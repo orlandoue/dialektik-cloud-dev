@@ -38,6 +38,7 @@ import { personalOwnerWorkersFreeNeuronBudgetMigration } from './035_personal_ow
 import { personalOwnerAdaptiveFeedPollingMigration } from './036_personal_owner_adaptive_feed_polling';
 import { seedProspectiveRightsGuardForNewSourcesMigration } from './037_seed_prospective_rights_guard_for_new_sources';
 import { personalOwnerOfficialVoteEventsMigration } from './038_personal_owner_official_vote_events';
+import { privateBetaAccessMigration } from './039_private_beta_access';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -57,6 +58,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '037_seed_prospective_rights_guard_for_new_sources':
     seedProspectiveRightsGuardForNewSourcesMigration,
   '038_personal_owner_official_vote_events': personalOwnerOfficialVoteEventsMigration,
+  '039_private_beta_access': privateBetaAccessMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,

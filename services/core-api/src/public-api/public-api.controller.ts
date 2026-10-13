@@ -1,10 +1,11 @@
-import { Controller, Get, Inject, Param, Query, Req, Res } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { sendPublicRead } from './public-api.cache.js';
 import { PUBLIC_OPENAPI_DOCUMENT } from './public-api.openapi.js';
 import { PublicApiService } from './public-api.service.js';
 import { PublicRateLimitService } from './public-rate-limit.service.js';
+import { PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import {
   assertExactQueryKeys,
   parseOptionalFilter,
@@ -15,6 +16,7 @@ import {
 type PublicQuery = Readonly<Record<string, unknown>>;
 
 @Controller('v1')
+@UseGuards(PrivateBetaAuthGuard)
 export class PublicApiController {
   public constructor(
     @Inject(PublicApiService) private readonly publicApi: PublicApiService,

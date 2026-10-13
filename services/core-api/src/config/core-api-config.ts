@@ -16,6 +16,7 @@ export interface CoreApiConfig {
   readonly logLevel: CoreApiLogLevel;
   readonly nodeEnvironment: NodeEnvironment;
   readonly port: number;
+  readonly supabaseAuthIssuer: string;
   readonly semanticMode?: 'disabled' | 'fixture' | 'unassigned';
   readonly ownershipMode?: 'corporate' | 'personal';
   readonly personalOwnerId?: string;
@@ -24,6 +25,29 @@ export interface CoreApiConfig {
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_POOL_MAX = 10;
+const DEFAULT_SUPABASE_AUTH_ISSUER =
+  'https://vclsswwfhljczxgnsciq.supabase.co/auth/v1';
+
+function readSupabaseAuthIssuer(source: NodeJS.ProcessEnv): string {
+  const raw = source.SUPABASE_AUTH_ISSUER?.trim() || DEFAULT_SUPABASE_AUTH_ISSUER;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('SUPABASE_AUTH_ISSUER must be a valid HTTPS URL.');
+  }
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.username.length > 0 ||
+    parsed.password.length > 0 ||
+    parsed.search.length > 0 ||
+    parsed.hash.length > 0 ||
+    parsed.pathname.replace(/\/$/u, '') !== '/auth/v1'
+  ) {
+    throw new Error('SUPABASE_AUTH_ISSUER must be an HTTPS Supabase Auth issuer URL.');
+  }
+  return parsed.toString().replace(/\/$/u, '');
+}
 
 function readEnum<const T extends readonly string[]>(
   source: NodeJS.ProcessEnv,
@@ -188,5 +212,6 @@ export function loadCoreApiConfig(
     ...(personalOwnerAuthTokenSha256 === undefined ? {} : { personalOwnerAuthTokenSha256 }),
     semanticMode: requestedMode as 'disabled' | 'fixture' | 'unassigned',
     port: readInteger(source, 'CORE_API_PORT', DEFAULT_PORT, 1, 65_535),
+    supabaseAuthIssuer: readSupabaseAuthIssuer(source),
   });
 }

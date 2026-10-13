@@ -4,7 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import type { PublicReadResult } from './public-api.types.js';
 
-const PUBLIC_CACHE_CONTROL = 'public, max-age=30, stale-while-revalidate=120';
+const PRIVATE_CACHE_CONTROL = 'private, no-cache, must-revalidate';
 
 function strongEtag(body: unknown): string {
   const digest = createHash('sha256').update(JSON.stringify(body), 'utf8').digest('base64url');
@@ -32,7 +32,8 @@ export function sendPublicRead<T>(
 ): T | undefined {
   const etag = strongEtag(result.body);
   const lastModified = result.lastModified.toUTCString();
-  void reply.header('cache-control', PUBLIC_CACHE_CONTROL);
+  void reply.header('cache-control', PRIVATE_CACHE_CONTROL);
+  void reply.header('vary', 'Authorization');
   void reply.header('etag', etag);
   void reply.header('last-modified', lastModified);
 
