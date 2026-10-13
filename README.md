@@ -11,11 +11,11 @@ research documents, scientific evaluation evidence, and frozen holdout materials
 - CORE_API_HOST=0.0.0.0
 - CORE_API_PORT=10000 (or the platform-provided port)
 - DATABASE_URL: restricted application-role PostgreSQL URL using TLS
-- MIGRATION_DATABASE_URL: private migration-only PostgreSQL URL
+- Database migrations are applied out-of-band by the owner before deploy. Do not configure
+  migration or administrator credentials on the running web service.
 
-Use a startup command that temporarily maps MIGRATION_DATABASE_URL to DATABASE_URL
-for the migration process, then starts Core with the application-role DATABASE_URL:
-DATABASE_URL="$MIGRATION_DATABASE_URL" npm run db:migrate && npm run start
+Start the service with `npm start` and configure `DATABASE_URL` with the restricted,
+read-only application role. The running Core must not receive migration privileges.
 
 Do not configure news polling, provider credentials, Cloudflare, semantic fixtures,
 or LIVE activation in this deployment.
