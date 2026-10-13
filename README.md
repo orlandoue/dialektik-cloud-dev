@@ -11,6 +11,8 @@ research documents, scientific evaluation evidence, and frozen holdout materials
 - CORE_API_HOST=0.0.0.0
 - CORE_API_PORT=10000 (or the platform-provided port)
 - DATABASE_URL: restricted application-role PostgreSQL URL using TLS
+- DATABASE_CA_CERT: the project's PEM CA downloaded from Supabase Database Settings → SSL
+  Configuration; when set, Core verifies both the certificate chain and database hostname.
 - Database migrations are applied out-of-band by the owner before deploy. Do not configure
   migration or administrator credentials on the running web service.
 

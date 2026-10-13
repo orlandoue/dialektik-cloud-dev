@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, X509Certificate } from 'node:crypto';
 
 export const CORE_API_CONFIG = Symbol('CORE_API_CONFIG');
 
@@ -11,6 +11,7 @@ export type CoreApiLogLevel = (typeof logLevels)[number];
 export interface CoreApiConfig {
   readonly databasePoolMax: number;
   readonly databaseUrl: string;
+  readonly databaseCaCertificate?: string;
   readonly host: string;
   readonly logLevel: CoreApiLogLevel;
   readonly nodeEnvironment: NodeEnvironment;
@@ -79,6 +80,35 @@ function readDatabaseUrl(source: NodeJS.ProcessEnv): string {
   return raw;
 }
 
+function readDatabaseCaCertificate(source: NodeJS.ProcessEnv): string | undefined {
+  const raw = source.DATABASE_CA_CERT?.trim();
+  if (raw === undefined || raw.length === 0) {
+    return undefined;
+  }
+  if (raw.length > 65_536) {
+    throw new Error('DATABASE_CA_CERT must not exceed 65536 characters.');
+  }
+
+  const certificates = [
+    ...raw.matchAll(/-----BEGIN CERTIFICATE-----[\s\S]+?-----END CERTIFICATE-----/g),
+  ];
+  const certificatePem = certificates[0]?.[0];
+  if (certificates.length !== 1 || certificatePem === undefined) {
+    throw new Error('DATABASE_CA_CERT must contain exactly one PEM certificate.');
+  }
+
+  try {
+    const certificate = new X509Certificate(certificatePem);
+    if (!certificate.ca || Date.parse(certificate.validTo) <= Date.now()) {
+      throw new Error('invalid CA certificate');
+    }
+  } catch {
+    throw new Error('DATABASE_CA_CERT must contain a valid, unexpired CA certificate.');
+  }
+
+  return certificatePem;
+}
+
 export function loadCoreApiConfig(
   source: NodeJS.ProcessEnv = process.env,
 ): Readonly<CoreApiConfig> {
@@ -144,9 +174,12 @@ export function loadCoreApiConfig(
     personalOwnerAuthTokenSha256 = createHash('sha256').update(ownerToken, 'utf8').digest('hex');
   }
 
+  const databaseCaCertificate = readDatabaseCaCertificate(source);
+
   return Object.freeze({
     databasePoolMax: readInteger(source, 'DATABASE_POOL_MAX', DEFAULT_POOL_MAX, 1, 50),
     databaseUrl: readDatabaseUrl(source),
+    ...(databaseCaCertificate === undefined ? {} : { databaseCaCertificate }),
     host,
     logLevel: readEnum(source, 'CORE_API_LOG_LEVEL', logLevels, defaultLogLevel),
     nodeEnvironment,

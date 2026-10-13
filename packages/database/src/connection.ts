@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import type { Database } from './database.types';
 
 export interface DatabaseConnectionOptions {
+  readonly caCertificate?: string;
   readonly connectionString: string;
   readonly applicationName: string;
   readonly maxConnections?: number;
@@ -38,10 +39,32 @@ export function redactPostgresUrl(connectionString: string): string {
 
 export function createDatabase(options: DatabaseConnectionOptions): Kysely<Database> {
   validatePostgresUrl(options.connectionString);
+
+  let connectionString = options.connectionString;
+  let ssl: { ca: string; rejectUnauthorized: true } | undefined;
+  const caCertificate = options.caCertificate?.trim();
+  if (caCertificate) {
+    const parsed = new URL(connectionString);
+    for (const parameter of [
+      'ssl',
+      'sslcert',
+      'sslkey',
+      'sslmode',
+      'sslnegotiation',
+      'sslrootcert',
+      'uselibpqcompat',
+    ]) {
+      parsed.searchParams.delete(parameter);
+    }
+    connectionString = parsed.toString();
+    ssl = { ca: caCertificate, rejectUnauthorized: true };
+  }
+
   const pool = new Pool({
     application_name: options.applicationName,
-    connectionString: options.connectionString,
+    connectionString,
     max: options.maxConnections ?? 10,
+    ...(ssl === undefined ? {} : { ssl }),
   });
   return new Kysely<Database>({
     dialect: new PostgresDialect({ pool }),

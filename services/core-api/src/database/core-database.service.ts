@@ -14,6 +14,9 @@ export class CoreDatabaseService implements OnApplicationShutdown {
       applicationName: 'dialektik-core-api',
       connectionString: config.databaseUrl,
       maxConnections: config.databasePoolMax,
+      ...(config.databaseCaCertificate === undefined
+        ? {}
+        : { caCertificate: config.databaseCaCertificate }),
     });
   }
 
