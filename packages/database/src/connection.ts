@@ -52,7 +52,15 @@ export async function databaseIsReady(database: Kysely<Database>): Promise<boole
   try {
     await sql<{ ready: number }>`select 1 as ready`.execute(database);
     return true;
-  } catch {
+  } catch (error) {
+    const errorCode =
+      typeof error === 'object' && error !== null && 'code' in error &&
+      typeof error.code === 'string' && /^[A-Za-z0-9_]+$/.test(error.code)
+        ? error.code
+        : error instanceof Error
+          ? error.name
+          : 'UnknownError';
+    console.warn(JSON.stringify({ event: 'database_readiness_failed', errorCode }));
     return false;
   }
 }
