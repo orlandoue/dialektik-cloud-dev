@@ -1,0 +1,32 @@
+{
+  "name": "dialektik",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@11.6.2",
+  "engines": {
+    "node": ">=22.14.0",
+    "npm": ">=10.0.0"
+  },
+  "workspaces": [
+    "packages/database",
+    "services/core-api"
+  ],
+  "overrides": {
+    "fastify": "5.12.1"
+  },
+  "scripts": {
+    "build": "npm run build --workspace @dialektik/database && npm run build --workspace @dialektik/core-api",
+    "db:migrate": "npm run db:migrate --workspace @dialektik/database",
+    "start": "npm run start --workspace @dialektik/core-api"
+  },
+  "devDependencies": {
+    "@eslint/js": "9.39.1",
+    "@types/node": "24.10.1",
+    "eslint": "9.39.1",
+    "prettier": "3.6.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "typescript-eslint": "8.46.3",
+    "vitest": "4.1.11"
+  }
+}
