@@ -30,7 +30,9 @@ export interface LiveSourcePolicy {
   readonly canonicalPathAliases?: Readonly<Record<string, string>>;
 }
 
-// Acquisition is enabled only for the currently documented rights preflight below.
+// These legacy candidates are discovery-only until consultation, storage and
+// display rights are documented for this deployment. A policy row is not a
+// source activation or a polling schedule.
 export const LIVE_SOURCE_POLICIES: readonly LiveSourcePolicy[] = [
   {
     sourceId: parseUlid('01K6MYH0000000000000000001'),
@@ -42,12 +44,12 @@ export const LIVE_SOURCE_POLICIES: readonly LiveSourcePolicy[] = [
     category: null,
     discoveryChannel: 'rss_atom',
     endpoint: 'https://www.nasa.gov/news-release/feed/',
-    rightsClass: 'LIVE_READY',
-    storagePolicy: 'METADATA_AND_FEED_EXCERPT',
-    active: true,
+    rightsClass: 'PERMISSION_REQUIRED',
+    storagePolicy: 'METADATA_ONLY',
+    active: false,
     rightsEvidenceUrl: 'https://www.nasa.gov/nasa-brand-center/images-and-media/',
     rightsVerifiedAt: '2026-10-03T10:16:19.000Z',
-    attribution: 'NASA. Official NASA RSS metadata; NASA does not endorse Dialektik.',
+    attribution: 'NASA is a discovery candidate only; no acquisition is enabled.',
     language: 'en',
     allowedArticleDomains: ['www.nasa.gov', 'nasa.gov'],
   },
@@ -93,3 +95,4 @@ export function assertLiveSourceReady(policy: LiveSourcePolicy): void {
     throw new Error('Source acquisition route is invalid.');
   }
 }
+
