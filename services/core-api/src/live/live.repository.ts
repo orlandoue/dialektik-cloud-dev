@@ -63,7 +63,10 @@ export class LiveRepository {
       join live_acquisition_receipts r on r.id =
         (select id from live_acquisition_receipts where exclusion_id = a.live_exposure_id
           and disposition = 'PERSISTED' order by seen_at desc, id desc limit 1)
-      join live_source_policies p on p.id = r.policy_id
+      join live_source_policies p on p.source_id = a.source_id and p.id =
+        (select id from live_source_policies where source_id = a.source_id
+          order by recorded_at desc, id desc limit 1)
+        and p.active = true and p.rights_class = 'LIVE_READY'
       join live_exposure_exclusions e on e.id = a.live_exposure_id
       where a.origin = 'LIVE_REAL' and a.event_id is null`;
   }
@@ -97,7 +100,8 @@ export class LiveRepository {
       await sql<LiveSourceReadRow>`select s.id, s.name, s.source_type, s.canonical_domain, p.policy
       from sources s join live_source_policies p on p.source_id = s.id and p.id =
         (select id from live_source_policies where source_id = s.id order by recorded_at desc, id desc limit 1)
-      where s.origin = 'LIVE_REAL' and ${id === undefined ? sql`true` : sql`s.id = ${id}`}
+      where s.origin = 'LIVE_REAL' and p.active = true and p.rights_class = 'LIVE_READY'
+        and ${id === undefined ? sql`true` : sql`s.id = ${id}`}
       order by s.name, s.id`.execute(this.database);
     return result.rows;
   }

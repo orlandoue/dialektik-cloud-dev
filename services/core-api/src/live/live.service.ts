@@ -27,10 +27,11 @@ function sourceDto(row: LiveSourceReadRow) {
 }
 
 function newsDto(row: LiveReadRow) {
+  const metadataOnly = row.policy.storagePolicy === 'METADATA_ONLY';
   return {
     id: row.id,
     headline: row.headline,
-    excerpt: row.excerpt,
+    excerpt: metadataOnly ? null : row.excerpt,
     canonical_url: row.canonical_url,
     published_at: row.published_at.toISOString(),
     modified_at: row.modified_at?.toISOString() ?? null,
@@ -86,16 +87,17 @@ export class LiveApplicationService {
     if (row === undefined) throw new NotFoundException('Live Article not found.');
     return {
       ...newsDto(row),
-      author: row.author,
+      author: row.policy.storagePolicy === 'METADATA_ONLY' ? null : row.author,
       content: {
         representation:
           row.policy.storagePolicy === 'METADATA_ONLY' ? 'metadata_only' : 'feed_excerpt',
-        text: row.excerpt,
+        text: row.policy.storagePolicy === 'METADATA_ONLY' ? null : row.excerpt,
         body: null,
         storage_policy: row.policy.storagePolicy,
       },
       provenance: provenanceDto(row),
-      declared_upstream: row.declared_upstream,
+      declared_upstream:
+        row.policy.storagePolicy === 'METADATA_ONLY' ? null : row.declared_upstream,
     };
   }
   async provenance(id: Ulid) {
