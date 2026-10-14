@@ -56,7 +56,7 @@ export class LiveRepository {
       (select max(seen_at) from live_acquisition_receipts where exclusion_id = a.live_exposure_id) as last_seen_at,
       r.original_published_at, r.original_modified_at, r.source_item_id,
       r.discovery_channel, r.discovery_url, r.adapter_version,
-      (select count(*)::int from live_acquisition_receipts where exclusion_id = a.live_exposure_id) as receipt_count
+      (select count(id)::int from live_acquisition_receipts where exclusion_id = a.live_exposure_id) as receipt_count
       from articles a join sources s on s.id = a.source_id
       join live_article_versions v on v.article_id = a.id and v.version_number =
         (select max(version_number) from live_article_versions where article_id = a.id)
