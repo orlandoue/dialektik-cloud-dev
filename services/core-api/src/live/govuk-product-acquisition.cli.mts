@@ -34,7 +34,7 @@ async function verifyWriter(database: ReturnType<typeof createDatabase>): Promis
   const result = await sql.raw(
     "select current_user::text as current_user, session_user::text as session_user, current_database()::text as current_database, " +
       "has_column_privilege(current_user, 'public.articles', 'text_original', 'INSERT') as can_insert_title, " +
-      "has_column_privilege(current_user, 'public.articles', 'text_original', 'SELECT') as can_select_title, " +
+      "has_column_privilege(current_user, 'public.articles', 'text_original', 'SELECT') as can_select_article_title, " +
       "has_column_privilege(current_user, 'public.prospective_content_rights_write_guards', 'source_id', 'INSERT') as can_seed_source_rights_guard, " +
       "has_column_privilege(current_user, 'public.prospective_content_rights_write_guards', 'source_id', 'SELECT') as can_read_source_rights_guard, " +
       "has_column_privilege(current_user, 'public.live_acquisition_receipts', 'discovery_channel', 'INSERT') as can_insert_receipt, " +
@@ -57,6 +57,15 @@ async function verifyWriter(database: ReturnType<typeof createDatabase>): Promis
       "case when to_regnamespace('net') is null then false else has_schema_privilege(current_user, to_regnamespace('net'), 'USAGE') end as can_use_network_schema, " +
       "exists(select 1 from pg_catalog.pg_proc p join pg_catalog.pg_namespace n on n.oid=p.pronamespace where n.nspname='net' and p.proname like 'http_%' and has_function_privilege(current_user, p.oid, 'EXECUTE')) as can_execute_network_http, " +
       "exists(select 1 from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace where n.nspname='net' and c.relname in ('http_request_queue','_http_response') and has_table_privilege(current_user, c.oid, 'SELECT')) as can_read_network_queue, " +
+      "(select count(*) = 14 from pg_catalog.pg_policies where schemaname='public' and current_user = any(roles) and policyname = any(array[" +
+      "'dialektik_govuk_writer_source_select','dialektik_govuk_writer_source_insert','dialektik_govuk_writer_article_select','dialektik_govuk_writer_article_insert'," +
+      "'dialektik_govuk_writer_live_source_policy_select','dialektik_govuk_writer_live_source_policy_insert','dialektik_govuk_writer_exclusion_select','dialektik_govuk_writer_exclusion_insert'," +
+      "'dialektik_govuk_writer_receipt_select','dialektik_govuk_writer_receipt_insert','dialektik_govuk_writer_version_select','dialektik_govuk_writer_version_insert'," +
+      "'dialektik_govuk_writer_prospective_guard_select','dialektik_govuk_writer_prospective_guard_insert']::name[]) " +
+      "and (select count(*) = 14 from pg_catalog.pg_policies where schemaname='public' " +
+      "and tablename = any(array['sources','articles','live_source_policies','live_exposure_exclusions','live_acquisition_receipts','live_article_versions','prospective_content_rights_write_guards']) " +
+      "and roles && array['dialektik_govuk_metadata_writer','public','anon','authenticated']::name[])) as scoped_rls_policies_valid, " +
+      "(select count(*) = 5 and bool_and(c.relrowsecurity) from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relname = any(array['live_source_policies','live_exposure_exclusions','live_acquisition_receipts','live_article_versions','prospective_content_rights_write_guards'])) as live_writer_rls_enabled, " +
       "not exists(select 1 from pg_catalog.pg_auth_members m where m.member=(select oid from pg_catalog.pg_roles where rolname=current_user)) as has_no_role_memberships, " +
       "exists(select 1 from pg_catalog.pg_roles where rolname = current_user and rolcanlogin and not rolsuper and not rolcreatedb and not rolcreaterole and not rolreplication and not rolbypassrls and not rolinherit) as role_is_restricted",
   ).execute(database);
@@ -65,7 +74,7 @@ async function verifyWriter(database: ReturnType<typeof createDatabase>): Promis
     session_user: string;
     current_database: string;
     can_insert_title: boolean;
-    can_select_title: boolean;
+    can_select_article_title: boolean;
     can_seed_source_rights_guard: boolean;
     can_read_source_rights_guard: boolean;
     can_insert_receipt: boolean;
@@ -76,6 +85,8 @@ async function verifyWriter(database: ReturnType<typeof createDatabase>): Promis
     can_use_network_schema: boolean;
     can_execute_network_http: boolean;
     can_read_network_queue: boolean;
+    scoped_rls_policies_valid: boolean;
+    live_writer_rls_enabled: boolean;
     has_no_role_memberships: boolean;
     role_is_restricted: boolean;
   } | undefined;
@@ -85,7 +96,8 @@ async function verifyWriter(database: ReturnType<typeof createDatabase>): Promis
     row.session_user !== GOVUK_RSH_WRITER_ROLE ||
     row.current_database !== 'postgres' ||
     row.can_insert_title !== true ||
-    row.can_select_title !== true ||
+    // The writer inserts the approved title but deliberately cannot read it back.
+    row.can_select_article_title !== false ||
     row.can_seed_source_rights_guard !== true ||
     row.can_read_source_rights_guard !== true ||
     row.can_insert_receipt !== true ||
@@ -96,6 +108,8 @@ async function verifyWriter(database: ReturnType<typeof createDatabase>): Promis
     row.can_use_network_schema !== false ||
     row.can_execute_network_http !== false ||
     row.can_read_network_queue !== false ||
+    row.scoped_rls_policies_valid !== true ||
+    row.live_writer_rls_enabled !== true ||
     row.has_no_role_memberships !== true ||
     row.role_is_restricted !== true
   ) {

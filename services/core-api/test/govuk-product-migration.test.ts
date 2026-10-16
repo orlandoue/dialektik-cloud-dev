@@ -10,6 +10,10 @@ const migration = readFileSync(
   resolve(process.cwd(), 'packages/database/src/migration/041_govuk_product_metadata_writer.ts'),
   'utf8',
 );
+const rowScopeMigration = readFileSync(
+  resolve(process.cwd(), 'packages/database/src/migration/042_govuk_product_writer_row_scope.ts'),
+  'utf8',
+);
 const channelMigration = readFileSync(
   resolve(process.cwd(), 'packages/database/src/migration/018_ephemeral_semantic_pipeline.ts'),
   'utf8',
@@ -57,8 +61,50 @@ describe('GOV.UK acquisition database boundary', () => {
     expect(cli).toContain('row.can_use_network_schema !== false');
     expect(cli).toContain('row.can_execute_network_http !== false');
     expect(cli).toContain('row.can_read_network_queue !== false');
+    expect(cli).toContain('row.scoped_rls_policies_valid !== true');
+    expect(cli).toContain('row.live_writer_rls_enabled !== true');
+    expect(cli).toContain('as can_select_article_title');
+    expect(cli).toContain('row.can_select_article_title !== false');
     expect(cli).toContain('row.has_no_role_memberships !== true');
     expect(cli).toContain("'GOVUK_RSH_NETWORK_' + causeCode");
+  });
+
+  it('scopes the writer to the one approved GOV.UK source and item with RLS', () => {
+    expect(rowScopeMigration).toContain('unexpected preexisting policies on GOV.UK writer support tables');
+    expect(rowScopeMigration).toContain('expected Core read policies are missing; refusing migration');
+    expect(rowScopeMigration).toContain('RSH target rows already exist; inspect before enabling one-shot writer policies');
+    expect(rowScopeMigration).toContain('ALTER TABLE public.prospective_content_rights_write_guards ENABLE ROW LEVEL SECURITY');
+    expect(rowScopeMigration).toContain('ALTER TABLE public.live_source_policies ENABLE ROW LEVEL SECURITY');
+    expect(rowScopeMigration).toContain('ALTER TABLE public.live_exposure_exclusions ENABLE ROW LEVEL SECURITY');
+    expect(rowScopeMigration).toContain('ALTER TABLE public.live_acquisition_receipts ENABLE ROW LEVEL SECURITY');
+    expect(rowScopeMigration).toContain('ALTER TABLE public.live_article_versions ENABLE ROW LEVEL SECURITY');
+    expect(rowScopeMigration).toContain("id = '01M4YDQK00WS344WW8RCPCEQHE'::public.dialektik_ulid");
+    expect(rowScopeMigration).toContain("source_id = '01M4YDQK00WS344WW8RCPCEQHE'::public.dialektik_ulid");
+    expect(rowScopeMigration).toContain("source_item_id = '86f4abba-9eaa-412f-b048-5ed30aa74201'");
+    expect(rowScopeMigration).toContain("url_canonical = 'https://www.gov.uk/government/news/social-housing-landlord-downgraded-by-rsh'");
+    expect(rowScopeMigration).toContain('dialektik_govuk_writer_prospective_guard_insert');
+    expect(rowScopeMigration).toContain('dialektik_govuk_writer_prospective_guard_select');
+    expect(rowScopeMigration).toContain('AND canonical_domain = \'gov.uk\'');
+    expect(rowScopeMigration).toContain("origin = 'LIVE_REAL'");
+    expect(rowScopeMigration).toContain("storage_policy = 'METADATA_ONLY'");
+    expect(rowScopeMigration).toContain("text_original = 'Social housing landlord downgraded by RSH'");
+    expect(rowScopeMigration).toContain("headline = 'Social housing landlord downgraded by RSH'");
+    expect(rowScopeMigration).not.toContain('a.text_original');
+    expect(rowScopeMigration).toContain('"polling":"disabled"');
+    expect(rowScopeMigration).not.toMatch(/CREATE POLICY[^;]+\bTO\s+(?:PUBLIC|anon|authenticated)\b/isu);
+    expect(rowScopeMigration).not.toMatch(/FOR\s+ALL\b/iu);
+    expect(rowScopeMigration).toContain('roles = ARRAY[\'dialektik_core_app\']::name[]');
+  });
+
+  it('preserves the preexisting Core read surface while denying other client roles', () => {
+    expect(rowScopeMigration.match(/TO dialektik_core_app USING \(true\)/gu)).toHaveLength(5);
+    expect(rowScopeMigration).toContain('dialektik_govuk_core_read_live_source_policies');
+    expect(rowScopeMigration).toContain('dialektik_govuk_core_read_live_exposure_exclusions');
+    expect(rowScopeMigration).toContain('dialektik_govuk_core_read_live_acquisition_receipts');
+    expect(rowScopeMigration).toContain('dialektik_govuk_core_read_live_article_versions');
+    expect(rowScopeMigration).toContain('dialektik_govuk_core_read_prospective_rights_guard');
+    expect(rowScopeMigration).toContain('additional policies exist on GOV.UK writer RLS tables; inspect before rollback');
+    expect(rowScopeMigration).not.toMatch(/TO\s+(?:PUBLIC|anon|authenticated)\b/iu);
   });
 
   it('allows only an explicit one-shot selection of the fixed GOV.UK source', () => {

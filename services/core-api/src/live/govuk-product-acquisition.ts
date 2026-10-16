@@ -536,14 +536,6 @@ export async function persistGovUkRshMetadataOnce(
     await sql.raw(
       "select pg_advisory_xact_lock(hashtextextended('" + GOVUK_RSH_REGISTRY_KEY + "',0))",
     ).execute(transaction);
-    const otherGovUkSource = await transaction
-      .selectFrom('sources')
-      .select(['id', 'name', 'canonical_domain'])
-      .where('canonical_domain', '=', 'gov.uk')
-      .where('id', '!=', GOVUK_RSH_SOURCE_ID)
-      .executeTakeFirst();
-    if (otherGovUkSource) throw new Error('GOVUK_RSH_SOURCE_CONFLICT');
-
     await transaction
       .insertInto('sources')
       .values({
