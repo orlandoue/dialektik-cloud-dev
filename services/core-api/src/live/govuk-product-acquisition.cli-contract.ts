@@ -28,7 +28,7 @@ export function parseGovUkAcquisitionArgs(args: readonly string[]): GovUkAcquisi
   return mode;
 }
 
-/** Restricts this writer CLI to the existing Dialektik development project and its dedicated login. */
+/** Restricts this writer CLI to the verified DEV session pooler and its dedicated login. */
 export function validateGovUkWriterDatabaseUrl(raw: string): URL {
   let url: URL;
   let username: string;
@@ -38,19 +38,17 @@ export function validateGovUkWriterDatabaseUrl(raw: string): URL {
   } catch {
     throw new Error('GOVUK_RSH_WRITER_TARGET_DENIED');
   }
-  const directHost = 'db.vclsswwfhljczxgnsciq.supabase.co';
   const poolerHost = 'aws-0-us-east-1.pooler.supabase.com';
-  const directIdentity = url.hostname === directHost && username === GOVUK_RSH_WRITER_ROLE;
   const poolerIdentity =
     url.hostname === poolerHost &&
     username === GOVUK_RSH_WRITER_ROLE + '.vclsswwfhljczxgnsciq';
   if (
     (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') ||
     url.pathname !== '/postgres' ||
-    (url.port !== '' && url.port !== '5432') ||
+    url.port !== '5432' ||
     url.search !== '' ||
     url.hash !== '' ||
-    (!directIdentity && !poolerIdentity) ||
+    !poolerIdentity ||
     !url.password
   ) {
     throw new Error('GOVUK_RSH_WRITER_TARGET_DENIED');

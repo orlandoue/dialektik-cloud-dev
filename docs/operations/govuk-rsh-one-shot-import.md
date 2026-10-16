@@ -11,6 +11,14 @@ This is a one-item metadata-only product operation for the exact RSH press relea
 5. Reconfirm the exact article, OGL page, third-party exclusions, robots policy, and attribution immediately before persistence. Rights review is dated 2026-10-15 and expires in 30 days.
 6. Keep polling, Cloudflare, semantic processing, paid APIs, and LIVE provider dispatch disabled.
 
+## Verified database endpoint and writer gate — 2026-10-16
+
+The owner checked Supabase DEV → Connect → Session pooler and supplied `aws-0-us-east-1.pooler.supabase.com:5432`. This matches the pooler host already encoded by the CLI and Supabase's documented shared session-pooler port. The CLI contract now accepts only this exact hostname, the project-qualified writer username, `/postgres`, and an explicit `:5432`; it rejects the direct database host, an omitted or different port, and other projects. TLS hostname and CA verification remain mandatory in the database connection layer.
+
+Do not enable the GOV.UK writer for an import yet. A process `finally` block cannot guarantee closure after executor termination, host loss, or an uncertain network result. A short password `VALID UNTIL` only prevents later password authentication; it does not terminate already-established sessions. Before any writer LOGIN, require an independently running, time-bounded shutdown mechanism that is verified to set the role to `NOLOGIN`, terminate its sessions, and report completion even if the import process is killed. Verify `NOLOGIN` and zero sessions administratively before and after the one-shot. If that supervisor is unavailable or its outcome is uncertain, do not import or retry; inspect the receipt and row counts first.
+
+The Core successor `dialektik_core_app_rot_20261016` is prepared in DEV with `NOLOGIN`, no administrative attributes, `default_transaction_read_only=on`, and only the `INHERIT TRUE, SET FALSE, ADMIN FALSE` membership in `dialektik_core_app`. It has no password and has not been used by Render. Do not enable it or change Render until its effective privileges are verified and the owner establishes its password through protected `psql` input.
+
 ## Local verification completed
 
 - npm run build: PASS.
@@ -30,7 +38,9 @@ npm run acquire:govuk-rsh --workspace @dialektik/core-api -- --source govuk-rsh 
 
 Repeat directly before any persistent operation because source data, terms, and robots rules can change.
 
-## Migration and writer setup after owner approval
+## Historical writer setup notes — blocked; do not execute
+
+The steps below are historical and are not a safe authorization to enable the writer. The one-shot is blocked until an independent shutdown supervisor is installed, armed, and tested. No writer password or LOGIN has been configured. Do not run the persistence command while this gate is open.
 
 Owner approval for this specific one-item write was received on 2026-10-16. Migration 041 has since been applied once to the development project. Do not apply it again.
 

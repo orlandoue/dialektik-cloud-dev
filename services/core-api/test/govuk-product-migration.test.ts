@@ -137,9 +137,16 @@ describe('GOV.UK acquisition database boundary', () => {
       'aws-0-us-east-1.pooler.supabase.com',
     );
 
+    const directUrl = new URL(
+      'postgresql://dialektik_govuk_metadata_writer@db.vclsswwfhljczxgnsciq.supabase.co:5432/postgres',
+    );
+    directUrl.password = 'test-only-placeholder';
+
     for (const denied of [
       allowed.replace('aws-0-us-east-1.pooler.supabase.com', 'attacker.example'),
+      allowed.replace(':5432/postgres', '/postgres'),
       allowed.replace(':5432/postgres', ':5433/postgres'),
+      directUrl.toString(),
       allowed + '?sslmode=disable',
       allowed + '#other-target',
       allowed.replace('dialektik_govuk_metadata_writer.vclsswwfhljczxgnsciq', 'postgres'),

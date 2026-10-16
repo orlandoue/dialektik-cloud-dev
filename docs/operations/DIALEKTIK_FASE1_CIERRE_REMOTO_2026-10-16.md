@@ -88,3 +88,35 @@ No volver a ejecutar migraciones 041/042. No reintentar persistencia hasta que, 
 - Términos GOV.UK: https://www.gov.uk/help/terms-conditions
 - The National Archives, OGL v3: https://www.nationalarchives.gov.uk/doc/open-government-licence/version/3/
 - Supabase Postgres roles: https://supabase.com/docs/guides/database/postgres/roles
+- Supabase Session pooler endpoint: https://supabase.com/docs/guides/database/connecting-to-postgres#pooler-session-mode
+- PostgreSQL 17 password management: https://www.postgresql.org/docs/17/auth-password.html
+- PostgreSQL 17 TLS hostname verification: https://www.postgresql.org/docs/17/libpq-connect.html
+
+## Checkpoint de seguimiento — 2026-10-16 19:35 UTC
+
+Este addendum supersede el estado del checkout, los roles y la conectividad descrito arriba; las observaciones anteriores se conservan como historial.
+
+### Estado de proyecto y rotación Core
+
+- Se confirmó otra vez el proyecto `dialektik-dev`, ref `vclsswwfhljczxgnsciq`, región `us-east-1`, estado `ACTIVE_HEALTHY`, PostgreSQL 17.11. El ledger sigue en 042 (`20261016074743`); no se aplicó ninguna migración.
+- El propietario confirmó desde Connect → Session pooler `aws-0-us-east-1.pooler.supabase.com:5432`. Coincide con el host fijado en el CLI y con el puerto documentado para el pooler de sesión. No se asumió un endpoint regional distinto.
+- Se creó `dialektik_core_app_rot_20261016` sin contraseña y `NOLOGIN`, sin atributos administrativos, límite de 5 conexiones, `default_transaction_read_only=on` y `search_path=public`. Su única membresía es `dialektik_core_app` con `INHERIT TRUE`, `SET FALSE`, `ADMIN FALSE`. No se cambió la contraseña ni el estado LOGIN del rol Core antiguo y no se cambió Render.
+- Las comparaciones de privilegios efectivos entre Core y el sucesor dieron cero diferencias en tablas, secuencias, ejecución de funciones y uso/creación del esquema `public`. El sucesor no tiene sesiones. El rol Core antiguo continúa en LOGIN, sin sesiones observadas; GOV.UK writer continúa `NOLOGIN`, sin sesiones.
+- La comparación ACL no reemplaza una sesión real. El intento inocuo de `SET ROLE dialektik_core_app_rot_20261016` desde la conexión administrativa fue rechazado por `SET FALSE`, como se configuró. La contraseña del sucesor y la conexión real como sucesor siguen pendientes del propietario.
+- Sources, Articles, Events, receipts, versions y exclusions siguen en cero.
+
+### Verificación de endpoint e importador
+
+- Se endureció el contrato del importador para aceptar solo el Session pooler informado, rechazar el host directo, exigir puerto explícito `:5432`, usuario cualificado del proyecto, ruta `/postgres` y ausencia de query/hash. La verificación TLS y hostname ya implementada permanece activa.
+- `govuk-product-migration.test.ts`: 7/7 PASS. El primer intento terminó antes de ejecutar tests por `EPERM` al renombrar archivos temporales fuera del workspace; se repitió con un directorio temporal nuevo dentro del checkout y pasó. `npm run build --workspace @dialektik/core-api`: PASS; `git diff --check`: PASS.
+- `pg_cron` está disponible en la instancia, pero no instalado; `cron.job` no existe. Por ello no hay supervisor remoto capaz de cerrar el escritor independientemente del proceso. Un `finally` del importador, password expiry o desconexión del proceso no satisface el gate de cierre. La persistencia GOV.UK sigue bloqueada; writer no se habilitó.
+- El runbook marca como bloqueadas las instrucciones históricas de habilitación. Próximo diseño seguro: habilitar y verificar por un cambio versionado un supervisor servidor independiente y de tiempo acotado (por ejemplo, tarea one-shot `pg_cron`, primero validada en PG17 desechable), que imponga `NOLOGIN`, termine sesiones y compruebe cero conexiones; probar SIGKILL antes/después del commit y reconciliar el recibo ante respuesta incierta. No instalar extensiones ni programar tareas remotas en este checkpoint.
+
+### Render, Git y próxima intervención
+
+- Render confirma `dialektik-core-dev`, Free, no suspendido, auto-deploy en `codex/v7i-operational-product-pipeline`. La rama `codex/govuk-rsh-one-shot-import` no dispara ese deploy. No se modificaron variables ni se desplegó.
+- La prueba HTTP desde este ejecutor volvió a fallar antes de obtener respuesta; `health/live`, `health/ready` y `/live/news` no tienen código HTTP verificable en este intento. El navegador remoto tampoco pudo abrir esos endpoints. El estado `live` de Render no se usa como prueba de salud.
+- El cambio del contrato y los informes de seguimiento quedan limitados a esta rama de adquisición; no se incorporó el directorio preexistente sin seguimiento `.task-temp/`.
+- Intervención humana mínima para la rotación: usar un cliente `psql` seguro con el CA descargado desde el proyecto y conectarse al Session pooler con `sslmode=verify-full`, usuario admin `postgres.vclsswwfhljczxgnsciq`, host `aws-0-us-east-1.pooler.supabase.com` y puerto `5432`. En el prompt interactivo oculto ejecutar `\password dialektik_core_app_rot_20261016` y luego `ALTER ROLE dialektik_core_app_rot_20261016 LOGIN;`. Cerrar esa sesión y probar una conexión nueva como `dialektik_core_app_rot_20261016.vclsswwfhljczxgnsciq`; ejecutar `SHOW transaction_read_only;` y conteos de `sources`, `articles`, `events`. No incluir contraseñas en URI, SQL Editor, chat, argumentos ni logs. Si la prueba falla, conectarse de nuevo como admin y ejecutar `ALTER ROLE dialektik_core_app_rot_20261016 NOLOGIN;`, sin cambiar Render. Si pasa, cambiar solo `DATABASE_URL` en Render desde su Dashboard para usar el usuario sucesor y la contraseña nueva, preservando host, puerto, base y TLS/CA. Confirmar desde el teléfono que el deploy entrega health 200/200 y lectura autenticada; informar solo estados, y entonces puede cerrarse el Core antiguo desde el canal SQL autorizado.
+
+**Fase 1 sigue BLOCKED** por canal seguro/validación del sucesor, HTTP actual no verificable y falta de supervisor para la futura inserción. No hay artículo real insertado ni E2E Android. R14 y las fuentes candidatas permanecen intactas.
