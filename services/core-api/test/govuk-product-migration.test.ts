@@ -73,6 +73,8 @@ describe('GOV.UK acquisition database boundary', () => {
     expect(rowScopeMigration).toContain('unexpected preexisting policies on GOV.UK writer support tables');
     expect(rowScopeMigration).toContain('expected Core read policies are missing; refusing migration');
     expect(rowScopeMigration).toContain('RSH target rows already exist; inspect before enabling one-shot writer policies');
+    expect(rowScopeMigration).toContain('AND NOT rolcanlogin AND NOT rolsuper');
+    expect(rowScopeMigration).toContain('writer role is missing, login-enabled, or has unsafe role attributes');
     expect(rowScopeMigration).toContain('ALTER TABLE public.prospective_content_rights_write_guards ENABLE ROW LEVEL SECURITY');
     expect(rowScopeMigration).toContain('ALTER TABLE public.live_source_policies ENABLE ROW LEVEL SECURITY');
     expect(rowScopeMigration).toContain('ALTER TABLE public.live_exposure_exclusions ENABLE ROW LEVEL SECURITY');

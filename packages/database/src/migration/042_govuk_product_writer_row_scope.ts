@@ -61,14 +61,14 @@ BEGIN
   IF NOT EXISTS (
     SELECT 1 FROM pg_catalog.pg_roles
     WHERE rolname = 'dialektik_govuk_metadata_writer'
-      AND rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole
+      AND NOT rolcanlogin AND NOT rolsuper AND NOT rolcreatedb AND NOT rolcreaterole
       AND NOT rolreplication AND NOT rolbypassrls AND NOT rolinherit
   ) OR EXISTS (
     SELECT 1 FROM pg_catalog.pg_auth_members m
     JOIN pg_catalog.pg_roles r ON r.oid = m.member
     WHERE r.rolname = 'dialektik_govuk_metadata_writer'
   ) THEN
-    RAISE EXCEPTION 'GOV.UK writer role is missing or has unsafe role attributes';
+    RAISE EXCEPTION 'GOV.UK writer role is missing, login-enabled, or has unsafe role attributes';
   END IF;
 END;
 $preflight$;

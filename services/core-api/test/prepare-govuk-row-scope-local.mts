@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { createDatabase, destroyDatabase } from '@dialektik/database';
 import { sql, Migrator, type Migration, type MigrationProvider } from 'kysely';
 
@@ -35,6 +37,12 @@ try {
     assert.equal(applied.rows[0]?.count, 0, 'refusing a cluster where any migration has already committed');
   }
 
+  const supabaseStub = readFileSync(
+    fileURLToPath(new URL('./fixtures/govuk-row-scope-supabase-stub.sql', import.meta.url)),
+    'utf8',
+  );
+  await sql.raw(supabaseStub).execute(database);
+
   const provider = new DialektikMigrationProvider();
   const baselineProvider: MigrationProvider = {
     async getMigrations(): Promise<Record<string, Migration>> {
@@ -46,6 +54,9 @@ try {
   const baseline = await new Migrator({ db: database, provider: baselineProvider }).migrateToLatest();
   if (baseline.error) throw baseline.error;
   assert.equal(baseline.results?.length, 41, 'expected migrations 001 through 041 only');
+
+  // Match the required remote order: disable the disposable writer before 042.
+  await sql.raw('ALTER ROLE dialektik_govuk_metadata_writer NOLOGIN').execute(database);
 
   // The authorized development project has these two Core read policies, but
   // they are not in the repository migration history. Reproduce only that
@@ -88,6 +99,7 @@ try {
     tested_migration: final.results?.[0]?.migrationName,
     core_read_baseline: 'mirrored_from_verified_remote_catalog',
     row_security_tables: 5,
+    writer_login: false,
     remote_database_touched: false,
   }) + '\n');
 } finally {

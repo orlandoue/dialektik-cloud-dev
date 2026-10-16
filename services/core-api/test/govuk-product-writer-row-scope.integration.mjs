@@ -165,7 +165,7 @@ test('PostgreSQL 17 row scope, integration, rollback, idempotence and access bou
       EXISTS (SELECT 1 FROM pg_catalog.pg_auth_members m WHERE m.member=r.oid) AS has_memberships
       FROM pg_catalog.pg_roles r WHERE r.rolname='dialektik_govuk_metadata_writer'`);
     assert.deepEqual(roleState.rows[0], {
-      rolcanlogin: true, rolsuper: false, rolcreatedb: false, rolcreaterole: false,
+      rolcanlogin: false, rolsuper: false, rolcreatedb: false, rolcreaterole: false,
       rolreplication: false, rolbypassrls: false, rolinherit: false, has_memberships: false,
     });
 
