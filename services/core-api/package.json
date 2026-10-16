@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "acquire:govuk-rsh": "node dist/live/govuk-product-acquisition.cli.mjs",
     "start": "node --env-file-if-exists=.env dist/main.js"
   },
   "dependencies": {

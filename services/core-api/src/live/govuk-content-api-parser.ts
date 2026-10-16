@@ -37,6 +37,20 @@ export interface ParsedGovUkContentItem {
   readonly completeBodyPresent: true;
 }
 
+/** The metadata-only product adapter deliberately omits the article body and body hashes. */
+export interface ParsedGovUkContentMetadata {
+  readonly contentId: string;
+  readonly basePath: string;
+  readonly documentType: string;
+  readonly schemaName: string;
+  readonly title: string;
+  readonly publisher: string;
+  readonly firstPublishedAt: string;
+  readonly publicUpdatedAt: string | null;
+  readonly locale: string | null;
+  readonly contentBodyPresent: true;
+}
+
 export function hashBytes(bytes: Uint8Array): string {
   return createHash('sha256').update(bytes).digest('hex');
 }
@@ -299,4 +313,81 @@ export function parseGovUkContentItem(
     bodyFormat: /<[A-Za-z][^>]*>/u.test(rawBody) ? ('html' as const) : ('govspeak' as const),
     completeBodyPresent: true,
   });
+}
+
+/**
+ * Parse only the GOV.UK identity and publication metadata required by the private product.
+ * The Content API returns the complete JSON item; `details.body` is checked only for presence,
+ * then removed from the transient parsed object. The body is never normalized, hashed, returned,
+ * or passed to a semantic/content processor.
+ */
+export function parseGovUkContentMetadata(
+  acquired: Uint8Array,
+  articleUrl = GOVUK_FIRST_ARTICLE_URL,
+): ParsedGovUkContentMetadata {
+  govUkContentApiUrl(articleUrl);
+  let parsed: unknown;
+  try {
+    try {
+      parsed = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(acquired));
+    } catch {
+      throw new Error('GOVUK_CONTENT_JSON_INVALID');
+    }
+
+    const item = asRecord(parsed);
+    const details = asRecord(item?.details);
+    const links = asRecord(item?.links);
+    const organizations = Array.isArray(links?.organisations) ? links.organisations : [];
+    const publisher = organizations
+      .map(asRecord)
+      .map((organization) => organization?.title)
+      .find((name) => name === 'Regulator of Social Housing');
+    const contentId = item?.content_id;
+    const basePath = item?.base_path;
+    const documentType = item?.document_type;
+    const schemaName = item?.schema_name;
+    const title = item?.title;
+    const rawLocale = item?.locale;
+    const locale = rawLocale ?? null;
+    const firstPublishedAt = canonicalTimestamp(item?.first_published_at);
+    const publicUpdatedAt = canonicalTimestamp(item?.public_updated_at, true);
+
+    if (
+      !item ||
+      !details ||
+      !links ||
+      !(nonEmptyString(contentId) && /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(contentId)) ||
+      basePath !== expectedGovUkBasePath(articleUrl) ||
+      typeof documentType !== 'string' ||
+      typeof schemaName !== 'string' ||
+      !nonEmptyString(title) ||
+      publisher !== 'Regulator of Social Housing' ||
+      !firstPublishedAt ||
+      typeof details.body !== 'string' ||
+      details.body.length === 0 ||
+      !(
+        locale === null ||
+        (nonEmptyString(locale) && /^[A-Za-z][A-Za-z0-9-]{0,34}$/u.test(locale))
+      )
+    ) {
+      throw new Error('GOVUK_CONTENT_ITEM_INVALID');
+    }
+
+    return Object.freeze({
+      contentId,
+      basePath,
+      documentType,
+      schemaName,
+      title,
+      publisher,
+      firstPublishedAt,
+      publicUpdatedAt,
+      locale,
+      contentBodyPresent: true as const,
+    });
+  } finally {
+    const details = asRecord(asRecord(parsed)?.details);
+    if (details && typeof details.body === 'string') details.body = '';
+    acquired.fill(0);
+  }
 }
