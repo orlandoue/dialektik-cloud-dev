@@ -101,3 +101,16 @@ Fresh read-only queries on Supabase project vclsswwfhljczxgnsciq reported Postgr
 Render’s read-only listing reports dialektik-core-dev as Free, configured for codex/v7i-operational-product-pipeline at https://dialektik-core-dev.onrender.com. The latest deploy remains commit 13a5733059d5424fc057888669527ac8bb3dfa29, status live. No deployment was triggered. Direct HTTPS probes from this execution host failed at network level, so the report does not claim current route status.
 
 The local code and test gates are ready for review. Before the first product database insertion, obtain owner approval for this concrete operation: apply migration 041 to the Dialektik development project, provision the dedicated writer credential through a protected channel, and persist this one exact RSH item. After approval, deploy the reviewed code, verify authenticated Render HTTPS routes and provenance, then have the owner check the item on the physical phone. Keep Cloudflare, polling, semantic inference, paid APIs, and LIVE provider dispatch disabled.
+
+## Post-commit deployment verification — 2026-10-16
+
+This section supersedes the pre-deployment rows above for the final deployment and route checks. The report was committed before auto-deploy started.
+
+- Commit 9353ab9819a8d865cdec53896f593bafdd8f80d2 was pushed as a fast-forward to codex/v7i-operational-product-pipeline. No force push was used.
+- Render automatically built and deployed that exact commit. Deploy ID dep-db8r6hc9v7es7397ijeg completed with status live at 2026-10-16T05:17:58Z.
+- Direct HTTPS GET checks after deployment returned /health/live=200 and /health/ready=200. Requests without bearer to /live/news, /live/sources, /v1/feed, and /v1/contradictions each returned 401.
+- Authenticated remote Article routes were not called because a tester bearer was not available in the execution environment. Local authenticated PostgreSQL/Core integration remains the positive route evidence.
+- A fresh read-only Supabase query after deployment reported PostgreSQL 17.11; latest ledger row 20261014062211 grant_live_core_column_read; no GOV.UK writer role; 0 LIVE_REAL Articles, 0 LIVE_REAL Sources, 0 Events, and 0 acquisition receipts. Migration 041 and the item are still unapplied remotely.
+- The deployed Core has no source item to return. Flutter and physical Android display of this specific Article remain unverified.
+- C: free space at final inspection: 10,391,863,296 bytes (about 9.67 GiB), below the 10 GiB build guard. No APK build was attempted.
+- The code commit is deployed. No migration, acquired-data write, Cloudflare inference, polling, or paid resource was activated.

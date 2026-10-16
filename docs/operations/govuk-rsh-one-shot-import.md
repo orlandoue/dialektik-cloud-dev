@@ -61,3 +61,9 @@ Clear both values immediately afterward. CLI accepts only the registered source 
 Local code, migration, disposable writer, and Core HTTP gates passed. Remote migration 041 and the product Article are absent. Render still reports commit 13a5733059d5424fc057888669527ac8bb3dfa29 as live. New code is not deployed. HTTPS probes from this execution host failed at network level. Flutter and physical Android display of this item have not been verified.
 
 Next gate: owner approval for migration 041 and persistence of this exact one-item metadata record in the development database. Then deploy the reviewed code and complete HTTPS and physical Android verification.
+
+## Latest deployment verification — 2026-10-16
+
+Render deploy dep-db8r6hc9v7es7397ijeg is live at commit 9353ab9819a8d865cdec53896f593bafdd8f80d2. Public health routes returned 200; /live/news, /live/sources, /v1/feed, and /v1/contradictions returned 401 without a bearer. No authenticated remote route call was made in this check.
+
+A fresh read-only Supabase query still shows the writer role and migration 041 absent, with zero LIVE_REAL Articles/Sources, Events, and receipts. Therefore the authenticated remote Article and Android gates remain pending the owner-approved one-item write. C: has about 9.67 GiB free, below the APK build guard.
