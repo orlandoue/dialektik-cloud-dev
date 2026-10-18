@@ -1,0 +1,33 @@
+name: Dialektik cloud validation
+
+on:
+  push:
+    branches:
+      - codex/cloud-ci-validation-20261018
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dialektik-cloud-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core-build-and-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install pinned dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build database and Core
+        run: npm run build
+      - name: Run focused tests (no production connection)
+        run: npx vitest run --config services/core-api/vitest.config.mts
