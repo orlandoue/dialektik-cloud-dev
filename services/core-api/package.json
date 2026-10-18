@@ -9,6 +9,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "acquire:govuk-rsh": "node dist/live/govuk-product-acquisition.cli.mjs",
+    "test:govuk-rsh-one-shot:pg17": "node test/govuk-rsh-one-shot.pg17.mjs",
+    "test:attack044-clean:pg17": "node test/attack044-clean-one-shot.pg17.mjs",
     "start": "node --env-file-if-exists=.env dist/main.js"
   },
   "dependencies": {

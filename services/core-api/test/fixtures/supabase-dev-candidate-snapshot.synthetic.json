@@ -1,0 +1,286 @@
+{
+  "fixtureKind": "SYNTHETIC_TEST_ONLY",
+  "project": {
+    "id": "vclsswwfhljczxgnsciq",
+    "status": "ACTIVE_HEALTHY",
+    "postgresVersion": "17.11"
+  },
+  "database": {
+    "databaseName": "postgres",
+    "effectiveUser": "postgres",
+    "sessionUser": "postgres",
+    "serverVersion": "17.11",
+    "fsync": "on",
+    "synchronousCommit": "on"
+  },
+  "migrationHistory": {
+    "table": "supabase_migrations.schema_migrations",
+    "localKyselyTableExists": false,
+    "count": 50,
+    "latestVersion": "20261016074743",
+    "entries": [
+      {
+        "version": "20260101000100",
+        "name": "legacy_migration_001"
+      },
+      {
+        "version": "20260101000200",
+        "name": "legacy_migration_002"
+      },
+      {
+        "version": "20260101000300",
+        "name": "legacy_migration_003"
+      },
+      {
+        "version": "20260101000400",
+        "name": "legacy_migration_004"
+      },
+      {
+        "version": "20260101000500",
+        "name": "legacy_migration_005"
+      },
+      {
+        "version": "20260101000600",
+        "name": "legacy_migration_006"
+      },
+      {
+        "version": "20260101000700",
+        "name": "legacy_migration_007"
+      },
+      {
+        "version": "20260101000800",
+        "name": "legacy_migration_008"
+      },
+      {
+        "version": "20260101000900",
+        "name": "legacy_migration_009"
+      },
+      {
+        "version": "20260101001000",
+        "name": "legacy_migration_010"
+      },
+      {
+        "version": "20260101001100",
+        "name": "legacy_migration_011"
+      },
+      {
+        "version": "20260101001200",
+        "name": "legacy_migration_012"
+      },
+      {
+        "version": "20260101001300",
+        "name": "legacy_migration_013"
+      },
+      {
+        "version": "20260101001400",
+        "name": "legacy_migration_014"
+      },
+      {
+        "version": "20260101001500",
+        "name": "legacy_migration_015"
+      },
+      {
+        "version": "20260101001600",
+        "name": "legacy_migration_016"
+      },
+      {
+        "version": "20260101001700",
+        "name": "legacy_migration_017"
+      },
+      {
+        "version": "20260101001800",
+        "name": "legacy_migration_018"
+      },
+      {
+        "version": "20260101001900",
+        "name": "legacy_migration_019"
+      },
+      {
+        "version": "20260101002000",
+        "name": "legacy_migration_020"
+      },
+      {
+        "version": "20260101002100",
+        "name": "legacy_migration_021"
+      },
+      {
+        "version": "20260101002200",
+        "name": "legacy_migration_022"
+      },
+      {
+        "version": "20260101002300",
+        "name": "legacy_migration_023"
+      },
+      {
+        "version": "20260101002400",
+        "name": "legacy_migration_024"
+      },
+      {
+        "version": "20260101002500",
+        "name": "legacy_migration_025"
+      },
+      {
+        "version": "20260101002600",
+        "name": "legacy_migration_026"
+      },
+      {
+        "version": "20260101002700",
+        "name": "legacy_migration_027"
+      },
+      {
+        "version": "20260101002800",
+        "name": "legacy_migration_028"
+      },
+      {
+        "version": "20260101002900",
+        "name": "legacy_migration_029"
+      },
+      {
+        "version": "20260101003000",
+        "name": "legacy_migration_030"
+      },
+      {
+        "version": "20260101003100",
+        "name": "legacy_migration_031"
+      },
+      {
+        "version": "20260101003200",
+        "name": "legacy_migration_032"
+      },
+      {
+        "version": "20260101003300",
+        "name": "legacy_migration_033"
+      },
+      {
+        "version": "20260101003400",
+        "name": "legacy_migration_034"
+      },
+      {
+        "version": "20260101003500",
+        "name": "legacy_migration_035"
+      },
+      {
+        "version": "20260101003600",
+        "name": "legacy_migration_036"
+      },
+      {
+        "version": "20260101003700",
+        "name": "legacy_migration_037"
+      },
+      {
+        "version": "20260101003800",
+        "name": "legacy_migration_038"
+      },
+      {
+        "version": "20260101003900",
+        "name": "legacy_migration_039"
+      },
+      {
+        "version": "20260101004000",
+        "name": "legacy_migration_040"
+      },
+      {
+        "version": "20260101004100",
+        "name": "legacy_migration_041"
+      },
+      {
+        "version": "20260101004200",
+        "name": "legacy_migration_042"
+      },
+      {
+        "version": "20260101004300",
+        "name": "legacy_migration_043"
+      },
+      {
+        "version": "20260101004400",
+        "name": "legacy_migration_044"
+      },
+      {
+        "version": "20260101004500",
+        "name": "legacy_migration_045"
+      },
+      {
+        "version": "20260101004600",
+        "name": "legacy_migration_046"
+      },
+      {
+        "version": "20260101004700",
+        "name": "legacy_migration_047"
+      },
+      {
+        "version": "20260101004800",
+        "name": "legacy_migration_048"
+      },
+      {
+        "version": "20261016052229",
+        "name": "041_govuk_product_metadata_writer"
+      },
+      {
+        "version": "20261016074743",
+        "name": "042_govuk_product_writer_row_scope"
+      }
+    ],
+    "bodyFingerprints": [
+      {
+        "version": "20261016052229",
+        "name": "041_govuk_product_metadata_writer",
+        "remoteStatementsSha256": "7c7de0106915fde2249136c253161dd33c136a7f13312330a579b3bc58a7e911",
+        "localUpSqlSha256": "7c7de0106915fde2249136c253161dd33c136a7f13312330a579b3bc58a7e911",
+        "match": true
+      },
+      {
+        "version": "20261016074743",
+        "name": "042_govuk_product_writer_row_scope",
+        "remoteStatementsSha256": "917eb52d0c6719a70b7f4b4e7317e317d6acd5b3834a91c18f7877c3d1c01bcb",
+        "localUpSqlSha256": "917eb52d0c6719a70b7f4b4e7317e317d6acd5b3834a91c18f7877c3d1c01bcb",
+        "match": true
+      }
+    ]
+  },
+  "candidateState": {
+    "opsSchemaExists": false,
+    "persistFunctionExists": false,
+    "recoveryFunctionExists": false,
+    "invokerRoleExists": false,
+    "pgCronInstalled": false,
+    "writerLogin": false,
+    "writerRole": {
+      "exists": true,
+      "superuser": false,
+      "createDb": false,
+      "createRole": false,
+      "replication": false,
+      "bypassRls": false,
+      "connectionLimit": 1
+    },
+    "writerMaintenanceMembership": {
+      "member": "postgres",
+      "adminOption": true,
+      "inheritOption": false,
+      "setOption": false
+    },
+    "activeRelevantSessions": 0,
+    "counts": {
+      "sources": 0,
+      "articles": 0,
+      "events": 0,
+      "live_source_policies": 0,
+      "live_acquisition_receipts": 0,
+      "live_article_versions": 0,
+      "live_exposure_exclusions": 0,
+      "prospective_content_rights_write_guards": 0
+    },
+    "rlsEnabled": {
+      "sources": true,
+      "articles": true,
+      "events": true,
+      "live_source_policies": true,
+      "live_acquisition_receipts": true,
+      "live_article_versions": true,
+      "live_exposure_exclusions": true,
+      "prospective_content_rights_write_guards": true
+    }
+  },
+  "remoteWrites": "NONE",
+  "remoteApplyAuthorized": "NO"
+}

@@ -11,25 +11,361 @@ permissions:
 
 concurrency:
   group: dialektik-cloud-validation-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
-  core-build-and-unit:
+  candidate-build-and-postgres-17:
+    if: github.ref == 'refs/heads/codex/cloud-ci-validation-20261018'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 45
+    env:
+      # Disposable CI-only credentials. These never target Supabase or Render.
+      CI_PG_PASSWORD: ci-only-postgres-17-ephemeral
+      CI_PG_ADMIN_URL: postgresql://postgres:ci-only-postgres-17-ephemeral@127.0.0.1:55442/postgres
+      CI_ATTACK044_DATABASE: dialektik_attack045_clean_20261018
+      CI_ATTACK047_DATABASE: dialektik_attack047_recovery_clean
+      CI_PG_PORT: "55442"
+    services:
+      postgres:
+        image: postgres:17.11
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci-only-postgres-17-ephemeral
+          POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
+        ports:
+          - 55442:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 8
     steps:
-      - name: Checkout exact commit
+      - name: Checkout exact validation commit
         uses: actions/checkout@v4
+
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
+
+      - name: Initialize sanitized evidence header
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/dialektik-evidence"
+          {
+            printf 'GITHUB_SHA=%s\n' "$GITHUB_SHA"
+            printf 'GITHUB_REF=%s\n' "$GITHUB_REF"
+            printf 'WORKFLOW=%s\n' "$GITHUB_WORKFLOW"
+            printf 'REMOTE_WRITES=NONE\nREMOTE_APPLY_AUTHORIZED=NO\n'
+            printf 'ACQUISITION_EXECUTED=NO\nRENDER_DEPLOYED=NO\n'
+          } > "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+          echo "::add-mask::$CI_PG_PASSWORD"
+          echo "::add-mask::$CI_PG_ADMIN_URL"
+
       - name: Match repository npm version
         run: npm install --global npm@11.6.2
+
       - name: Install pinned dependencies
-        run: npm ci --no-audit --no-fund
+        shell: bash
+        run: |
+          set -o pipefail
+          npm ci --no-audit --no-fund 2>&1 | tee "$RUNNER_TEMP/dialektik-evidence/npm-ci.log"
+
       - name: Build database and Core
-        run: npm run build
-      - name: Run focused tests (no production connection)
-        run: npx vitest run --config services/core-api/vitest.config.mts
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee "$RUNNER_TEMP/dialektik-evidence/build.log"
+
+      - name: Run unit, migration-guard, invoker, and export-plan tests
+        shell: bash
+        run: |
+          set -o pipefail
+          npx vitest run --config services/core-api/vitest.config.mts 2>&1 \
+            | tee "$RUNNER_TEMP/dialektik-evidence/vitest.log"
+
+      - name: Verify PostgreSQL 17.11 SCRAM and durability settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t pg_ids < <(docker ps --filter ancestor=postgres:17.11 --format '{{.ID}}')
+          [[ "${#pg_ids[@]}" -eq 1 ]]
+          pg_id="${pg_ids[0]}"
+          printf 'CI_PG_CONTAINER_ID=%s\n' "$pg_id" >> "$GITHUB_ENV"
+          docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET fsync = 'on'"
+          docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -X -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET synchronous_commit = 'on'"
+          docker restart "$pg_id" > /dev/null
+          ready=false
+          for attempt in $(seq 1 30); do
+            if docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+              pg_isready -h 127.0.0.1 -p 5432 -U postgres -d postgres >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          [[ "$ready" == true ]]
+          server_version="$(docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -XAt -v ON_ERROR_STOP=1 \
+            -c 'SHOW server_version')"
+          fsync_value="$(docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -XAt -v ON_ERROR_STOP=1 -c 'SHOW fsync')"
+          sync_commit_value="$(docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -XAt -v ON_ERROR_STOP=1 \
+            -c 'SHOW synchronous_commit')"
+          scram_value="$(docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -XAt -v ON_ERROR_STOP=1 \
+            -c "SELECT CASE WHEN rolpassword LIKE ('SCRAM-SHA-256'||chr(36)||'%') THEN 'SCRAM' ELSE 'NOT_SCRAM' END FROM pg_catalog.pg_authid WHERE rolname='postgres'")"
+          [[ "$server_version" == 17.11* ]]
+          [[ "$fsync_value" == on ]]
+          [[ "$sync_commit_value" == on ]]
+          [[ "$scram_value" == SCRAM ]]
+          {
+            printf 'POSTGRES_IMAGE=postgres:17.11\n'
+            printf 'POSTGRES_SERVER_VERSION=%s\n' "$server_version"
+            printf 'POSTGRES_SCRAM_PASSWORD_VERIFIER=%s\n' "$scram_value"
+            printf 'POSTGRES_TCP_PASSWORD_AUTH=PASS\n'
+            printf 'FSYNC=%s\nSYNCHRONOUS_COMMIT=%s\n' "$fsync_value" "$sync_commit_value"
+            printf 'POSTGRES_DURABILITY_CONFIG=EXPLICIT_ALTER_SYSTEM_AND_RESTART\n'
+            printf 'POSTGRES_BIND=runner-local-port-55442-to-service-5432\n'
+          } > "$RUNNER_TEMP/dialektik-evidence/postgres-preflight.txt"
+          # A real TCP connection with the synthetic password confirms SCRAM authentication.
+          docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -XAt -v ON_ERROR_STOP=1 \
+            -c 'SELECT current_user' | grep -qx postgres
+
+      - name: Apply disposable baseline 001-042 and verify migration guard setup
+        shell: bash
+        env:
+          DIALEKTIK_GOVUK_RLS_TEST_DATABASE_NAME: dialektik_attack045_clean_20261018
+          DIALEKTIK_GOVUK_RLS_TEST_PORT: "55442"
+        run: |
+          set -euo pipefail
+          pg_id="$(docker ps --filter ancestor=postgres:17.11 --format '{{.ID}}')"
+          [[ -n "$pg_id" ]]
+          psql_ci() { docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -XAt -v ON_ERROR_STOP=1 "$@"; }
+          existing="$(psql_ci -d postgres \
+            -c "SELECT count(*) FROM pg_catalog.pg_database WHERE datname='$CI_ATTACK044_DATABASE'")"
+          [[ "$existing" == 0 ]]
+          psql_ci -d postgres \
+            -c "CREATE DATABASE $CI_ATTACK044_DATABASE TEMPLATE template0 ENCODING 'UTF8'"
+          export DIALEKTIK_GOVUK_RLS_TEST_DATABASE_URL="${CI_PG_ADMIN_URL%/postgres}/$CI_ATTACK044_DATABASE"
+          set -o pipefail
+          node --import tsx services/core-api/test/prepare-govuk-row-scope-local.mts 2>&1 \
+            | tee "$RUNNER_TEMP/dialektik-evidence/migration-001-042.log"
+          applied_count="$(psql_ci -d "$CI_ATTACK044_DATABASE" \
+            -c 'SELECT count(*) FROM public.kysely_migration')"
+          [[ "$applied_count" == 42 ]]
+          psql_ci -d "$CI_ATTACK044_DATABASE" \
+            -c 'SELECT name FROM public.kysely_migration ORDER BY name' \
+            > "$RUNNER_TEMP/dialektik-evidence/migration-001-042-ledger.txt"
+          printf 'MIGRATION_LEDGER_COUNT_BEFORE_CANDIDATE=%s\n' "$applied_count" \
+            >> "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+
+      - name: Validate candidate export using synthetic snapshot only
+        shell: bash
+        run: |
+          set -euo pipefail
+          output_dir="docs/operations/dev-deployment-remediation/ci-payload-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          set -o pipefail
+          npm run supabase:dev:prepare-candidates -- \
+            --snapshot-file services/core-api/test/fixtures/supabase-dev-candidate-snapshot.synthetic.json \
+            --output-dir "$output_dir" 2>&1 \
+            | tee "$RUNNER_TEMP/dialektik-evidence/candidate-export.log"
+          node --input-type=module - "$output_dir/manifest.json" \
+            "$RUNNER_TEMP/dialektik-evidence/candidate-export-manifest.json" <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const [manifestPath, outputPath] = process.argv.slice(2);
+          const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
+          if (manifest.mode !== 'EXPORT_ONLY_NO_DATABASE_CONNECTION' ||
+              manifest.remoteOperation !== 'NONE' || manifest.remoteApplyAuthorized !== 'NO' ||
+              JSON.stringify(manifest.includedSequences) !== JSON.stringify(['043', '044']) ||
+              manifest.artifacts.length !== 4 ||
+              manifest.artifacts.some((item) => !/^[a-f0-9]{64}$/.test(item.sha256))) {
+            throw new Error('CANDIDATE_EXPORT_MANIFEST_ASSERTION_FAILED');
+          }
+          writeFileSync(outputPath, JSON.stringify({
+            mode: manifest.mode,
+            remoteOperation: manifest.remoteOperation,
+            remoteApplyAuthorized: manifest.remoteApplyAuthorized,
+            includedSequences: manifest.includedSequences,
+            artifacts: manifest.artifacts.map(({ file, direction, sequence, sha256, bytes }) =>
+              ({ file, direction, sequence, sha256, bytes })),
+          }, null, 2) + '\n');
+          NODE
+          rm -rf "$output_dir"
+          echo 'SELECTIVE_EXPORT=PASS; SQL execution=NONE' \
+            >> "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+
+      - name: Run ATTACK 044, first-invocation race, rollback, idempotency, and migration DOWN
+        shell: bash
+        env:
+          DIALEKTIK_ATTACK044_PORT: "55442"
+          DIALEKTIK_ATTACK047_RECOVERY_DATABASE_NAME: dialektik_attack047_recovery_clean
+        run: |
+          set -euo pipefail
+          export DIALEKTIK_ATTACK044_ADMIN_URL="${CI_PG_ADMIN_URL%/postgres}/$CI_ATTACK044_DATABASE"
+          set -o pipefail
+          node services/core-api/test/attack044-clean-one-shot.pg17.mjs 2>&1 \
+            | tee "$RUNNER_TEMP/dialektik-evidence/attack044-045-down.log"
+          printf 'CANDIDATE_MIGRATION_LEDGER_COUNT=' >> "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+          docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$CI_PG_CONTAINER_ID" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d "$CI_ATTACK044_DATABASE" -XAt -v ON_ERROR_STOP=1 \
+            -c 'SELECT count(*) FROM public.kysely_migration' \
+            >> "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+
+      - name: Create masked ephemeral invoker credential for recovery test
+        shell: bash
+        run: |
+          set -euo pipefail
+          password="$(openssl rand -hex 32)"
+          echo "::add-mask::$password"
+          printf 'CI_ATTACK047_INVOKER_PASSWORD=%s\n' "$password" >> "$GITHUB_ENV"
+          unset password
+
+      - name: Run ATTACK 047 recovery before PostgreSQL restart
+        shell: bash
+        env:
+          DIALEKTIK_ATTACK047_DATABASE_NAME: dialektik_attack047_recovery_clean
+          DIALEKTIK_ATTACK047_PORT: "55442"
+          DIALEKTIK_ATTACK047_MODE: before-restart
+        run: |
+          set -euo pipefail
+          export DIALEKTIK_ATTACK047_DATABASE_URL="${CI_PG_ADMIN_URL%/postgres}/$DIALEKTIK_ATTACK047_DATABASE_NAME"
+          export DIALEKTIK_ATTACK047_ADMIN_URL="$DIALEKTIK_ATTACK047_DATABASE_URL"
+          export DIALEKTIK_ATTACK047_INVOKER_PASSWORD="$CI_ATTACK047_INVOKER_PASSWORD"
+          set -o pipefail
+          node services/core-api/test/attack047-recovery.pg17.mjs 2>&1 \
+            | tee "$RUNNER_TEMP/dialektik-evidence/attack047-before-restart.log"
+
+      - name: Restart only this run's ephemeral PostgreSQL service
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t pg_ids < <(docker ps --filter ancestor=postgres:17.11 --format '{{.ID}}')
+          [[ "${#pg_ids[@]}" -eq 1 ]]
+          pg_id="${pg_ids[0]}"
+          [[ "$(docker inspect -f '{{.Config.Image}}' "$pg_id")" == postgres:17.11 ]]
+          docker restart "$pg_id" > /dev/null
+          ready=false
+          for attempt in $(seq 1 30); do
+            if docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+              pg_isready -h 127.0.0.1 -p 5432 -U postgres -d postgres >/dev/null 2>&1; then
+              ready=true
+              break
+            fi
+            sleep 2
+          done
+          [[ "$ready" == true ]]
+          server_version="$(docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -XAt -v ON_ERROR_STOP=1 -c 'SHOW server_version')"
+          fsync_value="$(docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -XAt -v ON_ERROR_STOP=1 -c 'SHOW fsync')"
+          sync_commit_value="$(docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" \
+            psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -XAt -v ON_ERROR_STOP=1 \
+            -c 'SHOW synchronous_commit')"
+          [[ "$server_version" == 17.11* && "$fsync_value" == on && "$sync_commit_value" == on ]]
+          printf 'POSTGRES_SERVICE_RESTART=PASS\nPOSTGRES_AFTER_RESTART_VERSION=%s\n' "$server_version" \
+            >> "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+
+      - name: Recover commit certainty after PostgreSQL restart and close test identities
+        shell: bash
+        env:
+          DIALEKTIK_ATTACK047_DATABASE_NAME: dialektik_attack047_recovery_clean
+          DIALEKTIK_ATTACK047_PORT: "55442"
+          DIALEKTIK_ATTACK047_MODE: after-restart
+        run: |
+          set -euo pipefail
+          export DIALEKTIK_ATTACK047_DATABASE_URL="${CI_PG_ADMIN_URL%/postgres}/$DIALEKTIK_ATTACK047_DATABASE_NAME"
+          export DIALEKTIK_ATTACK047_ADMIN_URL="$DIALEKTIK_ATTACK047_DATABASE_URL"
+          export DIALEKTIK_ATTACK047_INVOKER_PASSWORD="$CI_ATTACK047_INVOKER_PASSWORD"
+          set -o pipefail
+          node services/core-api/test/attack047-recovery.pg17.mjs 2>&1 \
+            | tee "$RUNNER_TEMP/dialektik-evidence/attack047-after-restart.log"
+          unset DIALEKTIK_ATTACK047_INVOKER_PASSWORD CI_ATTACK047_INVOKER_PASSWORD
+          echo 'ATTACK047_RESTART_RECOVERY=PASS; INVOKER_CLEANUP=PASS' \
+            >> "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+
+      - name: Fail-closed cleanup of disposable PostgreSQL databases and roles
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t pg_ids < <(docker ps --filter ancestor=postgres:17.11 --format '{{.ID}}')
+          if [[ "${#pg_ids[@]}" -ne 1 ]]; then
+            echo 'CI_POSTGRES_CLEANUP=BLOCKED_CONTAINER_NOT_UNIQUE'
+            exit 1
+          fi
+          pg_id="${pg_ids[0]}"
+          docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" psql \
+            -h 127.0.0.1 -p 5432 -U postgres -d postgres -X -v ON_ERROR_STOP=1 <<'SQL' | tee "$RUNNER_TEMP/dialektik-evidence/cleanup.log"
+          SELECT pg_catalog.pg_terminate_backend(pid)
+          FROM pg_catalog.pg_stat_activity
+          WHERE datname IN (
+            'dialektik_attack045_clean_20261018',
+            'dialektik_attack047_recovery_clean',
+            'dialektik_attack045_first_race_ab',
+            'dialektik_attack045_first_race_ba',
+            'dialektik_attack045_revoked_race',
+            'dialektik_attack047_conflict'
+          ) AND pid <> pg_catalog.pg_backend_pid();
+          DROP DATABASE IF EXISTS dialektik_attack045_first_race_ab;
+          DROP DATABASE IF EXISTS dialektik_attack045_first_race_ba;
+          DROP DATABASE IF EXISTS dialektik_attack045_revoked_race;
+          DROP DATABASE IF EXISTS dialektik_attack047_conflict;
+          DROP DATABASE IF EXISTS dialektik_attack047_recovery_clean;
+          DROP DATABASE IF EXISTS dialektik_attack045_clean_20261018;
+          DO $cleanup$
+          BEGIN
+            IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='dialektik_govuk_rsh_invoker') THEN
+              EXECUTE 'ALTER ROLE dialektik_govuk_rsh_invoker NOLOGIN PASSWORD NULL';
+              PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity
+                WHERE usename='dialektik_govuk_rsh_invoker' AND pid<>pg_catalog.pg_backend_pid();
+              EXECUTE 'DROP ROLE dialektik_govuk_rsh_invoker';
+            END IF;
+            IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='dialektik_govuk_metadata_writer') THEN
+              EXECUTE 'ALTER ROLE dialektik_govuk_metadata_writer NOLOGIN PASSWORD NULL';
+              EXECUTE 'REVOKE dialektik_govuk_metadata_writer FROM postgres';
+              PERFORM pg_catalog.pg_terminate_backend(pid) FROM pg_catalog.pg_stat_activity
+                WHERE usename='dialektik_govuk_metadata_writer' AND pid<>pg_catalog.pg_backend_pid();
+              EXECUTE 'DROP ROLE dialektik_govuk_metadata_writer';
+            END IF;
+          END
+          $cleanup$;
+          SELECT CASE
+            WHEN NOT EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname IN
+              ('dialektik_govuk_rsh_invoker','dialektik_govuk_metadata_writer'))
+             AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_stat_activity WHERE usename IN
+              ('dialektik_govuk_rsh_invoker','dialektik_govuk_metadata_writer'))
+            THEN 'CI_POSTGRES_CLEANUP=PASS ROLES=ABSENT SESSIONS=0'
+            ELSE 'CI_POSTGRES_CLEANUP=FAIL'
+          END;
+          SQL
+          printf 'CI_POSTGRES_CLEANUP=PASS; service is disposable and removed by Actions at job end\n' \
+            >> "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+
+      - name: Hash sanitized evidence files
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/dialektik-evidence"
+          if [[ -d "$evidence_dir" ]]; then
+            (cd "$evidence_dir" && find . -maxdepth 1 -type f ! -name SHA256SUMS.txt \
+              -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt)
+          fi
+
+      - name: Upload sanitized validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dialektik-cloud-validation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/dialektik-evidence/
+          if-no-files-found: warn
+          retention-days: 14

@@ -13,12 +13,14 @@ const { DialektikMigrationProvider } = require('../../../packages/database/dist/
 const connectionString = process.env.DIALEKTIK_GOVUK_RLS_TEST_DATABASE_URL;
 assert.ok(connectionString, 'DIALEKTIK_GOVUK_RLS_TEST_DATABASE_URL is required');
 const url = new URL(connectionString);
+const expectedDatabase = process.env.DIALEKTIK_GOVUK_RLS_TEST_DATABASE_NAME ?? 'dialektik_attack043';
+const expectedPort = process.env.DIALEKTIK_GOVUK_RLS_TEST_PORT ?? '55442';
 assert.equal(url.protocol, 'postgresql:');
 assert.equal(url.hostname, '127.0.0.1');
-assert.equal(url.port, '55442');
-assert.equal(url.pathname, '/postgres');
+assert.equal(url.port, expectedPort);
+assert.equal(url.pathname, `/${expectedDatabase}`);
 assert.equal(url.username, 'postgres');
-assert.equal(url.password, '');
+assert.ok(decodeURIComponent(url.password).length >= 32, 'a transient local SCRAM password is required');
 
 const database = createDatabase({
   connectionString,
@@ -48,6 +50,8 @@ try {
     async getMigrations(): Promise<Record<string, Migration>> {
       const migrations = await provider.getMigrations();
       delete migrations['042_govuk_product_writer_row_scope'];
+      delete migrations['043_govuk_rsh_one_shot_metadata'];
+      delete migrations['044_govuk_rsh_receipt_recovery'];
       return migrations;
     },
   };
@@ -75,7 +79,15 @@ try {
       FOR SELECT TO dialektik_core_app USING (true);
   `).execute(database);
 
-  const final = await new Migrator({ db: database, provider }).migrateToLatest();
+  const rowScopeProvider: MigrationProvider = {
+    async getMigrations(): Promise<Record<string, Migration>> {
+      const migrations = await provider.getMigrations();
+      delete migrations['043_govuk_rsh_one_shot_metadata'];
+      delete migrations['044_govuk_rsh_receipt_recovery'];
+      return migrations;
+    },
+  };
+  const final = await new Migrator({ db: database, provider: rowScopeProvider }).migrateToLatest();
   if (final.error) throw final.error;
   assert.equal(final.results?.length, 1, 'expected only migration 042 after the local baseline was prepared');
   assert.equal(final.results?.[0]?.migrationName, '042_govuk_product_writer_row_scope');
@@ -94,7 +106,7 @@ try {
   assert.deepEqual(policyState.rows[0], { coreSource: true, coreArticle: true, targetRls: 5 });
   process.stdout.write(JSON.stringify({
     event: 'govuk_row_scope_local_migrations_ready',
-    postgres_port: 55442,
+    postgres_port: Number(expectedPort),
     baseline_migrations: baseline.results?.length,
     tested_migration: final.results?.[0]?.migrationName,
     core_read_baseline: 'mirrored_from_verified_remote_catalog',

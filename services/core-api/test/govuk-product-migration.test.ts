@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import {
-  parseGovUkAcquisitionArgs,
-  validateGovUkWriterDatabaseUrl,
-} from '../src/live/govuk-product-acquisition.cli-contract.js';
+import { parseGovUkAcquisitionArgs } from '../src/live/govuk-product-acquisition.cli-contract.js';
 
 const migration = readFileSync(
   resolve(process.cwd(), 'packages/database/src/migration/041_govuk_product_metadata_writer.ts'),
@@ -12,6 +9,10 @@ const migration = readFileSync(
 );
 const rowScopeMigration = readFileSync(
   resolve(process.cwd(), 'packages/database/src/migration/042_govuk_product_writer_row_scope.ts'),
+  'utf8',
+);
+const oneShotMigration = readFileSync(
+  resolve(process.cwd(), 'packages/database/src/migration/043_govuk_rsh_one_shot_metadata.ts'),
   'utf8',
 );
 const channelMigration = readFileSync(
@@ -53,19 +54,17 @@ describe('GOV.UK acquisition database boundary', () => {
     );
   });
 
-  it('requires explicit one-shot persistence gates and rejects effective network-provider access', () => {
+  it('fails closed before acquisition when persistence requires a controlled PostgreSQL operator', () => {
     expect(cliContract).toContain("values.get('--source') !== 'govuk-rsh'");
     expect(cliContract).toContain("values.get('--mode')");
-    expect(cli).toContain("process.env.DIALEKTIK_GOVUK_RSH_PERSIST_ENABLED !== 'true'");
-    expect(cli).toContain('IMPORT_ONE_AUTHORIZED_GOVUK_RSH_ARTICLE');
-    expect(cli).toContain('row.can_use_network_schema !== false');
-    expect(cli).toContain('row.can_execute_network_http !== false');
-    expect(cli).toContain('row.can_read_network_queue !== false');
-    expect(cli).toContain('row.scoped_rls_policies_valid !== true');
-    expect(cli).toContain('row.live_writer_rls_enabled !== true');
-    expect(cli).toContain('as can_select_article_title');
-    expect(cli).toContain('row.can_select_article_title !== false');
-    expect(cli).toContain('row.has_no_role_memberships !== true');
+    expect(cli).toContain("if (mode === 'persist')");
+    expect(cli).toContain('DIALEKTIK_GOVUK_RSH_PERSIST_ENABLED');
+    expect(cli).toContain('persistGovUkRshMetadataWithInvoker');
+    expect(cli).not.toContain('postgres');
+    expect(cli).not.toContain('metadata_writer');
+    expect(cli).not.toContain('DIALEKTIK_GOVUK_ACQUISITION_DATABASE_URL');
+    expect(cli).not.toContain('DIALEKTIK_GOVUK_ACQUISITION_CA_CERT');
+    expect(cli).not.toContain('persistGovUkRshMetadataOnce');
     expect(cli).toContain("'GOVUK_RSH_NETWORK_' + causeCode");
   });
 
@@ -98,6 +97,50 @@ describe('GOV.UK acquisition database boundary', () => {
     expect(rowScopeMigration).toContain('roles = ARRAY[\'dialektik_core_app\']::name[]');
   });
 
+  it('installs a fixed-scope one-shot function owned by the closed writer role', () => {
+    expect(oneShotMigration).toContain('SECURITY DEFINER');
+    expect(oneShotMigration).toContain('SET search_path = pg_catalog, pg_temp');
+    expect(oneShotMigration).toContain('SET row_security = on');
+    expect(oneShotMigration).toContain("session_user <> 'dialektik_govuk_rsh_invoker'");
+    expect(oneShotMigration).toContain("current_user <> 'dialektik_govuk_metadata_writer'");
+    expect(oneShotMigration).toContain('CREATE ROLE dialektik_govuk_rsh_invoker NOLOGIN NOINHERIT');
+    expect(oneShotMigration).toContain('CONNECTION LIMIT 2');
+    expect(oneShotMigration).toContain('GRANT CONNECT ON DATABASE');
+    expect(oneShotMigration).toContain('GRANT USAGE ON SCHEMA dialektik_ops TO dialektik_govuk_rsh_invoker');
+    expect(oneShotMigration).toContain('REVOKE CREATE ON SCHEMA dialektik_ops FROM dialektik_govuk_metadata_writer');
+    expect(oneShotMigration).toContain('GOVUK_RSH_INVOKER_HAS_DIRECT_WRITE_PRIVILEGES');
+    expect(oneShotMigration).toContain('GOVUK_RSH_INVOKER_CAN_EXECUTE_OTHER_DEFINER_FUNCTIONS');
+    expect(oneShotMigration).not.toMatch(/GRANT\s+EXECUTE\s+ON\s+FUNCTION[^;]+\bTO\s+dialektik_govuk_rsh_invoker/isu);
+    expect(oneShotMigration).toContain("'86f4abba-9eaa-412f-b048-5ed30aa74201'");
+    expect(oneShotMigration).toContain("'https://www.gov.uk/government/news/social-housing-landlord-downgraded-by-rsh'");
+    expect(oneShotMigration).toContain('GOVUK_RSH_METADATA_FIELDS_OUT_OF_SCOPE');
+    expect(oneShotMigration).toContain('pg_advisory_xact_lock(20261018, 86)');
+    expect(oneShotMigration).toContain('REVOKE EXECUTE ON FUNCTION dialektik_ops.persist_govuk_rsh_metadata_once(jsonb)');
+    expect(oneShotMigration).toContain('SET LOCAL ROLE dialektik_govuk_metadata_writer;');
+    expect(oneShotMigration).not.toMatch(/\bEXECUTE\s+format\s*\(/iu);
+    expect(oneShotMigration).not.toMatch(/\b(?:ALTER|CREATE)\s+ROLE\b[^;]*\bLOGIN\b/isu);
+    expect(oneShotMigration).not.toMatch(/GRANT\s+EXECUTE\s+ON\s+FUNCTION[^;]+\bTO\s+(?:PUBLIC|anon|authenticated|dialektik_core_app)\b/isu);
+    expect(oneShotMigration).toContain('EXPECTED_NINE_ROWS_NOT_WRITTEN');
+    expect(oneShotMigration).toContain('only the restricted PostgreSQL 17 creator-admin grant is accepted');
+    expect(oneShotMigration).toContain('member = current_user::regrole');
+    expect(oneShotMigration).toContain('AND admin_option');
+    expect(oneShotMigration).toContain('privilege.grantee = session_user::pg_catalog.regrole');
+    expect(oneShotMigration).toContain('pg_catalog.aclexplode');
+    expect(oneShotMigration).toContain('INSERT INTO public.prospective_content_rights_write_guards');
+    expect(oneShotMigration).toContain('rights_guard_trigger_count <> 2');
+    expect(oneShotMigration).toContain('CREATE OR REPLACE FUNCTION public.dialektik_validate_live_receipt()');
+    expect(oneShotMigration).toContain('CREATE OR REPLACE FUNCTION public.dialektik_validate_live_article()');
+    expect(oneShotMigration).toContain('CREATE OR REPLACE FUNCTION public.dialektik_validate_live_version()');
+    expect(oneShotMigration).toContain('public.live_source_policies AS policy');
+    expect(oneShotMigration).toContain('public.live_acquisition_receipts AS receipt');
+    expect(oneShotMigration).toContain('public.live_exposure_exclusions AS exclusion');
+    expect(oneShotMigration).toContain('receipt_validator_trigger_count <> 1');
+    expect(oneShotMigration).toContain('article_validator_trigger_count <> 1');
+    expect(oneShotMigration).toContain('version_validator_trigger_count <> 1');
+    expect(oneShotMigration).toContain('session_user::pg_catalog.regrole');
+    expect(oneShotMigration).toContain('membership.roleid IN');
+  });
+
   it('preserves the preexisting Core read surface while denying other client roles', () => {
     expect(rowScopeMigration.match(/TO dialektik_core_app USING \(true\)/gu)).toHaveLength(5);
     expect(rowScopeMigration).toContain('dialektik_govuk_core_read_live_source_policies');
@@ -127,33 +170,4 @@ describe('GOV.UK acquisition database boundary', () => {
     }
   });
 
-  it('accepts only the dedicated development-project PostgreSQL identity and port', () => {
-    const allowedUrl = new URL(
-      'postgresql://dialektik_govuk_metadata_writer.vclsswwfhljczxgnsciq@aws-0-us-east-1.pooler.supabase.com:5432/postgres',
-    );
-    allowedUrl.password = 'test-only-placeholder';
-    const allowed = allowedUrl.toString();
-    expect(validateGovUkWriterDatabaseUrl(allowed).hostname).toBe(
-      'aws-0-us-east-1.pooler.supabase.com',
-    );
-
-    const directUrl = new URL(
-      'postgresql://dialektik_govuk_metadata_writer@db.vclsswwfhljczxgnsciq.supabase.co:5432/postgres',
-    );
-    directUrl.password = 'test-only-placeholder';
-
-    for (const denied of [
-      allowed.replace('aws-0-us-east-1.pooler.supabase.com', 'attacker.example'),
-      allowed.replace(':5432/postgres', '/postgres'),
-      allowed.replace(':5432/postgres', ':5433/postgres'),
-      directUrl.toString(),
-      allowed + '?sslmode=disable',
-      allowed + '#other-target',
-      allowed.replace('dialektik_govuk_metadata_writer.vclsswwfhljczxgnsciq', 'postgres'),
-    ]) {
-      expect(() => validateGovUkWriterDatabaseUrl(denied)).toThrow(
-        'GOVUK_RSH_WRITER_TARGET_DENIED',
-      );
-    }
-  });
 });
