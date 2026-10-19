@@ -81,8 +81,25 @@ jobs:
           set -euo pipefail
           umask 077
           mkdir -p "$RUNNER_TEMP/dialektik-backup"
-          printf '%s' "$DEV_CA_PEM" > "$RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt"
-          echo "700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7  $RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt" | sha256sum -c -
+          python3 - <<'PY'
+          import os, hashlib, subprocess, pathlib
+          p=pathlib.Path(os.environ['RUNNER_TEMP'])/'dialektik-backup'/'prod-ca-2021.crt'
+          raw=os.environ['DEV_CA_PEM']
+          lf=raw.replace('\\r\\n','\\n').replace('\\r','\\n')
+          candidates=[('exact',raw),('LF',lf),('LF_final_newline',lf.rstrip('\\n')+'\\n'),('LF_no_final_newline',lf.rstrip('\\n'))]
+          pin='700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'
+          for label, val in candidates:
+            if hashlib.sha256(val.encode()).hexdigest()==pin:
+              p.write_bytes(val.encode())
+              print('PINNED_DEV_CA_SHA256_MATCH_'+label)
+              break
+          else:
+            p.write_bytes(raw.encode())
+            test=subprocess.run(['openssl','x509','-in',str(p),'-noout'],capture_output=True)
+            if test.returncode!=0:
+              raise SystemExit('DEV_CA_PEM_INVALID_CERTIFICATE')
+            raise SystemExit('DEV_CA_PEM_VALID_BUT_WRONG_CERTIFICATE_OR_FINGERPRINT')
+          PY
           printf '%s' "$BACKUP_PASSWORD" > "$RUNNER_TEMP/dialektik-backup/passphrase"
           echo "PGSSLROOTCERT=$RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt" >> "$GITHUB_ENV"
       - name: Verify remote PostgreSQL identity through certificate-verified Docker psql
