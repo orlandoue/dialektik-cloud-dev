@@ -5,6 +5,7 @@ import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
 import 'package:dialektik/features/live/data/candidate_source_registry.dart';
+import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
@@ -41,6 +42,7 @@ final class LiveNewsScreen extends StatefulWidget {
     required this.repository,
     required this.onOpenArticle,
     this.initialSourceId,
+    this.govUkPreviewLoader,
     this.clock = DateTime.now,
     this.navigationActions = const <Widget>[],
     super.key,
@@ -48,6 +50,7 @@ final class LiveNewsScreen extends StatefulWidget {
   final LiveNewsRepository repository;
   final ValueChanged<String> onOpenArticle;
   final String? initialSourceId;
+  final GovUkPreviewLoader? govUkPreviewLoader;
   final LiveClock clock;
   final List<Widget> navigationActions;
   @override
@@ -55,6 +58,7 @@ final class LiveNewsScreen extends StatefulWidget {
 }
 
 final class _LiveNewsScreenState extends State<LiveNewsScreen> {
+  Future<GovUkPreview>? _govUkPreviewFuture;
   final TextEditingController _query = TextEditingController();
   PublicRequestToken? _newsToken;
   PublicRequestToken? _sourceToken;
@@ -78,6 +82,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   void initState() {
     super.initState();
     _sourceId = widget.initialSourceId;
+    _govUkPreviewFuture = widget.govUkPreviewLoader?.call(refresh: true);
     unawaited(_loadSources());
     unawaited(_load());
   }
@@ -272,6 +277,72 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
           const Text(
             'Titulares y datos de publicación. Lee el contenido en la fuente original.',
           ),
+          if (widget.govUkPreviewLoader != null) ...<Widget>[
+            const SizedBox(height: DialektikSpacing.space4),
+            Card(
+              key: const Key('govuk-official-preview'),
+              child: Padding(
+                padding: const EdgeInsets.all(DialektikSpacing.space4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Vista previa · Fuente oficial',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: DialektikSpacing.space2),
+                    const Text(
+                      'Contenido consultado en GOV.UK. No está guardado en Dialektik y todavía no forma parte del análisis de acontecimientos.',
+                    ),
+                    FutureBuilder<GovUkPreview>(
+                      future: _govUkPreviewFuture,
+                      builder: (BuildContext context, AsyncSnapshot<GovUkPreview> snapshot) {
+                        if (snapshot.connectionState != ConnectionState.done) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: LinearProgressIndicator(),
+                          );
+                        }
+                        if (snapshot.hasError || !snapshot.hasData) {
+                          return TextButton.icon(
+                            onPressed: () => setState(() {
+                              _govUkPreviewFuture =
+                                  widget.govUkPreviewLoader!.call(refresh: true);
+                            }),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Reintentar la vista previa oficial'),
+                          );
+                        }
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            for (final GovUkPreviewItem article in snapshot.data!.items) ...<Widget>[
+                              const SizedBox(height: DialektikSpacing.space3),
+                              Text(article.headline,
+                                  style: Theme.of(context).textTheme.titleMedium),
+                              const SizedBox(height: DialektikSpacing.space2),
+                              Text(article.publisher),
+                              Text(
+                                'Publicado: ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year}',
+                              ),
+                              TextButton.icon(
+                                onPressed: () =>
+                                    unawaited(openExternalHttpLink(article.canonicalUrl)),
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('Leer publicación original'),
+                              ),
+                              Text(article.attribution,
+                                  style: Theme.of(context).textTheme.bodySmall),
+                            ],
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: DialektikSpacing.space4),
           Row(
             children: <Widget>[
