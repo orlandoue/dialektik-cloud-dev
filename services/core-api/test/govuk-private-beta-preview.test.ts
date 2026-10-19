@@ -17,11 +17,11 @@ describe('Curated multi-article official preview', () => {
     return (async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/robots.txt')) return new Response(
-        denyRobots ? 'User-agent: *\\nDisallow: /api/content/\\n' :
-        'User-agent: *\\nAllow: /api/content/\\n',
+        denyRobots ? 'User-agent: *\nDisallow: /api/content/\n' :
+        'User-agent: *\nAllow: /api/content/\n',
         { status: 200, headers: { 'content-type': 'text/plain' } },
       );
-      const path = new URL(url).pathname.replace(/^\\/api\\/content/u, '');
+      const path = new URL(url).pathname.slice('/api/content'.length);
       const index = GOVUK_CURATED_ARTICLE_URLS.findIndex((u) => new URL(u).pathname === path);
       if (index < 0) return new Response('Not found', { status: 404 });
       const id = index === 0 ? GOVUK_RSH_CONTENT_ID :
