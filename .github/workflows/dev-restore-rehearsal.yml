@@ -97,6 +97,11 @@ jobs:
           if m:
             name=m.group(1)
             print('MISSING_ROLE_NAME',name if name in {'anon','authenticated','service_role','authenticator','supabase_admin','supabase_auth_admin','supabase_storage_admin','supabase_read_only_user','supabase_realtime_admin','supabase_functions_admin','supabase_replication_admin','dialektik_core_app','dialektik_core_app_rot_20261016'} else 'OTHER_ROLE')
+          first=next((line.split('ERROR:',1)[1].strip() for line in t.splitlines() if 'ERROR:' in line), 'UNAVAILABLE')
+          first=re.sub(r'"[^"]*"', '"[IDENTIFIER]"',first)
+          first=re.sub(r"'[^']*'", "'[REDACTED]'",first)
+          first=re.sub(r'[A-Fa-f0-9]{20,}', '[REDACTED]', first)
+          print('FIRST_SQL_ERROR_REDACTED',first[:160])
           PY
             exit 1
           fi
