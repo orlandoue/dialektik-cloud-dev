@@ -12,7 +12,7 @@
   },
   "transfer": {
     "fileCount": 252,
-    "totalBytes": 2278768,
+    "totalBytes": 2280881,
     "excludedPaths": [
       "app/test/semantic/**",
       "app/test/semantic_shadow/**",
@@ -31,7 +31,8 @@
       "Consumer navigation test preloads the local source registry through tester.runAsync and asserts all 50 candidates; source worktree unchanged.",
       "Sorted the new test imports and removed a duplicate candidate-count assertion; no source worktree changes.",
       "The immutable root candidate registry shares one in-flight/successful load across routes; the navigation test asserts concurrent calls share the same future.",
-      "The Fuentes navigation test flushes immediate mock reads and asserts loaded source and candidate states before settling the finite route transition; it does not wait for an indeterminate loading ticker to become idle."
+      "The Fuentes navigation test flushes immediate mock reads and asserts loaded source and candidate states before settling the finite route transition; it does not wait for an indeterminate loading ticker to become idle.",
+      "The Fuentes navigation test holds and then completes the /live/sources Future, asserts the visible loading state, verifies rendered source and candidate results, and only then settles navigation animations."
     ]
   },
   "files": [
@@ -1111,9 +1112,9 @@
     },
     {
       "path": "app/test/consumer/consumer_experience_entry_test.dart",
-      "bytes": 5126,
-      "sha256": "39d1ea3e032a0201889adb00e7011d933052dc642781c259086293986d24d48d",
-      "gitBlobSha": "00c9b426df12570dba83ab5c3a9a62b36d8f08cd"
+      "bytes": 7239,
+      "sha256": "9a0aff92f79cbce7dd5c2475c69360b26f28e3757b2394a2f32b2b473aa7dd0d",
+      "gitBlobSha": "9685c57549ab88ba3c4c6de8488bfbb5408022bc"
     },
     {
       "path": "app/test/consumer/consumer_navigation_filter_test.dart",
