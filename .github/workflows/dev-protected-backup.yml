@@ -41,8 +41,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$DEV_URL" && test -n "$BACKUP_PASSWORD" && test -n "$DEV_CA_PEM"
-          test "$(printf %s "$BACKUP_PASSWORD" | wc -c)" -ge 32
+          if [ -z "$DEV_URL" ]; then echo '::error::DIALEKTIK_DEV_BACKUP_DATABASE_URL: MISSING_OR_EMPTY'; exit 1; fi
+          echo 'DEV_DATABASE_URL: PRESENT'
+          if [ -z "$BACKUP_PASSWORD" ]; then echo '::error::DIALEKTIK_DEV_BACKUP_PASSPHRASE: MISSING_OR_EMPTY'; exit 1; fi
+          if [ "$(printf %s "$BACKUP_PASSWORD" | wc -c)" -lt 32 ]; then
+            echo '::error::DIALEKTIK_DEV_BACKUP_PASSPHRASE: TOO_SHORT_MIN_32_BYTES'; exit 1
+          fi
+          echo 'BACKUP_PASSPHRASE: PRESENT_AND_LENGTH_OK'
+          if [ -z "$DEV_CA_PEM" ]; then echo '::error::DIALEKTIK_DEV_DATABASE_CA_PEM: MISSING_OR_EMPTY'; exit 1; fi
+          echo 'DATABASE_CA_PEM: PRESENT'
           python3 - <<'PY'
           import os
           from urllib.parse import urlsplit,parse_qs,unquote
