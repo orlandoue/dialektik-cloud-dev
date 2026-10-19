@@ -9,7 +9,6 @@ final class CuratedEventPublication {
     required this.publishedOn,
   });
 
-
   factory CuratedEventPublication.fromJson(Object? value) {
     if (value is! Map<String, dynamic>) {
       throw const FormatException('Invalid event evidence.');
@@ -57,7 +56,6 @@ final class CuratedEventPublication {
     'Gobierno de Santiago':
         'https://www.gobiernosantiago.cl/2026/10/14/gobernador-de-santiago-y-alcalde-de-estacion-central-coordinan-catastro-de-viviendas-afectadas-por-tornado/',
   };
-
 
   final String publisher;
   final String publisherKind;
