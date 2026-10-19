@@ -172,6 +172,16 @@ final class _DialektikAppState extends State<DialektikApp> {
               : null);
       _routes = ConsumerRouteFactory(
         repository: _repository!,
+        curatedEventPreviewLoader:
+            const bool.fromEnvironment(
+                  'DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED',
+                  defaultValue: false,
+                ) &&
+                widget.readOnlyNewsReaderEnabled &&
+                liveRepository is PublicApiClient
+            ? ({bool refresh = false}) =>
+                  liveRepository.loadChileTornadoEventPreview(refresh: refresh)
+            : null,
         govUkPreviewLoader:
             const bool.fromEnvironment(
                   'DIALEKTIK_GOVUK_PREVIEW_ENABLED',
