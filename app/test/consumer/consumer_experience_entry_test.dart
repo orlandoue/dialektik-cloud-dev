@@ -49,9 +49,14 @@ void main() {
   testWidgets(
     'personal mode can open the consumer reader and reach administration separately',
     (WidgetTester tester) async {
-      final List<CandidateSourceInfo>? candidates = await tester.runAsync(
-        () => CandidateSourceRegistry.load(),
-      );
+      Future<List<CandidateSourceInfo>>? firstRegistryLoad;
+      Future<List<CandidateSourceInfo>>? secondRegistryLoad;
+      final List<CandidateSourceInfo>? candidates = await tester.runAsync(() {
+        firstRegistryLoad = CandidateSourceRegistry.load();
+        secondRegistryLoad = CandidateSourceRegistry.load();
+        return firstRegistryLoad!;
+      });
+      expect(identical(firstRegistryLoad, secondRegistryLoad), isTrue);
       expect(candidates, hasLength(50));
       await tester.pumpWidget(
         DialektikApp(
