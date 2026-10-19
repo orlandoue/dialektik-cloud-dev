@@ -274,9 +274,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text(
-            'Titulares oficiales con enlace al medio de origen.',
-          ),
+          const Text('Titulares oficiales con enlace al medio de origen.'),
           if (widget.govUkPreviewLoader != null) ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             Card(
