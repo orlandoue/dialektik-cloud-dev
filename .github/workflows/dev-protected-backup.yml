@@ -1,0 +1,112 @@
+name: Dialektik DEV protected backup (staged)
+
+on:
+  push:
+    branches: [codex/dev-backup-restore-20261019]
+    paths:
+      - '.github/workflows/dev-protected-backup.yml'
+      - 'docs/operations/dev-backup-protected.md'
+
+permissions:
+  contents: read
+
+jobs:
+  tooling:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Verify cloud backup tools without contacting DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker version --format '{{.Server.Version}}'
+          gpg --version | head -n 2
+          docker run --rm postgres:17.11 pg_dump --version
+          npx --yes supabase@2.120.0 --version
+          npx --yes supabase@2.120.0 db dump --help >/dev/null
+          echo 'Tools ready; no Supabase secrets or remote SQL used.'
+
+  protected_backup:
+    if: github.event.head_commit.message == 'EXECUTE_PROTECTED_DEV_BACKUP_20261019'
+    needs: tooling
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: dialektik-dev-backup
+    env:
+      DEV_URL: ${{ secrets.DIALEKTIK_DEV_BACKUP_DATABASE_URL }}
+      BACKUP_PASSWORD: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+      DEV_CA_PEM: ${{ secrets.DIALEKTIK_DEV_DATABASE_CA_PEM }}
+    steps:
+      - name: Verify protected parameters before touching DEV
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DEV_URL" && test -n "$BACKUP_PASSWORD" && test -n "$DEV_CA_PEM"
+          test "$(printf %s "$BACKUP_PASSWORD" | wc -c)" -ge 32
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit,parse_qs,unquote
+          u=urlsplit(os.environ['DEV_URL'])
+          q=parse_qs(u.query)
+          if not (u.scheme in ('postgresql','postgres') and
+                  u.hostname=='aws-0-us-east-1.pooler.supabase.com' and
+                  u.port==5432 and
+                  unquote(u.username or '')=='postgres.vclsswwfhljczxgnsciq' and
+                  u.path=='/postgres' and
+                  len(u.password or '')>=12 and
+                  q=={'sslmode':['verify-full']}):
+            raise SystemExit('TARGET_OR_TLS_MISMATCH')
+          print('Verified exact project, session pooler, and hostname-verifying TLS.')
+          PY
+      - name: Install and verify owner-supplied root certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/dialektik-backup"
+          printf '%s' "$DEV_CA_PEM" > "$RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt"
+          echo "700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7  $RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt" | sha256sum -c -
+          printf '%s' "$BACKUP_PASSWORD" > "$RUNNER_TEMP/dialektik-backup/passphrase"
+          echo "PGSSLROOTCERT=$RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt" >> "$GITHUB_ENV"
+      - name: Supabase-aware role schema and data export (read-only)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/dialektik-backup"
+          npx --yes supabase@2.120.0 db dump --db-url "$DEV_URL" -f "$work/roles.sql" --role-only \
+            > "$work/roles.log" 2>&1 || { echo '::error::Roles backup failed, no artifact.'; exit 1; }
+          npx --yes supabase@2.120.0 db dump --db-url "$DEV_URL" -f "$work/schema.sql" \
+            > "$work/schema.log" 2>&1 || { echo '::error::Schema backup failed, no artifact.'; exit 1; }
+          npx --yes supabase@2.120.0 db dump --db-url "$DEV_URL" -f "$work/data.sql" --use-copy --data-only \
+            -x storage.buckets_vectors -x storage.vector_indexes \
+            > "$work/data.log" 2>&1 || { echo '::error::Data backup failed, no artifact.'; exit 1; }
+          for file in roles.sql schema.sql data.sql; do test -s "$work/$file"; done
+          (cd "$work" && sha256sum roles.sql schema.sql data.sql > SHA256SUMS)
+          echo 'Role/schema/data files available for encrypted backup.'
+      - name: Encrypt before uploading
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/dialektik-backup"
+          tar -C "$work" -cf - roles.sql schema.sql data.sql SHA256SUMS |
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase-file "$work/passphrase" --symmetric \
+              --cipher-algo AES256 --s2k-digest-algo SHA512 \
+              --output "$RUNNER_TEMP/dialektik-dev-backup.tar.gpg"
+          test -s "$RUNNER_TEMP/dialektik-dev-backup.tar.gpg"
+          echo 'Encrypted data-only artifact prepared. Restore still unverified.'
+      - name: Upload only encrypted archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dialektik-dev-encrypted-logical-backup
+          path: ${{ runner.temp }}/dialektik-dev-backup.tar.gpg
+          retention-days: 7
+          if-no-files-found: error
+      - name: Delete temporary unencrypted files
+        if: always()
+        shell: bash
+        run: |
+          rm -rf -- "$RUNNER_TEMP/dialektik-backup"
+          echo 'Temp files deleted. CI runner will be discarded.'
