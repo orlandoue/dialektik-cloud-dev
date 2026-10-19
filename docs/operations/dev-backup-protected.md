@@ -43,3 +43,5 @@ The owner must provision the three Environment secrets via GitHub Settings → E
 2026-10-19 — Read-only backup URL diagnostics retry: password-encryption secret and CA were present; DEV connection URI failed strict shape validation. This run emits only categorical mismatch codes, never the URI or credentials. On another failure, stop and obtain owner-side correction.
 
 2026-10-19 — Owner corrected the database URL placeholder and encoded the dollar sign, and explicitly requested a repeat of the protected backup validation. Only a read-only encrypted backup is authorized; no migration, remote write, Render change or data import.
+
+2026-10-19 — Owner confirmed the GitHub Environment DATABASE_URL now has the required `?sslmode=verify-full` suffix and explicitly requested revalidation. Execute only a read-only encrypted cloud backup; no migration, authentication change, or restore to production.
