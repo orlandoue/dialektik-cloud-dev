@@ -13,6 +13,47 @@ import type { Kysely } from 'kysely';
 
 const validUrl = `postgresql://${encodeURIComponent(GOVUK_RSH_POOLER_USER)}:private-test-secret-at-least-32-characters@${GOVUK_RSH_POOLER_HOST}:5432/postgres?sslmode=verify-full`;
 
+function mockRecoveryDatabase(
+  recoveryStatus?: string,
+  identity = {
+    session_user: 'dialektik_govuk_rsh_invoker',
+    current_user: 'dialektik_govuk_rsh_invoker',
+    database_name: 'postgres',
+  },
+) {
+  const statements: string[] = [];
+  const executor = {
+    withPlugins: () => executor,
+    transformQuery: (node: unknown) => node,
+    compileQuery: (node: unknown, queryId: unknown) => {
+      const rawNode = node as { sqlFragments?: readonly string[]; parameters?: readonly unknown[] };
+      return {
+        queryId,
+        query: node,
+        sql: rawNode.sqlFragments?.join('') ?? '',
+        parameters: rawNode.parameters ?? [],
+      };
+    },
+    executeQuery: vi.fn(async (query: { sql: string }) => {
+      statements.push(query.sql);
+      if (query.sql.includes('SELECT session_user')) return { rows: [identity] };
+      if (query.sql.includes('govuk_rsh_metadata_recovery_status') && recoveryStatus !== undefined) {
+        return { rows: [{ status: recoveryStatus }] };
+      }
+      return { rows: [] };
+    }),
+  };
+  const provider = { getExecutor: () => executor };
+  const transaction = vi.fn(() => ({
+    execute: async <T>(callback: (transaction: unknown) => Promise<T>) => callback(provider),
+  }));
+  return {
+    database: { ...provider, transaction } as unknown as Kysely<Database>,
+    statements,
+    transaction,
+  };
+}
+
 describe('GOV.UK one-shot restricted invoker boundary', () => {
   it('pins the exact project, Session Pooler role, port, database, and hostname-verifying TLS mode', () => {
     const parsed = validateGovUkRshInvokerConnectionString(validUrl);
@@ -26,29 +67,7 @@ describe('GOV.UK one-shot restricted invoker boundary', () => {
   it.each(['COMMITTED_MATCH', 'NOT_COMMITTED', 'CONFLICT', 'PENDING_OR_UNKNOWN'] as const)(
     'reads recovery state %s only after READ COMMITTED and the shared transaction lock',
     async (recoveryState) => {
-      const statements: string[] = [];
-      const database = {
-        executeQuery: vi.fn(async (query: { sql: string }) => {
-          statements.push(query.sql);
-          if (query.sql.includes('SELECT session_user')) {
-            return {
-              rows: [{
-                session_user: 'dialektik_govuk_rsh_invoker',
-                current_user: 'dialektik_govuk_rsh_invoker',
-                database_name: 'postgres',
-              }],
-            };
-          }
-          if (query.sql.includes('govuk_rsh_metadata_recovery_status')) {
-            return { rows: [{ status: recoveryState }] };
-          }
-          return { rows: [] };
-        }),
-        transaction: () => ({
-          execute: async <T>(callback: (transaction: unknown) => Promise<T>) =>
-            callback(database),
-        }),
-      } as unknown as Kysely<Database>;
+      const { database, statements } = mockRecoveryDatabase(recoveryState);
 
       await expect(readGovUkRshRecoveryStatus(database)).resolves.toBe(recoveryState);
       expect(statements.map((statement) => statement.replace(/\s+/gu, ' ').trim())).toEqual([
@@ -63,41 +82,20 @@ describe('GOV.UK one-shot restricted invoker boundary', () => {
   );
 
   it('does not report a conclusive result if recovery times out or returns an unknown state', async () => {
-    const database = {
-      executeQuery: vi.fn(async (query: { sql: string }) => {
-        if (query.sql.includes('SELECT session_user')) {
-          return {
-            rows: [{
-              session_user: 'dialektik_govuk_rsh_invoker',
-              current_user: 'dialektik_govuk_rsh_invoker',
-              database_name: 'postgres',
-            }],
-          };
-        }
-        if (query.sql.includes('govuk_rsh_metadata_recovery_status')) {
-          return { rows: [{ status: 'UNRECOGNIZED' }] };
-        }
-        return { rows: [] };
-      }),
-      transaction: () => ({
-        execute: async <T>(callback: (transaction: unknown) => Promise<T>) =>
-          callback(database),
-      }),
-    } as unknown as Kysely<Database>;
+    const { database } = mockRecoveryDatabase('UNRECOGNIZED');
     await expect(readGovUkRshRecoveryStatus(database)).resolves.toBe('PENDING_OR_UNKNOWN');
   });
 
   it('rejects recovery from a connection that is not the restricted invoker', async () => {
-    const database = {
-      executeQuery: vi.fn(async () => ({
-        rows: [{ session_user: 'postgres', current_user: 'postgres', database_name: 'postgres' }],
-      })),
-      transaction: vi.fn(),
-    } as unknown as Kysely<Database>;
+    const { database, transaction } = mockRecoveryDatabase(undefined, {
+      session_user: 'postgres',
+      current_user: 'postgres',
+      database_name: 'postgres',
+    });
     await expect(readGovUkRshRecoveryStatus(database)).rejects.toThrow(
       'GOVUK_RSH_INVOKER_CONNECTION_IDENTITY_INVALID',
     );
-    expect(database.transaction).not.toHaveBeenCalled();
+    expect(transaction).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -146,4 +144,5 @@ describe('GOV.UK one-shot restricted invoker boundary', () => {
     ]);
   });
 });
+
 

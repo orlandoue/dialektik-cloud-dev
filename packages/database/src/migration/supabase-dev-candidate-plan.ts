@@ -30,6 +30,12 @@ const EXPECTED_ZERO_COUNT_TABLES = [
 ] as const;
 
 const EXPECTED_RLS_TABLES = EXPECTED_ZERO_COUNT_TABLES;
+const GOVUK_RSH_CANDIDATE_MIGRATION_NAMES = new Set([
+  '043_govuk_rsh_one_shot_metadata',
+  '044_govuk_rsh_receipt_recovery',
+  'govuk_rsh_one_shot_metadata_043',
+  'govuk_rsh_receipt_recovery_044',
+]);
 
 /**
  * Validate a fresh, read-only snapshot before exporting the two staged SQL
@@ -125,7 +131,7 @@ export function assertReviewedSupabaseDevSnapshot(value: unknown): asserts value
       (index > 0 && entries[index - 1]!.version >= entry.version)
     ) ||
     entries.at(-1)?.version !== SUPABASE_DEV_BASELINE_VERSION ||
-    entries.some(({ name }) => /(^|_)043(_|$)|(^|_)044(_|$)/u.test(name))
+    entries.some(({ name }) => GOVUK_RSH_CANDIDATE_MIGRATION_NAMES.has(name))
   ) {
     throw new Error('SUPABASE_DEV_MIGRATION_ORDER_OR_CANDIDATE_CHANGED');
   }
@@ -206,3 +212,4 @@ export function createSupabaseDevCandidatePlan(snapshot: unknown): readonly Supa
     }),
   ]);
 }
+
