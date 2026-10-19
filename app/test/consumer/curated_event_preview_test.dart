@@ -5,8 +5,8 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   Map<String, Object?> sample() {
-    final List<(String, String, String)> publishers =
-        <(String, String, String)>[
+    final List<(String, String, String)>
+    publishers = <(String, String, String)>[
       (
         'La Tercera',
         'INDEPENDENT_NEWSROOM',
@@ -49,13 +49,15 @@ void main() {
       'source_count': 5,
       'independent_newsroom_count': 4,
       'publications': <Object?>[
-        for (final (String publisher, String kind, String headline) in publishers)
+        for (final (String publisher, String kind, String headline)
+            in publishers)
           <String, Object?>{
             'publisher': publisher,
             'publisher_kind': kind,
             'headline': headline,
             'canonical_url': CuratedEventPublication.approvedUrls[publisher],
-            'published_on': publisher == 'Gobierno de Santiago' || publisher == 'T13'
+            'published_on':
+                publisher == 'Gobierno de Santiago' || publisher == 'T13'
                 ? '2026-10-14'
                 : '2026-10-13',
           },
@@ -89,21 +91,31 @@ void main() {
     expect(() => CuratedEventPreview.fromJson(dup), throwsFormatException);
   });
 
-  testWidgets('clearly distinguishes curated evidence from the live event feed', (WidgetTester tester) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: SingleChildScrollView(
-          child: CuratedEventPreviewCard(
-            future: Future<CuratedEventPreview>.value(CuratedEventPreview.fromJson(sample())),
-            onRetry: () {},
+  testWidgets(
+    'clearly distinguishes curated evidence from the live event feed',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: CuratedEventPreviewCard(
+                future: Future<CuratedEventPreview>.value(
+                  CuratedEventPreview.fromJson(sample()),
+                ),
+                onRetry: () {},
+              ),
+            ),
           ),
         ),
-      ),
-    ));
-    await tester.pumpAndSettle();
-    expect(find.text('Agrupación editorial piloto · País'), findsOneWidget);
-    expect(find.textContaining('No es un Event almacenado'), findsWidgets);
-    expect(find.textContaining('4 medios independientes'), findsOneWidget);
-    expect(find.byKey(const Key('chile-preview-evidence-expand')), findsOneWidget);
-  });
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Agrupación editorial piloto · País'), findsOneWidget);
+      expect(find.textContaining('No es un Event almacenado'), findsWidgets);
+      expect(find.textContaining('4 medios independientes'), findsOneWidget);
+      expect(
+        find.byKey(const Key('chile-preview-evidence-expand')),
+        findsOneWidget,
+      );
+    },
+  );
 }

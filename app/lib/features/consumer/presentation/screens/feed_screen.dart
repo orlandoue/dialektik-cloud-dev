@@ -43,7 +43,9 @@ final class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
-    _curatedPreviewFuture = widget.curatedEventPreviewLoader?.call(refresh: true);
+    _curatedPreviewFuture = widget.curatedEventPreviewLoader?.call(
+      refresh: true,
+    );
     unawaited(_controller.loadInitial());
   }
 
@@ -58,12 +60,14 @@ final class _FeedScreenState extends State<FeedScreen> {
     // imply it matches other categories or free-text topic filters.
     if (widget.curatedEventPreviewLoader == null ||
         (_controller.category != null && _controller.category != 'pais') ||
-        _controller.topic != null) return null;
+        _controller.topic != null)
+      return null;
     return CuratedEventPreviewCard(
       future: _curatedPreviewFuture,
       onRetry: () => setState(() {
-        _curatedPreviewFuture =
-            widget.curatedEventPreviewLoader!.call(refresh: true);
+        _curatedPreviewFuture = widget.curatedEventPreviewLoader!.call(
+          refresh: true,
+        );
       }),
     );
   }
@@ -122,7 +126,11 @@ final class _FeedScreenState extends State<FeedScreen> {
 }
 
 final class _FeedListFrame extends StatelessWidget {
-  const _FeedListFrame({required this.controller, required this.child, this.preview});
+  const _FeedListFrame({
+    required this.controller,
+    required this.child,
+    this.preview,
+  });
 
   final FeedController controller;
   final Widget child;
@@ -168,7 +176,11 @@ final class _FeedListFrame extends StatelessWidget {
 }
 
 final class _FeedContent extends StatelessWidget {
-  const _FeedContent({required this.controller, required this.onOpenEvent, this.preview});
+  const _FeedContent({
+    required this.controller,
+    required this.onOpenEvent,
+    this.preview,
+  });
 
   final FeedController controller;
   final ValueChanged<String> onOpenEvent;

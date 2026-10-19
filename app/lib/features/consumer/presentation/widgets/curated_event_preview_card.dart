@@ -37,7 +37,9 @@ final class CuratedEventPreviewCard extends StatelessWidget {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  const Text('La evidencia del acontecimiento piloto no está disponible.'),
+                  const Text(
+                    'La evidencia del acontecimiento piloto no está disponible.',
+                  ),
                   TextButton.icon(
                     onPressed: onRetry,
                     icon: const Icon(Icons.refresh),
@@ -55,7 +57,10 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.labelLarge,
                 ),
                 const SizedBox(height: 8),
-                Text(preview.title, style: Theme.of(context).textTheme.titleLarge),
+                Text(
+                  preview.title,
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
                 const SizedBox(height: 4),
                 Text('13 de octubre de 2026 · ${preview.location}'),
                 const SizedBox(height: 8),
@@ -64,7 +69,10 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
                 const SizedBox(height: 8),
-                Text(preview.warning, style: Theme.of(context).textTheme.bodySmall),
+                Text(
+                  preview.warning,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
                 ExpansionTile(
                   key: const Key('chile-preview-evidence-expand'),
                   tilePadding: EdgeInsets.zero,
@@ -73,7 +81,8 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                   children: <Widget>[
                     Text(preview.description),
                     const SizedBox(height: 8),
-                    for (final CuratedEventPublication item in preview.publications)
+                    for (final CuratedEventPublication item
+                        in preview.publications)
                       ListTile(
                         dense: true,
                         contentPadding: EdgeInsets.zero,
@@ -83,7 +92,8 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                           '${item.publisherKind == 'PRIMARY_GOVERNMENT_SOURCE' ? ' · Fuente primaria' : ''}',
                         ),
                         trailing: const Icon(Icons.open_in_new, size: 18),
-                        onTap: () => unawaited(openExternalHttpLink(item.canonicalUrl)),
+                        onTap: () =>
+                            unawaited(openExternalHttpLink(item.canonicalUrl)),
                       ),
                   ],
                 ),

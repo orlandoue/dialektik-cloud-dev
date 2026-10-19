@@ -39,9 +39,10 @@ final class CuratedEventPublication {
         uri.userInfo.isNotEmpty ||
         uri.hasQuery ||
         uri.hasFragment ||
-        publisherKind != (publisher == 'Gobierno de Santiago'
-            ? 'PRIMARY_GOVERNMENT_SOURCE'
-            : 'INDEPENDENT_NEWSROOM') ||
+        publisherKind !=
+            (publisher == 'Gobierno de Santiago'
+                ? 'PRIMARY_GOVERNMENT_SOURCE'
+                : 'INDEPENDENT_NEWSROOM') ||
         !<String>{'2026-10-13', '2026-10-14'}.contains(publishedOn) ||
         headline == null ||
         headline.trim().isEmpty) {
@@ -90,17 +91,24 @@ final class CuratedEventPreview {
             .map(CuratedEventPublication.fromJson)
             .toList(growable: false);
     final int newsroomCount = publications
-        .where((CuratedEventPublication x) =>
-            x.publisherKind == 'INDEPENDENT_NEWSROOM')
+        .where(
+          (CuratedEventPublication x) =>
+              x.publisherKind == 'INDEPENDENT_NEWSROOM',
+        )
         .length;
     if (publications.length < 3 ||
         publications.length > 5 ||
         value['source_count'] != publications.length ||
         value['independent_newsroom_count'] != newsroomCount ||
         newsroomCount < 2 ||
-        !publications.any((CuratedEventPublication x) =>
-            x.publisherKind == 'PRIMARY_GOVERNMENT_SOURCE') ||
-        publications.map((CuratedEventPublication p) => p.publisher).toSet().length !=
+        !publications.any(
+          (CuratedEventPublication x) =>
+              x.publisherKind == 'PRIMARY_GOVERNMENT_SOURCE',
+        ) ||
+        publications
+                .map((CuratedEventPublication p) => p.publisher)
+                .toSet()
+                .length !=
             publications.length ||
         value['verified_on'] != '2026-10-19' ||
         value['title'] is! String ||
@@ -128,6 +136,5 @@ final class CuratedEventPreview {
   final List<CuratedEventPublication> publications;
 }
 
-typedef CuratedEventPreviewLoader = Future<CuratedEventPreview> Function({
-  bool refresh,
-});
+typedef CuratedEventPreviewLoader =
+    Future<CuratedEventPreview> Function({bool refresh});
