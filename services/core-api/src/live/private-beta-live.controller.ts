@@ -3,6 +3,7 @@ import { PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js
 import { LiveApplicationService } from './live.service.js';
 import { LiveController } from './live.controller.js';
 import { acquireGovUkRshMetadataOnce, acquireGovUkRshPreviewBatch, type GovUkRshPreviewMetadata } from './govuk-product-acquisition.js';
+import { chileTornadoEditorialPreview } from './chile-tornado-evidence-preview.js';
 
 /**
  * The beta-only GOV.UK preview is NOT a stored Article and does not change the
@@ -54,6 +55,18 @@ export function toGovUkReadOnlyPreviewItems(items: readonly GovUkRshPreviewMetad
 export class PrivateBetaLiveController extends LiveController {
   constructor(@Inject(LiveApplicationService) service: LiveApplicationService) {
     super(service);
+  }
+
+  /**
+   * Curated cross-publisher occurrence evidence for DEV UX evaluation only.
+   * This is NOT a persisted Event and no automatic semantic decision occurs.
+   */
+  @Get('preview/events/chile-tornado')
+  chileTornadoEventPreview() {
+    if (process.env.DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED !== 'true') {
+      throw new NotFoundException('Editorial occurrence preview disabled.');
+    }
+    return chileTornadoEditorialPreview();
   }
 
   /** Explicit DEV opt-in; up to seven prequalified official source items, no SQL. */
