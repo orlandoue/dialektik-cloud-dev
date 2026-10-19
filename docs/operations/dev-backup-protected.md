@@ -45,3 +45,5 @@ The owner must provision the three Environment secrets via GitHub Settings → E
 2026-10-19 — Owner corrected the database URL placeholder and encoded the dollar sign, and explicitly requested a repeat of the protected backup validation. Only a read-only encrypted backup is authorized; no migration, remote write, Render change or data import.
 
 2026-10-19 — Owner confirmed the GitHub Environment DATABASE_URL now has the required `?sslmode=verify-full` suffix and explicitly requested revalidation. Execute only a read-only encrypted cloud backup; no migration, authentication change, or restore to production.
+
+2026-10-19 — Backup URI format is now verified. Previous protected job stopped on byte-exact pinned CA SHA, before any PostgreSQL connection. This retry permits only CRLF/trailing-newline normalization against the identical hard-coded certificate SHA-256, otherwise fails closed with a nonsecret certificate-status code. No relaxed TLS validation or remote writes.
