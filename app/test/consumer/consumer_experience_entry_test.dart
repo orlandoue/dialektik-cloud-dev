@@ -1,10 +1,10 @@
 import 'package:dialektik/app/dialektik_app.dart';
-import 'package:dialektik/features/live/data/candidate_source_registry.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/navigation/consumer_routes.dart';
-import 'package:flutter/widgets.dart' show Locale;
+import 'package:dialektik/features/live/data/candidate_source_registry.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/widgets.dart' show Locale;
 
 import '../live/live_fixtures.dart';
 import '../support/public_api_fixtures.dart';
@@ -87,7 +87,6 @@ void main() {
         findsOneWidget,
       );
       await _tap(tester, find.text('Fuentes'));
-      expect(find.text('Candidatas · 50'), findsOneWidget);
       expect(find.text('Candidatas · 50'), findsOneWidget);
       expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
       await _tap(tester, find.byTooltip('Más opciones'));
