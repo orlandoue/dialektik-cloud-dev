@@ -12,7 +12,7 @@
   },
   "transfer": {
     "fileCount": 252,
-    "totalBytes": 2280881,
+    "totalBytes": 2281194,
     "excludedPaths": [
       "app/test/semantic/**",
       "app/test/semantic_shadow/**",
@@ -32,7 +32,8 @@
       "Sorted the new test imports and removed a duplicate candidate-count assertion; no source worktree changes.",
       "The immutable root candidate registry shares one in-flight/successful load across routes; the navigation test asserts concurrent calls share the same future.",
       "The Fuentes navigation test flushes immediate mock reads and asserts loaded source and candidate states before settling the finite route transition; it does not wait for an indeterminate loading ticker to become idle.",
-      "The Fuentes navigation test holds and then completes the /live/sources Future, asserts the visible loading state, verifies rendered source and candidate results, and only then settles navigation animations."
+      "The Fuentes navigation test holds and then completes the /live/sources Future, asserts the visible loading state, verifies rendered source and candidate results, and only then settles navigation animations.",
+      "The candidate registry caches the completed immutable list separately from its in-flight Future, so route loads from other async zones complete correctly after the first bundle read."
     ]
   },
   "files": [
@@ -860,9 +861,9 @@
     },
     {
       "path": "app/lib/features/live/data/candidate_source_registry.dart",
-      "bytes": 7853,
-      "sha256": "ebe43a4d9f04887422c0dce9e96413f44cebd0bb7a522057a1620b1ca0e219b6",
-      "gitBlobSha": "fbc3a060bacd3be8af9ee4676b7095932a8f1ba2"
+      "bytes": 8166,
+      "sha256": "6f5498ae0cd03c8167eeb14d16a3f6a9521e5d153f3183dcefe7c118a12c04ec",
+      "gitBlobSha": "99c7c49c8d92abd1b86d91b0b817e5d65a674c80"
     },
     {
       "path": "app/lib/features/live/data/live_news_models.dart",

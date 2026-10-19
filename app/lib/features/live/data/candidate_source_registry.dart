@@ -134,6 +134,7 @@ abstract final class CandidateSourceRegistry {
   static const String assetPath =
       'assets/source-universe/candidate-registry.v1.json';
 
+  static List<CandidateSourceInfo>? _rootBundleValue;
   static Future<List<CandidateSourceInfo>>? _rootBundleLoad;
 
   /// Shares the immutable root asset load across route instances.
@@ -141,19 +142,24 @@ abstract final class CandidateSourceRegistry {
   /// Explicit bundles stay isolated so tests can supply their own assets.
   static Future<List<CandidateSourceInfo>> load({AssetBundle? bundle}) {
     if (bundle != null) return _load(bundle);
-    final Future<List<CandidateSourceInfo>>? cached = _rootBundleLoad;
-    if (cached != null) return cached;
-    final Future<List<CandidateSourceInfo>> pending = _loadDefaultBundle();
-    _rootBundleLoad = pending;
-    return pending;
+    final List<CandidateSourceInfo>? cachedValue = _rootBundleValue;
+    if (cachedValue != null) {
+      return Future<List<CandidateSourceInfo>>.value(cachedValue);
+    }
+    final Future<List<CandidateSourceInfo>>? pending = _rootBundleLoad;
+    if (pending != null) return pending;
+    final Future<List<CandidateSourceInfo>> pendingLoad = _loadDefaultBundle();
+    _rootBundleLoad = pendingLoad;
+    return pendingLoad;
   }
 
   static Future<List<CandidateSourceInfo>> _loadDefaultBundle() async {
     try {
-      return await _load(rootBundle);
-    } catch (_) {
+      final List<CandidateSourceInfo> loaded = await _load(rootBundle);
+      _rootBundleValue = loaded;
+      return loaded;
+    } finally {
       _rootBundleLoad = null;
-      rethrow;
     }
   }
 
