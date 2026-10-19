@@ -15,6 +15,24 @@ Future<void> _tap(WidgetTester tester, Finder target) async {
   await tester.pumpAndSettle();
 }
 
+Future<void> _tapAndWaitForSources(WidgetTester tester) async {
+  final Finder target = find.text('Fuentes');
+  await tester.ensureVisible(target);
+  await tester.tap(target);
+
+  // The source screen shows indeterminate loaders while its mock API and
+  // candidate-registry reads complete. pumpAndSettle cannot settle during
+  // that interval, so flush the immediate test responses and assert both
+  // data paths before settling the finite route transition.
+  await tester.pump();
+  expect(find.text('Fuentes operativas · 1'), findsOneWidget);
+  expect(find.text('Candidatas · 50'), findsOneWidget);
+  expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
+  expect(find.text('Cargando fuentes…'), findsNothing);
+  expect(find.text('Cargando catálogo de fuentes…'), findsNothing);
+  await tester.pumpAndSettle();
+}
+
 void main() {
   testWidgets('Acontecimientos remains the consumer root in personal mode', (
     WidgetTester tester,
@@ -91,9 +109,7 @@ void main() {
         find.text('No hay eventos públicos disponibles por ahora.'),
         findsOneWidget,
       );
-      await _tap(tester, find.text('Fuentes'));
-      expect(find.text('Candidatas · 50'), findsOneWidget);
-      expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
+      await _tapAndWaitForSources(tester);
       await _tap(tester, find.byTooltip('Más opciones'));
       await _tap(tester, find.text('Contradicciones'));
       expect(find.text('Contradicciones publicadas'), findsOneWidget);

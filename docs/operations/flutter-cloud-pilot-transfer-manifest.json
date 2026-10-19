@@ -12,7 +12,7 @@
   },
   "transfer": {
     "fileCount": 252,
-    "totalBytes": 2278069,
+    "totalBytes": 2278768,
     "excludedPaths": [
       "app/test/semantic/**",
       "app/test/semantic_shadow/**",
@@ -30,7 +30,8 @@
       "CI-only navigation harness uses finite route pumps and asserts the 50-candidate registry; the original V7P worktree remains unchanged.",
       "Consumer navigation test preloads the local source registry through tester.runAsync and asserts all 50 candidates; source worktree unchanged.",
       "Sorted the new test imports and removed a duplicate candidate-count assertion; no source worktree changes.",
-      "The immutable root candidate registry shares one in-flight/successful load across routes; the navigation test asserts concurrent calls share the same future."
+      "The immutable root candidate registry shares one in-flight/successful load across routes; the navigation test asserts concurrent calls share the same future.",
+      "The Fuentes navigation test flushes immediate mock reads and asserts loaded source and candidate states before settling the finite route transition; it does not wait for an indeterminate loading ticker to become idle."
     ]
   },
   "files": [
@@ -1110,9 +1111,9 @@
     },
     {
       "path": "app/test/consumer/consumer_experience_entry_test.dart",
-      "bytes": 4427,
-      "sha256": "5322558b241626a8f7bc66e7b8c452df6ab5d28338fbc5a048e42fb99dbb71eb",
-      "gitBlobSha": "62ed657da548aa2e40d62ada9a355252aa08dd80"
+      "bytes": 5126,
+      "sha256": "39d1ea3e032a0201889adb00e7011d933052dc642781c259086293986d24d48d",
+      "gitBlobSha": "00c9b426df12570dba83ab5c3a9a62b36d8f08cd"
     },
     {
       "path": "app/test/consumer/consumer_navigation_filter_test.dart",
