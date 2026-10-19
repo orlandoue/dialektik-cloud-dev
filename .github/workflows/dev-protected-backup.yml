@@ -68,6 +68,17 @@ jobs:
           echo "700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7  $RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt" | sha256sum -c -
           printf '%s' "$BACKUP_PASSWORD" > "$RUNNER_TEMP/dialektik-backup/passphrase"
           echo "PGSSLROOTCERT=$RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt" >> "$GITHUB_ENV"
+      - name: Verify remote PostgreSQL identity through certificate-verified Docker psql
+        shell: bash
+        run: |
+          set -euo pipefail
+          cert="$RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt"
+          result="$(docker run --rm --pull=never \
+            -v "$cert:/etc/dialektik/supabase-root.crt:ro" \
+            -e DEV_URL postgres:17.11 \
+            sh -eu -c 'psql "${DEV_URL}&sslrootcert=/etc/dialektik/supabase-root.crt" -XAt -v ON_ERROR_STOP=1 -c "SELECT current_database() || chr(124) || current_user || chr(124) || current_setting('\''server_version'\'')"')"
+          test "$result" = 'postgres|postgres|17.11'
+          echo 'TLS verify-full and DEV postgres identity: PASS.'
       - name: Supabase-aware role schema and data export (read-only)
         shell: bash
         run: |
