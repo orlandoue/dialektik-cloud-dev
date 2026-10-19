@@ -1,5 +1,5 @@
 name: Flutter Cloud Pilot
-# DEV pilot: GOV.UK headlines and cross-publisher Chile evidence preview; no persistence.
+# DEV pilot: GOV.UK headlines and Chile evidence preview, pinned formatted final validation; no persistence.
 
 on:
   push:
