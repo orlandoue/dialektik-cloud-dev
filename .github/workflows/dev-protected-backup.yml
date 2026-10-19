@@ -53,17 +53,27 @@ jobs:
           python3 - <<'PY'
           import os
           from urllib.parse import urlsplit,parse_qs,unquote
-          u=urlsplit(os.environ['DEV_URL'])
-          q=parse_qs(u.query)
-          if not (u.scheme in ('postgresql','postgres') and
-                  u.hostname=='aws-0-us-east-1.pooler.supabase.com' and
-                  u.port==5432 and
-                  unquote(u.username or '')=='postgres.vclsswwfhljczxgnsciq' and
-                  u.path=='/postgres' and
-                  len(u.password or '')>=12 and
-                  q=={'sslmode':['verify-full']}):
-            raise SystemExit('TARGET_OR_TLS_MISMATCH')
-          print('Verified exact project, session pooler, and hostname-verifying TLS.')
+          try:
+            u=urlsplit(os.environ['DEV_URL'].strip())
+            q=parse_qs(u.query)
+            checks = {
+              'SCHEME_INVALID':u.scheme not in ('postgresql','postgres'),
+              'SESSION_POOLER_HOST_MISMATCH':u.hostname!='aws-0-us-east-1.pooler.supabase.com',
+              'SESSION_POOLER_PORT_MISMATCH':u.port!=5432,
+              'PROJECT_USER_MISMATCH':unquote(u.username or '')!='postgres.vclsswwfhljczxgnsciq',
+              'DATABASE_NAME_MISMATCH':u.path!='/postgres',
+              'DB_PASSWORD_PLACEHOLDER_OR_TOO_SHORT':len(unquote(u.password or ''))<12 or '<' in unquote(u.password or ''),
+              'VERIFY_FULL_QUERY_MISSING_OR_EXTRA':q!={'sslmode':['verify-full']},
+              'URL_FRAGMENT_UNEXPECTED':bool(u.fragment)
+            }
+            for code,failed in checks.items():
+              if failed:
+                print('::error::BACKUP_DATABASE_URL_' + code)
+            if any(checks.values()):
+              raise SystemExit(1)
+          except (ValueError,TypeError):
+            raise SystemExit('BACKUP_DATABASE_URL_MALFORMED_OR_UNESCAPED_SPECIAL_CHARACTERS')
+          print('Exact DEV target, database, user and hostname-verifying TLS: format PASS.')
           PY
       - name: Install and verify owner-supplied root certificate
         shell: bash
