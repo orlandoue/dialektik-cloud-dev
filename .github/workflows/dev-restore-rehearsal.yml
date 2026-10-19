@@ -1,0 +1,104 @@
+name: Dialektik DEV encrypted archive isolated restore rehearsal
+
+on:
+  push:
+    branches: [codex/dev-backup-restore-20261019]
+    paths:
+      - '.github/workflows/dev-restore-rehearsal.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  isolated_restore:
+    if: github.event.head_commit.message == 'EXECUTE_ISOLATED_DEV_RESTORE_20261019'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: dialektik-dev-backup
+    env:
+      RESTORE_PASSPHRASE: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+      ARCHIVE_ROOT: ${{ runner.temp }}/dialektik-rehearsal
+    steps:
+      - name: Download the real encrypted archive from successful DEV backup
+        uses: actions/download-artifact@v4
+        with:
+          name: dialektik-dev-encrypted-logical-backup
+          run-id: 39321170714
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/dialektik-rehearsal/download
+      - name: Decrypt, verify manifest, and classify recovery coverage
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$ARCHIVE_ROOT"
+          mkdir -p "$work/plain"
+          test -n "$RESTORE_PASSPHRASE" || { echo '::error::RESTORE_KEY_MISSING'; exit 1; }
+          printf '%s' "$RESTORE_PASSPHRASE" > "$work/key"
+          test -s "$work/download/dialektik-dev-backup.tar.gpg" || { echo '::error::ENCRYPTED_ARCHIVE_MISSING'; exit 1; }
+          if ! gpg --quiet --batch --yes --pinentry-mode loopback --passphrase-file "$work/key" --decrypt --output "$work/source.tar" "$work/download/dialektik-dev-backup.tar.gpg" 2>"$work/decrypt.log"; then
+            echo '::error::DECRYPT_FAILED'; exit 1
+          fi
+          tar -tf "$work/source.tar" | LC_ALL=C sort > "$work/members"
+          printf 'SHA256SUMS\ndata.sql\nroles.sql\nschema.sql\n' | LC_ALL=C sort > "$work/expected"
+          cmp -s "$work/members" "$work/expected" || { echo '::error::ARCHIVE_MEMBER_SET_MISMATCH'; exit 1; }
+          tar -xf "$work/source.tar" -C "$work/plain"
+          (cd "$work/plain" && sha256sum -c SHA256SUMS > "$work/checksums.log") || { echo '::error::DUMP_SHA256_MISMATCH'; exit 1; }
+          python3 - <<'PY'
+          import os,pathlib,re
+          base=pathlib.Path(os.environ['ARCHIVE_ROOT'])/'plain'
+          schema=(base/'schema.sql').read_text(errors='replace')
+          data=(base/'data.sql').read_text(errors='replace')
+          roles=(base/'roles.sql').read_text(errors='replace')
+          print('ARCHIVE_DECRYPT_SHA256_PASS')
+          print('DUMP_FILES_NONEMPTY',all((base/f).stat().st_size>0 for f in ['roles.sql','schema.sql','data.sql']))
+          print('AUTH_USERS_SCHEMA_INCLUDED', bool(re.search(r'CREATE TABLE\s+auth\.users',schema,re.I)))
+          print('AUTH_USERS_DATA_INCLUDED', bool(re.search(r'COPY\s+auth\.users',data,re.I)))
+          print('MIGRATION_LEDGER_SCHEMA_INCLUDED', 'supabase_migrations' in schema)
+          print('APP_PUBLIC_SCHEMA_PRESENT', 'CREATE TABLE public.' in schema)
+          PY
+      - name: Restore actual dump in fully isolated PostgreSQL 17.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$ARCHIVE_ROOT"
+          docker run --rm -d --name dialektik-restore-probe --network none \
+            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 > "$work/container_id"
+          ready=false
+          for i in $(seq 1 45); do
+            if docker exec dialektik-restore-probe pg_isready -U postgres -d postgres >/dev/null 2>&1; then ready=true; break; fi
+            sleep 2
+          done
+          test "$ready" = true || { echo '::error::ISOLATED_POSTGRES_NOT_READY'; exit 1; }
+          for f in roles.sql schema.sql data.sql; do
+            docker cp "$work/plain/$f" "dialektik-restore-probe:/tmp/$f"
+          done
+          if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres --single-transaction \
+               -f /tmp/roles.sql -f /tmp/schema.sql -c 'SET session_replication_role=replica' -f /tmp/data.sql \
+               > "$work/restore.log" 2>&1; then
+            echo '::error::ISOLATED_RESTORE_FAILED_REVIEW_PRIVATE_LOG' 
+            python3 - <<'PY'
+          import os,re,pathlib
+          p=pathlib.Path(os.environ['ARCHIVE_ROOT'])/'restore.log'
+          t=p.read_text(errors='replace')
+          hints={'MISSING_ROLE':r'role .* does not exist','MISSING_EXTENSION':r'extension .* is not available','MISSING_RELATION':r'relation .* does not exist','MISSING_FUNCTION':r'function .* does not exist','PERMISSION_FAILURE':r'permission denied','DUPLICATE_OBJECT':r'already exists','UNKNOWN_SQL_FAILURE':r'ERROR:'}
+          for k,regex in hints.items():
+            if re.search(regex,t,re.I): print('RESTORE_DIAGNOSTIC_CATEGORY',k)
+          PY
+            exit 1
+          fi
+          docker exec dialektik-restore-probe psql -XAt -v ON_ERROR_STOP=1 -U postgres -d postgres \
+            -c "SELECT 'RESTORED_PUBLIC_TABLES='||count(*) FROM pg_tables WHERE schemaname='public';" \
+            -c "SELECT 'RESTORED_RLS_TABLES='||count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r' AND c.relrowsecurity;" \
+            -c "SELECT 'RESTORED_ARTICLES='||count(*) FROM public.articles;" \
+            -c "SELECT 'RESTORED_EVENTS='||count(*) FROM public.events;"
+          echo 'ISOLATED_APP_SQL_RESTORE_PASS; FULL_PLATFORM_RECOVERY_NOT_YET_PROVEN'
+      - name: Destroy disposable restore database and erase plaintext
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f dialektik-restore-probe >/dev/null 2>&1 || true
+          rm -rf -- "$ARCHIVE_ROOT"
+          echo 'EPHEMERAL_RESTORE_RESOURCES_DESTROYED'
