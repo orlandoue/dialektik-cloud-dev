@@ -72,6 +72,13 @@ jobs:
             sleep 2
           done
           test "$ready" = true || { echo '::error::ISOLATED_POSTGRES_NOT_READY'; exit 1; }
+          for role in anon authenticated service_role authenticator supabase_admin supabase_auth_admin supabase_storage_admin supabase_read_only_user supabase_realtime_admin supabase_functions_admin supabase_replication_admin; do
+            if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE ROLE ${role} NOLOGIN" > "$work/bootstrap.log" 2>&1; then
+              echo '::error::ISOLATED_MANAGED_ROLE_BOOTSTRAP_FAILED'
+              exit 1
+            fi
+          done
+          echo 'LOCAL_MANAGED_ROLE_SCAFFOLD_PRESENT'
           for f in roles.sql schema.sql data.sql; do
             docker cp "$work/plain/$f" "dialektik-restore-probe:/tmp/$f"
           done
