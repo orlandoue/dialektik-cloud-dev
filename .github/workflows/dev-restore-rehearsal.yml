@@ -1,4 +1,4 @@
-name: Dialektik DEV encrypted archive isolated restore rehearsal
+name: Dialektik DEV encrypted archive Supabase Postgres 17 restore rehearsal
 
 on:
   push:
@@ -58,14 +58,15 @@ jobs:
           print('MIGRATION_LEDGER_SCHEMA_INCLUDED', 'supabase_migrations' in schema)
           print('APP_PUBLIC_SCHEMA_PRESENT', 'CREATE TABLE public.' in schema)
           PY
-      - name: Restore actual dump in fully isolated PostgreSQL 17.11
+      - name: Restore actual dump in isolated Supabase PostgreSQL 17
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           work="$ARCHIVE_ROOT"
           docker run --rm -d --name dialektik-restore-probe --network none \
-            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 > "$work/container_id"
+            -e POSTGRES_HOST_AUTH_METHOD=trust -e POSTGRES_PASSWORD=ephemeral_local_only \
+            supabase/postgres:17.6.1.173 > "$work/container_id"
           ready=false
           for i in $(seq 1 45); do
             if docker exec dialektik-restore-probe pg_isready -U postgres -d postgres >/dev/null 2>&1; then ready=true; break; fi
@@ -73,6 +74,7 @@ jobs:
           done
           test "$ready" = true || { echo '::error::ISOLATED_POSTGRES_NOT_READY'; exit 1; }
           for role in anon authenticated service_role authenticator supabase_admin supabase_auth_admin supabase_storage_admin supabase_read_only_user supabase_realtime_admin supabase_functions_admin supabase_replication_admin; do
+            if [ "$(docker exec dialektik-restore-probe psql -XAt -U postgres -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname='${role}'")" = 1 ]; then continue; fi
             if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE ROLE ${role} NOLOGIN" > "$work/bootstrap.log" 2>&1; then
               echo '::error::ISOLATED_MANAGED_ROLE_BOOTSTRAP_FAILED'
               exit 1
@@ -83,8 +85,6 @@ jobs:
             -c 'CREATE SCHEMA IF NOT EXISTS auth; CREATE SCHEMA IF NOT EXISTS storage; CREATE SCHEMA IF NOT EXISTS extensions; CREATE SCHEMA IF NOT EXISTS vault; CREATE SCHEMA IF NOT EXISTS graphql; CREATE SCHEMA IF NOT EXISTS supabase_migrations;' \
             -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;' \
             -c 'CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);' \
-            -c 'CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $f$ SELECT NULL::uuid $f$;' \
-            -c 'CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $f$ SELECT NULL::jsonb $f$;' \
             > "$work/bootstrap-schema.log" 2>&1; then
               echo '::error::ISOLATED_MANAGED_SCHEMA_SCAFFOLD_FAILED'
               exit 1
