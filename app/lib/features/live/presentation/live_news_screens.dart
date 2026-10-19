@@ -296,47 +296,73 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                     ),
                     FutureBuilder<GovUkPreview>(
                       future: _govUkPreviewFuture,
-                      builder: (BuildContext context, AsyncSnapshot<GovUkPreview> snapshot) {
-                        if (snapshot.connectionState != ConnectionState.done) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: LinearProgressIndicator(),
-                          );
-                        }
-                        if (snapshot.hasError || !snapshot.hasData) {
-                          return TextButton.icon(
-                            onPressed: () => setState(() {
-                              _govUkPreviewFuture =
-                                  widget.govUkPreviewLoader!.call(refresh: true);
-                            }),
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Reintentar la vista previa oficial'),
-                          );
-                        }
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            for (final GovUkPreviewItem article in snapshot.data!.items) ...<Widget>[
-                              const SizedBox(height: DialektikSpacing.space3),
-                              Text(article.headline,
-                                  style: Theme.of(context).textTheme.titleMedium),
-                              const SizedBox(height: DialektikSpacing.space2),
-                              Text(article.publisher),
-                              Text(
-                                'Publicado: ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year}',
-                              ),
-                              TextButton.icon(
-                                onPressed: () =>
-                                    unawaited(openExternalHttpLink(article.canonicalUrl)),
-                                icon: const Icon(Icons.open_in_new),
-                                label: const Text('Leer publicación original'),
-                              ),
-                              Text(article.attribution,
-                                  style: Theme.of(context).textTheme.bodySmall),
-                            ],
-                          ],
-                        );
-                      },
+                      builder:
+                          (
+                            BuildContext context,
+                            AsyncSnapshot<GovUkPreview> snapshot,
+                          ) {
+                            if (snapshot.connectionState !=
+                                ConnectionState.done) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: LinearProgressIndicator(),
+                              );
+                            }
+                            if (snapshot.hasError || !snapshot.hasData) {
+                              return TextButton.icon(
+                                onPressed: () => setState(() {
+                                  _govUkPreviewFuture = widget
+                                      .govUkPreviewLoader!
+                                      .call(refresh: true);
+                                }),
+                                icon: const Icon(Icons.refresh),
+                                label: const Text(
+                                  'Reintentar la vista previa oficial',
+                                ),
+                              );
+                            }
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                for (final GovUkPreviewItem article
+                                    in snapshot.data!.items) ...<Widget>[
+                                  const SizedBox(
+                                    height: DialektikSpacing.space3,
+                                  ),
+                                  Text(
+                                    article.headline,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(
+                                    height: DialektikSpacing.space2,
+                                  ),
+                                  Text(article.publisher),
+                                  Text(
+                                    'Publicado: ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year}',
+                                  ),
+                                  TextButton.icon(
+                                    onPressed: () => unawaited(
+                                      openExternalHttpLink(
+                                        article.canonicalUrl,
+                                      ),
+                                    ),
+                                    icon: const Icon(Icons.open_in_new),
+                                    label: const Text(
+                                      'Leer publicación original',
+                                    ),
+                                  ),
+                                  Text(
+                                    article.attribution,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ],
+                            );
+                          },
                     ),
                   ],
                 ),

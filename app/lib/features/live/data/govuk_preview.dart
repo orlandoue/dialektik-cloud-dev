@@ -16,8 +16,9 @@ final class GovUkPreviewItem {
     final Object? rawUrl = value['canonical_url'];
     final Uri? uri = rawUrl is String ? Uri.tryParse(rawUrl) : null;
     final Object? rawDate = value['published_at'];
-    final DateTime? date =
-        rawDate is String ? DateTime.tryParse(rawDate) : null;
+    final DateTime? date = rawDate is String
+        ? DateTime.tryParse(rawDate)
+        : null;
     final String? headline = value['headline'] is String
         ? value['headline'] as String
         : null;
@@ -34,10 +35,13 @@ final class GovUkPreviewItem {
         uri.hasQuery ||
         uri.hasFragment ||
         !uri.path.startsWith('/government/news/') ||
-        headline == null || headline.trim().isEmpty ||
+        headline == null ||
+        headline.trim().isEmpty ||
         publisher != 'Regulator of Social Housing' ||
-        date == null || !rawDate.toString().endsWith('Z') ||
-        attribution == null || attribution.trim().isEmpty) {
+        date == null ||
+        !rawDate.toString().endsWith('Z') ||
+        attribution == null ||
+        attribution.trim().isEmpty) {
       throw const FormatException('Unverified official preview item.');
     }
     return GovUkPreviewItem(
@@ -67,10 +71,9 @@ final class GovUkPreview {
         value['items'] is! List<dynamic>) {
       throw const FormatException('Invalid read-only preview response.');
     }
-    final List<GovUkPreviewItem> items =
-        (value['items'] as List<dynamic>)
-            .map(GovUkPreviewItem.fromJson)
-            .toList(growable: false);
+    final List<GovUkPreviewItem> items = (value['items'] as List<dynamic>)
+        .map(GovUkPreviewItem.fromJson)
+        .toList(growable: false);
     if (items.length != 1) {
       throw const FormatException('Unexpected official preview scope.');
     }
@@ -80,6 +83,4 @@ final class GovUkPreview {
   final List<GovUkPreviewItem> items;
 }
 
-typedef GovUkPreviewLoader = Future<GovUkPreview> Function({
-  bool refresh,
-});
+typedef GovUkPreviewLoader = Future<GovUkPreview> Function({bool refresh});

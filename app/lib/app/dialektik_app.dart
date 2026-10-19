@@ -172,10 +172,15 @@ final class _DialektikAppState extends State<DialektikApp> {
               : null);
       _routes = ConsumerRouteFactory(
         repository: _repository!,
-        govUkPreviewLoader: const bool.fromEnvironment(
-              'DIALEKTIK_GOVUK_PREVIEW_ENABLED', defaultValue: false,
-            ) && widget.readOnlyNewsReaderEnabled && liveRepository is PublicApiClient
-            ? ({bool refresh = false}) => liveRepository.loadGovUkPreview(refresh: refresh)
+        govUkPreviewLoader:
+            const bool.fromEnvironment(
+                  'DIALEKTIK_GOVUK_PREVIEW_ENABLED',
+                  defaultValue: false,
+                ) &&
+                widget.readOnlyNewsReaderEnabled &&
+                liveRepository is PublicApiClient
+            ? ({bool refresh = false}) =>
+                  liveRepository.loadGovUkPreview(refresh: refresh)
             : null,
         externalLinkOpener: widget.externalLinkOpener,
         semanticRepository:
