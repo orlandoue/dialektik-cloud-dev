@@ -58,3 +58,15 @@ The owner must provision the three Environment secrets via GitHub Settings → E
 - Expires: **2026-10-26 20:41:38 UTC** (7-day retention). OWNER MUST DOWNLOAD AND STORE encrypted ZIP separately; retain passphrase privately.
 - **RESTORE NOT VERIFIED.** Content completeness for Supabase-managed auth/storage schemas, auth data, storage objects, migrations and ancillary platform configuration remains unproven. An isolated restoration rehearsal and data inventory are mandatory before enabling deployment gates.
 - Remote 043/044: NOT APPLIED. Render Core: NOT CHANGED. DEV database contents: NOT MODIFIED.
+
+## Isolated archive replay findings (2026-10-19)
+
+- The real encrypted artifact from run 39321170714 decrypted successfully and all original dump-file SHA256 checks passed; temporary restore containers and plaintext were destroyed.
+- Isolated replay workflow: .github/workflows/dev-restore-rehearsal.yml; no connection or changes to remote DEV.
+- Original Supabase CLI logical archive does NOT include auth.users schema/data or supabase_migrations ledger, and cannot be treated as a full Supabase account/managed-platform backup.
+- Vanilla PostgreSQL 17.11 replay encountered missing Supabase-managed roles and supabase_vault extension, which were not shipped in the vanilla container.
+- Official supabase/postgres:17.6.1.173 replay progressed beyond the extension bootstrap but managed role grants and role settings are not portable to this isolated target without appropriate setup. Latest run 39327424915 failed closed on 'permission denied for parameter log_min_messages' during role restoration.
+- Source archived SQL and checksums were not altered. An isolated test suppressed a specific documented cli_login_postgres grant ONLY in an ephemeral copy, but that statement was absent from the dump and did not solve the restore error.
+- RESTORE_GATE=FAIL; auth and migration recovery unavailable. No remote migrations 043/044; no first real Article in Dialektik yet.
+- Fast user-visible option is an explicitly labeled DEV-only read-only GOV.UK official content preview: does not authorize or substitute for durable metadata ingest, backup, migration or full restore.
+- Required for full readiness: Supabase-managed-compatible isolated restore target, platform-role reconciliation retaining product ACL/RLS, protected additional coverage of Auth and migration ledger, credential transition and separately scoped one-shot import authorization.
