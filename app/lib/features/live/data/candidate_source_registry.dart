@@ -134,10 +134,31 @@ abstract final class CandidateSourceRegistry {
   static const String assetPath =
       'assets/source-universe/candidate-registry.v1.json';
 
-  static Future<List<CandidateSourceInfo>> load({AssetBundle? bundle}) async {
-    final Object? decoded = jsonDecode(
-      await (bundle ?? rootBundle).loadString(assetPath),
-    );
+  static Future<List<CandidateSourceInfo>>? _rootBundleLoad;
+
+  /// Shares the immutable root asset load across route instances.
+  ///
+  /// Explicit bundles stay isolated so tests can supply their own assets.
+  static Future<List<CandidateSourceInfo>> load({AssetBundle? bundle}) {
+    if (bundle != null) return _load(bundle);
+    final Future<List<CandidateSourceInfo>>? cached = _rootBundleLoad;
+    if (cached != null) return cached;
+    final Future<List<CandidateSourceInfo>> pending = _loadDefaultBundle();
+    _rootBundleLoad = pending;
+    return pending;
+  }
+
+  static Future<List<CandidateSourceInfo>> _loadDefaultBundle() async {
+    try {
+      return await _load(rootBundle);
+    } catch (_) {
+      _rootBundleLoad = null;
+      rethrow;
+    }
+  }
+
+  static Future<List<CandidateSourceInfo>> _load(AssetBundle bundle) async {
+    final Object? decoded = jsonDecode(await bundle.loadString(assetPath));
     final Map<String, Object?> registry = _object(decoded);
     final Object? rawCandidates = registry['candidates'];
     if (registry['schemaVersion'] != 1 ||
