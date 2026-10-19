@@ -3,8 +3,8 @@ import 'package:dialektik/core/infrastructure/app_environment.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/navigation/consumer_routes.dart';
 import 'package:dialektik/features/live/data/candidate_source_registry.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter_test/flutter_test.dart';
 
 import '../live/live_fixtures.dart';
 import '../support/public_api_fixtures.dart';
