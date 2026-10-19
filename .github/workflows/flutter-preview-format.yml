@@ -21,9 +21,9 @@ jobs:
           flutter-version: '3.38.3'
           channel: stable
           cache: true
-      - name: Format exactly three review files
+      - name: Format official preview UI and tests
         run: |
-          dart format app/lib/app/dialektik_app.dart app/lib/features/live/data/govuk_preview.dart app/lib/features/live/presentation/live_news_screens.dart
+          dart format app/lib/app/dialektik_app.dart app/lib/features/live/data/govuk_preview.dart app/lib/features/live/presentation/live_news_screens.dart app/test/live/govuk_preview_test.dart
           git diff --stat
       - name: Commit formatted Dart files to cloud pilot
         shell: bash
@@ -31,7 +31,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add app/lib/app/dialektik_app.dart app/lib/features/live/data/govuk_preview.dart app/lib/features/live/presentation/live_news_screens.dart
+          git add app/lib/app/dialektik_app.dart app/lib/features/live/data/govuk_preview.dart app/lib/features/live/presentation/live_news_screens.dart app/test/live/govuk_preview_test.dart
           if git diff --cached --quiet; then
             echo "Dart formatting unchanged"
             exit 0
