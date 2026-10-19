@@ -297,7 +297,7 @@ async function killBeforeCommit(metadata) {
 async function main() {
   await bootstrap.connect();
   const version = await bootstrap.query("SELECT current_setting('server_version') AS version");
-  assert.match(version.rows[0].version, /^17\.11(?:\.|$)/u);
+  assert.match(version.rows[0].version, /^17\.11(?:\.|\s|$)/u);
   const migrationState = await sql`
     SELECT name FROM public.kysely_migration
     WHERE name IN ('042_govuk_product_writer_row_scope','043_govuk_rsh_one_shot_metadata')
@@ -603,3 +603,4 @@ async function clientState(connectionString, text, values) {
     await stateClient.end();
   }
 }
+

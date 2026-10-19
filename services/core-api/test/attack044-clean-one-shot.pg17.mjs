@@ -1040,7 +1040,7 @@ async function main() {
   await admin.connect();
   const version = await admin.query(`SELECT current_setting('server_version') AS version,
     current_database() AS database_name, current_user AS current_user`);
-  assert.match(version.rows[0].version, /^17\.11(?:\.|$)/u);
+  assert.match(version.rows[0].version, /^17\.11(?:\.|\s|$)/u);
   assert.equal(version.rows[0].database_name, databaseName);
   assert.equal(version.rows[0].current_user, 'postgres');
   const prior = await admin.query(`SELECT count(*)::int AS count FROM public.kysely_migration`);
@@ -1218,4 +1218,5 @@ try {
   await admin.end().catch(() => undefined);
   if (database) await destroyDatabase(database).catch(() => undefined);
 }
+
 
