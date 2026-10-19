@@ -1,3 +1,4 @@
+import { Script } from 'node:vm';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { PasswordRecoveryController, renderPasswordRecoveryHtml } from '../src/auth/password-recovery.controller.js';
@@ -40,6 +41,9 @@ describe('Dialektik password recovery browser flow', () => {
     expect(html).not.toContain('sessionStorage.setItem');
     expect(html).not.toContain('<script src=');
     expect(html).toContain('nonce="knownnonce"');
+    const inline = html.match(/<script nonce="knownnonce">([\s\S]*?)<\/script>/u);
+    expect(inline?.[1]).toBeDefined();
+    expect(() => new Script(inline![1]!)).not.toThrow();
   });
 
   it('escapes arbitrary runtime configuration so script structure cannot be broken', () => {
