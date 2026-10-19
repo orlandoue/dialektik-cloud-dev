@@ -1,0 +1,38 @@
+name: Chile real occurrence editorial evidence Core CI
+
+on:
+  push:
+    branches: [codex/chile-tornado-event-evidence-preview-20261019]
+
+permissions:
+  contents: read
+
+jobs:
+  curated-event-safety:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Match repository package manager
+        run: npm install --global npm@11.6.2
+      - name: Install from lockfile
+        run: npm ci --no-audit --no-fund
+      - name: Build Core and database modules
+        run: npm run build
+      - name: Test independent evidence and negative pairs
+        run: npx vitest run --config services/core-api/vitest.config.mts services/core-api/test/chile-tornado-evidence-preview.test.ts services/core-api/test/govuk-private-beta-preview.test.ts
+      - name: Check controlled provenance contracts
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { chileTornadoEditorialPreview } from './services/core-api/dist/live/chile-tornado-evidence-preview.js';
+          const d = chileTornadoEditorialPreview();
+          if (d.independent_newsroom_count !== 4 || d.source_count !== 5 ||
+              d.persisted !== false || d.semantic_engine_executed !== false) throw Error('NOT_SAFE');
+          console.log('CURATED_CHILE_OCCURRENCE=PASS');
+          console.log('INDEPENDENT_NEWSROOMS=4; PRIMARY_SOURCES=1; DB_WRITES=0; SEMANTIC_RUNS=0');
+          NODE
