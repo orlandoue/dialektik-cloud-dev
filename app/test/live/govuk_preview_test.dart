@@ -25,6 +25,31 @@ void main() {
     expect(value.items.single.canonicalUrl.host, 'www.gov.uk');
   });
 
+  test('shows multiple official publications newest first', () {
+    final Map<String, Object?> values = payload();
+    final List<Object?> items = values['items']! as List<Object?>;
+    items.add(<String, Object?>{
+      'headline': 'Newest official bulletin',
+      'publisher': 'Regulator of Social Housing',
+      'canonical_url':
+          'https://www.gov.uk/government/news/rsh-takes-enforcement-action-against-concept-housing-association',
+      'published_at': '2026-10-15T09:00:00.000Z',
+      'attribution': '© RSH. Open Government Licence v3.0.',
+    });
+    final GovUkPreview news = GovUkPreview.fromJson(values);
+    expect(news.items, hasLength(2));
+    expect(news.items.first.headline, 'Newest official bulletin');
+  });
+
+  test('rejects duplicate preview URLs', () {
+    final Map<String, Object?> values = payload();
+    final List<Object?> items = values['items']! as List<Object?>;
+    items.add(Map<String, Object?>.from(
+      items.first! as Map<String, Object?>,
+    ));
+    expect(() => GovUkPreview.fromJson(values), throwsFormatException);
+  });
+
   test('rejects a persisted-news masquerade', () {
     final Map<String, Object?> bad = payload()..['persisted'] = true;
     expect(() => GovUkPreview.fromJson(bad), throwsFormatException);
