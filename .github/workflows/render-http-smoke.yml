@@ -1,0 +1,44 @@
+name: Dialektik Render HTTP read-only smoke
+
+on:
+  push:
+    branches:
+      - codex/cloud-ci-validation-20261018
+    paths:
+      - .github/workflows/render-http-smoke.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check public Render health endpoints without credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://dialektik-core-dev.onrender.com'
+          failures=0
+          for path in /health/live /health/ready; do
+            ok=0
+            for attempt in 1 2 3 4; do
+              outfile="$(mktemp)"
+              code="$(curl --proto '=https' --tlsv1.2 --silent --show-error --max-time 65 --connect-timeout 15 --output "$outfile" --write-out '%{http_code}' "$base$path")" || code='CURL_FAILED'
+              rm -f "$outfile"
+              echo "$path attempt $attempt: HTTP $code"
+              if [ "$code" = '200' ]; then
+                ok=1
+                break
+              fi
+              if [ "$attempt" != 4 ]; then sleep 15; fi
+            done
+            if [ "$ok" != 1 ]; then failures=$((failures + 1)); fi
+          done
+          if [ "$failures" != 0 ]; then
+            echo "::error::Public Render health verification failed for $failures endpoint(s)"
+            exit 1
+          fi
+          echo 'Public Render live and ready health endpoints returned HTTP 200.'
