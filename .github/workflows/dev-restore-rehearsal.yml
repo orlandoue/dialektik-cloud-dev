@@ -74,14 +74,14 @@ jobs:
           done
           test "$ready" = true || { echo '::error::ISOLATED_POSTGRES_NOT_READY'; exit 1; }
           for role in anon authenticated service_role authenticator supabase_admin supabase_auth_admin supabase_storage_admin supabase_read_only_user supabase_realtime_admin supabase_functions_admin supabase_replication_admin; do
-            if [ "$(docker exec dialektik-restore-probe psql -XAt -U postgres -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname='${role}'")" = 1 ]; then continue; fi
-            if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres -c "CREATE ROLE ${role} NOLOGIN" > "$work/bootstrap.log" 2>&1; then
-              echo '::error::ISOLATED_MANAGED_ROLE_BOOTSTRAP_FAILED'
+            if [ "$(docker exec dialektik-restore-probe psql -XAt -U supabase_admin -d postgres -c "SELECT 1 FROM pg_roles WHERE rolname='${role}'")" = 1 ]; then continue; fi
+            if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c "CREATE ROLE ${role} NOLOGIN" > "$work/bootstrap.log" 2>&1; then
+              echo '::error::ISOLATED_MANAGED_ROLE_BOOTSTRAP_FAILED'\n              tail -n 4 "$work/bootstrap.log" | sed -E 's/"[^"]+"/"[ROLE]"/g'
               exit 1
             fi
           done
           echo 'LOCAL_MANAGED_ROLE_SCAFFOLD_PRESENT'
-          if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+          if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres \
             -c 'CREATE SCHEMA IF NOT EXISTS auth; CREATE SCHEMA IF NOT EXISTS storage; CREATE SCHEMA IF NOT EXISTS extensions; CREATE SCHEMA IF NOT EXISTS vault; CREATE SCHEMA IF NOT EXISTS graphql; CREATE SCHEMA IF NOT EXISTS supabase_migrations;' \
             -c 'CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;' \
             -c 'CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);' \
@@ -93,7 +93,7 @@ jobs:
           for f in roles.sql schema.sql data.sql; do
             docker cp "$work/plain/$f" "dialektik-restore-probe:/tmp/$f"
           done
-          if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres --single-transaction \
+          if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres --single-transaction \
                -f /tmp/roles.sql -f /tmp/schema.sql -c 'SET session_replication_role=replica' -f /tmp/data.sql \
                > "$work/restore.log" 2>&1; then
             echo '::error::ISOLATED_RESTORE_FAILED_REVIEW_PRIVATE_LOG' 
@@ -116,7 +116,7 @@ jobs:
           PY
             exit 1
           fi
-          docker exec dialektik-restore-probe psql -XAt -v ON_ERROR_STOP=1 -U postgres -d postgres \
+          docker exec dialektik-restore-probe psql -XAt -v ON_ERROR_STOP=1 -U supabase_admin -d postgres \
             -c "SELECT 'RESTORED_PUBLIC_TABLES='||count(*) FROM pg_tables WHERE schemaname='public';" \
             -c "SELECT 'RESTORED_RLS_TABLES='||count(*) FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind='r' AND c.relrowsecurity;" \
             -c "SELECT 'RESTORED_ARTICLES='||count(*) FROM public.articles;" \
