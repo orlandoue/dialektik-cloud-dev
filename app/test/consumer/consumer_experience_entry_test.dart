@@ -11,7 +11,8 @@ import '../support/public_api_fixtures.dart';
 Future<void> _tap(WidgetTester tester, Finder target) async {
   await tester.ensureVisible(target);
   await tester.tap(target);
-  await tester.pumpAndSettle();
+  await tester.pump();
+  await tester.pump(const Duration(milliseconds: 500));
 }
 
 void main() {
@@ -82,6 +83,7 @@ void main() {
         findsOneWidget,
       );
       await _tap(tester, find.text('Fuentes'));
+      expect(find.text('Candidatas · 50'), findsOneWidget);
       expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
       await _tap(tester, find.byTooltip('Más opciones'));
       await _tap(tester, find.text('Contradicciones'));
