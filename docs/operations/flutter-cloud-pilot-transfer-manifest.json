@@ -12,7 +12,7 @@
   },
   "transfer": {
     "fileCount": 252,
-    "totalBytes": 2277027,
+    "totalBytes": 2278069,
     "excludedPaths": [
       "app/test/semantic/**",
       "app/test/semantic_shadow/**",
@@ -29,7 +29,8 @@
       "Android artifact is debug-only and no signing or server credentials are included.",
       "CI-only navigation harness uses finite route pumps and asserts the 50-candidate registry; the original V7P worktree remains unchanged.",
       "Consumer navigation test preloads the local source registry through tester.runAsync and asserts all 50 candidates; source worktree unchanged.",
-      "Sorted the new test imports and removed a duplicate candidate-count assertion; no source worktree changes."
+      "Sorted the new test imports and removed a duplicate candidate-count assertion; no source worktree changes.",
+      "The immutable root candidate registry shares one in-flight/successful load across routes; the navigation test asserts concurrent calls share the same future."
     ]
   },
   "files": [
@@ -857,9 +858,9 @@
     },
     {
       "path": "app/lib/features/live/data/candidate_source_registry.dart",
-      "bytes": 7119,
-      "sha256": "12c17623f69be9370f53165e2cdf2a97ffd537bdfc844f59f5974892a581333a",
-      "gitBlobSha": "04fc29803a922b46e891ff3ef57c2c470090145d"
+      "bytes": 7853,
+      "sha256": "ebe43a4d9f04887422c0dce9e96413f44cebd0bb7a522057a1620b1ca0e219b6",
+      "gitBlobSha": "fbc3a060bacd3be8af9ee4676b7095932a8f1ba2"
     },
     {
       "path": "app/lib/features/live/data/live_news_models.dart",
@@ -1109,9 +1110,9 @@
     },
     {
       "path": "app/test/consumer/consumer_experience_entry_test.dart",
-      "bytes": 4119,
-      "sha256": "905ed0fd0f656e502fe45254c505c9aeb6724a1c9504bf95f1a8c87d3282ab48",
-      "gitBlobSha": "fa88a61e8177e0e903c261b6751bc5c196ec305b"
+      "bytes": 4427,
+      "sha256": "5322558b241626a8f7bc66e7b8c452df6ab5d28338fbc5a048e42fb99dbb71eb",
+      "gitBlobSha": "62ed657da548aa2e40d62ada9a355252aa08dd80"
     },
     {
       "path": "app/test/consumer/consumer_navigation_filter_test.dart",
