@@ -297,14 +297,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/dialektik-evidence"
+          cleanup_log="$evidence_dir/cleanup.log"
           mapfile -t pg_ids < <(docker ps --filter ancestor=postgres:17.11 --format '{{.ID}}')
           if [[ "${#pg_ids[@]}" -ne 1 ]]; then
             echo 'CI_POSTGRES_CLEANUP=BLOCKED_CONTAINER_NOT_UNIQUE'
             exit 1
           fi
           pg_id="${pg_ids[0]}"
-          cleanup_result="$(docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" psql \
-            -h 127.0.0.1 -p 5432 -U postgres -d postgres -q -XAt -v ON_ERROR_STOP=1 <<'SQL'
+          [[ "$(docker inspect -f '{{.Config.Image}}' "$pg_id")" == postgres:17.11 ]]
+
+          # Preserve psql stdout/stderr and its exit status before enforcing the gate.
+          set +e
+          docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" psql \
+            -h 127.0.0.1 -p 5432 -U postgres -d postgres -q -XAt -v ON_ERROR_STOP=1 \
+            > "$cleanup_log" 2>&1 <<'SQL'
+          SELECT 'CI_CLEANUP_DATABASES_BEGIN';
           SELECT pg_catalog.pg_terminate_backend(pid)
           FROM pg_catalog.pg_stat_activity
           WHERE datname IN (
@@ -321,6 +329,7 @@ jobs:
           DROP DATABASE IF EXISTS dialektik_attack047_conflict;
           DROP DATABASE IF EXISTS dialektik_attack047_recovery_clean;
           DROP DATABASE IF EXISTS dialektik_attack045_clean_20261018;
+          SELECT 'CI_CLEANUP_DATABASES_DONE';
           DO $cleanup$
           BEGIN
             IF EXISTS (SELECT 1 FROM pg_catalog.pg_roles WHERE rolname='dialektik_govuk_rsh_invoker') THEN
@@ -343,15 +352,33 @@ jobs:
               ('dialektik_govuk_rsh_invoker','dialektik_govuk_metadata_writer'))
              AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_stat_activity WHERE usename IN
               ('dialektik_govuk_rsh_invoker','dialektik_govuk_metadata_writer'))
-            THEN 'CI_POSTGRES_CLEANUP=PASS ROLES=ABSENT SESSIONS=0'
+             AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_database WHERE datname IN (
+              'dialektik_attack045_clean_20261018',
+              'dialektik_attack047_recovery_clean',
+              'dialektik_attack045_first_race_ab',
+              'dialektik_attack045_first_race_ba',
+              'dialektik_attack045_revoked_race',
+              'dialektik_attack047_conflict'
+             ))
+            THEN 'CI_POSTGRES_CLEANUP=PASS ROLES=ABSENT SESSIONS=0 DATABASES=ABSENT'
             ELSE 'CI_POSTGRES_CLEANUP=FAIL'
           END;
           SQL
-          )"
-          printf '%s\n' "$cleanup_result" | tee "$RUNNER_TEMP/dialektik-evidence/cleanup.log"
-          [[ "$(printf '%s\n' "$cleanup_result" | tail -n 1)" == 'CI_POSTGRES_CLEANUP=PASS ROLES=ABSENT SESSIONS=0' ]]
-          printf 'CI_POSTGRES_CLEANUP=PASS; service is disposable and removed by Actions at job end\n' \
-            >> "$RUNNER_TEMP/dialektik-evidence/run-context.txt"
+          psql_status=$?
+          set -e
+
+          printf 'CI_POSTGRES_CLEANUP_PSQL_EXIT=%s\n' "$psql_status"
+          cat "$cleanup_log"
+          if [[ "$psql_status" -ne 0 ]]; then
+            echo 'CI_POSTGRES_CLEANUP=FAIL PSQL_ERROR_CAPTURED'
+            exit 1
+          fi
+          if ! grep -Fqx 'CI_POSTGRES_CLEANUP=PASS ROLES=ABSENT SESSIONS=0 DATABASES=ABSENT' "$cleanup_log"; then
+            echo 'CI_POSTGRES_CLEANUP=FAIL ASSERTION_NOT_PRESENT'
+            exit 1
+          fi
+          printf 'CI_POSTGRES_CLEANUP=PASS; disposable service is removed by Actions at job end\n' \
+            >> "$evidence_dir/run-context.txt"
 
       - name: Hash sanitized evidence files
         if: always()
