@@ -9,18 +9,6 @@ final class CuratedEventPublication {
     required this.publishedOn,
   });
 
-  static const Map<String, String> approvedUrls = <String, String>{
-    'La Tercera':
-        'https://www.latercera.com/nacional/noticia/dmc-confirma-tornado-en-estacion-central-vientos-alcanzaron-los-137-kmh/',
-    'BioBioChile':
-        'https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/13/dmc-asegura-que-fenomeno-apreciado-en-estacion-central-seria-un-tornado.shtml',
-    'Cooperativa':
-        'https://www.instagram.cooperativa.cl/noticias/pais/desastres-naturales/video-meteorologia-confirmo-evento-tornadico-en-estacion-central/2026-10-13/175530.html',
-    'T13':
-        'https://www.t13.cl/noticia/nacional/intentan-rescatar-familia-atrapada-tras-tornado-estacion-central-14-10-2026',
-    'Gobierno de Santiago':
-        'https://www.gobiernosantiago.cl/2026/10/14/gobernador-de-santiago-y-alcalde-de-estacion-central-coordinan-catastro-de-viviendas-afectadas-por-tornado/',
-  };
 
   factory CuratedEventPublication.fromJson(Object? value) {
     if (value is! Map<String, dynamic>) {
@@ -49,13 +37,27 @@ final class CuratedEventPublication {
       throw const FormatException('Unverified event evidence.');
     }
     return CuratedEventPublication(
-      publisher: publisher,
+      publisher: publisher!,
       publisherKind: publisherKind,
       headline: headline,
       canonicalUrl: uri,
       publishedOn: publishedOn!,
     );
   }
+
+  static const Map<String, String> approvedUrls = <String, String>{
+    'La Tercera':
+        'https://www.latercera.com/nacional/noticia/dmc-confirma-tornado-en-estacion-central-vientos-alcanzaron-los-137-kmh/',
+    'BioBioChile':
+        'https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/13/dmc-asegura-que-fenomeno-apreciado-en-estacion-central-seria-un-tornado.shtml',
+    'Cooperativa':
+        'https://www.instagram.cooperativa.cl/noticias/pais/desastres-naturales/video-meteorologia-confirmo-evento-tornadico-en-estacion-central/2026-10-13/175530.html',
+    'T13':
+        'https://www.t13.cl/noticia/nacional/intentan-rescatar-familia-atrapada-tras-tornado-estacion-central-14-10-2026',
+    'Gobierno de Santiago':
+        'https://www.gobiernosantiago.cl/2026/10/14/gobernador-de-santiago-y-alcalde-de-estacion-central-coordinan-catastro-de-viviendas-afectadas-por-tornado/',
+  };
+
 
   final String publisher;
   final String publisherKind;
