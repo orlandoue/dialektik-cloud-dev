@@ -60,8 +60,9 @@ final class _FeedScreenState extends State<FeedScreen> {
     // imply it matches other categories or free-text topic filters.
     if (widget.curatedEventPreviewLoader == null ||
         (_controller.category != null && _controller.category != 'pais') ||
-        _controller.topic != null)
+        _controller.topic != null) {
       return null;
+    }
     return CuratedEventPreviewCard(
       future: _curatedPreviewFuture,
       onRetry: () => setState(() {
