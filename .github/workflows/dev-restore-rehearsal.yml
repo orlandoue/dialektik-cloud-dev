@@ -18,7 +18,7 @@ jobs:
     environment: dialektik-dev-backup
     env:
       RESTORE_PASSPHRASE: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
-      ARCHIVE_ROOT: ${{ runner.temp }}/dialektik-rehearsal
+      ARCHIVE_ROOT: /tmp/dialektik-rehearsal
     steps:
       - name: Download the real encrypted archive from successful DEV backup
         uses: actions/download-artifact@v4
@@ -26,7 +26,7 @@ jobs:
           name: dialektik-dev-encrypted-logical-backup
           run-id: 39321170714
           github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/dialektik-rehearsal/download
+          path: /tmp/dialektik-rehearsal/download
       - name: Decrypt, verify manifest, and classify recovery coverage
         shell: bash
         run: |
