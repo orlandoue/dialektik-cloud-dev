@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           for test_dir in test/app test/consumer test/design_system test/live test/private_beta; do
-            flutter test --no-pub --test-randomize-ordering-seed=0 "$test_dir"
+            flutter test --no-pub --test-randomize-ordering-seed=0 --concurrency=1 "$test_dir"
           done
       - name: Verify design invariants
         run: dart run tool/check_design_invariants.dart
