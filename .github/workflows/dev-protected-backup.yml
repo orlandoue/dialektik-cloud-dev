@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           cert="$RUNNER_TEMP/dialektik-backup/prod-ca-2021.crt"
-          result="$(docker run --rm --pull=never \
+          result="$(docker run --rm \
             -v "$cert:/etc/dialektik/supabase-root.crt:ro" \
             -e DEV_URL postgres:17.11 \
             sh -eu -c 'psql "${DEV_URL}&sslrootcert=/etc/dialektik/supabase-root.crt" -XAt -v ON_ERROR_STOP=1 -c "SELECT current_database() || chr(124) || current_user || chr(124) || current_setting('\''server_version'\'')"')"
