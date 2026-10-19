@@ -46,7 +46,7 @@ final class GovUkPreviewItem {
     }
     return GovUkPreviewItem(
       headline: headline,
-      publisher: publisher,
+      publisher: publisher!,
       canonicalUrl: uri,
       publishedAt: date.toUtc(),
       attribution: attribution,
