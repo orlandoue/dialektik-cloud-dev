@@ -5,6 +5,7 @@ import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
@@ -276,6 +277,16 @@ final class PublicApiClient
     decoder: SemanticProvenanceDto.fromJson,
     refresh: refresh,
     requestToken: requestToken,
+  );
+
+  /// Human-reviewed evidence pilot, not part of persistent Event feed or semantic Core.
+  Future<CuratedEventPreview> loadChileTornadoEventPreview({
+    bool refresh = false,
+  }) => _get(
+    '/live/preview/events/chile-tornado',
+    decoder: CuratedEventPreview.fromJson,
+    refresh: refresh,
+    requestToken: null,
   );
 
   /// Opt-in, beta-only preview. Never included in live/news or local Article cache.
