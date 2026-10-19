@@ -47,7 +47,10 @@ jobs:
           if (o.event !== 'govuk_rsh_metadata_dry_run' ||
               o.source_item_id !== '86f4abba-9eaa-412f-b048-5ed30aa74201' ||
               o.canonical_url !== 'https://www.gov.uk/government/news/social-housing-landlord-downgraded-by-rsh' ||
-              !/^[0-9a-f]{64}$/.test(o.metadata_hash)) {
+              o.metadata_only !== true ||
+              o.acquisition_persisted !== false ||
+              o.body_persisted !== false ||
+              typeof o.title !== 'string' || o.title.length < 3) {
             throw new Error('GOVUK_RSH_EXACT_IDENTITY_OR_HASH_INVALID');
           }
           console.log(JSON.stringify({
@@ -55,7 +58,7 @@ jobs:
             event:o.event,
             item:o.source_item_id,
             canonical:o.canonical_url,
-            metadataHashPresent:true,
+            metadataOnly:o.metadata_only,
             remoteWrites:'NONE',
             migrationsApplied:'NONE',
             persistedArticle:'NO'
