@@ -286,87 +286,96 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        const Icon(Icons.verified_outlined, size: 20),
+                        const SizedBox(width: DialektikSpacing.space2),
+                        Expanded(
+                          child: Text(
+                            'Noticias oficiales · GOV.UK',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Actualizar publicaciones oficiales',
+                          onPressed: () => setState(() {
+                            _govUkPreviewFuture =
+                                widget.govUkPreviewLoader!.call(refresh: true);
+                          }),
+                          icon: const Icon(Icons.refresh),
+                        ),
+                      ],
+                    ),
                     Text(
-                      'Vista previa · Fuente oficial',
-                      style: Theme.of(context).textTheme.titleMedium,
+                      'Vista previa en vivo · Solo titulares y enlaces. No guardados ni analizados por Dialektik.',
+                      style: Theme.of(context).textTheme.bodySmall,
                     ),
                     const SizedBox(height: DialektikSpacing.space2),
-                    const Text(
-                      'Contenido consultado en GOV.UK. No está guardado en Dialektik y todavía no forma parte del análisis de acontecimientos.',
-                    ),
                     FutureBuilder<GovUkPreview>(
                       future: _govUkPreviewFuture,
-                      builder:
-                          (
-                            BuildContext context,
-                            AsyncSnapshot<GovUkPreview> snapshot,
-                          ) {
-                            if (snapshot.connectionState !=
-                                ConnectionState.done) {
-                              return const Padding(
-                                padding: EdgeInsets.symmetric(vertical: 12),
-                                child: LinearProgressIndicator(),
-                              );
-                            }
-                            if (snapshot.hasError || !snapshot.hasData) {
-                              return TextButton.icon(
-                                onPressed: () => setState(() {
-                                  _govUkPreviewFuture = widget
-                                      .govUkPreviewLoader!
-                                      .call(refresh: true);
-                                }),
-                                icon: const Icon(Icons.refresh),
-                                label: const Text(
-                                  'Reintentar la vista previa oficial',
+                      builder: (
+                        BuildContext context,
+                        AsyncSnapshot<GovUkPreview> snapshot,
+                      ) {
+                        if (snapshot.connectionState != ConnectionState.done) {
+                          return const Padding(
+                            padding: EdgeInsets.symmetric(vertical: 12),
+                            child: LinearProgressIndicator(),
+                          );
+                        }
+                        if (snapshot.hasError || !snapshot.hasData) {
+                          return TextButton.icon(
+                            onPressed: () => setState(() {
+                              _govUkPreviewFuture =
+                                  widget.govUkPreviewLoader!.call(refresh: true);
+                            }),
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Reintentar consulta oficial'),
+                          );
+                        }
+                        final List<GovUkPreviewItem> items = snapshot.data!.items;
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              '${items.length} publicaciones verificadas · Regulator of Social Housing',
+                              style: Theme.of(context).textTheme.labelMedium,
+                            ),
+                            for (final GovUkPreviewItem article in items) ...<Widget>[
+                              const Divider(height: 14),
+                              ListTile(
+                                contentPadding: EdgeInsets.zero,
+                                dense: true,
+                                title: Text(
+                                  article.headline,
+                                  style: Theme.of(context).textTheme.titleSmall,
                                 ),
-                              );
-                            }
-                            return Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                for (final GovUkPreviewItem article
-                                    in snapshot.data!.items) ...<Widget>[
-                                  const SizedBox(
-                                    height: DialektikSpacing.space3,
-                                  ),
-                                  Text(
-                                    article.headline,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                  const SizedBox(
-                                    height: DialektikSpacing.space2,
-                                  ),
-                                  Text(article.publisher),
-                                  Text(
-                                    'Publicado: ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year}',
-                                  ),
-                                  TextButton.icon(
-                                    onPressed: () => unawaited(
-                                      openExternalHttpLink(
-                                        article.canonicalUrl,
-                                      ),
-                                    ),
-                                    icon: const Icon(Icons.open_in_new),
-                                    label: const Text(
-                                      'Leer publicación original',
-                                    ),
-                                  ),
-                                  Text(
-                                    article.attribution,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ),
-                                ],
-                              ],
-                            );
-                          },
+                                subtitle: Text(
+                                  'Publicado ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year} · Abrir fuente',
+                                ),
+                                trailing: const Icon(Icons.open_in_new, size: 18),
+                                onTap: () => unawaited(
+                                  openExternalHttpLink(article.canonicalUrl),
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: DialektikSpacing.space2),
+                            Text(
+                              items.first.attribution,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
+            ),
+            const SizedBox(height: DialektikSpacing.space4),
+            Text(
+              'Artículos incorporados a Dialektik',
+              style: Theme.of(context).textTheme.titleMedium,
             ),
           ],
           const SizedBox(height: DialektikSpacing.space4),
