@@ -2,7 +2,7 @@ name: GOV.UK official preview Core CI
 
 on:
   push:
-    branches: [codex/govuk-live-preview-core-20261019]
+    branches: [codex/govuk-multi-preview-core-20261019]
   workflow_dispatch:
 
 permissions:
