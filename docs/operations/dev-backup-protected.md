@@ -35,3 +35,5 @@ The owner must provision the three Environment secrets via GitHub Settings → E
 ## Execution checkpoint
 
 2026-10-19 — Owner confirmed all three protected GitHub Environment secrets configured. Authorized read-only encrypted backup attempt. Never print secrets or move unencrypted data out of the ephemeral runner. The real restore remains separately gated.
+
+2026-10-19 diagnostic retry: previous protected backup exited at secret validation before any database connection. Retry reports presence and passphrase-length categories only; all credential values remain withheld.
