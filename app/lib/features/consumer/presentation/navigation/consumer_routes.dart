@@ -5,6 +5,7 @@ import 'package:dialektik/features/consumer/presentation/screens/event_detail_sc
 import 'package:dialektik/features/consumer/presentation/screens/feed_screen.dart';
 import 'package:dialektik/features/consumer/presentation/screens/source_screen.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_navigation_action.dart';
+import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/presentation/live_news_screens.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_operational.dart';
@@ -66,6 +67,7 @@ final class ConsumerRouteFactory {
     required this.externalLinkOpener,
     this.semanticRepository,
     this.liveNewsRepository,
+    this.govUkPreviewLoader,
     this.semanticShadowRepository,
     this.ephemeralSemanticRepository,
     this.semanticGraphRepository,
@@ -79,6 +81,7 @@ final class ConsumerRouteFactory {
   final ExternalLinkOpener externalLinkOpener;
   final SemanticRepository? semanticRepository;
   final LiveNewsRepository? liveNewsRepository;
+  final GovUkPreviewLoader? govUkPreviewLoader;
   final SemanticShadowRepository? semanticShadowRepository;
   final EphemeralSemanticRepository? ephemeralSemanticRepository;
   final SemanticGraphRepository? semanticGraphRepository;
@@ -361,6 +364,7 @@ final class ConsumerRouteFactory {
         settings,
         LiveNewsScreen(
           repository: live,
+          govUkPreviewLoader: govUkPreviewLoader,
           initialSourceId: uri.queryParameters['source_id'],
           onOpenArticle: openLiveNews,
           navigationActions: navigationActions,
