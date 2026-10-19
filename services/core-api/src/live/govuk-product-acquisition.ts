@@ -4,6 +4,7 @@ import {
   GOVUK_ATTRIBUTION,
   GOVUK_CONTENT_API_ORIGIN,
   GOVUK_FIRST_ARTICLE_URL,
+  GOVUK_CURATED_ARTICLE_URLS,
   govUkContentApiUrl,
   parseGovUkContentMetadata,
   type ParsedGovUkContentMetadata,
@@ -243,6 +244,106 @@ export async function acquireGovUkRshMetadataOnce(
     responseBytes.fill(0);
   }
   return projectGovUkRshMetadata(parsed, recordedAt);
+}
+
+/**
+ * Exact allowlist of up to seven official GOV.UK news paths. A single live robots
+ * verification is required for every path; each response is bounded and parsed
+ * metadata-only. Each unsuccessful item is omitted, never replaced with fixture text.
+ * The first pinned Article must pass the original identity proof.
+ * No SQL, Article IDs, event records, source-policy writes, or background polling.
+ */
+export interface GovUkRshPreviewMetadata {
+  readonly contentId: string;
+  readonly canonicalUrl: string;
+  readonly title: string;
+  readonly publisher: 'Regulator of Social Housing';
+  readonly publishedAt: string;
+  readonly modifiedAt: string | null;
+  readonly attribution: string;
+  readonly rightsEvidenceUrl: string;
+}
+
+export async function acquireGovUkRshPreviewBatch(
+  options: { readonly fetcher?: typeof fetch; readonly recordedAt?: Date } = {},
+): Promise<readonly GovUkRshPreviewMetadata[]> {
+  const fetcher = options.fetcher ?? fetch;
+  const recordedAt = options.recordedAt ?? new Date();
+  assertRightsCurrent(recordedAt);
+  const robotsBytes = await fetchExact(
+    GOVUK_CONTENT_API_ORIGIN + '/robots.txt',
+    fetcher,
+    MAX_ROBOTS_BYTES,
+    /text\/plain/iu,
+    'GOVUK_ROBOTS_UNAVAILABLE',
+  );
+  let robots: string;
+  try {
+    robots = new TextDecoder('utf-8', { fatal: true }).decode(robotsBytes);
+  } finally {
+    robotsBytes.fill(0);
+  }
+  const urls = GOVUK_CURATED_ARTICLE_URLS;
+  // Reject the entire batch if a single curated path lacks robots permission.
+  for (const url of urls) {
+    if (!govUkRobotsAllowsPath(robots, new URL(govUkContentApiUrl(url)).pathname))
+      throw new Error('GOVUK_ROBOTS_DISALLOWS_API');
+  }
+  const successful: GovUkRshPreviewMetadata[] = [];
+  for (let offset = 0; offset < urls.length; offset += 3) {
+    const chunk = urls.slice(offset, offset + 3);
+    const results = await Promise.allSettled(chunk.map(async (url) => {
+      const bytes = await fetchExact(
+        govUkContentApiUrl(url),
+        fetcher,
+        MAX_API_BYTES,
+        /application\/json/iu,
+        'GOVUK_CONTENT_API_UNAVAILABLE',
+      );
+      let metadata: ParsedGovUkContentMetadata;
+      try {
+        metadata = parseGovUkContentMetadata(bytes, url);
+      } finally {
+        bytes.fill(0);
+      }
+      if (
+        metadata.documentType !== 'press_release' ||
+        metadata.schemaName !== 'news_article' ||
+        metadata.publisher !== GOVUK_RSH_PUBLISHER ||
+        (metadata.locale !== null && metadata.locale !== 'en') ||
+        metadata.title.length > 1024 ||
+        metadata.title.includes('\\u0000')
+      ) throw new Error('GOVUK_PREVIEW_ITEM_OUT_OF_SCOPE');
+      const published = Date.parse(metadata.firstPublishedAt);
+      const updated = metadata.publicUpdatedAt === null ? null : Date.parse(metadata.publicUpdatedAt);
+      if (
+        !Number.isFinite(published) ||
+        published > recordedAt.getTime() ||
+        (updated !== null &&
+          (!Number.isFinite(updated) || updated < published || updated > recordedAt.getTime()))
+      ) throw new Error('GOVUK_PREVIEW_DATE_INVALID');
+      if (url === GOVUK_RSH_CANONICAL_URL) {
+        // Preserve the stronger identity pin of the approved first article.
+        projectGovUkRshMetadata(metadata, recordedAt);
+      }
+      return Object.freeze({
+        contentId: metadata.contentId,
+        canonicalUrl: url,
+        title: metadata.title,
+        publisher: GOVUK_RSH_PUBLISHER,
+        publishedAt: metadata.firstPublishedAt,
+        modifiedAt: metadata.publicUpdatedAt,
+        attribution: GOVUK_ATTRIBUTION,
+        rightsEvidenceUrl: GOVUK_RSH_RIGHTS_EVIDENCE_URL,
+      });
+    }));
+    for (const result of results) if (result.status === 'fulfilled') successful.push(result.value);
+  }
+  if (successful.length === 0) throw new Error('GOVUK_PREVIEW_NO_VERIFIED_ITEMS');
+  return Object.freeze(
+    successful.sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) ||
+      a.canonicalUrl.localeCompare(b.canonicalUrl)),
+  );
 }
 
 /** Copies only approved metadata fields; the product parser does not expose an article body. */

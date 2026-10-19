@@ -12,6 +12,8 @@ export const GOVUK_CURATED_ARTICLE_URLS = Object.freeze([
   'https://www.gov.uk/government/news/regulator-of-social-housing-publishes-the-rent-standard-2026',
   'https://www.gov.uk/government/news/social-housing-landlords-to-invest-record-amounts-in-repairs-and-new-homes',
   'https://www.gov.uk/government/news/governance-and-viability-downgrades-for-non-compliant-landlord',
+  'https://www.gov.uk/government/news/rsh-gives-two-local-authorities-a-c3-consumer-grade',
+  'https://www.gov.uk/government/news/rsh-takes-enforcement-action-against-concept-housing-association',
 ]);
 export const GOVUK_CONTENT_API_ORIGIN = 'https://www.gov.uk';
 export const GOVUK_CONTENT_API_URL =
