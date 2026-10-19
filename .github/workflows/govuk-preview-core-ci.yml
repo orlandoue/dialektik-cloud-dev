@@ -18,6 +18,8 @@ jobs:
         with:
           node-version: '22'
           cache: npm
+      - name: Match repository npm version
+        run: npm install --global npm@11.6.2
       - name: Install dependencies from lock
         run: npm ci --no-audit --no-fund
       - name: Build database and Core
