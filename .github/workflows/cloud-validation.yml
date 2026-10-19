@@ -20,8 +20,8 @@ jobs:
     timeout-minutes: 45
     env:
       # Disposable CI-only credentials. These never target Supabase or Render.
-      CI_PG_PASSWORD: ci-only-postgres-17-ephemeral
-      CI_PG_ADMIN_URL: postgresql://postgres:ci-only-postgres-17-ephemeral@127.0.0.1:55442/postgres
+      CI_PG_PASSWORD: ci-only-postgres-17-ephemeral-20261018
+      CI_PG_ADMIN_URL: postgresql://postgres:ci-only-postgres-17-ephemeral-20261018@127.0.0.1:55442/postgres
       CI_ATTACK044_DATABASE: dialektik_attack045_clean_20261018
       CI_ATTACK047_DATABASE: dialektik_attack047_recovery_clean
       CI_PG_PORT: "55442"
@@ -30,7 +30,7 @@ jobs:
         image: postgres:17.11
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-only-postgres-17-ephemeral
+          POSTGRES_PASSWORD: ci-only-postgres-17-ephemeral-20261018
           POSTGRES_INITDB_ARGS: --auth-host=scram-sha-256 --auth-local=scram-sha-256
         ports:
           - 55442:5432
@@ -369,3 +369,4 @@ jobs:
           path: ${{ runner.temp }}/dialektik-evidence/
           if-no-files-found: warn
           retention-days: 14
+
