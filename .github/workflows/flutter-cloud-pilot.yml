@@ -91,6 +91,7 @@ jobs:
             --dart-define="DIALEKTIK_SUPABASE_PUBLISHABLE_KEY=$DIALEKTIK_SUPABASE_PUBLISHABLE_KEY" \
             --dart-define=DIALEKTIK_NEWS_READER_ENABLED=true \
             --dart-define=DIALEKTIK_GOVUK_PREVIEW_ENABLED=true \
+            --dart-define=DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED=true \
             --dart-define=DIALEKTIK_SEMANTIC_MODE=disabled \
             --dart-define=DIALEKTIK_OWNERSHIP_MODE=corporate
           sha256sum build/app/outputs/flutter-apk/app-debug.apk | tee "$RUNNER_TEMP/dialektik-apk.sha256"
