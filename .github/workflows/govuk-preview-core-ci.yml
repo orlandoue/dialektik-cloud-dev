@@ -1,0 +1,31 @@
+name: GOV.UK official preview Core CI
+
+on:
+  push:
+    branches: [codex/govuk-live-preview-core-20261019]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  core-preview-quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Match repository npm version
+        run: npm install --global npm@11.6.2
+      - name: Install dependencies from lock
+        run: npm ci --no-audit --no-fund
+      - name: Build database and Core
+        run: npm run build
+      - name: Preview and GovUk safety unit tests
+        run: npx vitest run --config services/core-api/vitest.config.mts services/core-api/test/govuk-private-beta-preview.test.ts services/core-api/test/govuk-product-acquisition.test.ts
+      - name: Security summary
+        run: |
+          echo 'Private-beta guarded; explicit DEV toggle required; metadata only; no persistent writes.'
