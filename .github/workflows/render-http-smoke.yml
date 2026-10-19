@@ -42,3 +42,20 @@ jobs:
             exit 1
           fi
           echo 'Public Render live and ready health endpoints returned HTTP 200.'
+
+      - name: Verify unauthenticated product routes fail closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://dialektik-core-dev.onrender.com'
+          for path in /live/news /live/sources; do
+            outfile="$(mktemp)"
+            code="$(curl --proto '=https' --tlsv1.2 --silent --show-error --max-time 65 --connect-timeout 15 --output "$outfile" --write-out '%{http_code}' "$base$path")" || code='CURL_FAILED'
+            rm -f "$outfile"
+            echo "$path without bearer: HTTP $code (expected 401)"
+            if [ "$code" != '401' ]; then
+              echo "::error::Unauthenticated $path did not return 401"
+              exit 1
+            fi
+          done
+          echo 'Protected live news and sources routes reject anonymous requests.'
