@@ -36,8 +36,8 @@ final class CuratedEventPublication {
       throw const FormatException('Unverified event evidence.');
     }
     return CuratedEventPublication(
-      publisher: publisher!,
-      publisherKind: publisherKind,
+      publisher: publisher,
+      publisherKind: publisherKind!,
       headline: headline,
       canonicalUrl: uri,
       publishedOn: publishedOn!,
