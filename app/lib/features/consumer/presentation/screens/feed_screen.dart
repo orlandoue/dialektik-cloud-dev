@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:dialektik/design_system/design_system.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
+import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/state/feed_controller.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/curated_event_preview_card.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/event_card.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/filter_bar.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
@@ -16,6 +18,7 @@ final class FeedScreen extends StatefulWidget {
     required this.onOpenEvent,
     required this.onOpenContradictions,
     this.onOpenThreads,
+    this.curatedEventPreviewLoader,
     this.navigationActions = const <Widget>[],
     super.key,
   });
@@ -24,6 +27,7 @@ final class FeedScreen extends StatefulWidget {
   final ValueChanged<String> onOpenEvent;
   final VoidCallback onOpenContradictions;
   final VoidCallback? onOpenThreads;
+  final CuratedEventPreviewLoader? curatedEventPreviewLoader;
   final List<Widget> navigationActions;
 
   @override
@@ -31,6 +35,7 @@ final class FeedScreen extends StatefulWidget {
 }
 
 final class _FeedScreenState extends State<FeedScreen> {
+  Future<CuratedEventPreview>? _curatedPreviewFuture;
   late final FeedController _controller = FeedController(
     repository: widget.repository,
   );
@@ -38,6 +43,7 @@ final class _FeedScreenState extends State<FeedScreen> {
   @override
   void initState() {
     super.initState();
+    _curatedPreviewFuture = widget.curatedEventPreviewLoader?.call(refresh: true);
     unawaited(_controller.loadInitial());
   }
 
@@ -45,6 +51,21 @@ final class _FeedScreenState extends State<FeedScreen> {
   void dispose() {
     _controller.dispose();
     super.dispose();
+  }
+
+  Widget? get _editorialPreview {
+    // A country-scoped preview is not a real persistent feed record; do not
+    // imply it matches other categories or free-text topic filters.
+    if (widget.curatedEventPreviewLoader == null ||
+        (_controller.category != null && _controller.category != 'pais') ||
+        _controller.topic != null) return null;
+    return CuratedEventPreviewCard(
+      future: _curatedPreviewFuture,
+      onRetry: () => setState(() {
+        _curatedPreviewFuture =
+            widget.curatedEventPreviewLoader!.call(refresh: true);
+      }),
+    );
   }
 
   @override
@@ -63,10 +84,12 @@ final class _FeedScreenState extends State<FeedScreen> {
           return switch (_controller.phase) {
             FeedPhase.initial || FeedPhase.loading => _FeedListFrame(
               controller: _controller,
+              preview: _editorialPreview,
               child: SystemStateView(message: strings.loading, isLoading: true),
             ),
             FeedPhase.error => _FeedListFrame(
               controller: _controller,
+              preview: _editorialPreview,
               child: SystemStateView(
                 message: strings.errorForName(_controller.failure!.kind.name),
                 actionLabel: strings.retry,
@@ -75,6 +98,7 @@ final class _FeedScreenState extends State<FeedScreen> {
             ),
             FeedPhase.empty => _FeedListFrame(
               controller: _controller,
+              preview: _editorialPreview,
               child: SystemStateView(
                 message: _controller.hasFilter
                     ? strings.filteredFeedEmpty
@@ -87,6 +111,7 @@ final class _FeedScreenState extends State<FeedScreen> {
             ),
             FeedPhase.content => _FeedContent(
               controller: _controller,
+              preview: _editorialPreview,
               onOpenEvent: widget.onOpenEvent,
             ),
           };
@@ -97,10 +122,11 @@ final class _FeedScreenState extends State<FeedScreen> {
 }
 
 final class _FeedListFrame extends StatelessWidget {
-  const _FeedListFrame({required this.controller, required this.child});
+  const _FeedListFrame({required this.controller, required this.child, this.preview});
 
   final FeedController controller;
   final Widget child;
+  final Widget? preview;
 
   @override
   Widget build(BuildContext context) {
@@ -126,6 +152,10 @@ final class _FeedListFrame extends StatelessWidget {
                   onTopicChanged: (String? value) =>
                       unawaited(controller.setTopic(value)),
                 ),
+                if (preview != null) ...<Widget>[
+                  const SizedBox(height: DialektikSpacing.space4),
+                  preview!,
+                ],
                 const SizedBox(height: DialektikSpacing.space8),
                 child,
               ],
@@ -138,10 +168,11 @@ final class _FeedListFrame extends StatelessWidget {
 }
 
 final class _FeedContent extends StatelessWidget {
-  const _FeedContent({required this.controller, required this.onOpenEvent});
+  const _FeedContent({required this.controller, required this.onOpenEvent, this.preview});
 
   final FeedController controller;
   final ValueChanged<String> onOpenEvent;
+  final Widget? preview;
 
   @override
   Widget build(BuildContext context) {
@@ -183,6 +214,10 @@ final class _FeedContent extends StatelessWidget {
                         controller.transientFailure!.kind.name,
                       ),
                     ),
+                  ],
+                  if (preview != null) ...<Widget>[
+                    const SizedBox(height: DialektikSpacing.space4),
+                    preview!,
                   ],
                   const SizedBox(height: DialektikSpacing.space8),
                   for (
