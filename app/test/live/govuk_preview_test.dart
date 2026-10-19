@@ -44,9 +44,7 @@ void main() {
   test('rejects duplicate preview URLs', () {
     final Map<String, Object?> values = payload();
     final List<Object?> items = values['items']! as List<Object?>;
-    items.add(Map<String, Object?>.from(
-      items.first! as Map<String, Object?>,
-    ));
+    items.add(Map<String, Object?>.from(items.first! as Map<String, Object?>));
     expect(() => GovUkPreview.fromJson(values), throwsFormatException);
   });
 

@@ -299,8 +299,8 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                         IconButton(
                           tooltip: 'Actualizar publicaciones oficiales',
                           onPressed: () => setState(() {
-                            _govUkPreviewFuture =
-                                widget.govUkPreviewLoader!.call(refresh: true);
+                            _govUkPreviewFuture = widget.govUkPreviewLoader!
+                                .call(refresh: true);
                           }),
                           icon: const Icon(Icons.refresh),
                         ),
@@ -313,60 +313,76 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                     const SizedBox(height: DialektikSpacing.space2),
                     FutureBuilder<GovUkPreview>(
                       future: _govUkPreviewFuture,
-                      builder: (
-                        BuildContext context,
-                        AsyncSnapshot<GovUkPreview> snapshot,
-                      ) {
-                        if (snapshot.connectionState != ConnectionState.done) {
-                          return const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            child: LinearProgressIndicator(),
-                          );
-                        }
-                        if (snapshot.hasError || !snapshot.hasData) {
-                          return TextButton.icon(
-                            onPressed: () => setState(() {
-                              _govUkPreviewFuture =
-                                  widget.govUkPreviewLoader!.call(refresh: true);
-                            }),
-                            icon: const Icon(Icons.refresh),
-                            label: const Text('Reintentar consulta oficial'),
-                          );
-                        }
-                        final List<GovUkPreviewItem> items = snapshot.data!.items;
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: <Widget>[
-                            Text(
-                              '${items.length} publicaciones verificadas · Regulator of Social Housing',
-                              style: Theme.of(context).textTheme.labelMedium,
-                            ),
-                            for (final GovUkPreviewItem article in items) ...<Widget>[
-                              const Divider(height: 14),
-                              ListTile(
-                                contentPadding: EdgeInsets.zero,
-                                dense: true,
-                                title: Text(
-                                  article.headline,
-                                  style: Theme.of(context).textTheme.titleSmall,
+                      builder:
+                          (
+                            BuildContext context,
+                            AsyncSnapshot<GovUkPreview> snapshot,
+                          ) {
+                            if (snapshot.connectionState !=
+                                ConnectionState.done) {
+                              return const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12),
+                                child: LinearProgressIndicator(),
+                              );
+                            }
+                            if (snapshot.hasError || !snapshot.hasData) {
+                              return TextButton.icon(
+                                onPressed: () => setState(() {
+                                  _govUkPreviewFuture = widget
+                                      .govUkPreviewLoader!
+                                      .call(refresh: true);
+                                }),
+                                icon: const Icon(Icons.refresh),
+                                label: const Text(
+                                  'Reintentar consulta oficial',
                                 ),
-                                subtitle: Text(
-                                  'Publicado ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year} · Abrir fuente',
+                              );
+                            }
+                            final List<GovUkPreviewItem> items =
+                                snapshot.data!.items;
+                            return Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  '${items.length} publicaciones verificadas · Regulator of Social Housing',
+                                  style: Theme.of(
+                                    context,
+                                  ).textTheme.labelMedium,
                                 ),
-                                trailing: const Icon(Icons.open_in_new, size: 18),
-                                onTap: () => unawaited(
-                                  openExternalHttpLink(article.canonicalUrl),
+                                for (final GovUkPreviewItem article
+                                    in items) ...<Widget>[
+                                  const Divider(height: 14),
+                                  ListTile(
+                                    contentPadding: EdgeInsets.zero,
+                                    dense: true,
+                                    title: Text(
+                                      article.headline,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleSmall,
+                                    ),
+                                    subtitle: Text(
+                                      'Publicado ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year} · Abrir fuente',
+                                    ),
+                                    trailing: const Icon(
+                                      Icons.open_in_new,
+                                      size: 18,
+                                    ),
+                                    onTap: () => unawaited(
+                                      openExternalHttpLink(
+                                        article.canonicalUrl,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                                const SizedBox(height: DialektikSpacing.space2),
+                                Text(
+                                  items.first.attribution,
+                                  style: Theme.of(context).textTheme.bodySmall,
                                 ),
-                              ),
-                            ],
-                            const SizedBox(height: DialektikSpacing.space2),
-                            Text(
-                              items.first.attribution,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        );
-                      },
+                              ],
+                            );
+                          },
                     ),
                   ],
                 ),

@@ -76,7 +76,10 @@ final class GovUkPreview {
         .toList(growable: false);
     if (items.isEmpty ||
         items.length > 7 ||
-        items.map((GovUkPreviewItem item) => item.canonicalUrl).toSet().length !=
+        items
+                .map((GovUkPreviewItem item) => item.canonicalUrl)
+                .toSet()
+                .length !=
             items.length) {
       throw const FormatException('Unexpected official preview scope.');
     }
