@@ -568,9 +568,7 @@ void main() {
         'océano',
       );
       expect(
-        find.text(
-          'Titulares y datos de publicación. Lee el contenido en la fuente original.',
-        ),
+        find.text('Titulares oficiales con enlace al medio de origen.'),
         findsOneWidget,
       );
       expect(find.byTooltip('Actualizar noticias'), findsOneWidget);
