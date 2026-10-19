@@ -1,4 +1,4 @@
-/// Preview of a single prequalified official Content API item.
+/// Bounded read-only preview of prequalified official Content API items.
 /// This is never an Article, a persisted version, or a semantic event.
 final class GovUkPreviewItem {
   const GovUkPreviewItem({
@@ -74,9 +74,16 @@ final class GovUkPreview {
     final List<GovUkPreviewItem> items = (value['items'] as List<dynamic>)
         .map(GovUkPreviewItem.fromJson)
         .toList(growable: false);
-    if (items.length != 1) {
+    if (items.isEmpty ||
+        items.length > 7 ||
+        items.map((GovUkPreviewItem item) => item.canonicalUrl).toSet().length !=
+            items.length) {
       throw const FormatException('Unexpected official preview scope.');
     }
+    items.sort(
+      (GovUkPreviewItem a, GovUkPreviewItem b) =>
+          b.publishedAt.compareTo(a.publishedAt),
+    );
     return GovUkPreview(items: List<GovUkPreviewItem>.unmodifiable(items));
   }
 
