@@ -1,5 +1,5 @@
 name: Flutter Cloud Pilot
-# DEV pilot: compact read-only official GOV.UK multi-headline interface.
+# DEV pilot: GOV.UK headlines and cross-publisher Chile evidence preview; no persistence.
 
 on:
   push:
