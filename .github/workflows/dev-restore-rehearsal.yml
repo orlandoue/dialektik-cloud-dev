@@ -57,6 +57,13 @@ jobs:
           print('AUTH_USERS_DATA_INCLUDED', bool(re.search(r'COPY\s+auth\.users',data,re.I)))
           print('MIGRATION_LEDGER_SCHEMA_INCLUDED', 'supabase_migrations' in schema)
           print('APP_PUBLIC_SCHEMA_PRESENT', 'CREATE TABLE public.' in schema)
+          # Supabase's documented platform-specific cli_login_postgres grant can be
+          # excluded only for disposable restore; source checksum remains unaltered.
+          original=(base/'roles.sql').read_text()
+          exceptional='GRANT "postgres" TO "cli_login_postgres" WITH INHERIT FALSE GRANTED BY "supabase_admin";'
+          if original.count(exceptional) > 1: raise SystemExit('DUPLICATE_PLATFORM_GRANT_UNEXPECTED')
+          (base/'roles.restore.sql').write_text(original.replace(exceptional,'-- EXCLUDED PLATFORM_CLI_LOGIN_GRANT'))
+          print('EXCLUDED_PLATFORM_CLI_LOGIN_GRANT', exceptional in original)
           PY
       - name: Restore actual dump in isolated Supabase PostgreSQL 17
         shell: bash
@@ -90,11 +97,11 @@ jobs:
               exit 1
           fi
           echo 'LOCAL_MANAGED_SCHEMA_SCAFFOLD_PRESENT'
-          for f in roles.sql schema.sql data.sql; do
+          for f in roles.restore.sql schema.sql data.sql; do
             docker cp "$work/plain/$f" "dialektik-restore-probe:/tmp/$f"
           done
           if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres --single-transaction \
-               -f /tmp/roles.sql -f /tmp/schema.sql -c 'SET session_replication_role=replica' -f /tmp/data.sql \
+               -f /tmp/roles.restore.sql -f /tmp/schema.sql -c 'SET session_replication_role=replica' -f /tmp/data.sql \
                > "$work/restore.log" 2>&1; then
             echo '::error::ISOLATED_RESTORE_FAILED_REVIEW_PRIVATE_LOG' 
             python3 - <<'PY'
