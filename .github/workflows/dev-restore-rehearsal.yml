@@ -102,3 +102,5 @@ jobs:
           docker rm -f dialektik-restore-probe >/dev/null 2>&1 || true
           rm -rf -- "$ARCHIVE_ROOT"
           echo 'EPHEMERAL_RESTORE_RESOURCES_DESTROYED'
+
+# Explicitly owner-authorized isolated restore from existing encrypted backup; NO remote write.
