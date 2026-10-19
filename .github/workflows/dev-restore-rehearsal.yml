@@ -86,6 +86,10 @@ jobs:
           hints={'MISSING_ROLE':r'role .* does not exist','MISSING_EXTENSION':r'extension .* is not available','MISSING_RELATION':r'relation .* does not exist','MISSING_FUNCTION':r'function .* does not exist','PERMISSION_FAILURE':r'permission denied','DUPLICATE_OBJECT':r'already exists','UNKNOWN_SQL_FAILURE':r'ERROR:'}
           for k,regex in hints.items():
             if re.search(regex,t,re.I): print('RESTORE_DIAGNOSTIC_CATEGORY',k)
+          m=re.search(r'role ["\u2018\u2019]?([a-z][a-z0-9_]*)["\u2018\u2019]? does not exist',t,re.I)
+          if m:
+            name=m.group(1)
+            print('MISSING_ROLE_NAME',name if name in {'anon','authenticated','service_role','authenticator','supabase_admin','supabase_auth_admin','supabase_storage_admin','supabase_read_only_user','supabase_realtime_admin','supabase_functions_admin','supabase_replication_admin','dialektik_core_app','dialektik_core_app_rot_20261016'} else 'OTHER_ROLE')
           PY
             exit 1
           fi
