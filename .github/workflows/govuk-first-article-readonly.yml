@@ -1,0 +1,65 @@
+name: Dialektik GOV.UK first article read-only preflight
+
+on:
+  push:
+    branches:
+      - codex/govuk-first-article-readonly-20261019
+    paths:
+      - .github/workflows/govuk-first-article-readonly.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bounded-govuk-dry-run:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DIALEKTIK_GOVUK_RSH_PERSIST_ENABLED: '0'
+      DIALEKTIK_GOVUK_RSH_PERSIST_CONFIRMATION: ''
+    steps:
+      - name: Checkout exact reviewed candidate
+        uses: actions/checkout@v4
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Match pinned npm
+        run: npm install --global npm@11.6.2
+      - name: Reproducible dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Build database and Core without database connection
+        run: npm run build
+      - name: Fetch exactly one registered GOV.UK RSH item in dry-run mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "${DATABASE_URL:-}"
+          test "${DIALEKTIK_GOVUK_RSH_PERSIST_ENABLED}" = '0'
+          node services/core-api/dist/live/govuk-product-acquisition.cli.mjs \
+            --source govuk-rsh --mode dry-run --once > "$RUNNER_TEMP/govuk-rsh-dryrun.json"
+          node --input-type=module - "$RUNNER_TEMP/govuk-rsh-dryrun.json" <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const p = process.argv[2];
+          const o = JSON.parse(readFileSync(p,'utf8'));
+          if (o.event !== 'govuk_rsh_metadata_dry_run' ||
+              o.source_item_id !== '86f4abba-9eaa-412f-b048-5ed30aa74201' ||
+              o.canonical_url !== 'https://www.gov.uk/government/news/social-housing-landlord-downgraded-by-rsh' ||
+              !/^[0-9a-f]{64}$/.test(o.metadata_hash)) {
+            throw new Error('GOVUK_RSH_EXACT_IDENTITY_OR_HASH_INVALID');
+          }
+          console.log(JSON.stringify({
+            verdict:'PASS_READ_ONLY',
+            event:o.event,
+            item:o.source_item_id,
+            canonical:o.canonical_url,
+            metadataHashPresent:true,
+            remoteWrites:'NONE',
+            migrationsApplied:'NONE',
+            persistedArticle:'NO'
+          }));
+          NODE
+          echo '### GOV.UK read-only dry-run' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Exact RSH item; official API & robots; metadata-only; zero database credentials; no persistence.' >> "$GITHUB_STEP_SUMMARY"
