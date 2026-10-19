@@ -85,8 +85,8 @@ jobs:
           import os, hashlib, subprocess, pathlib
           p=pathlib.Path(os.environ['RUNNER_TEMP'])/'dialektik-backup'/'prod-ca-2021.crt'
           raw=os.environ['DEV_CA_PEM']
-          lf=raw.replace('\\r\\n','\\n').replace('\\r','\\n')
-          candidates=[('exact',raw),('LF',lf),('LF_final_newline',lf.rstrip('\\n')+'\\n'),('LF_no_final_newline',lf.rstrip('\\n'))]
+          lf=raw.replace('\r\n','\n').replace('\r','\n')
+          candidates=[('exact',raw),('LF',lf),('LF_final_newline',lf.rstrip('\n')+'\n'),('LF_no_final_newline',lf.rstrip('\n'))]
           pin='700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7'
           for label, val in candidates:
             if hashlib.sha256(val.encode()).hexdigest()==pin:
