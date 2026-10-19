@@ -309,7 +309,7 @@ jobs:
 
           # Preserve psql stdout/stderr and its exit status before enforcing the gate.
           set +e
-          docker exec -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" psql \
+          docker exec -i -e PGPASSWORD="$CI_PG_PASSWORD" "$pg_id" psql \
             -h 127.0.0.1 -p 5432 -U postgres -d postgres -q -XAt -v ON_ERROR_STOP=1 \
             > "$cleanup_log" 2>&1 <<'SQL'
           SELECT 'CI_CLEANUP_DATABASES_BEGIN';
