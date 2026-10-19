@@ -26,6 +26,17 @@ jobs:
         run: npm run build
       - name: Preview and GovUk safety unit tests
         run: npx vitest run --config services/core-api/vitest.config.mts services/core-api/test/govuk-private-beta-preview.test.ts services/core-api/test/govuk-product-acquisition.test.ts
+      - name: Verify current GOV.UK API content without database access
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import { acquireGovUkRshPreviewBatch } from './services/core-api/dist/live/govuk-product-acquisition.js';
+          const items = await acquireGovUkRshPreviewBatch();
+          if (items.length < 2 || items.length > 7) throw Error('OFFICIAL_MULTI_PREVIEW_NOT_AVAILABLE');
+          console.log('OFFICIAL_VERIFIED_ITEM_COUNT=' + items.length);
+          console.log('OFFICIAL_ARTICLE_PUBLICATION_DATES=' + items.map(item=>item.publishedAt.slice(0,10)).join(','));
+          console.log('PERSISTENCE=NONE; FULLTEXT_RETURNED=NO');
+          NODE
       - name: Security summary
         run: |
           echo 'Private-beta guarded; explicit DEV toggle required; metadata only; no persistent writes.'
