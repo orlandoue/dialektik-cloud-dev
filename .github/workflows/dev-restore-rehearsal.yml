@@ -100,7 +100,7 @@ jobs:
           for f in roles.restore.sql schema.sql data.sql; do
             docker cp "$work/plain/$f" "dialektik-restore-probe:/tmp/$f"
           done
-          if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U supabase_admin -d postgres --single-transaction \
+          if ! docker exec dialektik-restore-probe psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres --single-transaction \
                -f /tmp/roles.restore.sql -f /tmp/schema.sql -c 'SET session_replication_role=replica' -f /tmp/data.sql \
                > "$work/restore.log" 2>&1; then
             echo '::error::ISOLATED_RESTORE_FAILED_REVIEW_PRIVATE_LOG' 
