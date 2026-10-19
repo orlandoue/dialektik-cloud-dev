@@ -1,4 +1,5 @@
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
+import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/screens/contradictions_screen.dart';
 import 'package:dialektik/features/consumer/presentation/screens/event_detail_screen.dart';
@@ -68,6 +69,7 @@ final class ConsumerRouteFactory {
     this.semanticRepository,
     this.liveNewsRepository,
     this.govUkPreviewLoader,
+    this.curatedEventPreviewLoader,
     this.semanticShadowRepository,
     this.ephemeralSemanticRepository,
     this.semanticGraphRepository,
@@ -82,6 +84,7 @@ final class ConsumerRouteFactory {
   final SemanticRepository? semanticRepository;
   final LiveNewsRepository? liveNewsRepository;
   final GovUkPreviewLoader? govUkPreviewLoader;
+  final CuratedEventPreviewLoader? curatedEventPreviewLoader;
   final SemanticShadowRepository? semanticShadowRepository;
   final EphemeralSemanticRepository? ephemeralSemanticRepository;
   final SemanticGraphRepository? semanticGraphRepository;
@@ -269,6 +272,7 @@ final class ConsumerRouteFactory {
           settings,
           FeedScreen(
             repository: repository,
+            curatedEventPreviewLoader: curatedEventPreviewLoader,
             navigationActions: navigationActions,
             onOpenThreads: null,
             onOpenEvent: (String id) =>
