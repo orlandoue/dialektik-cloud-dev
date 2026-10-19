@@ -32,8 +32,9 @@ void main() {
 
   test('rejects an unapproved publisher-domain link', () {
     final Map<String, Object?> bad = payload();
-    (bad['items']! as List<Object?>).first as Map<String, Object?>
-      ..['canonical_url'] = 'https://example.org/government/news/fake';
+    final Map<String, Object?> item =
+        (bad['items']! as List<Object?>).first! as Map<String, Object?>;
+    item['canonical_url'] = 'https://example.org/government/news/fake';
     expect(() => GovUkPreview.fromJson(bad), throwsFormatException);
   });
 }
