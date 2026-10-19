@@ -39,3 +39,5 @@ The owner must provision the three Environment secrets via GitHub Settings → E
 2026-10-19 diagnostic retry: previous protected backup exited at secret validation before any database connection. Retry reports presence and passphrase-length categories only; all credential values remain withheld.
 
 2026-10-19 — Owner updated the encrypted-backup passphrase in protected GitHub Environment and explicitly requested a retry. Protected execution remains restricted to this branch; no SQL migration, rotation, import or Render deployment is authorized by this checkpoint.
+
+2026-10-19 — Read-only backup URL diagnostics retry: password-encryption secret and CA were present; DEV connection URI failed strict shape validation. This run emits only categorical mismatch codes, never the URI or credentials. On another failure, stop and obtain owner-side correction.
