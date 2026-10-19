@@ -1,0 +1,1546 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repositoryWorktree": "v7p-real-world-operational-preparation-checkout",
+    "branch": "codex/v7i-operational-product-pipeline",
+    "head": "a19921c7369794c4b8b57990ea868b5f013e5cde"
+  },
+  "target": {
+    "repository": "orlandoue/dialektik-cloud-dev",
+    "branch": "codex/cloud-flutter-pilot-20261018",
+    "baseCommit": "9847c58b4b39117579e493e03719e7893e67b10a"
+  },
+  "transfer": {
+    "fileCount": 252,
+    "totalBytes": 2276717,
+    "excludedPaths": [
+      "app/test/semantic/**",
+      "app/test/semantic_shadow/**",
+      "app/test/personal_owner/**"
+    ],
+    "excludedGenerated": [
+      "app/.dart_tool/**",
+      "app/build/**",
+      "app/.local/**",
+      "app/.task-temp/**"
+    ],
+    "notes": [
+      "Only Flutter application files were selected; backend/database files from the source worktree were not copied.",
+      "Android artifact is debug-only and no signing or server credentials are included."
+    ]
+  },
+  "files": [
+    {
+      "path": "app/.gitignore",
+      "bytes": 748,
+      "sha256": "1e725ca8cb4e6c2a19dc889d0cebb497d954f091aba3b08d53df20edd0a98cdb",
+      "gitBlobSha": "6f0d0064ee471801b686548b5c1339b4628a82e6"
+    },
+    {
+      "path": "app/.metadata",
+      "bytes": 1296,
+      "sha256": "4d3f8067cd8874476302a4a8750996d9b96cb4392cbae972da064141c3ebc075",
+      "gitBlobSha": "24087d144f391f80614eebd388bf93f2ae5f9f27"
+    },
+    {
+      "path": "app/AGENTS.md",
+      "bytes": 3216,
+      "sha256": "a6ef7c387126588afe17d64448071ef3b8c1f8cac59483ac1ac1240b059ff467",
+      "gitBlobSha": "82e0b5fa1b40dfd9745d8fe6c99850e03ccb25db"
+    },
+    {
+      "path": "app/analysis_options.yaml",
+      "bytes": 625,
+      "sha256": "0616ac5e05513f2d47eb09c5d00f97bbd24ed2264ea0d2bb2356cd461f94c2d5",
+      "gitBlobSha": "e24d417bf99ae9732775032727f4fec6e3f95819"
+    },
+    {
+      "path": "app/android/.gitignore",
+      "bytes": 267,
+      "sha256": "c9af75dbc2c8aa867476a09426c80b178c4aeed8b9393ae48503eedfa3273d71",
+      "gitBlobSha": "c9082585a535b3dee4052706248ac3782322b50a"
+    },
+    {
+      "path": "app/android/app/build.gradle.kts",
+      "bytes": 1438,
+      "sha256": "ddbe5f9c545addd658e66276f900ef7583c461ba50b64678ac54c8f251373efb",
+      "gitBlobSha": "195c10c27f6bc8fe7b9c1b185d565f0804131fed"
+    },
+    {
+      "path": "app/android/app/src/debug/AndroidManifest.xml",
+      "bytes": 166,
+      "sha256": "35fe43e087670e9162c1ff6524312bf4dc24ca81048e48d6c3e64172ace9f176",
+      "gitBlobSha": "0b019ccfe9ed3fee41b3dbc7d4f0343cc60e7701"
+    },
+    {
+      "path": "app/android/app/src/debug/res/xml/local_dev_network_security.xml",
+      "bytes": 490,
+      "sha256": "ca8215275045c6b0972930fca21cdcc4c411b7b08181fd89b9827a7ca43fae6b",
+      "gitBlobSha": "28c2ec7908d38af0be8b37ad2f8cc9a01b55734c"
+    },
+    {
+      "path": "app/android/app/src/main/AndroidManifest.xml",
+      "bytes": 2310,
+      "sha256": "09b1da39962e15d959d1da273bdb2ab7ae92b9a0afa3a6e3048fd56a57ee3ac9",
+      "gitBlobSha": "4e3c3caaaa661522ecbee4a14f30acc3651923cf"
+    },
+    {
+      "path": "app/android/app/src/main/kotlin/com/dialektik/dialektik/MainActivity.kt",
+      "bytes": 130,
+      "sha256": "4ea605e231d947d9a615a1516c49cf785e5e5fe246fd7d1895f3b5fdee63972c",
+      "gitBlobSha": "c921b4d294f0bdb714382f38a8d0163b59cc2cfe"
+    },
+    {
+      "path": "app/android/app/src/main/res/drawable-v21/launch_background.xml",
+      "bytes": 450,
+      "sha256": "dca312ec77de83e43ef70a825c299b51451247286c29167d62f19165750b8793",
+      "gitBlobSha": "1cb7aa2f6e8c2438e50149b6ec567b515c243c88"
+    },
+    {
+      "path": "app/android/app/src/main/res/drawable/launch_background.xml",
+      "bytes": 446,
+      "sha256": "2df60e2cfbee873ce2858088cf003e6b93498f2f568476da437610467ea1a9d7",
+      "gitBlobSha": "84037589b06bb17b24ba7acffee949159cd99a16"
+    },
+    {
+      "path": "app/android/app/src/main/res/mipmap-hdpi/ic_launcher.png",
+      "bytes": 544,
+      "sha256": "6a7c8f0d703e3682108f9662f813302236240d3f8f638bb391e32bfb96055fef",
+      "gitBlobSha": "db77bb4b7b0906d62b1847e87f15cdcacf6a4f29"
+    },
+    {
+      "path": "app/android/app/src/main/res/mipmap-mdpi/ic_launcher.png",
+      "bytes": 442,
+      "sha256": "c7c0c0189145e4e32a401c61c9bdc615754b0264e7afae24e834bb81049eaf81",
+      "gitBlobSha": "17987b79bb8a35cc66c3c1fd44f5a5526c1b78be"
+    },
+    {
+      "path": "app/android/app/src/main/res/mipmap-xhdpi/ic_launcher.png",
+      "bytes": 721,
+      "sha256": "e14aa40904929bf313fded22cf7e7ffcbf1d1aac4263b5ef1be8bfce650397aa",
+      "gitBlobSha": "09d4391482be68e9e4a07fab769b5de337d16eb1"
+    },
+    {
+      "path": "app/android/app/src/main/res/mipmap-xxhdpi/ic_launcher.png",
+      "bytes": 1031,
+      "sha256": "4d470bf22d5c17d84edc5f82516d1ba8a1c09559cd761cefb792f86d9f52b540",
+      "gitBlobSha": "d5f1c8d34e7a88e3f88bea192c3a370d44689c3c"
+    },
+    {
+      "path": "app/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png",
+      "bytes": 1443,
+      "sha256": "3c34e1f298d0c9ea3455d46db6b7759c8211a49e9ec6e44b635fc5c87dfb4180",
+      "gitBlobSha": "4d6372eebdb28e45604e46eeda8dd24651419bc0"
+    },
+    {
+      "path": "app/android/app/src/main/res/values-night/styles.xml",
+      "bytes": 1013,
+      "sha256": "ea763597dc1a84c8034251caee98d7753e0fbf57340ffc94677427de4b537516",
+      "gitBlobSha": "360a1605cd6d544ad23ddd7515862ff2c9df6ab8"
+    },
+    {
+      "path": "app/android/app/src/main/res/values/styles.xml",
+      "bytes": 1014,
+      "sha256": "cca15a99b59380a548bf6a890f7ca5380ee509b1f9bbb2f5f9ec3589fa25c2f7",
+      "gitBlobSha": "5fac679616bbc0255412f37eea3eae0a3716e7d7"
+    },
+    {
+      "path": "app/android/app/src/profile/AndroidManifest.xml",
+      "bytes": 470,
+      "sha256": "c8949e367a0d7cda0a6ef8807c06b99fdfa6f7745833fe95b2c51a366960196c",
+      "gitBlobSha": "133ae10ea0305f0a94b3ef958a0b2cceddbb497f"
+    },
+    {
+      "path": "app/android/app/src/profile/res/xml/local_dev_network_security.xml",
+      "bytes": 429,
+      "sha256": "e419c726f7bdb69408db945fb9a8124170b5fe4bf663eb06c76c7c1fc55d6ff3",
+      "gitBlobSha": "775fe4e65d18eb0559e1d1d8618797be2ce1818f"
+    },
+    {
+      "path": "app/android/build.gradle.kts",
+      "bytes": 561,
+      "sha256": "218f400e3fff31c9c986a2535dfb974560e1b4d33cc27b7c1fee96a2b7e44454",
+      "gitBlobSha": "1f88145b6b91073cc0a28f44e1df8c8437669a02"
+    },
+    {
+      "path": "app/android/gradle.properties",
+      "bytes": 140,
+      "sha256": "1888df8f168eb770ca0f540b7bf84091e6b31b0d5ac55e4de518590b8f7ed8e5",
+      "gitBlobSha": "21dbfa569961dee0cb33e348677c48e8138c16dc"
+    },
+    {
+      "path": "app/android/gradle/wrapper/gradle-wrapper.properties",
+      "bytes": 206,
+      "sha256": "1220fdd333a881e47441de07b23f9dd1ebd35459730543ae429cf249847d91bf",
+      "gitBlobSha": "db3f45316544d29546c0ce7b5419bc079fe7c87d"
+    },
+    {
+      "path": "app/android/settings.gradle.kts",
+      "bytes": 798,
+      "sha256": "4d438e37bd80ccc48ded4892c9026994cabe8cfb9c20d2947a609248495c869b",
+      "gitBlobSha": "4dcef4bf1b67b397d33946b7b7f1e0a46514e582"
+    },
+    {
+      "path": "app/assets/asset_catalog.json",
+      "bytes": 576,
+      "sha256": "f9f4ed9e23b443395816c703e0bac57b554afa0ffe062b497b828b5b13f1751f",
+      "gitBlobSha": "c183b6c47507d5803132d034f47d3fa660b16b68"
+    },
+    {
+      "path": "app/assets/backgrounds/.gitkeep",
+      "bytes": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+      "gitBlobSha": "d3f5a12faa99758192ecc4ed3fc22c9249232e86"
+    },
+    {
+      "path": "app/assets/brand/.gitkeep",
+      "bytes": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+      "gitBlobSha": "d3f5a12faa99758192ecc4ed3fc22c9249232e86"
+    },
+    {
+      "path": "app/assets/contracts/public-api-v1.json",
+      "bytes": 52862,
+      "sha256": "6403ae37c238a3168e48a8536428340f91d17197224604e0534b46d6692959aa",
+      "gitBlobSha": "adb75b38f5505461b1872b769aafb40be621d979"
+    },
+    {
+      "path": "app/assets/fonts/Inter-Medium.ttf",
+      "bytes": 325280,
+      "sha256": "36a36ff7ac46dc2aeceac3a80a87a67e7b844b8fc936699259aac8fba9bcf734",
+      "gitBlobSha": "f371b8bd9990d5677854ef57c0ec2ef0afa3e842"
+    },
+    {
+      "path": "app/assets/fonts/Inter-Regular.ttf",
+      "bytes": 324796,
+      "sha256": "15b294b67f2f8bbc04d990023ef4aec66502b87dc9040d84abe5f896ccb693de",
+      "gitBlobSha": "9401a27d9e078c09da9863902d09a5a49d8f3d78"
+    },
+    {
+      "path": "app/assets/fonts/Merriweather-OFL.txt",
+      "bytes": 4529,
+      "sha256": "1481cb910112da26a099406adf2d2bceaf75fc685a1abb9f2cb03a566ae8a10a",
+      "gitBlobSha": "9fd6b9d19b893b380dda4de33da468b44a1937eb"
+    },
+    {
+      "path": "app/assets/fonts/Merriweather-Regular.ttf",
+      "bytes": 156096,
+      "sha256": "bc38fe756b3e259248183fc0b75ad81b02774f3ca68e5e544e925827b0186d40",
+      "gitBlobSha": "2ee9a6978f2c5ae9efa52ad120d5a9c61c736ad3"
+    },
+    {
+      "path": "app/assets/fonts/OFL.txt",
+      "bytes": 4470,
+      "sha256": "f14f2b95a38f4f20cad4d27f7710593f37534c046641be0348da7c28365f4e39",
+      "gitBlobSha": "5eed41a8c2264770c5d58d1de1c4d17331bfde36"
+    },
+    {
+      "path": "app/assets/icons/.gitkeep",
+      "bytes": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+      "gitBlobSha": "d3f5a12faa99758192ecc4ed3fc22c9249232e86"
+    },
+    {
+      "path": "app/assets/illustrations/.gitkeep",
+      "bytes": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+      "gitBlobSha": "d3f5a12faa99758192ecc4ed3fc22c9249232e86"
+    },
+    {
+      "path": "app/assets/media/.gitkeep",
+      "bytes": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+      "gitBlobSha": "d3f5a12faa99758192ecc4ed3fc22c9249232e86"
+    },
+    {
+      "path": "app/assets/placeholders/.gitkeep",
+      "bytes": 2,
+      "sha256": "7eb70257593da06f682a3ddda54a9d260d4fc514f645237f5ca74b08f8da61a6",
+      "gitBlobSha": "d3f5a12faa99758192ecc4ed3fc22c9249232e86"
+    },
+    {
+      "path": "app/assets/README.md",
+      "bytes": 605,
+      "sha256": "f7c05c28d8f2b93964a55b9e41559916ab0263503e159099ac38b87ce73f59e7",
+      "gitBlobSha": "36b34bc986a1a8c28c1a87b09be5ea675ec6b65e"
+    },
+    {
+      "path": "app/assets/source-universe/candidate-registry.v1.json",
+      "bytes": 268521,
+      "sha256": "c6f13fe36c6e641186d704dbe28676e7e6cab6b9eab43b6938cd461e677cd332",
+      "gitBlobSha": "cca4959c526b82f577db87c60acb0385e9805a69"
+    },
+    {
+      "path": "app/ios/.gitignore",
+      "bytes": 603,
+      "sha256": "e85b4db8ba6ed14708e5f7d3c60336e5a3067ce11329b84aa8ba5d98603ee253",
+      "gitBlobSha": "ad322bc09d2bbd018667440c592d2a42d1ef6805"
+    },
+    {
+      "path": "app/ios/Flutter/AppFrameworkInfo.plist",
+      "bytes": 800,
+      "sha256": "88e403d33087654522431733ad261741f836f92c94a50ee792820b4f1ed89716",
+      "gitBlobSha": "b5586f2f80d008dc7b4f089faee86ee68454fbab"
+    },
+    {
+      "path": "app/ios/Flutter/Debug.xcconfig",
+      "bytes": 31,
+      "sha256": "c0d1da54718e75f2028962b689258ecc741abf7cdaed50483aa5225264d0a7d7",
+      "gitBlobSha": "0b2d479c08504549ca6e74f0743bd584f068f9bd"
+    },
+    {
+      "path": "app/ios/Flutter/Release.xcconfig",
+      "bytes": 31,
+      "sha256": "c0d1da54718e75f2028962b689258ecc741abf7cdaed50483aa5225264d0a7d7",
+      "gitBlobSha": "0b2d479c08504549ca6e74f0743bd584f068f9bd"
+    },
+    {
+      "path": "app/ios/Runner.xcodeproj/project.pbxproj",
+      "bytes": 24288,
+      "sha256": "f47c74773822da6e67347b4721e671300deb2cbf061c5e6b66c48cd145f602c3",
+      "gitBlobSha": "e1b79f3f4f0df351c098b99a1823a1e904b2cde4"
+    },
+    {
+      "path": "app/ios/Runner.xcodeproj/project.xcworkspace/contents.xcworkspacedata",
+      "bytes": 142,
+      "sha256": "ac28b35c2b940210bec0fff8e424b07fd0efe9112ab178a10533583f251a386c",
+      "gitBlobSha": "c4b79bd8c0e5b685bc62bc82f93335b2a95fd7fd"
+    },
+    {
+      "path": "app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist",
+      "bytes": 246,
+      "sha256": "d557c2c32fc6258ec28981fa45dc847b76c9968beb90a2e26d13ef9c4ea45c30",
+      "gitBlobSha": "fc6bf8074854f8fd9fea8d9cc80d5ca1b8d932db"
+    },
+    {
+      "path": "app/ios/Runner.xcodeproj/project.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings",
+      "bytes": 234,
+      "sha256": "dd64c0308ab2971c456871b990b24a008bdc3ece09833e8dbe9675e33a496e74",
+      "gitBlobSha": "af0309c4dc26b0880121296bc3fd0bd14aad8420"
+    },
+    {
+      "path": "app/ios/Runner.xcodeproj/xcshareddata/xcschemes/Runner.xcscheme",
+      "bytes": 3934,
+      "sha256": "570c49fd61c67330efb75097018d1b0df0c68d03667631105a5acf5621112b1b",
+      "gitBlobSha": "bbabc4e461f2641f43460c76ea459eb7be2f7231"
+    },
+    {
+      "path": "app/ios/Runner.xcworkspace/contents.xcworkspacedata",
+      "bytes": 159,
+      "sha256": "706a4c812f2a1e220e6785c27580020d58048e2ae4d30d1280f3c43344ce6b38",
+      "gitBlobSha": "59c6d39465edc08bd1e919a6248c68b1b72cfd33"
+    },
+    {
+      "path": "app/ios/Runner.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist",
+      "bytes": 246,
+      "sha256": "d557c2c32fc6258ec28981fa45dc847b76c9968beb90a2e26d13ef9c4ea45c30",
+      "gitBlobSha": "fc6bf8074854f8fd9fea8d9cc80d5ca1b8d932db"
+    },
+    {
+      "path": "app/ios/Runner.xcworkspace/xcshareddata/WorkspaceSettings.xcsettings",
+      "bytes": 234,
+      "sha256": "dd64c0308ab2971c456871b990b24a008bdc3ece09833e8dbe9675e33a496e74",
+      "gitBlobSha": "af0309c4dc26b0880121296bc3fd0bd14aad8420"
+    },
+    {
+      "path": "app/ios/Runner/AppDelegate.swift",
+      "bytes": 404,
+      "sha256": "13e99dab5435148efc15d9177ba505da3d24859a6ba663767510622fdf7a97fa",
+      "gitBlobSha": "8be1cecd13f83473b3393ca1b5998985fe108123"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Contents.json",
+      "bytes": 2519,
+      "sha256": "3b1e214f466ffedff74baa5598ad5c4421130eea6bc8d57b8fe23435e8280ae4",
+      "gitBlobSha": "d36b1fab2d9dea668a4f83df94d525897d9e68dd"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-1024x1024@1x.png",
+      "bytes": 10932,
+      "sha256": "7770183009e914112de7d8ef1d235a6a30c5834424858e0d2f8253f6b8d31926",
+      "gitBlobSha": "dc9ada4725e9b0ddb1deab583e5b5102493aa332"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@1x.png",
+      "bytes": 295,
+      "sha256": "cab10a0d391ec5bc09ef50ce49e8ad401cee7ef03707ec0923a222c5c2b3d212",
+      "gitBlobSha": "7353c41ecf9ca08017312dc233d9830079b50717"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@2x.png",
+      "bytes": 406,
+      "sha256": "b9ad02cf6576a04d1b6806ac02a2431481b448dd0c2e505ce25842d1f7c4730b",
+      "gitBlobSha": "797d452e458972bab9d994556c8305db4c827017"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-20x20@3x.png",
+      "bytes": 450,
+      "sha256": "c6e6d3b215ae744a9c391f4c4d44157eff5e739d6ad6c39f9bfa5df66dddd267",
+      "gitBlobSha": "6ed2d933e1120817fe9182483a228007b18ab6ae"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@1x.png",
+      "bytes": 282,
+      "sha256": "5dee24dc104ac76dc162e42ae0beb163d426bf365562ee28ba7b3ad368559a60",
+      "gitBlobSha": "4cd7b0099ca80c806f8fe495613e8d6c69460d76"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@2x.png",
+      "bytes": 462,
+      "sha256": "a9b21eb6f4271385655a8771f76e29eef8c1107d7879cbcfc567e6619d1f716a",
+      "gitBlobSha": "fe730945a01f64a61e2235dbe3f45b08f7729182"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-29x29@3x.png",
+      "bytes": 704,
+      "sha256": "e677d701ffe4af7bc2935098d6b3984cc9ab7ace573e6900955a5535b12410cf",
+      "gitBlobSha": "321773cd857a8a0f0c9c7d3dc3f5ff4fb298dc10"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@1x.png",
+      "bytes": 406,
+      "sha256": "b9ad02cf6576a04d1b6806ac02a2431481b448dd0c2e505ce25842d1f7c4730b",
+      "gitBlobSha": "797d452e458972bab9d994556c8305db4c827017"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@2x.png",
+      "bytes": 586,
+      "sha256": "7c61c42fc7b657d9cf314d32a4ec458f0647c3aaf360be1b9377857266ec2499",
+      "gitBlobSha": "502f463a9bc882b461c96aadf492d1729e49e725"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-40x40@3x.png",
+      "bytes": 862,
+      "sha256": "19be171481dc71a0b2803ebcd01dd8b0c5fd5778dee34c0a3cabc948c225f24e",
+      "gitBlobSha": "0ec303439225b78712f49115768196d8d76f6790"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@2x.png",
+      "bytes": 862,
+      "sha256": "19be171481dc71a0b2803ebcd01dd8b0c5fd5778dee34c0a3cabc948c225f24e",
+      "gitBlobSha": "0ec303439225b78712f49115768196d8d76f6790"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-60x60@3x.png",
+      "bytes": 1674,
+      "sha256": "4209a49e44a92ec40a327d3455eb1b1c153ee83d75de1c2be0a12ab18b2ff9de",
+      "gitBlobSha": "e9f5fea27c705180eb716271f41b582e76dcbd90"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@1x.png",
+      "bytes": 762,
+      "sha256": "836c918cb613249eba0483a6b02fa3df3c1c0a89a315ee4d3b88509b83c7ab73",
+      "gitBlobSha": "84ac32ae7d989f82d5e46a60405adcc8279e8001"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-76x76@2x.png",
+      "bytes": 1226,
+      "sha256": "41c7d42f6e61f8fe7f30b1ffa2256aecbc9682be06d18c4a3062043e1a2e547c",
+      "gitBlobSha": "8953cba09064923c5daf2d37e7c3c836ccdd794b"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/AppIcon.appiconset/Icon-App-83.5x83.5@2x.png",
+      "bytes": 1418,
+      "sha256": "5d7e5bdf01b93802bc973345b3a78c038907147625035952a08a115a563b7f81",
+      "gitBlobSha": "0467bf12aa4d28f374bb26596605a46dcbb3e7c8"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/LaunchImage.imageset/Contents.json",
+      "bytes": 391,
+      "sha256": "ccc7950fd5f5b82067c85f667940a9d59189151460761ece8098ca78daa19469",
+      "gitBlobSha": "0bedcf2fd46788ae3a01a423467513ff59b5c120"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage.png",
+      "bytes": 68,
+      "sha256": "93ae7d494fad0fb30cbf3ae746a39c4bc7a0f8bbf87fbb587a3f3c01f3c5ce20",
+      "gitBlobSha": "9da19eacad3b03bb08bbddbbf4ac48dd78b3d838"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@2x.png",
+      "bytes": 68,
+      "sha256": "93ae7d494fad0fb30cbf3ae746a39c4bc7a0f8bbf87fbb587a3f3c01f3c5ce20",
+      "gitBlobSha": "9da19eacad3b03bb08bbddbbf4ac48dd78b3d838"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/LaunchImage.imageset/LaunchImage@3x.png",
+      "bytes": 68,
+      "sha256": "93ae7d494fad0fb30cbf3ae746a39c4bc7a0f8bbf87fbb587a3f3c01f3c5ce20",
+      "gitBlobSha": "9da19eacad3b03bb08bbddbbf4ac48dd78b3d838"
+    },
+    {
+      "path": "app/ios/Runner/Assets.xcassets/LaunchImage.imageset/README.md",
+      "bytes": 336,
+      "sha256": "a985b626c4f7546a8ba392d135e9226c3547c8e2b46895f5f2bdf40d7b14ef9f",
+      "gitBlobSha": "89c2725b70f1882be97f5214fafe22d27a0ec01e"
+    },
+    {
+      "path": "app/ios/Runner/Base.lproj/LaunchScreen.storyboard",
+      "bytes": 2414,
+      "sha256": "bc3644fbb251ff1e18de25a4932c927850ae1a025be3dd1447940429633fe4b2",
+      "gitBlobSha": "497371ea23a88889b582a79836d65568268f5fd3"
+    },
+    {
+      "path": "app/ios/Runner/Base.lproj/Main.storyboard",
+      "bytes": 1631,
+      "sha256": "dcea4686c02065e56217fd19fcfb73d7509b41872e7486126149d47a18559363",
+      "gitBlobSha": "bbb83caaec5481ea63968cdfdf6e574aa9584a1b"
+    },
+    {
+      "path": "app/ios/Runner/Info.plist",
+      "bytes": 1694,
+      "sha256": "faec667653dd205cc84c3fa10f28693da26b3c2aaa654bcfc675c3fc848f995a",
+      "gitBlobSha": "a84b543d412a51fec42725fc5af3d8c78f99bba2"
+    },
+    {
+      "path": "app/ios/Runner/Runner-Bridging-Header.h",
+      "bytes": 39,
+      "sha256": "efe657d8b27f7f8595a0d416bffb33fe7d93bd2869d81f7353b556c439d7a1a7",
+      "gitBlobSha": "fae207f9e2b9302728c2199314243bda2088bb8b"
+    },
+    {
+      "path": "app/ios/RunnerTests/RunnerTests.swift",
+      "bytes": 297,
+      "sha256": "c0e04141287eb7f9c9f3d31cf5be8cb626a9ea71351206c9121578e8b8f480c3",
+      "gitBlobSha": "4d206ded9e1cc1a76c409afcfc90f8de4e7c99ec"
+    },
+    {
+      "path": "app/lib/app/bootstrap/bootstrap.dart",
+      "bytes": 5051,
+      "sha256": "7f98fb7bc33c33e6f570d01519240d41c64bb74570e9bc2243ef60ae64e4ce6e",
+      "gitBlobSha": "d348bd653bcd905e27e421fc88a4cc80ce6d1781"
+    },
+    {
+      "path": "app/lib/app/development/foundation_showcase.dart",
+      "bytes": 2783,
+      "sha256": "0c291394d27f0371b3d2d6820f2f7223faa75bf9894c5889821be79eb7208e8c",
+      "gitBlobSha": "d03cd8e2e97e0ed48ad6c19bb4819611cf53554c"
+    },
+    {
+      "path": "app/lib/app/dialektik_app.dart",
+      "bytes": 11217,
+      "sha256": "e54b383f07217e119788edf9af019e834e41622072b6910a1496b0abbd1d5c7a",
+      "gitBlobSha": "6d48dddadfd700bfad37b6042d61808f5d0e9bdd"
+    },
+    {
+      "path": "app/lib/app/moderation/internal_moderation_tool.dart",
+      "bytes": 8870,
+      "sha256": "d1f48898c88f7d228d8eb3060392505e15b2412410ab73a0796e867733d054af",
+      "gitBlobSha": "17974bfaa1df66f3cc132274a956903044ee687b"
+    },
+    {
+      "path": "app/lib/core/accessibility/accessible_action.dart",
+      "bytes": 3690,
+      "sha256": "b40147f24adec75bbdd42fc52710ab90774db8d8acc87ad062adfce0e25de398",
+      "gitBlobSha": "c5b52bb80f2e52f9893ad7b141c02b16a740ef94"
+    },
+    {
+      "path": "app/lib/core/accessibility/contrast_ratio.dart",
+      "bytes": 725,
+      "sha256": "f8711f06a2ab45331a6f9e5f2961f8b0e5bfd5163d8c140f5667fb9c736d7568",
+      "gitBlobSha": "4a9de23840d54a381d431fc8b239ef7aa32031ed"
+    },
+    {
+      "path": "app/lib/core/accessibility/dialektik_semantics.dart",
+      "bytes": 731,
+      "sha256": "8356f3c7eed1e98fe1b13f5b590383f26a329dba1cc307f5e72b84127bb0041b",
+      "gitBlobSha": "df31e8eda9999f4ed7753022a36344cc4f3d9566"
+    },
+    {
+      "path": "app/lib/core/infrastructure/api_configuration.dart",
+      "bytes": 1935,
+      "sha256": "343656c83a6fc51044d07ab6abeffa637cac76e50acda539c92c36abaa62d0d9",
+      "gitBlobSha": "983c47c1b87a4450e484faaf0f708a1ff745380c"
+    },
+    {
+      "path": "app/lib/core/infrastructure/app_environment.dart",
+      "bytes": 822,
+      "sha256": "2d674914af0983795317641445a39f580f561a2d043cbbb6bd323dad054d5434",
+      "gitBlobSha": "43a399410eadfd8222bcb922447edaeca90355aa"
+    },
+    {
+      "path": "app/lib/design_system/assets/dialektik_asset_catalog.dart",
+      "bytes": 2318,
+      "sha256": "a8d4e7bd5111dc1515bcf154bb1b715f01b5d9af8162cbccc1d21d57148c4a58",
+      "gitBlobSha": "fed27616f20460ff1eb20ff7520165eb3bc6b3ae"
+    },
+    {
+      "path": "app/lib/design_system/components/dialektik_divider.dart",
+      "bytes": 1639,
+      "sha256": "dd66ac630701cd99b7cd09dbd0ef89f4bf91ff99f99624bd66ac0e04827942ce",
+      "gitBlobSha": "0058470adf87465b1be9c4b60be530388eddd698"
+    },
+    {
+      "path": "app/lib/design_system/components/dialektik_icon.dart",
+      "bytes": 1861,
+      "sha256": "fcd8d4bfc9ff4946c3e45a8faab39ee18d2049dbe1ae64888687e2766c1af457",
+      "gitBlobSha": "18200ffeff8cef464b21e1762df75f7e0b017aa7"
+    },
+    {
+      "path": "app/lib/design_system/components/dialektik_surface.dart",
+      "bytes": 1164,
+      "sha256": "7774703fbb93e59100c3350c8bc306c76de160d27b5fe8f4b3b74a04459c0cbf",
+      "gitBlobSha": "718bd732e734db643b9bd649e56c79af07fe8a3b"
+    },
+    {
+      "path": "app/lib/design_system/components/equivalence_proposal_review_card.dart",
+      "bytes": 7951,
+      "sha256": "e7f728cb8f3ee5f3688e44eedd04838bc280caa03809157bdd1ad08e08861c3e",
+      "gitBlobSha": "17097b8a58e701a6d5d26bf498df553dc227a625"
+    },
+    {
+      "path": "app/lib/design_system/components/equivalence_queue_card.dart",
+      "bytes": 9713,
+      "sha256": "ab8af4dbc44107d148f39e1c65dc273e8f577e4627ef679b35a5511102781922",
+      "gitBlobSha": "45af401f91bb13de94e0ba2d8fd4adecd94fbadc"
+    },
+    {
+      "path": "app/lib/design_system/components/operational_notice.dart",
+      "bytes": 2763,
+      "sha256": "768f99541cdd7794dec6dcfc4f4bb29057d0802bd43d0393f3fcc8bbe7751457",
+      "gitBlobSha": "30d3f6606895d36b7630e953552e558fbb41185b"
+    },
+    {
+      "path": "app/lib/design_system/design_system.dart",
+      "bytes": 823,
+      "sha256": "f9fcce34ab97c5d79471099ad17f5ec63cc8ef5988ff874ff5a55cd70c0bc55c",
+      "gitBlobSha": "1cb20922bec42f9af11abf73f1d8ab8982e183f9"
+    },
+    {
+      "path": "app/lib/design_system/epistemic/epistemic_presentation.dart",
+      "bytes": 3845,
+      "sha256": "bcef9c1170257d0383689a6a66e2f9ca036fd1a676256517d7d24f064aab6641",
+      "gitBlobSha": "65f6fec0f9212a8930f222bd29be75b724ec381f"
+    },
+    {
+      "path": "app/lib/design_system/foundations/borders.dart",
+      "bytes": 333,
+      "sha256": "a6ed1900f7eab06b2efe24478af5dac32993c04580ab3a6370f5e940bf42eafd",
+      "gitBlobSha": "e80fd958c0430a021da8052b588a84ba84636156"
+    },
+    {
+      "path": "app/lib/design_system/foundations/colors.dart",
+      "bytes": 1556,
+      "sha256": "554188825b634505aabca99a40999cb2df59146de8f6ed82f482c99a0c5a57eb",
+      "gitBlobSha": "ea06bd13956a2c506940d04393cbefb869937ca1"
+    },
+    {
+      "path": "app/lib/design_system/foundations/elevation.dart",
+      "bytes": 901,
+      "sha256": "5ddac6292d9b753a84a52b327482ffcefd4179409662b1a18a4a35b4ca385776",
+      "gitBlobSha": "d366f9a39b7b6532e0ce69e01b6a4236c805dd48"
+    },
+    {
+      "path": "app/lib/design_system/foundations/motion.dart",
+      "bytes": 567,
+      "sha256": "3809c4694f56a6bbba8aa8b8e36f918cd8a04832d85e748d71c6e209e952b7ec",
+      "gitBlobSha": "878996c411029bbb10e4b94fed8e8df15435e68b"
+    },
+    {
+      "path": "app/lib/design_system/foundations/opacity.dart",
+      "bytes": 166,
+      "sha256": "2dbd18d8a591d6a0317309811e57c60b25f624ad0aba60e22e958c295e4ebe14",
+      "gitBlobSha": "b1809b066af534ee641cc5f79869607b553e28b8"
+    },
+    {
+      "path": "app/lib/design_system/foundations/radii.dart",
+      "bytes": 521,
+      "sha256": "2543374b98fd544c4e338c87b731b6c71863ccbca1663e8ad2f9e9294fa54cb6",
+      "gitBlobSha": "6ec2f5bfdc8f01e31059eb6500e3cfda56640620"
+    },
+    {
+      "path": "app/lib/design_system/foundations/sizing.dart",
+      "bytes": 828,
+      "sha256": "8c2eeda1a007dcd22b5c2436b5404234c0df5b6a30b2f99571326afd714501e3",
+      "gitBlobSha": "52aa792b90dd16f55243b77e5bf0e06f143d5355"
+    },
+    {
+      "path": "app/lib/design_system/foundations/spacing.dart",
+      "bytes": 410,
+      "sha256": "16060aa61e5cf5a03f33736dadbaec5ddacae57754c363926cf1eb6c05786201",
+      "gitBlobSha": "3293d529ca4a04a8ee4a15838e83b14a7292681d"
+    },
+    {
+      "path": "app/lib/design_system/foundations/typography.dart",
+      "bytes": 3200,
+      "sha256": "abadde707f87be4f30e926a9dc3ea9a5d14e4648af23328b809b1a5f723bbf1b",
+      "gitBlobSha": "bbb80900fb501fbf80e4a29e3ba46d4a66ff30b4"
+    },
+    {
+      "path": "app/lib/design_system/safety/design_invariant_checker.dart",
+      "bytes": 13793,
+      "sha256": "7ea76df22b5d5835b4d0cf14cceee1ccdc5084f3f8e674d51381918640768a99",
+      "gitBlobSha": "7735faeeeb04fdef78c6af32d21f8b19e7b790d5"
+    },
+    {
+      "path": "app/lib/design_system/theme/dialektik_theme_extensions.dart",
+      "bytes": 4395,
+      "sha256": "415826ec8bbbf5bbefcae47991dfb794e0d5249dd45c464a83023c6d7abf3c28",
+      "gitBlobSha": "707415bb990f2f6383d1fec8775b54dfb54cd23f"
+    },
+    {
+      "path": "app/lib/design_system/theme/dialektik_theme.dart",
+      "bytes": 5472,
+      "sha256": "872e63d8914e9e0ec1ee1feac5bc31a53e76492b20000df63a71d6ce55028676",
+      "gitBlobSha": "005c32bbb242818076d24d17f87a2f1bf8fb9ac5"
+    },
+    {
+      "path": "app/lib/features/consumer/data/consumer_repository.dart",
+      "bytes": 1485,
+      "sha256": "131e679dd9ba470b20994768e78f614c7b1b9bd02f2b9b863031886db1ae183b",
+      "gitBlobSha": "1aea4e7232998f948027ab8c8db17a6abbf04d2d"
+    },
+    {
+      "path": "app/lib/features/consumer/data/public_api_client.dart",
+      "bytes": 17284,
+      "sha256": "8b0c4800cf60f933351f9d0a1415839297e4cbaad496daa4c3843baed694179b",
+      "gitBlobSha": "d7e23439cfdf7f474119f26ddca5cd80e052a69e"
+    },
+    {
+      "path": "app/lib/features/consumer/data/public_api_failure.dart",
+      "bytes": 1334,
+      "sha256": "560538936e762e22a4438f7ee95fef1d307d4ee857ba4a9196e63a4495bab075",
+      "gitBlobSha": "6b39f310b513516c6c1bdff54e1d74f9839bd092"
+    },
+    {
+      "path": "app/lib/features/consumer/data/public_api_models.dart",
+      "bytes": 25159,
+      "sha256": "6e72ee7f3ed77b8bb8c1ce9a32bc472ebde6751fd3695bb93075f448d66c85cc",
+      "gitBlobSha": "ed1544e2171089f322201864d951b483eb4021a2"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/external_links.dart",
+      "bytes": 319,
+      "sha256": "5746c702e36da17fde74b4992e679906583cdca491013bfd57308d8c90154693",
+      "gitBlobSha": "f29ac3bf2643395926cb60253cb24649e747676e"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/localization/consumer_strings.dart",
+      "bytes": 13345,
+      "sha256": "e43beb8f583a11b6270c53c8539c704fa2c35f52df7b4dc242c641af3f21903a",
+      "gitBlobSha": "4ae5e4d0ef14305a55c5452d03fbc4830bfe1b79"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/navigation/consumer_routes.dart",
+      "bytes": 22249,
+      "sha256": "c796ef6bf7754e056e4ade882ea84804f1f03a6b614b3a43520f0d974bf5685c",
+      "gitBlobSha": "20e4ce50d1e94d70a9d71814d713cb0327d89b5f"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/screens/contradictions_screen.dart",
+      "bytes": 4468,
+      "sha256": "7b8b256484e39c8460426de95ac188badc148c258dce0ba913c57c74c85a719a",
+      "gitBlobSha": "b876226e84ec688e3c144ff701f6adeff7ab1555"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/screens/event_detail_screen.dart",
+      "bytes": 13378,
+      "sha256": "19032db1c407bb024a5845caa631157656cec0f18112a8c5f187420354fa51a5",
+      "gitBlobSha": "4cf80a5e614ccfed408fcf775e75e7fac6fea91c"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/screens/feed_screen.dart",
+      "bytes": 8750,
+      "sha256": "30b5772afc59627085aaab24479eb7cb158908d0532bc1df9bffde0f49a272cd",
+      "gitBlobSha": "c091985ff5fceee29adf59b69e99f75d3e0867f5"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/screens/source_screen.dart",
+      "bytes": 5295,
+      "sha256": "4779b5df808db5aa3f7faa8503557c117275540027dd0ee2c70b18c0e9a739fc",
+      "gitBlobSha": "8a5abdf490351c9e34c4cad0449009789c1432f6"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/state/contradictions_controller.dart",
+      "bytes": 2175,
+      "sha256": "349d334baa0c295f53829e5c81dace7eac9f8245d3f34f731673705073bd5ce9",
+      "gitBlobSha": "2c4cf6c7ce87e677f81b852d0836f9ebc7a342cd"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/state/event_controller.dart",
+      "bytes": 5546,
+      "sha256": "17f7477a39f22cd4df27c0cc31814329751b85f0e6a091c7b759fb881b37e611",
+      "gitBlobSha": "7b0a4a6826f0aaae2de0f9c2299f63305341dd13"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/state/feed_controller.dart",
+      "bytes": 4791,
+      "sha256": "e4b16fe590248e8ef7f8831a14bb6a38ee90cd581ec774f741bc83e919112bbc",
+      "gitBlobSha": "3928da6aacad93ea515c3dff1878002e77c5129c"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/state/source_controller.dart",
+      "bytes": 1134,
+      "sha256": "18fa41026b22598c049be0a44d3940b34be487cb0b58b3d965c654213260f3ca",
+      "gitBlobSha": "9b1b238f63c0851b026c88a689dc1179249f304f"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/analysis_pending_panel.dart",
+      "bytes": 843,
+      "sha256": "da8f25580bb6fadcea45de7308399aa6e41fa31932673514eb2dfe64ffa57ea7",
+      "gitBlobSha": "3c872afd5900adc81968d5a0e7205e00328394b6"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/claim_row.dart",
+      "bytes": 4715,
+      "sha256": "4a23a928191b299e159e7c5b40b7ae7898112551000214c347227b3fae14d2fd",
+      "gitBlobSha": "6f97f805c2d8d12f1b4675b5b2682eed705b839a"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/consumer_navigation_action.dart",
+      "bytes": 989,
+      "sha256": "21feceb9cdf36b4a09e368a3e5145337324f8bc813a7c51f80764a3df297fbea",
+      "gitBlobSha": "8d5b76b374bc27b8d8d55501ef89786456a22953"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/consumer_responsive_shell.dart",
+      "bytes": 15270,
+      "sha256": "dfd09e5f97b25622e9542bdc78ee7e812d732f12f8fb68c41e98e07ce45fdf03",
+      "gitBlobSha": "c80c86c1a664c3962dd1ae91fc72a399758c72a4"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/consumer_scaffold.dart",
+      "bytes": 2564,
+      "sha256": "48c9489f30995ef5ccc4a4b417cd5475d80f7deab775315a855bc5b4e3742a9d",
+      "gitBlobSha": "e711ab67fe47d230cfbcca707c2ce3ddd6d981ec"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/contradiction_card.dart",
+      "bytes": 1715,
+      "sha256": "dab7e79a459c0fcd5e4478d87894fb4dec469a424cf1f7ccf8220b9f58421023",
+      "gitBlobSha": "b5dc6a8472d329553c8c0b7ca65dd99a3107e5d7"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/contradictions_empty_state.dart",
+      "bytes": 4267,
+      "sha256": "0663d0499a6ab4f8aa171c488a665466841a513ce38f463bcc7afe3e51fd6452",
+      "gitBlobSha": "83ee316fbe818bdf0d8e30ea04f03999b8d2e5cb"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/event_card.dart",
+      "bytes": 2003,
+      "sha256": "db2b0f6cfc8b248f37bc66c14749d01ea20722d692b453cbe80ed9bf491188d9",
+      "gitBlobSha": "371387408724be0623dc7f03d9111b59fb96a6ae"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/filter_bar.dart",
+      "bytes": 10350,
+      "sha256": "5929a152aba38559bdaf7de6cf32732d8d58c71ae3e3364f6a9be8d23fcf60c9",
+      "gitBlobSha": "df9eeb511d63efcbc7118a09e8e5d079efd2066b"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/horizontal_choice_strip.dart",
+      "bytes": 10585,
+      "sha256": "fe8f2117cdf4b7b2cf9434eabe2700339e46d129aef0e7497945a42967dbabee",
+      "gitBlobSha": "1b088b431cf654b2914644cfc00070245feac924"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/position_card.dart",
+      "bytes": 4077,
+      "sha256": "73de726c4ef6e8de42e926413dd8edddd0188a0edae09d61f35ca36046e709ba",
+      "gitBlobSha": "fcb3cfbc207445c3b92def249b5d718122ba6b28"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/relationship_indicator.dart",
+      "bytes": 1907,
+      "sha256": "a26731d30c4386080a728934b307a26dd1ba52f49195b5bb61e1fad37de8582c",
+      "gitBlobSha": "f1d43a9437ea1fbc23b209e5e8fcc258b9a7ddbb"
+    },
+    {
+      "path": "app/lib/features/consumer/presentation/widgets/system_state_view.dart",
+      "bytes": 1872,
+      "sha256": "1a49e1a17e91bda3a40aae53e70855da70bdc1fac58b8f7767b367cfe8aceffd",
+      "gitBlobSha": "e45775d9ee85018f24faa3f3697cbc9849f29912"
+    },
+    {
+      "path": "app/lib/features/live/data/candidate_source_registry.dart",
+      "bytes": 7119,
+      "sha256": "12c17623f69be9370f53165e2cdf2a97ffd537bdfc844f59f5974892a581333a",
+      "gitBlobSha": "04fc29803a922b46e891ff3ef57c2c470090145d"
+    },
+    {
+      "path": "app/lib/features/live/data/live_news_models.dart",
+      "bytes": 10411,
+      "sha256": "dad94292c8824fb8c95614adafbb19bc7a263752d5e527bef8aad4a9755caf2c",
+      "gitBlobSha": "e62388b70c73e8a3fb764de5922d9e80befd5800"
+    },
+    {
+      "path": "app/lib/features/live/data/live_news_repository.dart",
+      "bytes": 960,
+      "sha256": "31555dc61f35a31dfce9603da2b50e36c1fea58e9b9b990501e8f850ab946eb6",
+      "gitBlobSha": "4190c456495ae416321bc9f8b3c66d1ed4cffd3d"
+    },
+    {
+      "path": "app/lib/features/live/presentation/live_components.dart",
+      "bytes": 10685,
+      "sha256": "f41f4d42722b7050b7247e13966a15048afbb75d612787b1b074047688ca260a",
+      "gitBlobSha": "0a9bf55035324a39bf3b2bd5638f1f73fe970ca5"
+    },
+    {
+      "path": "app/lib/features/live/presentation/live_news_screens.dart",
+      "bytes": 48979,
+      "sha256": "1eee84b1ce2569ab9dcdd4496f800eb68648610b36d27abdf2544d1e3c337e44",
+      "gitBlobSha": "146d2ad522118675be4ebcd99897896729cc38af"
+    },
+    {
+      "path": "app/lib/features/personal_owner/data/personal_owner_operational.dart",
+      "bytes": 9834,
+      "sha256": "cbd8fb9cdf922a0007609b25b6a8415be12fd00d611c921cfe93d103ec0331d2",
+      "gitBlobSha": "0d7490c6fcde04883eaf23a1371fe47a4566fc78"
+    },
+    {
+      "path": "app/lib/features/personal_owner/data/personal_owner_status_client.dart",
+      "bytes": 2212,
+      "sha256": "380757b8c887c22cd8975d3bd1fcb23d8d3a2442d86a52eaab96f5355d570e5b",
+      "gitBlobSha": "ae95ac05a19b7cd1861e4c7986659b1cb1229356"
+    },
+    {
+      "path": "app/lib/features/personal_owner/data/personal_owner_status.dart",
+      "bytes": 3482,
+      "sha256": "d31467270082e8651132a869f6d4b6a4b4b51ae2d04d4ef41ee4b2b70c427c5f",
+      "gitBlobSha": "def828f4da8ad2db9009bfbca5fe1c6d9cffaff2"
+    },
+    {
+      "path": "app/lib/features/personal_owner/data/personal_owner_test_shadow.dart",
+      "bytes": 28488,
+      "sha256": "b5cc283b9fbf5122d280a06d13360c87a19ac3eb10dc84d7568c54592a6d3d08",
+      "gitBlobSha": "054c8fbc34d61abe749a301e1e71beae13466d80"
+    },
+    {
+      "path": "app/lib/features/personal_owner/presentation/personal_owner_official_event_screen.dart",
+      "bytes": 7724,
+      "sha256": "25c87e2417d782877cff0419154a24b938c99ffeb3bdb503e013a490101a4529",
+      "gitBlobSha": "cef8c316771b5e0925b1d404b174dd22e5dc69c0"
+    },
+    {
+      "path": "app/lib/features/personal_owner/presentation/personal_owner_operational_screen.dart",
+      "bytes": 65766,
+      "sha256": "574d928b2f4a6904d905bb7676bf72a9f6d32439daa902b9d76ae65f58fd2cdd",
+      "gitBlobSha": "0b88a5f1bdc549588ced27650ed7395a9241cda6"
+    },
+    {
+      "path": "app/lib/features/personal_owner/presentation/personal_owner_status_screen.dart",
+      "bytes": 6472,
+      "sha256": "78eea4065aeb3be380cda59320bab85543a10bd8932571afb63872478363394e",
+      "gitBlobSha": "03ce47221e1d2a3d294a5f61c057183062c818c1"
+    },
+    {
+      "path": "app/lib/features/personal_owner/presentation/personal_owner_test_shadow_screen.dart",
+      "bytes": 11402,
+      "sha256": "9c83fd09c42b214532c9281cdb23b3b86617b9fd4553c11044127b8441950c0d",
+      "gitBlobSha": "b2a0fba752af67687fc41f81b1b9ff284b0ee3ec"
+    },
+    {
+      "path": "app/lib/features/private_beta/data/supabase_auth_client.dart",
+      "bytes": 4661,
+      "sha256": "6ba6d129cc63781f016d85a8934f2fd69b3848972d4748c6a104a2baea1ef1de",
+      "gitBlobSha": "58312266babd4f595179c4840eed7548d69d8cef"
+    },
+    {
+      "path": "app/lib/features/private_beta/presentation/private_beta_gate.dart",
+      "bytes": 10516,
+      "sha256": "6de0d9ef98c6be8c942178255d9cc0dc4f1a0c1150939b6a45af4cc1761cd096",
+      "gitBlobSha": "3aab69881838a65245080b50e4d44cf8fc6dfc52"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/data/ephemeral_semantic_models.dart",
+      "bytes": 18784,
+      "sha256": "d78f94f68914356366585edb3d33aa4698ee374a71965cbbbdf22aec09aae9a2",
+      "gitBlobSha": "f34f4978785cc03260a2b563ead92b475b42c55c"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/data/ephemeral_semantic_repository.dart",
+      "bytes": 353,
+      "sha256": "37a62569e5ef873b7e1ed0fe36f9ee1e05c615958338b7ec861481993d09d505",
+      "gitBlobSha": "0985557b6268aa90b8eec73c795c710ef7e7700e"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/data/llm_semantic_models.dart",
+      "bytes": 9371,
+      "sha256": "fb4699dddd7aef5d5b94c16f471972a885352c08b221967082f1703d83851bb9",
+      "gitBlobSha": "4b5f80af352d3b63e5610ee2f0c06f0b0b36cdf9"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/data/semantic_graph_models.dart",
+      "bytes": 16821,
+      "sha256": "d803961a801430776071cd120e029e169054f9636c2c5198239de1815630651f",
+      "gitBlobSha": "538e2d6fd5ef7aa846f15bc9834b7a219de50246"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/data/semantic_graph_repository.dart",
+      "bytes": 349,
+      "sha256": "d6fcb107453bc9e427f17b85d12bcf12ac5acc26a3b17b67d47fde65ab434778",
+      "gitBlobSha": "600fb92ec5c1c78ee0fc0d3833927661cb78e41f"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/data/semantic_shadow_models.dart",
+      "bytes": 7103,
+      "sha256": "bfcf608f59fbbcab6ff09fd93b33fe2e8eb7e523633a6eb4399f69b5942dcd0b",
+      "gitBlobSha": "953c534ffc7bf0642d04a9f401cd14e944f00135"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/data/semantic_shadow_repository.dart",
+      "bytes": 425,
+      "sha256": "0641fafb582b054ab9e93710aaafcd270e00d400886aa5edb8e298d28c16df83",
+      "gitBlobSha": "8806051a9551f4af99743db767125559ecbe61f9"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/presentation/ephemeral_semantic_screen.dart",
+      "bytes": 15395,
+      "sha256": "0a1f4a328448ffcfcba2bd1a81a8a4cf4a9022cf52bf667edf7215301d21b4d3",
+      "gitBlobSha": "3f9ecfea3392909c2c6d64e051a2e0cfd73a2bca"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/presentation/semantic_graph_screen.dart",
+      "bytes": 25822,
+      "sha256": "bf38ac67e01038ad4583cd13bf904786750684e43f9dc5f5d5ac9e50d3a3c6c9",
+      "gitBlobSha": "529a3204be4451b0074d8f98d3ca9aa2816e430d"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/presentation/semantic_shadow_access.dart",
+      "bytes": 565,
+      "sha256": "8a65a9bb87170bcf773a1fb989b081ab3d50c2ca8256d3c24bf3fab4c41cbd76",
+      "gitBlobSha": "6f6c3814ea07467c5d8795d4980502b4058e06aa"
+    },
+    {
+      "path": "app/lib/features/semantic_shadow/presentation/semantic_shadow_screen.dart",
+      "bytes": 10120,
+      "sha256": "738d232c1b7daf2906d7156cb5768a09c7b5d9da07703c5125e4f5f6b0161968",
+      "gitBlobSha": "a36932a8652266dce7cdf7cc2e53fa6ca180ed43"
+    },
+    {
+      "path": "app/lib/features/semantic/data/semantic_models.dart",
+      "bytes": 16556,
+      "sha256": "120ebf05f7b3cdcfba6cc7d4da42c8aa089d8bb3fe67ab25bde83cf74e30ff33",
+      "gitBlobSha": "7a0fd8ae94d90637e3065e7868c620f27a0aa8fb"
+    },
+    {
+      "path": "app/lib/features/semantic/data/semantic_repository.dart",
+      "bytes": 1512,
+      "sha256": "a2c7063ad9c4453eb20b81421614cf0c0991162dd57f77573b53562fbc6505c6",
+      "gitBlobSha": "ea956fcfc5cd35b8fb19759cfbc476991b2bb02c"
+    },
+    {
+      "path": "app/lib/features/semantic/presentation/editorial_components.dart",
+      "bytes": 39595,
+      "sha256": "228d7262faebfc755da483406ca8ee48fecbba323ef47c1273491a8c07182007",
+      "gitBlobSha": "cb2561c6ad47e09b95280a1f788b0b3ab922d364"
+    },
+    {
+      "path": "app/lib/features/semantic/presentation/editorial_vocabulary.dart",
+      "bytes": 4075,
+      "sha256": "7d66c6495e9ac66e4b8ffac6821b6ffd465b78456842b38dcb961928e093d79e",
+      "gitBlobSha": "30116eaf4fb80054e9ea1d39ec05d43f31110194"
+    },
+    {
+      "path": "app/lib/features/semantic/presentation/semantic_evidence_screens.dart",
+      "bytes": 33167,
+      "sha256": "ded68551b572cd2764a8aafa4cc0b1eb6cd45a524c20e93b5ab8051e8c270ca2",
+      "gitBlobSha": "6fcec1c3c3868717f0750242383953877de86430"
+    },
+    {
+      "path": "app/lib/features/semantic/presentation/semantic_screens.dart",
+      "bytes": 41802,
+      "sha256": "d1c125afd3455b8db90ad1e681746fc52fa2630bc46297ffbbea8b97514b9476",
+      "gitBlobSha": "b2ff5a14b3f7853d3cded9b365779a460ed89e98"
+    },
+    {
+      "path": "app/lib/features/semantic/presentation/story_context_card.dart",
+      "bytes": 7487,
+      "sha256": "8eecceb9cf0ad3530f5486c6a0967250556a3b9a18ab1d78f3d8203009ef9755",
+      "gitBlobSha": "c7aa430bb02d3de2beb462990dfa983c68ad2331"
+    },
+    {
+      "path": "app/lib/main.dart",
+      "bytes": 89,
+      "sha256": "4b786906dd52739dbf104ec9afde761992225a73b54fa25309853d05654b8dd3",
+      "gitBlobSha": "4e4b93a0feb907f28ed1f4c0a656ed614449b6b8"
+    },
+    {
+      "path": "app/lib/shared/primitives/gap.dart",
+      "bytes": 488,
+      "sha256": "ea1eb9936c5bedddf485480e7d1925feae37db1620adb07d197e055ad79ac5da",
+      "gitBlobSha": "3998c87eb603e68c3d4fbf69df04e2e23ed46513"
+    },
+    {
+      "path": "app/pubspec.lock",
+      "bytes": 13929,
+      "sha256": "fac492592281f8dcf17f903f8c81146ac7ff9bdea3ed15d8aa3d6f7233f70b10",
+      "gitBlobSha": "0ec804dc4c746a1e662eba9294d6b24a1f694112"
+    },
+    {
+      "path": "app/pubspec.yaml",
+      "bytes": 953,
+      "sha256": "75d8eb5959551dabec5713f94e28569e8419ddefd64d0e7fbbd062e1efc98122",
+      "gitBlobSha": "027777783c31019cd756851666d9bc50d2307b1d"
+    },
+    {
+      "path": "app/README.md",
+      "bytes": 576,
+      "sha256": "84bd95fa4617e28f47e4b74c44f7149d93bc79b5d111cc6c5d8c57d2cd3470a6",
+      "gitBlobSha": "7ed3341f8af2d6cf13a8d9633945e12a1afe6bdf"
+    },
+    {
+      "path": "app/test/app/app_smoke_test.dart",
+      "bytes": 2106,
+      "sha256": "2dea1dd7a034724b20b73e0b762fee4ea6f7817d064d8e9fe4e5187d261874d0",
+      "gitBlobSha": "d2bcd9b8d6639f25afe3895bfc25d040fa1c7ec4"
+    },
+    {
+      "path": "app/test/app/bootstrap_test.dart",
+      "bytes": 2068,
+      "sha256": "8e6ee759c1260926e29ee5eff09f038af0e6532a25753986456581e92eeb86a3",
+      "gitBlobSha": "23db945a7d093812c96645e5c725d559640447cb"
+    },
+    {
+      "path": "app/test/app/internal_moderation_tool_test.dart",
+      "bytes": 7575,
+      "sha256": "998871cd0cd7f8da0dc0c2726d8d77add3be4efb3fd682b5cd817ed2af90fec3",
+      "gitBlobSha": "2197cdf592d852093519ebd0fd77d0a1e3f9c38a"
+    },
+    {
+      "path": "app/test/consumer/consumer_controller_test.dart",
+      "bytes": 7958,
+      "sha256": "d2708465142c70da2cabd111fab64eae57f897ce60debba57f2abbda14f0add1",
+      "gitBlobSha": "51b0fa0f4ea7f4decc6eea20b0ae135756cb7361"
+    },
+    {
+      "path": "app/test/consumer/consumer_experience_entry_test.dart",
+      "bytes": 3809,
+      "sha256": "ca1d638ff94ca969365a498ee2f5033635592527958a082d15c39922949b47de",
+      "gitBlobSha": "4d01f75f636b4860605466c7a828849fe694a665"
+    },
+    {
+      "path": "app/test/consumer/consumer_navigation_filter_test.dart",
+      "bytes": 19955,
+      "sha256": "21c9766247d71922222c207a05f1d5050a22cf86646a89f23bd4a0438b7e0a27",
+      "gitBlobSha": "6ff2aaad6b34c965a4434902c1c6c581e584759a"
+    },
+    {
+      "path": "app/test/consumer/consumer_performance_test.dart",
+      "bytes": 3929,
+      "sha256": "41cc8146885ef13f1de68023d1dc8726dc444a2a5038de3bc95fe7bf90fdc035",
+      "gitBlobSha": "3984895d51dace24a77c4f75481371163a42ae7b"
+    },
+    {
+      "path": "app/test/consumer/consumer_prohibition_test.dart",
+      "bytes": 2783,
+      "sha256": "7d935694033922539f35c370f1e96ad3fa769cc72d35da26722239c678905f44",
+      "gitBlobSha": "e3e1eea6bde364886310d3191e62695c64ddf335"
+    },
+    {
+      "path": "app/test/consumer/consumer_widget_test.dart",
+      "bytes": 10592,
+      "sha256": "5a6afe3a7bb0560403ef8f52a44f893d30dfd0c36054d237931580d14a990b6b",
+      "gitBlobSha": "d8bac0b03f8075f1906ac51ae1d87207156f7582"
+    },
+    {
+      "path": "app/test/consumer/public_api_client_test.dart",
+      "bytes": 11248,
+      "sha256": "d9e4193027c0d3d60d2bdd0357dfd71e3804e6e33a2b52b7502628a45c6e94ac",
+      "gitBlobSha": "78c63e71134b2676839c7b17d3643bba66b04d89"
+    },
+    {
+      "path": "app/test/consumer/public_openapi_contract_test.dart",
+      "bytes": 2375,
+      "sha256": "0735580099cb021fbee8e096dc0187bec52268b5463e08cb4acf4bd2ee861dfc",
+      "gitBlobSha": "9ef3737f0c21b5fa7e728106376ae5f088849b69"
+    },
+    {
+      "path": "app/test/design_system/accessibility_primitives_test.dart",
+      "bytes": 3796,
+      "sha256": "1ed2b55f873465190d07aa4e77182281114961dc298385cf13387bb9fdc3946c",
+      "gitBlobSha": "147c92eb1c00deeef9330d0e9cd2e19e79c076c9"
+    },
+    {
+      "path": "app/test/design_system/asset_catalog_test.dart",
+      "bytes": 2051,
+      "sha256": "647be0692a13bd713ab9beb14f1103a3ca1306dd3659fb70cefa190d88084076",
+      "gitBlobSha": "e12e44a326dc3567d7af65e6dfcb4cdeddfcc4a4"
+    },
+    {
+      "path": "app/test/design_system/design_invariant_checker_test.dart",
+      "bytes": 7373,
+      "sha256": "b46a1fdade269fdcd08c6b9b5e2da2bf476a0cba78d2eb54d753ea10c870f54e",
+      "gitBlobSha": "09c8c65460bdbfbd8676775642a72957e4a9d3ef"
+    },
+    {
+      "path": "app/test/design_system/design_tokens_test.dart",
+      "bytes": 9231,
+      "sha256": "62f8bc1ad53da9532bcee20fc34c559db2d6b91db87df70215f1c35dfcb82103",
+      "gitBlobSha": "cbf6b88bd3874071334fe8d75945ca6bd1d09370"
+    },
+    {
+      "path": "app/test/design_system/equivalence_proposal_review_card_test.dart",
+      "bytes": 4294,
+      "sha256": "cc455e5d0c048d6177a6f6c174ae54424f691ff3c7329aeb3335c998df2ffa0b",
+      "gitBlobSha": "37baafaf3dda0d7ee8cc47a7e5350c9e2700da8c"
+    },
+    {
+      "path": "app/test/design_system/equivalence_queue_card_test.dart",
+      "bytes": 6521,
+      "sha256": "7da15453ffa185e017506401b45a9e7ebab6fabc71c6704b52a0d748cd05a6a4",
+      "gitBlobSha": "e839caf410467413feaac7d88290a22ec90615d8"
+    },
+    {
+      "path": "app/test/e2e/live_news_e2e_test.dart",
+      "bytes": 6806,
+      "sha256": "72ec282397ef54dfa415d35debf600427d404fbc222785b69a469e1bbc6f1af2",
+      "gitBlobSha": "1598beed3405da20764f9f3d69efef37da4d9bfe"
+    },
+    {
+      "path": "app/test/e2e/llm_shadow_e2e_test.dart",
+      "bytes": 3043,
+      "sha256": "512927b5eaeb4a45269df184bb7f79986e23c12fc1ddfd1eb4e76f364f51f46c",
+      "gitBlobSha": "c7150fe4ffd548b5902fe4c5ecfd08cd518e72a7"
+    },
+    {
+      "path": "app/test/e2e/personal_owner_operational_pipeline_e2e_test.dart",
+      "bytes": 5395,
+      "sha256": "6cb91475b244ebbf2899d3d824a2b1b873bff2d131836a44210e794c8effb9c0",
+      "gitBlobSha": "75178118244dda0d10b9bfb1cf4f88e66d375a63"
+    },
+    {
+      "path": "app/test/e2e/personal_owner_real_source_http_test.dart",
+      "bytes": 6026,
+      "sha256": "e7e5c659992748d372624d5f10fa3d8427b7894a5cf828c05ae8b9dcbc002193",
+      "gitBlobSha": "0ff07cc7de8d93581427c0e23ad937b48c37e1bb"
+    },
+    {
+      "path": "app/test/e2e/personal_owner_v6r_e2e_test.dart",
+      "bytes": 8287,
+      "sha256": "d0d40906c55023a10797f4c38ded337afee3f8947eb97e820963b388354535cc",
+      "gitBlobSha": "e48dcde53133efbd52ca9dcffb40df3acb062d2f"
+    },
+    {
+      "path": "app/test/e2e/real_public_api_e2e_test.dart",
+      "bytes": 4983,
+      "sha256": "a44a7adde38d6cec60fb270e9f5542f4dac2ba24fa1152a812e2662dfb3087ef",
+      "gitBlobSha": "7ea5d4c4712bf47ebd4b8e9476dca43bb413c591"
+    },
+    {
+      "path": "app/test/e2e/recorded_live_news_e2e_test.dart",
+      "bytes": 4588,
+      "sha256": "bf397591b382a899fc4b08c0d10dd531d0eedb8d6113950cd6d74365fa2858ed",
+      "gitBlobSha": "d0d8bd95d7c4ee5c455531208be3e1683f7dc604"
+    },
+    {
+      "path": "app/test/e2e/semantic_shadow_e2e_test.dart",
+      "bytes": 11206,
+      "sha256": "274c4f39be90eadd06acbac74ba81bd56efb90a6ddddb08a3e4bac7f5a47f5e9",
+      "gitBlobSha": "47d27db8f456204584228a54948dd0373d453963"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/aliased_color_scheme_error.dart.txt",
+      "bytes": 127,
+      "sha256": "652efc394c202a521ec688d30987961a1095f6b26057ffa1c672e51247e0d789",
+      "gitBlobSha": "44916ec8191b2bdea6231623b55ec89abb62bd11"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/box_shadow.dart.txt",
+      "bytes": 112,
+      "sha256": "6162d6a9aa9033690cb924e530708807026ac0013409a727474eccfa5216ce5b",
+      "gitBlobSha": "a71421163f4d4d291805d09e2b51315e8fd2db33"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/color_alpha.dart.txt",
+      "bytes": 105,
+      "sha256": "ec7d22e8157fdad6eefd5b4d3a00a5d9d1c097d3ee257bf9e5935bd333254b91",
+      "gitBlobSha": "86324c79dd5cf81e0631eb695092ea45a63e3c87"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/conditional_raised_surface.dart.txt",
+      "bytes": 168,
+      "sha256": "919300849bb589591927701d0a9e5df09409012fe3f2cb3d1f73bc5f79f3f8c2",
+      "gitBlobSha": "a65b519d7f935b209ac06c01020cdaac59e2b406"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/context_operational_colors.dart.txt",
+      "bytes": 85,
+      "sha256": "34dcd51b5c8bdd4686c68d8e475b7a1bcaffc8fc205ada2f083fbe1ba253954b",
+      "gitBlobSha": "186b1f305b669f6883376942bfb6a326d806d41e"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/dynamic_box_shadow.dart.txt",
+      "bytes": 98,
+      "sha256": "bec148ae25441dce152510bd158590cad55d6e7a4ab11eba6b03349af643f8f1",
+      "gitBlobSha": "3cb61db52b41d10fd9b730ea6c7a564febc74846"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/dynamic_elevation.dart.txt",
+      "bytes": 84,
+      "sha256": "873cf11966333e290defcd0083862c655aea3db1218e10cc17a9a476a28edb76",
+      "gitBlobSha": "390af056d1106a649b4d6d2e34b5464092a8ecb9"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/dynamic_font_size.dart.txt",
+      "bytes": 91,
+      "sha256": "946938a89b21daa57dc6b3300b08ece99858902c9cdc77a82cb3e0b1bc427b1c",
+      "gitBlobSha": "04bf637a9018e6d76d554fd3e65367087ca94ced"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/dynamic_font_weight.dart.txt",
+      "bytes": 126,
+      "sha256": "3776e6ee0865f6fd78ceffc6da6b51a7d1958f01658eeb06668fc45102851756",
+      "gitBlobSha": "e424430203bccedf8000bce9ec7595f01428a827"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/dynamic_marker_width.dart.txt",
+      "bytes": 94,
+      "sha256": "58f2318ea986adff2e227111bce0bbe5d1a95181ed8adb8dd47017c7dd100968",
+      "gitBlobSha": "c1e13471e19af6ba422f05de12ae55e9413105ba"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/dynamic_scale.dart.txt",
+      "bytes": 127,
+      "sha256": "64ffd4f169085cfae27039ae407117a9b9885f92d31bc76e849d7ba1ba3a3d18",
+      "gitBlobSha": "c4e76fdb87cb3098f2f1f84397736a03ba7b9bb6"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/epistemic_api_classified.dart.txt",
+      "bytes": 196,
+      "sha256": "7175283cb7c8dd8c08172f2007a8702a114b71086f79e3beeaca3188d678bf1a",
+      "gitBlobSha": "d9fc2a13246c2f96790fc6c84258d4eedd50a87a"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/forbidden_icon.dart.txt",
+      "bytes": 81,
+      "sha256": "d959b7ff73ce081bb9e240459013282ba407f30f6b2ff13b4de937e51efd72aa",
+      "gitBlobSha": "9588b330dcc4e5bc341f2bd1398a271a76a9c608"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/nonzero_elevation.dart.txt",
+      "bytes": 68,
+      "sha256": "eb7c11275ab4f4df976b8e255f8c38f9ccaa1491bce1151a4edba75a4f11646c",
+      "gitBlobSha": "b118158c1e01e24439e160d5cf2c4f23138990bb"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/operational_notice.dart.txt",
+      "bytes": 104,
+      "sha256": "ef110d3d0d19870c4668c9fdedd5d672233421396499d08d896c99bf680ee1fa",
+      "gitBlobSha": "3bb9498a5ee0cd0573041c6d7a508402c3f5b02d"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/operational_state_class.dart.txt",
+      "bytes": 95,
+      "sha256": "7b9849b1eae3d7eda3bdb361ff39673b8c03f71f90579abdc0bfd29865567b90",
+      "gitBlobSha": "c82ba130d6d79e8b4f1929afe45693b41b60b0a7"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/operational_state_color.dart.txt",
+      "bytes": 104,
+      "sha256": "74f547fd418cb195fadb509a922366ca329193951701bbe394817b33fc4c2727",
+      "gitBlobSha": "91bda01df67eff8c3a406fb83704540db5c67529"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/quantitative_emphasis.dart.txt",
+      "bytes": 102,
+      "sha256": "0e3eec32cb82d9aaac35520ebf9130f81088928291a74e4b5a852486664c7b6f",
+      "gitBlobSha": "ee03210052314a244269875d9f0f581530de3066"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/raw_color.dart.txt",
+      "bytes": 75,
+      "sha256": "c2fce3883045313afc21f0a0dbbd200333873793079c3384f0e21eaa920fa41f",
+      "gitBlobSha": "a80ab1aba7e4069fb6c28eed0d945c85faa78ce3"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/reduced_opacity.dart.txt",
+      "bytes": 83,
+      "sha256": "917f8ced99173b402e3645f77dce5dcd430edbce1c5b2d53767e54e59d52264a",
+      "gitBlobSha": "0b74fcc0665d1b4d2758e9cf3ea6c70d5289e6d2"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/selected_position.dart.txt",
+      "bytes": 95,
+      "sha256": "52ab7db31ec1ab99c09f52d1d3b6f55ecfdacdfcff92ecb59c9823971b5c6f7f",
+      "gitBlobSha": "cbecda1cf4bcc0f122f50fbc68ebdf06ae9056f4"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/source_count_ordering.dart.txt",
+      "bytes": 115,
+      "sha256": "6047e8a1e97145a59065d8a7fffc5edc1e5157d67147f24581ef8dff4fc8e61f",
+      "gitBlobSha": "9f46c73587f50f13a20fb2258f2ae23c74969390"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/theme_color_scheme_error.dart.txt",
+      "bytes": 89,
+      "sha256": "334ab4106ac006b4d723b3edd67fb2b6af6fdced41e72660a8ee69ae87b1f8b0",
+      "gitBlobSha": "3e5c3bcaf708a20b6fc17077e2251863209dc264"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/theme_error_container.dart.txt",
+      "bytes": 101,
+      "sha256": "eabba60d02c39ddc613815508e465500f97ae65214e8041eec2060806f625e53",
+      "gitBlobSha": "ecb8c7f584b00acebbfa70db4fbb4c635c5fefac"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/theme_on_error_container.dart.txt",
+      "bytes": 101,
+      "sha256": "b55500ee6a6e0dedd3a65d3d2affa200519a8559edd858eb265490c414d0f9e5",
+      "gitBlobSha": "77b9d7500c7c82920dac5136fdc10fea485173bf"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/theme_on_error.dart.txt",
+      "bytes": 92,
+      "sha256": "e5e7ff1bc442190bc7a6ef55340d08691bcc19df8892eb0d3ef2f4445c2b7f69",
+      "gitBlobSha": "c9363635df7e8d2e0f4ad31dda42728942ff6cc5"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/unmarked_claim_row.dart.txt",
+      "bytes": 71,
+      "sha256": "0eed8ac493ae080bf219d18f5b89bddd73b6895506c28328c1c6321e9a857f14",
+      "gitBlobSha": "6f939a5cc2414e850135d428d2af0375cfe8bad0"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/unmarked_contradiction_card.dart.txt",
+      "bytes": 80,
+      "sha256": "3fc41da8dfd4696192305edb46ea2c5bde0bcd4ee74afb5d0ca2f207ea237cec",
+      "gitBlobSha": "322a997a50398e021dde40ad827a8bddd2fb5f9f"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/unmarked_equivalence_queue_card.dart.txt",
+      "bytes": 278,
+      "sha256": "579f79effca26ae1ad6c9f25ec8dccfda9c96336d9e9ac414e9341b6cdeb940c",
+      "gitBlobSha": "69aec49e71b30f82318bb310712dd78848b00c21"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/unmarked_evidence_card.dart.txt",
+      "bytes": 75,
+      "sha256": "d2c1bdd6c5cef11728f6d555258e7964a09bcb6a544ca45c19e8d577b460e026",
+      "gitBlobSha": "af1b621197e718339680a31c0b5a51ae0087b97e"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/unmarked_position_card.dart.txt",
+      "bytes": 75,
+      "sha256": "977dc592fea76f0c0e5330bdb765e55b5fbae0c7fcb79bcf5abe895e4e2fbc7b",
+      "gitBlobSha": "7cd006aa929ffaa2ad8aa6b8ce9778a66084bddf"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/unmarked_relationship_indicator.dart.txt",
+      "bytes": 84,
+      "sha256": "97da65321b0d85bb7fed18d6f85e35a497f27e48a16efae0ccb25f0bea8ec075",
+      "gitBlobSha": "ea10e46525982eb5fad94d1f9d0a8a6b5d2dce60"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/invalid/winner_score.dart.txt",
+      "bytes": 95,
+      "sha256": "4456bb1386129ca3c021923b07c44d531ab4438eaecdf43b3f27bf0235cd96ef",
+      "gitBlobSha": "f822390b655c0a31c41b176991312fe8127df876"
+    },
+    {
+      "path": "app/test/fixtures/design_invariants/valid/epistemic_component.dart.txt",
+      "bytes": 674,
+      "sha256": "677223d20270757e71a5ae57e53c6dd8a693ba9ecda70ef6757f67e38c072baa",
+      "gitBlobSha": "889b2ad94db3d4b4e766789a7abe57daa4146cab"
+    },
+    {
+      "path": "app/test/fixtures/private_beta_demo/scenario.json",
+      "bytes": 2052,
+      "sha256": "8b16c39edfc606481034c2e6415d57b278a91388c5bddedd9fe96388813b7cd1",
+      "gitBlobSha": "8cdb5794f5741aa1219d25a769f9b92f2f76fa5c"
+    },
+    {
+      "path": "app/test/live/live_fixtures.dart",
+      "bytes": 5201,
+      "sha256": "d35170273b8e199c986d87c97ac79b866c99756986a2d96ba6af38ef75438458",
+      "gitBlobSha": "8d287ea7322d117ae33a4b5d57c4066d3aa555f0"
+    },
+    {
+      "path": "app/test/live/live_news_test.dart",
+      "bytes": 26610,
+      "sha256": "da79f969795d437bb295347f8c79a04ad93937d95b12e3ad415e5d3f06a8956d",
+      "gitBlobSha": "0c276bede41c726ca9e34bfe831f8dead84f63bc"
+    },
+    {
+      "path": "app/test/private_beta/private_beta_demo_fixture_test.dart",
+      "bytes": 1991,
+      "sha256": "71eab468f8c1575a4dcacb0aa50cc0fe53bedcd549925609d0dba9643aebf949",
+      "gitBlobSha": "2139b6287cf4d58f45d47059c479f61bd6903d56"
+    },
+    {
+      "path": "app/test/private_beta/private_beta_gate_test.dart",
+      "bytes": 6856,
+      "sha256": "4d0efc0ae88ace8438132418bd14c96982c1713a31a7a9c5da00af05eca750b8",
+      "gitBlobSha": "fc0e909795e2ea648111b52cd8c4bd2b7cb55ec4"
+    },
+    {
+      "path": "app/test/private_beta/supabase_auth_client_test.dart",
+      "bytes": 5475,
+      "sha256": "382ca2f5ac545a5a36dbb53857659423b234c8e1e8bed401f9f1fe17846c2dc5",
+      "gitBlobSha": "95e17c35cd3758bc652285813119738374b8417f"
+    },
+    {
+      "path": "app/test/support/loopback_socket_client.dart",
+      "bytes": 5968,
+      "sha256": "6c8e892e0dec51398549e773a54c1318563d047e624c2db487471b6721af5f62",
+      "gitBlobSha": "675fd2938ccb4561b38ec3271a41b68253bbfa08"
+    },
+    {
+      "path": "app/test/support/public_api_fixtures.dart",
+      "bytes": 10792,
+      "sha256": "606742d2bae9a513bd95006499ac8afdd60e311e6fe5e4632de4954fab6cd030",
+      "gitBlobSha": "335b0f1393c61ee1397c633f2f042efdef734270"
+    },
+    {
+      "path": "app/test/support/test_app.dart",
+      "bytes": 1075,
+      "sha256": "3ce7f69a7f72a8aac18e3f79b2a9a62c0ddbe3584b2c15cb28eb9328fef460e2",
+      "gitBlobSha": "935160be9ed6886d0e4b672fc41d9d629aaee71c"
+    },
+    {
+      "path": "app/tool/check_design_invariants.dart",
+      "bytes": 1355,
+      "sha256": "162b00e49dcb0c997099f6f18edb0a5fdb75493d6f7ce83d805e6bbf9ea251bf",
+      "gitBlobSha": "53b81cb7528541f99ed8764d2bc02f724bb310ed"
+    },
+    {
+      "path": "app/tool/quality.dart",
+      "bytes": 1613,
+      "sha256": "ca6254408778852389cbfb82bff7c2e769cad564a78e1ebf123c363df7413b8f",
+      "gitBlobSha": "3f1a4c4c924b7b016d8aa88eacce541359659259"
+    },
+    {
+      "path": "app/web/favicon.png",
+      "bytes": 917,
+      "sha256": "7ab2525f4b86b65d3e4c70358a17e5a1aaf6f437f99cbcc046dad73d59bb9015",
+      "gitBlobSha": "8aaa46ac1ae21512746f852a42ba87e4165dfdd1"
+    },
+    {
+      "path": "app/web/icons/Icon-192.png",
+      "bytes": 5292,
+      "sha256": "3dce99077602f70421c1c6b2a240bc9b83d64d86681d45f2154143310c980be3",
+      "gitBlobSha": "b749bfef07473333cf1dd31e9eed89862a5d52aa"
+    },
+    {
+      "path": "app/web/icons/Icon-512.png",
+      "bytes": 8252,
+      "sha256": "baccb205ae45f0b421be1657259b4943ac40c95094ab877f3bcbe12cd544dcbe",
+      "gitBlobSha": "88cfd48dff1169879ba46840804b412fe02fefd6"
+    },
+    {
+      "path": "app/web/icons/Icon-maskable-192.png",
+      "bytes": 5594,
+      "sha256": "d2c842e22a9f4ec9d996b23373a905c88d9a203b220c5c151885ad621f974b5c",
+      "gitBlobSha": "eb9b4d76e525556d5d89141648c724331630325d"
+    },
+    {
+      "path": "app/web/icons/Icon-maskable-512.png",
+      "bytes": 20998,
+      "sha256": "6aee06cdcab6b2aef74b1734c4778f4421d2da100b0ff9e52b21b55240202929",
+      "gitBlobSha": "d69c56691fbdb0b7efa65097c7cc1edac12a6d3e"
+    },
+    {
+      "path": "app/web/index.html",
+      "bytes": 1299,
+      "sha256": "f9a03201eafe87faedc6e981774c40e673173d8b1eb3ae7fabce181e81e5f074",
+      "gitBlobSha": "799de1c5cadc49c7f16198f79693fbb1edd9157a"
+    },
+    {
+      "path": "app/web/manifest.json",
+      "bytes": 924,
+      "sha256": "7b4bc70d989e960d058a5f4deef6a44704f9849db61b64da08f8176314634322",
+      "gitBlobSha": "c9be72974d38c365cfdd0a8f473ebc37bce88636"
+    }
+  ]
+}

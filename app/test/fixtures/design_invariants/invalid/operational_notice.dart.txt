@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final notice = OperationalNotice(kind: OperationalNoticeKind.error);

@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final errorGround = Theme.of(context).colorScheme.errorContainer;

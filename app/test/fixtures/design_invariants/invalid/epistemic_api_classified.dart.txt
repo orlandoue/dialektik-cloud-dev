@@ -1,0 +1,4 @@
+class UnlistedEpistemicCard extends StatelessWidget {
+  final presentation = EpistemicPresentation.forRole(EpistemicVisualRole.position);
+  final errorInk = context.operationalColors.error;
+}

@@ -1,0 +1,43 @@
+name: dialektik
+description: Dialektik application and design-system foundation.
+publish_to: none
+version: 0.1.1+2
+
+environment:
+  sdk: ^3.10.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  google_fonts: ^8.2.1
+  http: ^1.5.0
+  intl: ^0.20.2
+  phosphor_flutter: ^2.1.0
+  url_launcher: ^6.3.2
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+    - family: Merriweather
+      fonts:
+        - asset: assets/fonts/Merriweather-Regular.ttf
+          weight: 400
+  assets:
+    - assets/asset_catalog.json
+    - assets/contracts/public-api-v1.json
+    - assets/source-universe/candidate-registry.v1.json
+    - assets/fonts/OFL.txt
+    - assets/fonts/Merriweather-OFL.txt

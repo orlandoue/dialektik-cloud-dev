@@ -1,0 +1,3 @@
+class EvidenceCard {
+  final color = context.operationalColors.error;
+}

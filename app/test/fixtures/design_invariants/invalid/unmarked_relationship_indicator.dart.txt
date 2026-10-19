@@ -1,0 +1,3 @@
+class RelationshipIndicator {
+  final color = context.operationalColors.error;
+}

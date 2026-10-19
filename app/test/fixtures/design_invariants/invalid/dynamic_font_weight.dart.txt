@@ -1,0 +1,4 @@
+// dialektik:epistemic-component
+final style = TextStyle(
+  fontWeight: isPrimary ? FontWeight.w500 : FontWeight.w400,
+);

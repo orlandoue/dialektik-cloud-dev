@@ -1,0 +1,66 @@
+{
+  "classification": "DEMO/TEST — completely synthetic; not a real-world finding",
+  "persistence": "TEST_FIXTURE_ONLY",
+  "rights": "SYNTHETIC_NO_PUBLISHER_CONTENT",
+  "sources": [
+    {
+      "id": "demo-source-a",
+      "name": "Fuente sintética A",
+      "url": "https://example.test/demo/source-a"
+    },
+    {
+      "id": "demo-source-b",
+      "name": "Fuente sintética B",
+      "url": "https://example.test/demo/source-b"
+    },
+    {
+      "id": "demo-source-c",
+      "name": "Fuente sintética C",
+      "url": "https://example.test/demo/source-c"
+    }
+  ],
+  "articles": [
+    {
+      "id": "demo-article-a1",
+      "title": "DEMO/TEST: La estación imaginaria informa un cierre temporal",
+      "source_id": "demo-source-a",
+      "event_id": "demo-event-station",
+      "url": "https://example.test/demo/a1"
+    },
+    {
+      "id": "demo-article-b1",
+      "title": "DEMO/TEST: El servicio ficticio anuncia una reapertura gradual",
+      "source_id": "demo-source-b",
+      "event_id": "demo-event-station",
+      "url": "https://example.test/demo/b1"
+    },
+    {
+      "id": "demo-article-c1",
+      "title": "DEMO/TEST: El consejo inventado publica una agenda",
+      "source_id": "demo-source-c",
+      "event_id": "demo-event-agenda",
+      "url": "https://example.test/demo/c1"
+    }
+  ],
+  "events": [
+    {
+      "id": "demo-event-station",
+      "title": "DEMO/TEST: Servicio de una estación imaginaria",
+      "article_ids": ["demo-article-a1", "demo-article-b1"]
+    },
+    {
+      "id": "demo-event-agenda",
+      "title": "DEMO/TEST: Agenda del consejo inventado",
+      "article_ids": ["demo-article-c1"]
+    }
+  ],
+  "contradiction": {
+    "id": "demo-contradiction-station",
+    "classification": "DEMO/TEST_ONLY_NOT_A_REAL_CONTRADICTION",
+    "event_id": "demo-event-station",
+    "position_a": "DEMO/TEST: cierre temporal comunicado",
+    "position_b": "DEMO/TEST: reapertura gradual comunicada",
+    "provenance_article_ids": ["demo-article-a1", "demo-article-b1"],
+    "real_semantic_conclusion": false
+  }
+}

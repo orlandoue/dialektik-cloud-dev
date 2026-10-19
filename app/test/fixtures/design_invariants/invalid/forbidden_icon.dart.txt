@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+return Icon(PhosphorIcons.regular.sealCheck);

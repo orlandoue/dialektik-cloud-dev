@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final isPositionSelected = position.id == currentSelection;
