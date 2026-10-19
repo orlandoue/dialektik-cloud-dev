@@ -226,7 +226,7 @@ export class PasswordRecoveryController {
       );
     }
 
-    const supabaseUrl = this.config.supabaseAuthIssuer.replace(/\\/auth\\/v1$/u, '');
+    const supabaseUrl = this.config.supabaseAuthIssuer.replace(/\/auth\/v1$/u, '');
     const nonce = randomBytes(18).toString('base64');
     reply.header('Content-Security-Policy', [
       "default-src 'none'",
