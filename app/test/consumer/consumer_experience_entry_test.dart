@@ -1,4 +1,5 @@
 import 'package:dialektik/app/dialektik_app.dart';
+import 'package:dialektik/features/live/data/candidate_source_registry.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/navigation/consumer_routes.dart';
@@ -11,8 +12,7 @@ import '../support/public_api_fixtures.dart';
 Future<void> _tap(WidgetTester tester, Finder target) async {
   await tester.ensureVisible(target);
   await tester.tap(target);
-  await tester.pump();
-  await tester.pump(const Duration(milliseconds: 500));
+  await tester.pumpAndSettle();
 }
 
 void main() {
@@ -49,6 +49,10 @@ void main() {
   testWidgets(
     'personal mode can open the consumer reader and reach administration separately',
     (WidgetTester tester) async {
+      final List<CandidateSourceInfo>? candidates = await tester.runAsync(
+        () => CandidateSourceRegistry.load(),
+      );
+      expect(candidates, hasLength(50));
       await tester.pumpWidget(
         DialektikApp(
           environment: AppEnvironment.test,
@@ -83,6 +87,7 @@ void main() {
         findsOneWidget,
       );
       await _tap(tester, find.text('Fuentes'));
+      expect(find.text('Candidatas · 50'), findsOneWidget);
       expect(find.text('Candidatas · 50'), findsOneWidget);
       expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
       await _tap(tester, find.byTooltip('Más opciones'));

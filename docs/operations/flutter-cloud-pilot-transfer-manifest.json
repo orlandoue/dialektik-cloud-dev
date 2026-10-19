@@ -12,7 +12,7 @@
   },
   "transfer": {
     "fileCount": 252,
-    "totalBytes": 2276825,
+    "totalBytes": 2277088,
     "excludedPaths": [
       "app/test/semantic/**",
       "app/test/semantic_shadow/**",
@@ -27,7 +27,8 @@
     "notes": [
       "Only Flutter application files were selected; backend/database files from the source worktree were not copied.",
       "Android artifact is debug-only and no signing or server credentials are included.",
-      "CI-only navigation harness uses finite route pumps and asserts the 50-candidate registry; the original V7P worktree remains unchanged."
+      "CI-only navigation harness uses finite route pumps and asserts the 50-candidate registry; the original V7P worktree remains unchanged.",
+      "Consumer navigation test preloads the local source registry through tester.runAsync and asserts all 50 candidates; source worktree unchanged."
     ]
   },
   "files": [
@@ -1107,9 +1108,9 @@
     },
     {
       "path": "app/test/consumer/consumer_experience_entry_test.dart",
-      "bytes": 3917,
-      "sha256": "1b7b178d86ebcc00fbf1da4dc97037ce2bc0e395e8c77a059e760eb3f66daf1b",
-      "gitBlobSha": "715b6a1f03c32d4b7a06efcf7fc59977b426fb0c"
+      "bytes": 4180,
+      "sha256": "1794c482d091418bd92a8128638c9084162172deaebeeb44811c41df49acbed3",
+      "gitBlobSha": "bb4423b59c4dce228569b31b69ec215b30d75956"
     },
     {
       "path": "app/test/consumer/consumer_navigation_filter_test.dart",
