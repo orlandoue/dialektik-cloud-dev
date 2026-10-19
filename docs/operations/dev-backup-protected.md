@@ -31,3 +31,7 @@ After full restoration PASS, coordinate a protected Core-credential transition i
 ## Human action required
 
 The owner must provision the three Environment secrets via GitHub Settings → Environments → `dialektik-dev-backup`, with branch restrictions. Once ready, report **"backup cloud configurado"** without disclosing any credential. The authorized agent may then create the one explicitly named trigger commit, review the resulting job, and arrange the real restore rehearsal before any 043/044 apply.
+
+## Execution checkpoint
+
+2026-10-19 — Owner confirmed all three protected GitHub Environment secrets configured. Authorized read-only encrypted backup attempt. Never print secrets or move unencrypted data out of the ephemeral runner. The real restore remains separately gated.
