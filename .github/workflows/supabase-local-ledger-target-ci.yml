@@ -56,6 +56,9 @@ jobs:
             -c "SELECT (to_regclass('auth.users') IS NOT NULL)::integer, (to_regclass('auth.identities') IS NOT NULL)::integer, (to_regclass('auth.sessions') IS NOT NULL)::integer, (to_regclass('auth.refresh_tokens') IS NOT NULL)::integer, (to_regclass('supabase_migrations.schema_migrations') IS NOT NULL)::integer;")"
           echo "LOCAL_BOOTSTRAPPED_AUTH_AND_LEDGER_TABLES_PRESENT=$result"
           test "$result" = '1|1|1|1|1'
+          auth_count="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "SELECT count(*) FROM pg_tables WHERE schemaname='auth';")"
+          echo "LOCAL_EMPTY_AUTH_TABLE_COUNT=$auth_count"
           echo 'EMPTY_LOCAL_SUPABASE_MANAGED_SCHEMA=PASS'
           echo 'RESTORE_OF_REAL_BACKUP=NOT_ATTEMPTED'
           echo 'USER_BACKUP_DECRYPTED=FALSE'
