@@ -13,9 +13,13 @@ descifrado no se publica como artefacto y se borra del runner al terminar.
 
 ## Para solicitar la ejecución desde GitHub
 
-El propietario comprueba el código del workflow y, en esta rama exacta,
-cambia solo la línea `Estado:` por `Estado: SOLICITADA POR EL PROPIETARIO`.
-Al confirmar el cambio, utiliza el **mensaje exacto de commit**:
+El propietario comprueba el workflow y, en esta rama exacta,
+abre `.github/workflows/real-backup-isolated-restore.yml`. Añade
+**únicamente un comentario** de aprobación justo debajo de `name:`,
+por ejemplo `# OWNER_APPROVED_OFFLINE_RESTORE_20261020`. No altera los
+comandos, condiciones ni permisos. Al confirmar el cambio al workflow
+(que sí está incluido en el filtro de archivos del evento `push`),
+utiliza el **mensaje exacto de commit**:
 
 `EXECUTE_ISOLATED_ENCRYPTED_RESTORE_20261020`
 
