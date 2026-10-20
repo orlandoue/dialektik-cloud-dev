@@ -157,13 +157,32 @@ def entities(headline,geo):
       ("OFFICIAL_ROLE_MINISTER",r"\b(?:ministro|ministra)\b"),
     ):
         if re.search(pat,t):speaker.append(tag)
+    # Case-sensitive named-entity candidates are NEVER trusted identity keys.
+    # Entity type is tentative unless the administrative gazetteer matched.
+    people=[];organisations=[]
+    org_leads={"ministerio","direccion","gobierno","municipalidad","bomberos",
+               "senapred","shoa","universidad","fiscalia","servicio","delegacion"}
+    facility_leads={"teatro","centro","hospital","estadio","terminal","mall"}
+    geo_names={h["text"] for h in geographical}
+    for m in re.finditer(r"\b[A-ZÁÉÍÓÚÑ][a-záéíóúüñ]{2,}"
+                         r"(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúüñ]{2,}){1,2}\b",headline):
+        mention=m.group(0)
+        normalized=norm(mention)
+        if normalized in geo_names or normalized.split()[0] in facility_leads:
+            continue
+        record={"text":mention,"kind":"UNVERIFIED_NAMED_MENTION",
+                "support":"HEADLINE_ORTHOGRAPHY_ONLY"}
+        if normalized.split()[0] in org_leads:
+            organisations.append(dict(record,kind="ORGANIZATION_CANDIDATE"))
+        else:
+            people.append(dict(record,kind="PERSON_CANDIDATE"))
     facilities=[]
     # Facility type, not verified facility identity. No place ID inferred from
     # this string alone, including generic "teatro municipal".
     for m in EVENT_VENUE.finditer(t):
         facilities.append({"kind":"FACILITY_MENTION_UNVERIFIED",
                            "label":m.group(0),"authority":"LEXICAL_ONLY"})
-    return geographical, speaker, facilities, speech
+    return geographical, speaker, facilities, speech, people, organisations
 
 def event_kind(t):
     found=[k for k,p in KINDS.items() if re.search(p,t)]
@@ -177,7 +196,7 @@ def feature(row,geo):
     if u.scheme!="https" or not u.hostname or u.username or u.password or u.query or u.fragment:
         raise ValueError("CANONICAL_URL_INVALID")
     t=norm(row["headline"])
-    geographical,speakers,facilities,speech=entities(row["headline"],geo)
+    geographical,speakers,facilities,speech,people,organisations=entities(row["headline"],geo)
     kind,kinds=event_kind(t)
     multi=bool(MULTI.search(t) or len(set(h["regions"][0] for h in geographical
        if h["regions"]))>1 and re.search(r"\b(?:entre|desde|hasta|y)\b",t))
@@ -193,6 +212,7 @@ def feature(row,geo):
       "canonical_url":row["canonical_url"],"headline":row["headline"],
       "published_on":row["published_on"],"geography":geographical,
       "speaker_roles":speakers,"facility_mentions":facilities,
+      "person_candidates":people,"organization_candidates":organisations,
       "kind":kind,"kind_mentions":kinds,"role":role,
       "magnitude":(f"{magnitude.group(1)}.{magnitude.group(2)}" if magnitude else None),
       "lexical_tokens":sorted(words(row["headline"])),
