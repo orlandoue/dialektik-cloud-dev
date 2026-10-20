@@ -11,7 +11,7 @@
 
 ## This branch: tangible additive integration (no production authority)
 
-- New private beta endpoint **`GET /live/preview/events/chile-tornado/evidence-shadow`**, guarded by existing beta auth, with both feature toggles `DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED=true` AND `DIALEKTIK_EVIDENCE_SHADOW_ENABLED=true`, and blocked in `NODE_ENV=production`.
+- New private beta endpoint **`GET /live/preview/events/chile-tornado/evidence-shadow`**, guarded by existing beta auth, with two feature toggles `DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED=true` and `DIALEKTIK_EVIDENCE_SHADOW_ENABLED=true` PLUS `DIALEKTIK_EVIDENCE_SHADOW_DEPLOYMENT=dev` and an explicitly configured `SUPABASE_AUTH_ISSUER=https://vclsswwfhljczxgnsciq.supabase.co/auth/v1`. The DEV Render process legitimately uses `NODE_ENV=production`, which must not be used as the DEV/production-deployment distinguisher.
 - Same five original vetted editorial publications; exact headline-bound citation offsets for confirmation/rescue/damage-assessment/physical phenomenon cues.
 - Explicitly labels editorial provenance separate from machine-extracted lexical cues; supplies article, documentary cue nodes and edges, but **no new occurrence assignment**, world-action verification, event timestamp, claim, contradiction, source body, Article/Events migration or DB write.
 - No Flutter code change or runtime deployment implied. Preserve original API responses and operational flags; beta Android should continue to show existing content unchanged.
