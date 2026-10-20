@@ -4,6 +4,7 @@ import { LiveApplicationService } from './live.service.js';
 import { LiveController } from './live.controller.js';
 import { acquireGovUkRshMetadataOnce, acquireGovUkRshPreviewBatch, type GovUkRshPreviewMetadata } from './govuk-product-acquisition.js';
 import { chileTornadoEditorialPreview } from './chile-tornado-evidence-preview.js';
+import { chileTornadoEvidenceShadowPreview } from './chile-evidence-shadow-preview.js';
 
 /**
  * The beta-only GOV.UK preview is NOT a stored Article and does not change the
@@ -67,6 +68,20 @@ export class PrivateBetaLiveController extends LiveController {
       throw new NotFoundException('Editorial occurrence preview disabled.');
     }
     return chileTornadoEditorialPreview();
+  }
+
+  /**
+   * Additional read-only evidence projection on the ALREADY curated Chile event.
+   * Shadow only. Explicitly disabled unless separately enabled in DEV.
+   */
+  @Get('preview/events/chile-tornado/evidence-shadow')
+  chileTornadoEvidenceShadow() {
+    if (process.env.NODE_ENV === 'production' ||
+        process.env.DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED !== 'true' ||
+        process.env.DIALEKTIK_EVIDENCE_SHADOW_ENABLED !== 'true') {
+      throw new NotFoundException('Experimental evidence shadow disabled.');
+    }
+    return chileTornadoEvidenceShadowPreview();
   }
 
   /** Explicit DEV opt-in; up to seven prequalified official source items, no SQL. */
