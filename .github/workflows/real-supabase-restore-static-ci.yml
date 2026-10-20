@@ -6,6 +6,8 @@ on:
       - '.github/workflows/real-backup-local-supabase-restore.yml'
       - 'scripts/operations/real_supabase_offline_replay.sh'
       - 'scripts/operations/check_local_restore_target.py'
+      - 'scripts/operations/classify_private_restore_error.py'
+      - 'scripts/operations/test_classify_private_restore_error.py'
       - '.github/workflows/real-supabase-restore-static-ci.yml'
   workflow_dispatch:
 permissions:
@@ -26,6 +28,7 @@ jobs:
           python3 -m py_compile scripts/operations/check_local_restore_target.py
           python3 -m unittest discover -s scripts/operations -p test_managed_backup_inventory.py -v
           python3 -m unittest discover -s scripts/operations -p test_verify_real_restore_bundle.py -v
+          python3 -m unittest discover -s scripts/operations -p test_classify_private_restore_error.py -v
           echo 'ALL_REPLAY_CONTRACT_SCRIPTS_PARSE=PASS'
       - name: Ensure protected flow does not access remote DEV or upload source data
         shell: bash
