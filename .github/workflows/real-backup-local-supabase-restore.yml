@@ -1,0 +1,112 @@
+name: Dialektik complete Supabase Auth offline replay (protected, opt-in)
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/real-backup-local-supabase-restore.yml'
+      - 'scripts/operations/real_supabase_offline_replay.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  supervised-protected-real-restore:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'APPROVE_REAL_SUPABASE_OFFLINE_RESTORE_20261020'
+    environment: dialektik-dev-backup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Trusted checkout without persistent token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Bootstrap disposable empty Supabase Auth and migration ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-protected-replay"
+          mkdir -p "$w/local" "$w/derived" "$w/download"
+          cd "$w/local"
+          npx --yes supabase@2.120.0 init > "$w/derived/local-init.log" 2>&1
+          npx --yes supabase@2.120.0 start > "$w/derived/local-start.log" 2>&1 || {
+            echo 'EMPTY_SUPABASE_BOOTSTRAP_FAILED_LOG_REDACTED'
+            exit 1
+          }
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db" || { echo 'ISOLATED_SUPABASE_DATABASE_NOT_FOUND'; exit 1; }
+          docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
+            "CREATE SCHEMA IF NOT EXISTS supabase_migrations; CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+              version text PRIMARY KEY, statements text[], name text,
+              created_by text, idempotency_key text, rollback text[]
+            );" > "$w/derived/local-ledger.log" 2>&1 || {
+              echo 'EMPTY_LEDGER_BOOTSTRAP_FAILED_LOG_REDACTED'
+              exit 1
+            }
+          local_structure="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -c "SELECT (to_regclass('auth.users') IS NOT NULL)::integer, (to_regclass('auth.identities') IS NOT NULL)::integer, (to_regclass('auth.sessions') IS NOT NULL)::integer, (to_regclass('auth.refresh_tokens') IS NOT NULL)::integer, (to_regclass('supabase_migrations.schema_migrations') IS NOT NULL)::integer;")"
+          test "$local_structure" = '1|1|1|1|1' || {
+            echo 'EMPTY_AUTH_AND_LEDGER_TARGET_STRUCTURE_NOT_READY'
+            exit 1
+          }
+          echo "DB_CONTAINER=$db" >> "$GITHUB_ENV"
+          echo 'EMPTY_OFFLINE_RESTORE_TARGET=READY'
+      - name: Stop all non-database services and remove ALL database network interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DB_CONTAINER"
+          # Real backup has NOT been downloaded or decrypted at this point.
+          for c in $(docker ps --format '{{.Names}}' | grep '^supabase_' || true); do
+            if [ "$c" != "$DB_CONTAINER" ]; then
+              docker stop "$c" >/dev/null
+            fi
+          done
+          while IFS= read -r network; do
+            if [ -n "$network" ]; then
+              docker network disconnect --force "$network" "$DB_CONTAINER"
+            fi
+          done < <(docker inspect "$DB_CONTAINER" --format '{{range $n,$_ := .NetworkSettings.Networks}}{{println $n}}{{end}}')
+          if [ "$(docker inspect "$DB_CONTAINER" --format '{{json .NetworkSettings.Networks}}')" != '{}' ]; then
+            echo 'DATABASE_STILL_HAS_NETWORK_ABORT'
+            exit 1
+          fi
+          docker exec "$DB_CONTAINER" pg_isready -U postgres -d postgres >/dev/null
+          echo 'ISOLATED_DATABASE_NETWORKS=NONE'
+          echo 'SENSITIVE_USER_BACKUP_NOT_YET_DECRYPTED=TRUE'
+      - name: Download exact original encrypted backup with read-only GitHub token
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: orlandoue/dialektik-cloud-dev
+        run: |
+          set -euo pipefail
+          w="$RUNNER_TEMP/dialektik-protected-replay"
+          gh run download 39488529000 --name dialektik-complete-dev-auth-ledger-encrypted \
+            --dir "$w/download" >/dev/null
+          test -s "$w/download/dialektik-complete-dev-20261020.tar.gpg"
+          echo 'SOURCE_CIPHERTEXT_AVAILABLE=PASS'
+      - name: Attempt actual networkless Supabase Auth and 50-migration replay
+        shell: bash
+        env:
+          BACKUP_PASSWORD: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          bash scripts/operations/real_supabase_offline_replay.sh \
+            "$DB_CONTAINER" "$RUNNER_TEMP/dialektik-protected-replay"
+      - name: Irreversibly discard local real-data containers and ephemeral plaintext
+        shell: bash
+        if: always()
+        run: |
+          if [ -n "${DB_CONTAINER:-}" ]; then
+            docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
+          fi
+          if [ -d "$RUNNER_TEMP/dialektik-protected-replay/local" ]; then
+            (cd "$RUNNER_TEMP/dialektik-protected-replay/local" &&
+              npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1) || true
+          fi
+          rm -rf -- "$RUNNER_TEMP/dialektik-protected-replay"
+          echo 'LOCAL_REAL_AUTH_PLAINTEXT_AND_DATA_CONTAINER_CLEANUP=COMPLETE'
+          echo 'REMOTE_DEV_SQL_CHANGES=0'
+          echo 'AUTH_BODY_OR_SOURCE_BACKUP_ARTIFACTS_UPLOADED=NONE'
