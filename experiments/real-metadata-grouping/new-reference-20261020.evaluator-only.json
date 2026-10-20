@@ -1,0 +1,128 @@
+{
+  "schema": "hierarchy-metadata-exploratory-reference-v1",
+  "reference_created": "2026-10-20",
+  "independent_blind_reference": false,
+  "known_limits": "Single researcher, date of publication may differ from occurrence; source selection partly seen before predictor freeze. No R14 or V10.11 formal Gold.",
+  "adjudications": [
+    {
+      "id": "p01",
+      "occurrence_id": "occ-maipu-theater-fire",
+      "thread_id": "thread-maipu-theater",
+      "note": "Initial report of physical 7 Oct Maipu theatre fire"
+    },
+    {
+      "id": "p02",
+      "occurrence_id": "occ-maipu-theater-fire",
+      "thread_id": "thread-maipu-theater",
+      "note": "Initial report of same theatre fire"
+    },
+    {
+      "id": "p03",
+      "occurrence_id": "occ-maipu-theater-fire",
+      "thread_id": "thread-maipu-theater",
+      "note": "Initial report of same theatre fire"
+    },
+    {
+      "id": "p04",
+      "occurrence_id": "occ-maipu-theater-fire",
+      "thread_id": "thread-maipu-theater",
+      "note": "Initial report of same theatre fire"
+    },
+    {
+      "id": "p05",
+      "occurrence_id": "occ-maipu-theater-fire",
+      "thread_id": "thread-maipu-theater",
+      "note": "Initial report of same theatre fire"
+    },
+    {
+      "id": "p06",
+      "occurrence_id": "occ-maipu-theater-fire",
+      "thread_id": "thread-maipu-theater",
+      "note": "Report of physical 7 Oct fire, including potential demolition context"
+    },
+    {
+      "id": "p07",
+      "occurrence_id": "occ-maipu-theater-fire",
+      "thread_id": "thread-maipu-theater",
+      "note": "Reporting the physical fire being controlled"
+    },
+    {
+      "id": "p08",
+      "occurrence_id": "occ-maipu-theater-fire",
+      "thread_id": "thread-maipu-theater",
+      "note": "Retrospective documentation of original fire damage, not a distinct incident"
+    },
+    {
+      "id": "p09",
+      "occurrence_id": "occ-mayor-loss-statement",
+      "thread_id": "thread-maipu-theater",
+      "note": "Mayor statement about destruction and possible demolition"
+    },
+    {
+      "id": "p10",
+      "occurrence_id": "occ-mayor-loss-statement",
+      "thread_id": "thread-maipu-theater",
+      "note": "Mayor statement about destruction and material rescue; rescatar refers to property"
+    },
+    {
+      "id": "p11",
+      "occurrence_id": "occ-mayor-loss-statement",
+      "thread_id": "thread-maipu-theater",
+      "note": "Mayor reaction to loss and frustration"
+    },
+    {
+      "id": "p12",
+      "occurrence_id": "occ-technical-investigation-announcement",
+      "thread_id": "thread-maipu-theater",
+      "note": "Follow-up announcement of expert investigations and reconstruction"
+    },
+    {
+      "id": "p13",
+      "occurrence_id": "occ-cerrillos-fire-oct16",
+      "thread_id": "thread-cerrillos-oct16",
+      "note": "Different fire affecting four houses in Cerrillos on 16 Oct"
+    },
+    {
+      "id": "p14",
+      "occurrence_id": "occ-cerrillos-fire-sep23",
+      "thread_id": "thread-cerrillos-sep23",
+      "note": "Different apartment-block fire on 23 Sept, different victims"
+    },
+    {
+      "id": "p15",
+      "occurrence_id": "occ-maipu-camp-fire-sep15",
+      "thread_id": "thread-maipu-camp-sep15",
+      "note": "Maipu fire in a camp during September; not theater"
+    },
+    {
+      "id": "p16",
+      "occurrence_id": null,
+      "thread_id": "thread-oct18-demonstrations",
+      "note": "Headline aggregates at least three different protest-related acts; cannot assign one occurrence"
+    },
+    {
+      "id": "p17",
+      "occurrence_id": null,
+      "thread_id": "thread-oct18-demonstrations",
+      "note": "Aggregate of multiple protest incidents; cannot assign one occurrence"
+    },
+    {
+      "id": "p18",
+      "occurrence_id": "occ-pac-bus-burning-oct18",
+      "thread_id": "thread-oct18-demonstrations",
+      "note": "Specific bus burned in Pedro Aguirre Cerda, within 18 Oct disturbances"
+    },
+    {
+      "id": "p19",
+      "occurrence_id": "occ-maipu-gunfire-oct14",
+      "thread_id": "thread-maipu-gunfire",
+      "note": "Firearms and pyrotechnics report, not a fire or 18 Oct protest"
+    },
+    {
+      "id": "p20",
+      "occurrence_id": "occ-presidential-expulsion-announcement-oct19",
+      "thread_id": "thread-oct18-demonstrations",
+      "note": "Separate presidential response on 19 Oct to earlier violent incidents"
+    }
+  ]
+}
