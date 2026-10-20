@@ -1,0 +1,191 @@
+{
+  "schema": "public-real-metadata-only-v1",
+  "captured_on": "2026-10-20",
+  "selection": "Manual discovery from publisher pages/indexed headlines; no algorithm preview; publication dates source-stated. Sampling informed partly by pre-registration exploratory search, NOT random or fully blind.",
+  "source_text_acquired": false,
+  "reference_included": false,
+  "articles": [
+    {
+      "id": "z01",
+      "publisher": "Cooperativa",
+      "published_on": "2024-06-18",
+      "headline": "Penco: Tornado avanzó un kilómetro desde la playa hacia el interior",
+      "canonical_url": "https://cooperativa.cl/noticias/pais/desastres-naturales/penco-tornado-avanzo-un-kilometro-desde-la-playa-hacia-el-interior/2024-06-18/131308.html"
+    },
+    {
+      "id": "z02",
+      "publisher": "Cooperativa",
+      "published_on": "2024-06-18",
+      "headline": "Tornado en Arauco causó daños en al menos una decena de viviendas",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/region-del-biobio/tornado-en-arauco-causo-danos-en-al-menos-una-decena-de-viviendas/2024-06-18/102801.html"
+    },
+    {
+      "id": "z03",
+      "publisher": "Cooperativa",
+      "published_on": "2024-06-18",
+      "headline": "\"Sentimos un ruido espantoso\": Vecinos relataron cómo vivieron el paso de los tornados",
+      "canonical_url": "https://cooperativa.cl/noticias/pais/region-del-biobio/sentimos-un-ruido-espantoso-vecinos-relataron-como-vivieron-el-paso/2024-06-18/132107.html"
+    },
+    {
+      "id": "z04",
+      "publisher": "BioBioChile",
+      "published_on": "2024-06-18",
+      "headline": "Gobierno rectifica y confirma que fenómeno que afectó a Penco se trató de un tornado",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-del-bio-bio/2024/06/18/gobierno-rectifica-y-confirma-que-fenomeno-que-afecto-a-penco-se-trato-de-un-tornado.shtml"
+    },
+    {
+      "id": "z05",
+      "publisher": "BioBioChile",
+      "published_on": "2024-06-18",
+      "headline": "Fuertes vientos causan daños en Penco: vecinos aseguran que pasó una tromba marina",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-del-bio-bio/2024/06/18/fuertes-vientos-causan-danos-en-penco-vecinos-aseguran-que-paso-una-tromba-marina.shtml"
+    },
+    {
+      "id": "z06",
+      "publisher": "BioBioChile",
+      "published_on": "2024-06-18",
+      "headline": "\"Sentimos que las ventanas iban a reventar\": el relato de vecina afectada por tornado en Penco",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-del-bio-bio/2024/06/18/sentimos-que-las-ventanas-iban-a-reventar-el-relato-de-afectada-por-vientos-tipo-tornado-en-penco.shtml"
+    },
+    {
+      "id": "z07",
+      "publisher": "BioBioChile",
+      "published_on": "2024-06-18",
+      "headline": "\"Voló el techo... se mojó todo lo que estaba adentro\": vecino afectado por tromba marina en Arauco",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-del-bio-bio/2024/06/18/volo-el-techo-se-mojo-todo-lo-que-estaba-adentro-vecino-afectado-por-tromba-marina-en-arauco.shtml"
+    },
+    {
+      "id": "z08",
+      "publisher": "Emol",
+      "published_on": "2024-06-18",
+      "headline": "Fotos | Postes de alumbrado caídos y viviendas sin techo: Las consecuencias del tornado que pasó por la Región del Biobío",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2024/06/18/1134108/fotos-tornado-region-biobio.html"
+    },
+    {
+      "id": "z09",
+      "publisher": "24 Horas",
+      "published_on": "2024-06-18",
+      "headline": "¿Tornado o tromba marina? Este fue el fenómeno que se vivió en Penco",
+      "canonical_url": "https://www.24horas.cl/24horas/site/artic/20240618/pagspar/20240618113436_general_escroll.html"
+    },
+    {
+      "id": "z10",
+      "publisher": "24 Horas",
+      "published_on": "2024-06-18",
+      "headline": "\"Peor que el terremoto\": los daños tras paso de tromba marina en Penco",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/biobio/familias-afectadas-tromba-marina-penco"
+    },
+    {
+      "id": "z11",
+      "publisher": "24 Horas",
+      "published_on": "2024-06-18",
+      "headline": "Tromba marina: fuertes vientos generan graves destrozos en Penco",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/biobio/fuertes-vientos-generan-graves-destrozos-en-penco"
+    },
+    {
+      "id": "z12",
+      "publisher": "ADN Radio",
+      "published_on": "2024-06-18",
+      "headline": "Tromba marina provoca voladura de techos de al menos 10 casas en Penco",
+      "canonical_url": "https://www.adnradio.cl/2024/06/18/tromba-marina-provoca-voladura-de-techo-de-al-menos-10-casas-en-penco/"
+    },
+    {
+      "id": "z13",
+      "publisher": "ADN Radio",
+      "published_on": "2024-06-18",
+      "headline": "Penco: ¿Tornado o tromba marina? Experto explica la diferencia entre ambos fenómenos",
+      "canonical_url": "https://www.adnradio.cl/2024/06/18/penco-tornado-o-tromba-marina-experto-explica-la-diferencia-entre-ambos-fenomenos/"
+    },
+    {
+      "id": "z14",
+      "publisher": "Meganoticias",
+      "published_on": "2024-06-18",
+      "headline": "Tornado provocó voladuras de techumbres, caída de árboles y cortes de luz en Penco",
+      "canonical_url": "https://www.meganoticias.cl/nacional/450462-tromba-marina-en-penco-hoy-martes-voladuras-techumbre-arboles-caidos-corte-de-luz-brk-18-06-2024.html"
+    },
+    {
+      "id": "z15",
+      "publisher": "Meganoticias",
+      "published_on": "2024-06-18",
+      "headline": "\"Como si fuera un terremoto\": El dramático relato de vecinos afectados por tornado en Penco",
+      "canonical_url": "https://www.meganoticias.cl/nacional/450478-tornado-en-penco-danos-casas-vecinos-mucho-gusto-video-brk-18-06-2024.html"
+    },
+    {
+      "id": "z16",
+      "publisher": "Meganoticias",
+      "published_on": "2024-06-19",
+      "headline": "Video muestra el paso del tornado que arrasó con techos y árboles en Penco",
+      "canonical_url": "https://www.meganoticias.cl/nacional/450581-video-tornado-penco-arraso-techos-arboles-sistema-frontal-brk-19-06-2024.html"
+    },
+    {
+      "id": "z17",
+      "publisher": "TVU",
+      "published_on": "2024-06-18",
+      "headline": "\"En la zona en que estamos se hace cada vez más frecuente\": meteoróloga explica tornado en Penco",
+      "canonical_url": "https://www.tvu.cl/prensa/tvu-noticias/2024/06/18/en-la-zona-en-que-estamos-se-hace-cada-vez-mas-frecuente-meteorologa-explica-tornado-en-penco.html"
+    },
+    {
+      "id": "z18",
+      "publisher": "Tornados en Chile",
+      "published_on": "2024-07-01",
+      "headline": "[EF0] Tornado en Penco (Región del Biobío) el 18/06/2024",
+      "canonical_url": "https://tornadoschile.cl/2024/07/01/reporte-tornado-en-penco-region-del-biobio-el-18-06-2024/"
+    },
+    {
+      "id": "z19",
+      "publisher": "BioBioChile",
+      "published_on": "2024-06-19",
+      "headline": "Dirección Meteorológica no descarta que se desarrollen tornados o trombas desde Ñuble a Los Lagos",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/chile/2024/06/19/direccion-meteorologica-no-descarta-que-se-desarrollen-tornados-o-trombas-desde-nuble-a-los-lagos.shtml"
+    },
+    {
+      "id": "z20",
+      "publisher": "ADN Radio",
+      "published_on": "2024-06-15",
+      "headline": "Consecuencias del sistema frontal: suspenden clases en todos los colegios de Arauco y Curanilahue este lunes 17 y martes 18 de junio",
+      "canonical_url": "https://www.adnradio.cl/2024/06/15/consecuencias-del-sistema-frontal-suspenden-clases-en-todos-los-colegios-de-arauco-y-curanilahue-este-lunes-17-y-martes-18-de-junio/"
+    },
+    {
+      "id": "z21",
+      "publisher": "Emol",
+      "published_on": "2024-06-17",
+      "headline": "Senapred mantiene alerta roja en el Biobío: Arauco y Curanilahue con clases suspendidas",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2024/06/17/1133955/senapred-alerta-roja-biobio.html"
+    },
+    {
+      "id": "z22",
+      "publisher": "24 Horas",
+      "published_on": "2024-06-12",
+      "headline": "Decenas de viviendas afectadas por desborde de ríos Andalién y Curanilahue",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/biobio/biobio-decenas-viviendas-afectadas-desborde-rios-andalien-curanilahue"
+    },
+    {
+      "id": "z23",
+      "publisher": "24 Horas",
+      "published_on": "2024-06-21",
+      "headline": "Voluntarios ayudan a limpiar las zonas afectadas en Curanilahue",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/biobio/voluntarios-ayudan-a-limpiar-las-zonas-afectadas-en-curanilahue"
+    },
+    {
+      "id": "z24",
+      "publisher": "24 Horas",
+      "published_on": "2024-08-02",
+      "headline": "1.200 casas afectadas por inundaciones en Curanilahue",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/biobio/1-200-casas-afectadas-por-inundaciones-en-curanilahue"
+    },
+    {
+      "id": "z25",
+      "publisher": "Meganoticias",
+      "published_on": "2024-07-30",
+      "headline": "Meteorólogo de la DMC anuncia posibilidad de tornados y trombas marinas en Chile para los próximos días",
+      "canonical_url": "https://www.meganoticias.cl/nacional/454332-tornados-chile-trombas-marinas-sistema-frontal-brk-30-07-2024.html"
+    },
+    {
+      "id": "z26",
+      "publisher": "BioBioChile",
+      "published_on": "2024-05-10",
+      "headline": "Arauco suspende de manera indefinida operaciones del aserradero El Colorado en Curanilahue",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-del-bio-bio/2024/05/10/arauco-suspende-de-manera-indefinida-operaciones-del-aserradero-el-colorado-en-curanilahue.shtml"
+    }
+  ]
+}
