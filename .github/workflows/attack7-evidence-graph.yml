@@ -1,0 +1,44 @@
+name: ATTACK 7 typed evidence graph - synthetic engineering only
+on:
+  push:
+    branches: [codex/attack7-evidence-graph-20261020]
+    paths:
+      - experiments/real-metadata-grouping/attack7.py
+      - experiments/real-metadata-grouping/test_attack7.py
+      - .github/workflows/attack7-evidence-graph.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  graph-contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Sparse checkout candidate modules only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack7.py
+            experiments/real-metadata-grouping/test_attack7.py
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack6_roles.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+          sparse-checkout-cone-mode: false
+      - name: Reject prior corpora, references, networks and secrets
+        shell: bash
+        run: |
+          test ! -f experiments/real-metadata-grouping/attack6-prospective/corpus.json
+          test ! -f experiments/real-metadata-grouping/attack5/prospective_corpus.json
+          test ! -f experiments/real-metadata-grouping/attack6-prospective/reference.json
+          test ! -f experiments/real-metadata-grouping/score_attack3.py
+          ! grep -E 'import (requests|httpx|supabase)' experiments/real-metadata-grouping/attack7.py
+          echo "NO_GOLD_OR_PUBLISHER_BODY=PASS"
+      - name: Run synthetic temporal and graph invariants
+        working-directory: experiments/real-metadata-grouping
+        run: python3 -m unittest -v test_attack7.py
+      - name: Declare phase boundary
+        run: |
+          echo 'ENGINEERING_ONLY=TRUE'
+          echo 'INDEPENDENT_SCIENTIFIC_SCORING=NOT_EXECUTED'
+          echo 'EVENT_PERSISTENCE=NOT_AUTHORIZED'
+          echo 'PRODUCTION_PERMISSION=FALSE'
