@@ -50,7 +50,7 @@ class Attack4SyntheticTests(unittest.TestCase):
           article(2,"Incendio de edificio en Villa Serena","Other")])
         # Small same-city same-type news reports are not provenance-backed
         # occurrence equivalents; algorithm is research-only (known risk).
-        self.assertEqual(out["pair_decisions"][0]["decision"],"SAME_OCCURRENCE")
+        self.assertEqual(out["pair_decisions"][0]["decision"],"UNKNOWN")
 
     def test_narrative_does_not_create_transitive_equivalence(self):
         decisions={("s01","s02"):"SAME_OCCURRENCE",
