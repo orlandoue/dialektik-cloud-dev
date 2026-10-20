@@ -22,9 +22,7 @@ jobs:
     if: ${{ github.event_name != 'schedule' || vars.DIALEKTIK_GOVUK_READONLY_WATCH_ENABLED == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    env:
-      # No DATABASE_URL, no PostgreSQL role, no Supabase service secret, no tokens.
-      DIALEKTIK_WATCH_OUTPUT: ${{ runner.temp }}/govuk-watch/manifest.json
+    # No DATABASE_URL, no PostgreSQL role, no Supabase service secret, no tokens.
     steps:
       - name: Checkout without retained GitHub write credentials
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -48,6 +46,8 @@ jobs:
             services/core-api/test/govuk-private-beta-preview.test.ts \
             services/core-api/test/govuk-product-acquisition.test.ts
       - name: Call approved source once, on allowlist and after live rights/robots check
+        env:
+          DIALEKTIK_WATCH_OUTPUT: ${{ runner.temp }}/govuk-watch/manifest.json
         run: node .github/scripts/govuk-metadata-watch.mjs
       - name: Save seven-day metadata receipt for audit (NO DB)
         uses: actions/upload-artifact@v4
