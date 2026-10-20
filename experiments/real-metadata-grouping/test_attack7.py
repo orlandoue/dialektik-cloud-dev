@@ -124,6 +124,17 @@ class EvidenceGraphTests(unittest.TestCase):
         self.assertEqual(g["database_writes"],0)
         self.assertEqual(g["asserted_contradictions"],0)
 
+    def test_unverified_actor_not_automatically_attributed_claim(self):
+        g=make_graph(bundle(
+          row(1,"SML informa 99 fallecidos en incendio de Valparaíso"),
+          row(2,"Gobierno informa 123 fallecidos en incendio de Valparaíso",
+              day="2024-02-05")))
+        actors=[x for x in g["nodes"] if x["kind"]=="ActorMention"]
+        self.assertTrue(any(x["alias"]=="SML" for x in actors))
+        self.assertTrue(any(x["alias"]=="GOVERNMENT" for x in actors))
+        self.assertEqual(g["asserted_contradictions"],0)
+        self.assertFalse(any(e["type"]=="VERIFIED_ASSERTION_BY" for e in g["edges"]))
+
     def test_reporting_disjoint_strata(self):
         g=make_graph(bundle(
           row(1,"Incendios afectan Viña del Mar",day="2024-02-03"),
