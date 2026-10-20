@@ -81,8 +81,10 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                   children: <Widget>[
                     Text(preview.description),
                     const SizedBox(height: 8),
-                    Text(preview.warning,
-                        style: Theme.of(context).textTheme.bodySmall),
+                    Text(
+                      preview.warning,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
                     const SizedBox(height: 8),
                     for (final CuratedEventPublication item
                         in preview.publications)
@@ -101,9 +103,9 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                     Text(
                       'Enlaces revisados el ${preview.reviewedOn}. No es un Event persistido ni un agrupamiento automático.',
                       style: Theme.of(context).textTheme.bodySmall,
-                    ),                  ],
+                    ),
+                  ],
                 ),
-
               ],
             );
           },
