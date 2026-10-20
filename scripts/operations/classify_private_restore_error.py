@@ -51,8 +51,7 @@ SAFE_PARAMETER_NAMES={
     "statement_timeout":"STATEMENT_TIMEOUT",
 }
 PERMISSION_PARAMETER=re.compile(
-    r"(?:permission denied (?:for|to set) parameter|"
-    r"must be superuser to set parameter)\\s+[\\\"']?([a-z_][a-z0-9_.]*)",
+    r'''(?:permission denied (?:for|to set) parameter|must be superuser to set parameter)\s+["']?([a-z_][a-z0-9_.]*)''',
     flags=re.IGNORECASE,
 )
 
