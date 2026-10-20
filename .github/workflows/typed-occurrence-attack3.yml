@@ -1,0 +1,35 @@
+name: Typed occurrence metadata Attack 3 (synthetic only)
+on:
+  push:
+    branches:
+      - codex/typed-occurrence-attack3-20261020
+    paths:
+      - 'experiments/real-metadata-grouping/attack3.py'
+      - 'experiments/real-metadata-grouping/test_attack3.py'
+      - 'experiments/real-metadata-grouping/signatures.py'
+      - 'experiments/real-metadata-grouping/ATTACK3_PREPROSPECTIVE_REVIEW.md'
+      - '.github/workflows/typed-occurrence-attack3.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout experimental branch only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Refuse external semantic or database credentials
+        shell: bash
+        run: |
+          test -f experiments/real-metadata-grouping/attack3.py
+          ! grep -q 'supabase' experiments/real-metadata-grouping/attack3.py
+          ! grep -q 'requests' experiments/real-metadata-grouping/attack3.py
+      - name: Execute synthetic metamorphic tests (never research scoring)
+        working-directory: experiments/real-metadata-grouping
+        run: python3 -m unittest -v test_attack3.py
+      - name: Record only synthetic test success
+        run: |
+          echo 'SYNTHETIC_TESTS=PASS'
+          echo 'PROSPECTIVE_EVALUATION=NOT_EXECUTED'
+          echo 'PRODUCTION_PERMISSION=FALSE'
