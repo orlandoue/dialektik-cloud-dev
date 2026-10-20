@@ -14,7 +14,7 @@ type MentionKind =
   | 'DAMAGE_ASSESSMENT_CUE'
   | 'PHYSICAL_PHENOMENON_CUE';
 
-interface HeadlineMention {
+export interface HeadlineMention {
   readonly evidence_id: string;
   readonly field: 'headline';
   readonly start: number;
