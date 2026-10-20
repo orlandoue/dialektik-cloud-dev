@@ -187,7 +187,8 @@ def feature(row,geo):
     elif RETRO.search(t):role="RETROSPECTIVE_REPORT"
     elif kind:role="PHYSICAL_REPORT"
     else:role="UNKNOWN"
-    magnitude=DATE_MAG.search(t) if kind=="earthquake" else None
+    # Preserve original decimal separator; norm() intentionally removes punctuation.
+    magnitude=DATE_MAG.search(row["headline"]) if kind=="earthquake" else None
     return {"id":row["id"],"publisher":row["publisher"],
       "canonical_url":row["canonical_url"],"headline":row["headline"],
       "published_on":row["published_on"],"geography":geographical,
