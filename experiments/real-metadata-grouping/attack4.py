@@ -52,12 +52,12 @@ OBJECTS = {
 SPEECH = re.compile(r"\b(alcalde|alcaldesa|ministro|ministra|presidente|presidenta|"
  "anuncia|anuncio|asegura|aseguro|afirma|afirmo|declara|declaro|"
  "proyecta|proyecto|instruye|instruyo|explica|explico|advierte|"
- "advirtio|senala|informo que|dijo que|segun)\b")
+ r"advirtio|senala|informo que|dijo que|segun)\b")
 RETROSPECTIVE = re.compile(r"\b(imagenes|fotografias|fotos|videos|registro visual|"
- "muestran|lo que dejo|danos que|tras el paso|despues del)\b")
+ r"muestran|lo que dejo|danos que|tras el paso|despues del)\b")
 MULTI = re.compile(r"\b(otro (?:bus|hecho|ataque)|varios incidentes|"
  "hechos de violencia|multiples incidentes|intento de saqueo|"
- "al menos tres emergencias)\b")
+ r"al menos tres emergencias)\b")
 URLID = re.compile(r"^[a-z][0-9]{2,3}$")
 
 def norm(s: str) -> str:
