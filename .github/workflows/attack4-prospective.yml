@@ -1,0 +1,80 @@
+name: Attack 4 prospective new-publication metadata (unlabeled)
+on:
+  push:
+    branches: [codex/attack4-generalized-retrieval-20261020]
+    paths:
+      - '.github/workflows/attack4-prospective.yml'
+      - 'experiments/real-metadata-grouping/attack4-prospective/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frozen-prediction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Sparse checkout frozen predictor and public metadata only
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack4.py
+            experiments/real-metadata-grouping/attack4-prospective/corpus.json
+          sparse-checkout-cone-mode: false
+      - name: Enforce frozen model blob and gold absence
+        run: |
+          test "$(git hash-object experiments/real-metadata-grouping/attack4.py)" = 91a0b6195691280e4ddd1ced197e9e4ea4ff46f4
+          test ! -f experiments/real-metadata-grouping/score_attack3.py
+          test ! -f experiments/real-metadata-grouping/attack4-prospective/reference.json
+          test ! -f experiments/real-metadata-grouping/attack3b/corpus.json
+          echo "CANDIDATE_FROZEN=PASS"
+          echo "PREDICTOR_GOLD_FREE=PASS"
+      - name: Run candidate, permutations, manifest and diagnostics (NOT scoring)
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/attack4"
+          python3 experiments/real-metadata-grouping/attack4.py \
+            --input experiments/real-metadata-grouping/attack4-prospective/corpus.json \
+            --output "$RUNNER_TEMP/attack4/predictions.json"
+          python3 - <<'PY'
+          import json, pathlib, sys, collections, hashlib, os
+          p=pathlib.Path('experiments/real-metadata-grouping')
+          sys.path.insert(0,str(p.resolve()))
+          import attack4
+          cbytes=(p/'attack4-prospective/corpus.json').read_bytes()
+          corpus=json.loads(cbytes)
+          assert len(corpus['articles'])==30
+          assert len({a['canonical_url'] for a in corpus['articles']})==30
+          pred=attack4.run(corpus)
+          permuted=dict(corpus)
+          permuted['articles']=list(reversed(corpus['articles']))
+          assert pred==attack4.run(permuted),"INPUT_ORDER_NONDETERMINISM"
+          assert len(pred['pair_decisions'])==435
+          assert pred['database_writes']==0 and pred['contradictions_detected']==0
+          assert not pred['production_permission'] and not pred['semantic_model_executed']
+          decisions=collections.Counter(p['decision'] for p in pred['pair_decisions'])
+          reasons=collections.Counter(p['reason'] for p in pred['pair_decisions'])
+          role_counts=collections.Counter(a['role'] for a in pred['articles'])
+          output=pathlib.Path(os.environ['RUNNER_TEMP'])/'attack4/predictions.json'
+          manifest={
+            'candidate_git_blob':'91a0b6195691280e4ddd1ced197e9e4ea4ff46f4',
+            'corpus_sha256':hashlib.sha256(cbytes).hexdigest(),
+            'predictions_sha256':hashlib.sha256(output.read_bytes()).hexdigest(),
+            'documents':30,'pairs':435,'retrieved_pairs':pred['retrieved_pairs'],
+            'candidate_class_counts':dict(sorted(decisions.items())),
+            'non_gold_reason_counts':dict(sorted(reasons.items())),
+            'role_counts':dict(sorted(role_counts.items())),
+            'group_count':len(pred['occurrence_groups']),
+            'scoring_status':'UNSCORED_NO_INDEPENDENT_REFERENCE',
+            'production_permission':False,'gold_access':False}
+          (pathlib.Path(os.environ['RUNNER_TEMP'])/'attack4/manifest.json').write_text(
+            json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+'\n',
+            encoding='utf8')
+          print('ATTACK4_UNLABELED_DIAGNOSTICS='+json.dumps(manifest,sort_keys=True))
+          PY
+      - name: Preserve frozen unlabeled prediction artifact for separate evaluation
+        uses: actions/upload-artifact@v4
+        with:
+          name: attack4-unlabeled-predictions
+          path: ${{ runner.temp }}/attack4/
+          retention-days: 7
+          if-no-files-found: error
