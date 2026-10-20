@@ -6,6 +6,8 @@ on:
     paths:
       - 'experiments/real-metadata-grouping/attack3.py'
       - 'experiments/real-metadata-grouping/test_attack3.py'
+      - 'experiments/real-metadata-grouping/score_attack3.py'
+      - 'experiments/real-metadata-grouping/test_score_attack3.py'
       - 'experiments/real-metadata-grouping/signatures.py'
       - 'experiments/real-metadata-grouping/ATTACK3_PREPROSPECTIVE_REVIEW.md'
       - '.github/workflows/typed-occurrence-attack3.yml'
@@ -27,7 +29,7 @@ jobs:
           ! grep -q 'requests' experiments/real-metadata-grouping/attack3.py
       - name: Execute synthetic metamorphic tests (never research scoring)
         working-directory: experiments/real-metadata-grouping
-        run: python3 -m unittest -v test_attack3.py
+        run: python3 -m unittest -v test_attack3.py test_score_attack3.py
       - name: Record only synthetic test success
         run: |
           echo 'SYNTHETIC_TESTS=PASS'
