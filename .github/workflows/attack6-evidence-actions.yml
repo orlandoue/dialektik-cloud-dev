@@ -1,0 +1,43 @@
+name: Attack 6 evidence actions (synthetic only)
+on:
+  push:
+    branches: [codex/attack6-evidence-actions-20261020]
+    paths:
+      - 'experiments/real-metadata-grouping/attack6.py'
+      - 'experiments/real-metadata-grouping/attack6_roles.py'
+      - 'experiments/real-metadata-grouping/test_attack6.py'
+      - '.github/workflows/attack6-evidence-actions.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Sparse checkout only candidate, geography and tests
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack6.py
+            experiments/real-metadata-grouping/attack6_roles.py
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+            experiments/real-metadata-grouping/test_attack6.py
+          sparse-checkout-cone-mode: false
+      - name: Reject reference and old news inputs in synthetic job
+        run: |
+          test ! -f experiments/real-metadata-grouping/attack5/prospective_corpus.json
+          test ! -f experiments/real-metadata-grouping/attack5/independent-reference.json
+          test ! -f experiments/real-metadata-grouping/score_attack3.py
+          echo 'GOLD_AND_NEWS_CORPORA_ABSENT=PASS'
+      - name: Execute synthetic role and temporal evidence gates
+        working-directory: experiments/real-metadata-grouping
+        run: python3 -m unittest -v test_attack6.py
+      - name: Declare authority boundary
+        run: |
+          echo 'ENGINEERING_SYNTHETIC_ONLY=PASS'
+          echo 'REAL_PROSPECTIVE_EVALUATION=NOT_RUN'
+          echo 'CONTRADICTIONS=0'
+          echo 'DATABASE_WRITES=0'
+          echo 'PRODUCTION_PERMISSION=FALSE'
