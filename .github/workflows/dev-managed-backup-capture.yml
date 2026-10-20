@@ -1,0 +1,137 @@
+name: Dialektik DEV complete encrypted snapshot - protected and gated
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/dev-managed-backup-capture.yml'
+      - 'scripts/operations/managed_backup_inventory.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  protected_real_capture:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'EXECUTE_ENCRYPTED_DEV_MANAGED_BACKUP_20261020'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    environment: dialektik-dev-backup
+    env:
+      DEV_URL: ${{ secrets.DIALEKTIK_DEV_BACKUP_DATABASE_URL }}
+      BACKUP_PASSWORD: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+      DEV_CA_PEM: ${{ secrets.DIALEKTIK_DEV_DATABASE_CA_PEM }}
+    steps:
+      - name: Checkout no write token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate remote target and protected-secret prerequisites without disclosing them
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import os
+          from urllib.parse import urlsplit,parse_qs,unquote
+          uri=os.environ.get("DEV_URL","").strip()
+          try: u=urlsplit(uri)
+          except: raise SystemExit("BACKUP_URL_INVALID")
+          if not all([
+             u.scheme in ("postgresql","postgres"),
+             u.hostname=="aws-0-us-east-1.pooler.supabase.com",
+             u.port==5432,
+             unquote(u.username or "")=="postgres.vclsswwfhljczxgnsciq",
+             u.path=="/postgres",
+             len(unquote(u.password or ""))>=12,
+             parse_qs(u.query)=={"sslmode":["verify-full"]},
+             not u.fragment,
+             len(os.environ.get("BACKUP_PASSWORD",""))>=32,
+             "BEGIN CERTIFICATE" in os.environ.get("DEV_CA_PEM",""),
+          ]): raise SystemExit("PROTECTED_DEV_SECRETS_OR_HOSTNAME_INVALID")
+          print("EXACT_DEV_DATABASE_TLS_TARGET=PASS")
+          PY
+      - name: Install pinned PostgreSQL and Supabase tools; prepare secret material in ephemeral runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/managed-backup"
+          mkdir -p "$work"
+          python3 - <<'PY'
+          import hashlib,os,pathlib
+          work=pathlib.Path(os.environ["RUNNER_TEMP"])/"managed-backup"
+          v=os.environ["DEV_CA_PEM"]
+          candidates=[v,v.replace("\r\n","\n"),v.replace("\r\n","\n").rstrip("\n")+"\n"]
+          pin="700723581420dd1ac98fd7e9ac529f0ef210eadcaf87fc868a3ad7d114c2f3b7"
+          matching=[x for x in candidates if hashlib.sha256(x.encode()).hexdigest()==pin]
+          if not matching: raise SystemExit("CERTIFICATE_FINGERPRINT_MISMATCH")
+          (work/"ca.pem").write_text(matching[0])
+          (work/"key").write_text(os.environ["BACKUP_PASSWORD"])
+          print("CERTIFICATE_FINGERPRINT=PASS")
+          PY
+          docker run --rm postgres:17.11 pg_dump --version
+          npx --yes supabase@2.120.0 --version
+          npx --yes supabase@2.120.0 db dump --help >/dev/null
+          echo 'DOCKER_POSTGRES17_AND_PINNED_SUPABASE_CLI=PASS'
+      - name: Query remote identity by TLS certificate verified SELECT, no DDL
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/managed-backup"
+          docker run --rm --user "$(id -u):$(id -g)" -v "$work:/work:ro" -e DEV_URL postgres:17.11 \
+            sh -ec 'psql "$DEV_URL&sslrootcert=/work/ca.pem" -XAt -v ON_ERROR_STOP=1 -c "select current_database() || chr(124) || current_user || chr(124) || current_setting('\''server_version'\'')" | grep -qx "postgres|postgres|17.11"'
+          echo 'TLS_AND_DB_IDENTIFIED=PASS'
+      - name: Capture complete normal application roles/schema/data with trusted existing CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/managed-backup"
+          npx --yes supabase@2.120.0 db dump --db-url "$DEV_URL" -f "$work/roles.sql" --role-only > "$work/roles.log" 2>&1 || { echo 'APP_ROLES_CAPTURE_FAILED'; exit 1; }
+          npx --yes supabase@2.120.0 db dump --db-url "$DEV_URL" -f "$work/schema.sql" > "$work/schema.log" 2>&1 || { echo 'APP_SCHEMA_CAPTURE_FAILED'; exit 1; }
+          npx --yes supabase@2.120.0 db dump --db-url "$DEV_URL" -f "$work/data.sql" --use-copy --data-only \
+            -x storage.buckets_vectors -x storage.vector_indexes > "$work/data.log" 2>&1 || { echo 'APP_DATA_CAPTURE_FAILED'; exit 1; }
+          test -s "$work/roles.sql" && test -s "$work/schema.sql" && test -s "$work/data.sql"
+          echo 'APPLICATION_CAPTURE=PASS'
+      - name: Capture managed Auth and migration ledger separately in native pg_dump custom archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/managed-backup"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$work:/work:rw" -e DEV_URL postgres:17.11 sh -euc '
+            pg_dump --dbname="$DEV_URL&sslrootcert=/work/ca.pem" --format=custom --data-only \
+              --schema=auth --no-owner --no-privileges --file=/work/managed-auth.dump > /work/managed-auth.log 2>&1
+            pg_dump --dbname="$DEV_URL&sslrootcert=/work/ca.pem" --format=custom --data-only \
+              --schema=supabase_migrations --no-owner --no-privileges --file=/work/managed-ledger.dump > /work/managed-ledger.log 2>&1
+            pg_restore --list /work/managed-auth.dump > /work/auth.toc
+            pg_restore --list /work/managed-ledger.dump > /work/ledger.toc
+          '
+          python3 scripts/operations/managed_backup_inventory.py \
+            --auth-toc "$work/auth.toc" --ledger-toc "$work/ledger.toc" \
+            --auth-archive "$work/managed-auth.dump" --ledger-archive "$work/managed-ledger.dump" \
+            --out "$work/managed-coverage.json"
+          echo 'EXPLICIT_MANAGED_AUTH_AND_LEDGER_COVERAGE=PASS'
+      - name: Encrypt complete snapshot before any transfer or artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/managed-backup"
+          (cd "$work" && sha256sum roles.sql schema.sql data.sql managed-auth.dump managed-ledger.dump > SHA256SUMS)
+          tar -C "$work" -cf - roles.sql schema.sql data.sql managed-auth.dump managed-ledger.dump SHA256SUMS managed-coverage.json |
+            gpg --batch --yes --pinentry-mode loopback --passphrase-file "$work/key" \
+              --symmetric --cipher-algo AES256 --s2k-digest-algo SHA512 \
+              --output "$RUNNER_TEMP/dialektik-complete-dev-20261020.tar.gpg"
+          test -s "$RUNNER_TEMP/dialektik-complete-dev-20261020.tar.gpg"
+          echo 'COMPLETE_SNAPSHOT_ENCRYPTED=PASS; RESTORE_STILL_PENDING'
+      - name: Upload ONLY ciphertext with tightly bounded retention
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dialektik-complete-dev-auth-ledger-encrypted
+          path: ${{ runner.temp }}/dialektik-complete-dev-20261020.tar.gpg
+          if-no-files-found: error
+          retention-days: 7
+      - name: Cleanup unencrypted, sensitive files even on failure
+        if: always()
+        shell: bash
+        run: |
+          rm -rf -- "$RUNNER_TEMP/managed-backup"
+          echo 'EPHEMERAL_UNENCRYPTED_CONTENT_CLEANUP=PASS'
