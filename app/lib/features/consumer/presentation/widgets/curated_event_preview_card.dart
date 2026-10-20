@@ -62,24 +62,27 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                   style: Theme.of(context).textTheme.titleLarge,
                 ),
                 const SizedBox(height: 4),
-                Text('13 de octubre de 2026 · ${preview.location}'),
+                Text('13/10/2026 · Estación Central, Santiago'),
                 const SizedBox(height: 8),
                 Text(
-                  '${preview.publications.length} publicaciones · ${preview.publications.where((CuratedEventPublication p) => p.publisherKind == 'INDEPENDENT_NEWSROOM').length} medios independientes y 1 fuente oficial',
+                  '${preview.publications.length} publicaciones · ${preview.publications.where((CuratedEventPublication p) => p.publisherKind == 'INDEPENDENT_NEWSROOM').length} medios · 1 fuente oficial',
                   style: Theme.of(context).textTheme.bodyMedium,
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 4),
                 Text(
-                  preview.warning,
+                  'Selección editorial · no es agrupación automática',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 ExpansionTile(
                   key: const Key('chile-preview-evidence-expand'),
                   tilePadding: EdgeInsets.zero,
-                  initiallyExpanded: true,
-                  title: const Text('Comparar publicaciones originales'),
+                  initiallyExpanded: false,
+                  title: const Text('Ver fuentes y evidencia'),
                   children: <Widget>[
                     Text(preview.description),
+                    const SizedBox(height: 8),
+                    Text(preview.warning,
+                        style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 8),
                     for (final CuratedEventPublication item
                         in preview.publications)
@@ -95,12 +98,12 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                         onTap: () =>
                             unawaited(openExternalHttpLink(item.canonicalUrl)),
                       ),
-                  ],
+                    Text(
+                      'Enlaces revisados el ${preview.reviewedOn}. No es un Event persistido ni un agrupamiento automático.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),                  ],
                 ),
-                Text(
-                  'Enlaces revisados el ${preview.reviewedOn}. No es un Event persistido ni un agrupamiento automático.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+
               ],
             );
           },
