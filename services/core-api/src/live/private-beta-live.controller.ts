@@ -76,7 +76,12 @@ export class PrivateBetaLiveController extends LiveController {
    */
   @Get('preview/events/chile-tornado/evidence-shadow')
   chileTornadoEvidenceShadow() {
-    if (process.env.NODE_ENV === 'production' ||
+    // DEV Render uses NODE_ENV=production for compiled Node. Restrict using
+    // an explicit DEV deployment marker AND the exact DEV Supabase Auth issuer,
+    // in addition to two independent opt-in toggles and private-beta auth.
+    if (process.env.DIALEKTIK_EVIDENCE_SHADOW_DEPLOYMENT !== 'dev' ||
+        process.env.SUPABASE_AUTH_ISSUER !==
+          'https://vclsswwfhljczxgnsciq.supabase.co/auth/v1' ||
         process.env.DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED !== 'true' ||
         process.env.DIALEKTIK_EVIDENCE_SHADOW_ENABLED !== 'true') {
       throw new NotFoundException('Experimental evidence shadow disabled.');
