@@ -1,0 +1,121 @@
+{
+  "schema": "public-real-metadata-only-v1",
+  "captured_on": "2026-10-20",
+  "acquisition": "manually_verified_public_metadata_not_automatic_feed_ingestion",
+  "source_text_acquired": false,
+  "legal_note": "Public headlines, public attribution, dates and canonical links only; never scrape or store news bodies",
+  "articles": [
+    {
+      "id": "m01",
+      "publisher": "BioBioChile",
+      "headline": "Municipio de Las Condes revela el perímetro más afectado por aluvión y detalla acciones por emergencia",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/08/municipio-de-las-condes-revela-el-perimetro-mas-afectado-por-aluvion-y-detalla-acciones-por-emergencia.shtml"
+    },
+    {
+      "id": "m02",
+      "publisher": "Cooperativa",
+      "headline": "[VIDEO] Meteorología confirmó \"evento tornádico\" en Estación Central",
+      "published_on": "2026-10-13",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/desastres-naturales/video-meteorologia-confirmo-evento-tornadico-en-estacion-central/2026-10-13/175530.html"
+    },
+    {
+      "id": "m03",
+      "publisher": "El País",
+      "headline": "Una lluvia torrencial e inesperada desborda Santiago de Chile",
+      "published_on": "2026-10-13",
+      "canonical_url": "https://elpais.com/chile/2026-10-13/alerta-roja-una-fuerte-tormenta-electrica-con-granizos-afecta-santiago-cinco-dias-despues-del-aluvion.html"
+    },
+    {
+      "id": "m04",
+      "publisher": "Gobierno de Santiago",
+      "headline": "Gobernador de Santiago y alcalde de Estación Central coordinan catastro de viviendas afectadas por tornado",
+      "published_on": "2026-10-14",
+      "canonical_url": "https://www.gobiernosantiago.cl/2026/10/14/gobernador-de-santiago-y-alcalde-de-estacion-central-coordinan-catastro-de-viviendas-afectadas-por-tornado/"
+    },
+    {
+      "id": "m05",
+      "publisher": "BioBioChile",
+      "headline": "Confirman que fenómeno que afectó a sector de Mulchén fue un tornado: alcanzó hasta los 137 km/h",
+      "published_on": "2026-10-03",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-del-bio-bio/2026/10/03/confirman-que-fenomeno-que-afecto-a-sector-de-mulchen-fue-un-tornado-alcanzo-hasta-los-137-km-h.shtml"
+    },
+    {
+      "id": "m06",
+      "publisher": "Emol",
+      "headline": "Autoridades atribuyen aluvión a caída de 15 mm en \"período extremadamente breve\" y detallan pronóstico para las próximas horas",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/08/1213686/balance-las-condes-aluvion.html"
+    },
+    {
+      "id": "m07",
+      "publisher": "La Tercera",
+      "headline": "DMC confirma tornado en Estación Central: vientos alcanzaron los 137 km/h",
+      "published_on": "2026-10-13",
+      "canonical_url": "https://www.latercera.com/nacional/noticia/dmc-confirma-tornado-en-estacion-central-vientos-alcanzaron-los-137-kmh/"
+    },
+    {
+      "id": "m08",
+      "publisher": "BioBioChile",
+      "headline": "Intensa tormenta que azota Santiago deja a más de 40 mil hogares sin energía eléctrica",
+      "published_on": "2026-10-13",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/13/intensa-tormenta-que-azota-santiago-deja-a-miles-de-hogares-sin-energia-electrica.shtml"
+    },
+    {
+      "id": "m09",
+      "publisher": "El País",
+      "headline": "Tornado EF0 en Estación Central: los meteorólogos evalúan el fenómeno ocurrido en el terminal de buses",
+      "published_on": "2026-10-13",
+      "canonical_url": "https://elpais.com/chile/2026-10-13/tornado-ef0-en-estacion-central-los-meteorologos-evaluan-el-fenomeno-ocurrido-en-el-terminal-de-buses.html"
+    },
+    {
+      "id": "m10",
+      "publisher": "24 Horas",
+      "headline": "VIDEOS: aluvión arrasó con vehículos, árboles y una micro en Las Condes",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.24horas.cl/24horas/site/artic/20261008/pags/20261008171433.html"
+    },
+    {
+      "id": "m11",
+      "publisher": "T13",
+      "headline": "Intentan rescatar a familia atrapada tras inédito tornado en Estación Central: árbol cayó sobre su casa",
+      "published_on": "2026-10-14",
+      "canonical_url": "https://www.t13.cl/noticia/nacional/intentan-rescatar-familia-atrapada-tras-tornado-estacion-central-14-10-2026"
+    },
+    {
+      "id": "m12",
+      "publisher": "Cooperativa",
+      "headline": "¿Por qué llovió tanto en tan poco tiempo? Meteorología detalló fenómeno en la capital",
+      "published_on": "2026-10-13",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/tiempo/por-que-llovio-tanto-en-tan-poco-tiempo-meteorologia-detallo-fenomeno/2026-10-13/180441.html"
+    },
+    {
+      "id": "m13",
+      "publisher": "BioBioChile",
+      "headline": "DMC confirma que fenómeno registrado en Estación Central sería un tornado",
+      "published_on": "2026-10-13",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/13/dmc-asegura-que-fenomeno-apreciado-en-estacion-central-seria-un-tornado.shtml"
+    },
+    {
+      "id": "m14",
+      "publisher": "El País",
+      "headline": "Decretada zona de catástrofe en Las Condes: al menos seis heridos por un aluvión en el sector oriente de Santiago",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://elpais.com/chile/2026-10-08/aluvion-en-las-condes-vehiculos-arrastrados-e-inundaciones-en-el-sector-oriente-de-santiago.html"
+    },
+    {
+      "id": "m15",
+      "publisher": "Cooperativa",
+      "headline": "El día después del insólito tornado que afectó a Estación Central",
+      "published_on": "2026-10-14",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/tiempo/el-dia-despues-del-insolito-tornado-que-afecto-a-estacion-central/2026-10-14/124214.html"
+    },
+    {
+      "id": "m16",
+      "publisher": "El País",
+      "headline": "Identifican a dos de los tres montañistas muertos en una avalancha en los Andes",
+      "published_on": "2026-10-18",
+      "canonical_url": "https://elpais.com/chile/2026-10-18/identifican-a-dos-de-los-tres-montanistas-muertos-en-una-avalancha-en-los-andes.html"
+    }
+  ]
+}

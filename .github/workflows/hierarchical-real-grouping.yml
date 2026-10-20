@@ -1,0 +1,102 @@
+name: Hierarchical real-news occurrence vs thread (offline)
+
+on:
+  push:
+    branches: [codex/hierarchical-occurrence-thread-20261020]
+    paths:
+      - 'experiments/real-metadata-grouping/signatures.py'
+      - 'experiments/real-metadata-grouping/hierarchy.py'
+      - 'experiments/real-metadata-grouping/new-corpus-20261020.json'
+      - 'experiments/real-metadata-grouping/new-reference-20261020.evaluator-only.json'
+      - 'experiments/real-metadata-grouping/score_hierarchy.py'
+      - '.github/workflows/hierarchical-real-grouping.yml'
+permissions:
+  contents: read
+
+jobs:
+  predict-without-reference:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/signatures.py
+            experiments/real-metadata-grouping/hierarchy.py
+            experiments/real-metadata-grouping/new-corpus-20261020.json
+          sparse-checkout-cone-mode: false
+      - name: Verify the prediction job has no reference labels or evaluator
+        run: |
+          test ! -e experiments/real-metadata-grouping/new-reference-20261020.evaluator-only.json
+          test ! -e experiments/real-metadata-grouping/score_hierarchy.py
+          echo 'PREDICTOR_UNABLE_TO_READ_GOLD=PASS'
+      - name: Run frozen hierarchical baseline on new public metadata
+        run: |
+          mkdir -p "$RUNNER_TEMP/occ-pred"
+          python3 experiments/real-metadata-grouping/hierarchy.py \
+            --input experiments/real-metadata-grouping/new-corpus-20261020.json \
+            --output "$RUNNER_TEMP/occ-pred/predictions.json"
+      - name: Deterministic permutation and negative-case checks
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import copy, json, pathlib, sys
+          p=pathlib.Path('experiments/real-metadata-grouping')
+          sys.path.insert(0,str(p.resolve()))
+          import hierarchy
+          corpus=json.loads((p/'new-corpus-20261020.json').read_text())
+          baseline=hierarchy.run(corpus)
+          shuffled=copy.deepcopy(corpus)
+          shuffled['articles']=list(reversed(shuffled['articles']))
+          assert baseline==hierarchy.run(shuffled), 'INPUT_ORDER_CHANGED_RESULT'
+          assert baseline['database_writes']==0 and not baseline['semantic_model_executed']
+          from signatures import signature
+          a=signature({'headline':'Incendio en teatro municipal de Maipú',
+             'canonical_url':'https://example.org/news/test','published_on':'2026-10-07','publisher':'Example A'})
+          b=signature({'headline':'Rescate de una familia tras incendio en teatro municipal de Maipú',
+             'canonical_url':'https://example.net/news/test','published_on':'2026-10-07','publisher':'Example B'})
+          yes,why=hierarchy.compatible(a,b,'occurrence')
+          assert not yes and why=='DIFFERENT_FOCAL_ACTION'
+          assert hierarchy.compatible(a,b,'thread')[0]
+          print('OCCURRENCE_VERSUS_THREAD_NEGATIVE=PASS')
+          print('INPUT_ORDER_INVARIANCE=PASS')
+          print('R14_AND_V10_11_CALLS=0')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hierarchical-unlabeled-predictions
+          path: ${{ runner.temp }}/occ-pred/predictions.json
+          retention-days: 7
+          if-no-files-found: error
+
+  evaluate-after-predictions:
+    needs: predict-without-reference
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/new-corpus-20261020.json
+            experiments/real-metadata-grouping/new-reference-20261020.evaluator-only.json
+            experiments/real-metadata-grouping/score_hierarchy.py
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: hierarchical-unlabeled-predictions
+          path: ${{ runner.temp }}/occ-pred
+      - name: Score occurrence and thread independently; report NO-GO without CI masking
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/occ-eval"
+          python3 experiments/real-metadata-grouping/score_hierarchy.py \
+            --corpus experiments/real-metadata-grouping/new-corpus-20261020.json \
+            --predictions "$RUNNER_TEMP/occ-pred/predictions.json" \
+            --reference experiments/real-metadata-grouping/new-reference-20261020.evaluator-only.json \
+            --out "$RUNNER_TEMP/occ-eval/report.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hierarchical-occurrence-vs-thread-evaluation
+          path: ${{ runner.temp }}/occ-eval/report.json
+          retention-days: 7
+          if-no-files-found: error

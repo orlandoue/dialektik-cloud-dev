@@ -1,0 +1,97 @@
+name: Independent real-metadata grouping baseline (offline)
+
+on:
+  push:
+    branches:
+      - codex/real-metadata-grouping-probe-20261020
+    paths:
+      - 'experiments/real-metadata-grouping/**'
+      - '.github/workflows/real-metadata-grouping.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  metadata-only-prediction:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout ONLY public metadata and candidate (never the reference)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/corpus.json
+            experiments/real-metadata-grouping/group.py
+          sparse-checkout-cone-mode: false
+      - name: Prove reference annotations unavailable to predictor
+        shell: bash
+        run: |
+          set -euo pipefail
+          test ! -e experiments/real-metadata-grouping/reference.private-to-evaluator.json
+          test ! -e experiments/real-metadata-grouping/evaluate.py
+          echo 'PREDICTOR_CANNOT_READ_REFERENCE=PASS'
+      - name: Run isolated candidate generator without source bodies or secrets
+        run: |
+          mkdir -p "$RUNNER_TEMP/grouping-predictions"
+          python3 experiments/real-metadata-grouping/group.py \
+            --input experiments/real-metadata-grouping/corpus.json \
+            --output "$RUNNER_TEMP/grouping-predictions/predictions.json"
+      - name: Assert permutation determinism and no R14 execution
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import importlib.util, json, pathlib
+          base=pathlib.Path('experiments/real-metadata-grouping')
+          spec=importlib.util.spec_from_file_location('offline_baseline',base/'group.py')
+          mod=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(mod)
+          data=json.loads((base/'corpus.json').read_text())
+          shuffled={**data,'articles':list(reversed(data['articles']))}
+          a,b=mod.run(data),mod.run(shuffled)
+          if a!=b: raise SystemExit('ORDER_DEPENDENCY_FAIL')
+          if a['semantic_model_used'] or a['contradictions_inferred'] or a['persistent_event_ids_created']:
+            raise SystemExit('UNAUTHORIZED_OUTPUT_FAIL')
+          print('PERMUTATION_INVARIANCE=PASS')
+          print('V10_11_AND_R14_FINAL_EXECUTIONS=0')
+          PY
+      - name: Upload predictions, no golden labels
+        uses: actions/upload-artifact@v4
+        with:
+          name: metadata-only-frozen-predictions
+          path: ${{ runner.temp }}/grouping-predictions/predictions.json
+          if-no-files-found: error
+          retention-days: 7
+
+  separate-reference-evaluation:
+    needs: metadata-only-prediction
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout corpus and evaluator reference AFTER candidate has finished
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/corpus.json
+            experiments/real-metadata-grouping/evaluate.py
+            experiments/real-metadata-grouping/reference.private-to-evaluator.json
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: metadata-only-frozen-predictions
+          path: ${{ runner.temp }}/grouping-predictions
+      - name: Evaluate already-frozen predictions, report deployment NO_GO separately
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/grouping-results"
+          python3 experiments/real-metadata-grouping/evaluate.py \
+            --corpus experiments/real-metadata-grouping/corpus.json \
+            --predictions "$RUNNER_TEMP/grouping-predictions/predictions.json" \
+            --reference experiments/real-metadata-grouping/reference.private-to-evaluator.json \
+            --out "$RUNNER_TEMP/grouping-results/report.json"
+      - name: Store immutable exploratory scoring report
+        uses: actions/upload-artifact@v4
+        with:
+          name: real-metadata-occurrence-evaluation
+          path: ${{ runner.temp }}/grouping-results/report.json
+          if-no-files-found: error
+          retention-days: 7
