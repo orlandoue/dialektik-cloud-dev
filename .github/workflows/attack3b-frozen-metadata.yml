@@ -20,6 +20,7 @@ jobs:
             experiments/real-metadata-grouping/attack3.py
             experiments/real-metadata-grouping/signatures.py
             experiments/real-metadata-grouping/attack3b/corpus.json
+            experiments/real-metadata-grouping/attack3b/diagnose.py
           sparse-checkout-cone-mode: false
       - name: Authenticate frozen candidate blobs and exclude any gold/evaluator
         shell: bash
@@ -67,6 +68,11 @@ jobs:
           print('COUNTS='+json.dumps(dict(counts),sort_keys=True))
           print('SCIENCE_GATE=UNSCORED_PENDING_INDEPENDENT_ADJUDICATION')
           PY
+      - name: Print post-prediction blind failure diagnostics
+        shell: bash
+        run: |
+          python3 experiments/real-metadata-grouping/attack3b/diagnose.py
+          echo "NO_GOLD_SCORED=TRUE"
       - name: Upload frozen candidate outputs and manifest, never gold
         uses: actions/upload-artifact@v4
         with:
