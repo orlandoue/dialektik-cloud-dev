@@ -1,0 +1,46 @@
+name: ATTACK 5 development diagnostic on seen Attack-3B metadata
+on:
+  push:
+    branches: [codex/attack5-typed-georesolver-20261020]
+    paths: [.github/workflows/attack5-seen3b-diagnostic.yml]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  known-not-gold:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+            experiments/real-metadata-grouping/attack3b/corpus.json
+          sparse-checkout-cone-mode: false
+      - name: No reference or scorer
+        run: |
+          test ! -e experiments/real-metadata-grouping/score_attack3.py
+          test ! -e experiments/real-metadata-grouping/attack3b/reference.json
+      - name: Investigate seen old corpus without source selection leakage
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import sys,json,collections,pathlib
+          p=pathlib.Path('experiments/real-metadata-grouping').resolve()
+          sys.path.insert(0,str(p))
+          from attack5 import run
+          corpus=json.loads((p/'attack3b/corpus.json').read_text(encoding='utf8'))
+          result=run(corpus)
+          count=collections.Counter(x['decision'] for x in result['pair_decisions'])
+          print('SEEN_OLD_CORPUS_NOT_INDEPENDENT=TRUE')
+          print('GEO_COVERAGE='+str(sum(bool(x['geography']) for x in result['articles'])))
+          print('RETRIEVED='+str(result['retrieved_pairs']))
+          print('PAIR_CLASSES='+json.dumps(count,sort_keys=True))
+          print('GROUPS='+str(len(result['occurrence_groups'])))
+          print('CANDIDATE_PAIR_EXAMPLES='+json.dumps([
+            {'pair':p['ids'],'reason':p['reason'],'geo':p['evidence']['geo_relation']}
+            for p in result['pair_decisions'] if p['decision']!='UNKNOWN'][:24],sort_keys=True))
+          print('NO_REFERENCE_OR_SCIENTIFIC_SCORE=TRUE')
+          assert result['database_writes']==0 and not result['production_permission']
+          PY
