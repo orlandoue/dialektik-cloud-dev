@@ -1,3 +1,18 @@
+# Update after owner approved second deployment branch (2026-10-20)
+
+**REAL_COMPLETE_DEV_BACKUP_CAPTURE=PASS; REAL_RESTORE=NOT_YET_EXECUTED; RESTORE_GATE_#4=OPEN.**
+
+The owner authorized `codex/restore-gate-managed-recovery-20261020` in the protected GitHub environment `dialektik-dev-backup`. Re-running failed run [39488529000, attempt 2](https://github.com/orlandoue/dialektik-cloud-dev/actions/runs/39488529000) **started a runner and completed all steps successfully**, including fail-closed exact DEV database and TLS/CA validation, application roles/schema/data capture, custom-format Auth and migration ledger exports, strict managed-table inventory and GPG/AES256 encrypted upload.
+
+- `MANAGED_TABLE_COVERAGE=PASS`: **27 Auth** table-data objects and **one** `supabase_migrations` table-data object included. Counts of records within encrypted archives were NOT independently verified against source rows.
+- Final artifact **`dialektik-complete-dev-auth-ledger-encrypted`**, artifact ID `12295491516`, uploaded [here](https://github.com/orlandoue/dialektik-cloud-dev/actions/runs/39488529000/artifacts/12295491516). Approx. 225.5 kB GitHub artifact package. GitHub expiry **2026-10-27T20:20:08Z**. **Owner must promptly retain ciphertext in secured backup storage; do not upload decrypted contents or passphrase to this repository, issue, or chat.**
+- Plaintext cleanup `EPHEMERAL_UNENCRYPTED_CONTENT_CLEANUP=PASS` and no remote DDL/DML were run.
+- This only proves a **complete-format encrypted capture step** with required table inventories; no restoration of these **real bytes** or consistent point-in-time transaction snapshot has been demonstrated. Supabase-managed role/extensions/Auth runtime and migration ledger compatibility remain unvalidated.
+- Do not enable `dialektik_govuk_metadata_writer`, apply 043/044, or mark issue #4 complete until independently verified isolated compatible restore, Auth/ledger counts, ACL/RLS, app authentication and owner sign-off.
+- The earlier failed attempt 1 was consistent with the environment branch restriction; success after adding the exact branch is compelling operational evidence, not a definitive audit of the exact GitHub pre-run error mechanism.
+
+---
+
 # DIALEKTIK — RESTORE-GATE Auth + migration-ledger recovery audit, 20 October 2026
 
 ## Verdict
