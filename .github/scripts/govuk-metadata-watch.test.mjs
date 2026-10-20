@@ -30,7 +30,7 @@ test('a bounded seven-publication record has no source body and no database auth
   assert.equal(first.source_count,1);
   assert.equal(first.schema,'dialektik-readonly-source-watch-v1');
   assert.equal(first.robots_checked_live,true);
-  assert.equal(first.articles[0].canonical_url,GOVUK_CURATED_ARTICLE_URLS[0]);
+  assert.deepEqual(first.articles.map(x=>x.canonical_url),[GOVUK_CURATED_ARTICLE_URLS[0],GOVUK_CURATED_ARTICLE_URLS[1]].sort());
   assert.equal(JSON.stringify(first).includes('source_body'),false);
 });
 test('rejects unknown publishers, URLs and duplicate canonical items', () => {
