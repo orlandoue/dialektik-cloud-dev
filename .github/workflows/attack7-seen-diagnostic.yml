@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/attack7-seen-diagnostic.yml'
       - 'experiments/real-metadata-grouping/attack7/diagnose_seen_corpus.py'
+      - 'experiments/real-metadata-grouping/attack7.py'
   workflow_dispatch:
 permissions:
   contents: read
