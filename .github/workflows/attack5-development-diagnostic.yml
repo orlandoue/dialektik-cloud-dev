@@ -1,0 +1,37 @@
+name: ATTACK 5 prefreeze development diagnostic (seen corpus, NOT science)
+on:
+  push:
+    branches: [codex/attack5-typed-georesolver-20261020]
+    paths:
+      - '.github/workflows/attack5-development-diagnostic.yml'
+      - 'experiments/real-metadata-grouping/attack5/diagnose_known_corpus.py'
+      - 'experiments/real-metadata-grouping/attack5.py'
+      - 'experiments/real-metadata-grouping/attack5/chile_geography.json'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reuse-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+            experiments/real-metadata-grouping/attack5/diagnose_known_corpus.py
+            experiments/real-metadata-grouping/attack4-prospective/corpus.json
+          sparse-checkout-cone-mode: false
+      - name: Assert no evaluator or reference
+        run: |
+          test ! -e experiments/real-metadata-grouping/score_attack3.py
+          test ! -e experiments/real-metadata-grouping/attack4-prospective/reference.json
+          echo 'CORPUS_ALREADY_SEEN=TRUE'
+      - name: Collect diagnostics without new scientific claims
+        run: python3 experiments/real-metadata-grouping/attack5/diagnose_known_corpus.py
+      - name: No deployment authorization
+        run: |
+          echo 'INDEPENDENT_EVALUATION=NOT_EXECUTED'
+          echo 'DATABASE_WRITES=0'
+          echo 'PRODUCTION_PERMISSION=FALSE'
