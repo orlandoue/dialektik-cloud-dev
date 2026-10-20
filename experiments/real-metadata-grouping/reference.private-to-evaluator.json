@@ -1,0 +1,103 @@
+{
+  "schema": "occurrence-reference-v1",
+  "evaluation_scope": "manual_adjudication_of_real_public_headlines_no_fulltext",
+  "quality_notice": "Exploratory single-reviewer reference, not independent blinded scientific Gold and not R14. An annotated article can concern the same evolving thread yet not report the same bounded occurrence.",
+  "adjudications": [
+    {
+      "id": "m01",
+      "occurrence_id": "occ-lc-flood-20261008",
+      "thread_id": "thread-lc-flood",
+      "note": "Report about the same 8 October Las Condes mudslide"
+    },
+    {
+      "id": "m02",
+      "occurrence_id": "occ-ec-tornado-20261013",
+      "thread_id": "thread-ec-storm",
+      "note": "13 October physical tornado"
+    },
+    {
+      "id": "m03",
+      "occurrence_id": null,
+      "thread_id": "thread-ec-storm",
+      "note": "Broad Santiago storm article, no single distinct headline-bounded occurrence"
+    },
+    {
+      "id": "m04",
+      "occurrence_id": "occ-ec-municipal-damage-response-20261014",
+      "thread_id": "thread-ec-storm",
+      "note": "New municipal damage-assessment coordination, refers to tornado but is not the tornado"
+    },
+    {
+      "id": "m05",
+      "occurrence_id": "occ-mulchen-tornado-20260927",
+      "thread_id": "thread-mulchen",
+      "note": "Separate tornado in Mulchen on 27 Sep, reported on 3 Oct"
+    },
+    {
+      "id": "m06",
+      "occurrence_id": "occ-lc-flood-20261008",
+      "thread_id": "thread-lc-flood",
+      "note": "Official explanation of same 8 October mudslide"
+    },
+    {
+      "id": "m07",
+      "occurrence_id": "occ-ec-tornado-20261013",
+      "thread_id": "thread-ec-storm",
+      "note": "13 October physical tornado"
+    },
+    {
+      "id": "m08",
+      "occurrence_id": "occ-santiago-power-outage-20261013",
+      "thread_id": "thread-ec-storm",
+      "note": "Electric outage impact of broader storm, not physical tornado"
+    },
+    {
+      "id": "m09",
+      "occurrence_id": "occ-ec-tornado-20261013",
+      "thread_id": "thread-ec-storm",
+      "note": "13 October physical tornado"
+    },
+    {
+      "id": "m10",
+      "occurrence_id": "occ-lc-flood-20261008",
+      "thread_id": "thread-lc-flood",
+      "note": "Same Las Condes flood event"
+    },
+    {
+      "id": "m11",
+      "occurrence_id": "occ-ec-family-rescue-20261014",
+      "thread_id": "thread-ec-storm",
+      "note": "Distinct ongoing rescue attempt after tornado, not tornado itself"
+    },
+    {
+      "id": "m12",
+      "occurrence_id": null,
+      "thread_id": "thread-ec-storm",
+      "note": "General meteorological explanation, not one bounded occurrence"
+    },
+    {
+      "id": "m13",
+      "occurrence_id": "occ-ec-tornado-20261013",
+      "thread_id": "thread-ec-storm",
+      "note": "13 October physical tornado"
+    },
+    {
+      "id": "m14",
+      "occurrence_id": "occ-lc-flood-20261008",
+      "thread_id": "thread-lc-flood",
+      "note": "Article about same 8 October mudslide and consequent emergency measures"
+    },
+    {
+      "id": "m15",
+      "occurrence_id": "occ-ec-tornado-20261013",
+      "thread_id": "thread-ec-storm",
+      "note": "Day-after photographic documentation of the same physical tornado"
+    },
+    {
+      "id": "m16",
+      "occurrence_id": "occ-portillo-avalanche-20261017",
+      "thread_id": "thread-portillo-avalanche",
+      "note": "Other natural disaster, unrelated to same storm"
+    }
+  ]
+}
