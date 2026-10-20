@@ -1,0 +1,149 @@
+{
+  "schema": "public-real-metadata-only-v1",
+  "captured_on": "2026-10-20",
+  "acquisition": "editorially_collected_new_after_candidate_code_frozen_not_live_autonomous",
+  "source_text_acquired": false,
+  "limitations": "Researcher saw some candidate headlines during source discovery before freezing code. Thus this is a fresh-corpus diagnostic, not a strictly prospective blind holdout. Headline strings lightly normalize original typographic quotation marks.",
+  "articles": [
+    {
+      "id": "p01",
+      "publisher": "BioBioChile",
+      "headline": "Gran incendio afecta al Teatro Municipal de Maipú: se originó en medio de remodelaciones",
+      "published_on": "2026-10-07",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/07/bomberos-concurren-a-gran-incendio-que-afecta-al-teatro-municipal-de-maipu.shtml"
+    },
+    {
+      "id": "p02",
+      "publisher": "Cooperativa",
+      "headline": "Bomberos combate incendio estructural del Teatro Municipal de Maipú",
+      "published_on": "2026-10-07",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/policial/incendios/bomberos-combate-incendio-estructural-del-teatro-municipal-de-maipu/2026-10-07/165958.html"
+    },
+    {
+      "id": "p03",
+      "publisher": "Emol",
+      "headline": "Incendio afecta al teatro Municipal de Maipú: Hay un bombero y un civil lesionados",
+      "published_on": "2026-10-07",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/07/1213549/incendio-teatro-municipal-maipu-remodelacion.html"
+    },
+    {
+      "id": "p04",
+      "publisher": "TVN",
+      "headline": "Incendio en Maipú: Teatro Municipal arde en medio de remodelaciones",
+      "published_on": "2026-10-07",
+      "canonical_url": "https://www.tvn.cl/actualidad-y-tendencias/actualidad/incendio-en-maipu-teatro-municipal-arde-en-medio-de-remodelaciones"
+    },
+    {
+      "id": "p05",
+      "publisher": "24 Horas",
+      "headline": "Se incendia el Teatro Municipal de Maipú: Declaran tercera alarma",
+      "published_on": "2026-10-07",
+      "canonical_url": "https://www.24horas.cl/actualidad/nacional/se-incendia-el-teatro-municipal-de-maipu-declaran-tercera-alarma"
+    },
+    {
+      "id": "p06",
+      "publisher": "La Tercera",
+      "headline": "Incendio destruye Teatro Municipal de Maipú y deja tres lesionados: recinto podría ser demolido",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.latercera.com/nacional/noticia/incendio-destruye-teatro-municipal-de-maipu-y-deja-tres-lesionados-recinto-podria-ser-demolido/"
+    },
+    {
+      "id": "p07",
+      "publisher": "La Voz de Maipú",
+      "headline": "Incendio en el Teatro Municipal de Maipú se encuentra controlado",
+      "published_on": "2026-10-07",
+      "canonical_url": "https://astro.lavozdemaipu.cl/incendio-en-el-teatro-municipal-de-maipu-se-encuentra-controlado/"
+    },
+    {
+      "id": "p08",
+      "publisher": "Emol",
+      "headline": "Interior completamente quemado: Las imágenes de los graves daños que causó el incendio en el teatro municipal de Maipú",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/07/1213562/danos-incendio-teatro-maipu-imagenes.html"
+    },
+    {
+      "id": "p09",
+      "publisher": "Emol",
+      "headline": "Vodanovic proyecta pérdida casi total de teatro de Maipú: quizás la recomendación sea derechamente demoler todo",
+      "published_on": "2026-10-07",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/07/1213558/vodanovic-perdida-total-teatro-maipu.html"
+    },
+    {
+      "id": "p10",
+      "publisher": "Meganoticias",
+      "headline": "Es muy poco lo que se puede rescatar: Alcalde Vodanovic tras incendio que destruyó el Teatro Municipal de Maipú",
+      "published_on": "2026-10-07",
+      "canonical_url": "https://www.meganoticias.cl/amp/nacional/533409-vodanovic-incendio-teatro-municipal-maipu-muy-poco-rescatar-07-10-2026.html"
+    },
+    {
+      "id": "p11",
+      "publisher": "24 Horas",
+      "headline": "Alcalde de Maipú tras incendio de Teatro Municipal: Es imposible describir la pena y frustración",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.24horas.cl/actualidad/nacional/alcalde-de-maipu-incendio-teatro-municipal-es-imposible-describir-pena"
+    },
+    {
+      "id": "p12",
+      "publisher": "La Voz de Maipú",
+      "headline": "Incendio en el Teatro Municipal: alcalde Vodanovic asegura inicio de peritajes y proyecta al menos tres años para levantar una nueva obra",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://lavozdemaipu.cl/teatro-municipal-maipu-incendio-demolicion/"
+    },
+    {
+      "id": "p13",
+      "publisher": "BioBioChile",
+      "headline": "Incendio de al menos cuatro viviendas en Cerrillos movilizó a más de un centenar de bomberos",
+      "published_on": "2026-10-16",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/16/incendio-de-al-menos-cuatro-viviendas-en-cerrillos-movilizo-a-mas-de-un-centenar-de-bomberos.shtml"
+    },
+    {
+      "id": "p14",
+      "publisher": "Cooperativa",
+      "headline": "Cerrillos: incendio en block de departamentos dejó dos fallecidos",
+      "published_on": "2026-09-23",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/policial/incendios/cerrillos-incendio-en-block-de-departamentos-dejo-dos-fallecidos/2026-09-23/090200.html"
+    },
+    {
+      "id": "p15",
+      "publisher": "BioBioChile",
+      "headline": "Al menos 2 viviendas y varias caballerizas destruidas deja incendio en campamento El Esfuerzo de Maipú",
+      "published_on": "2026-09-15",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/09/15/al-menos-8-viviendas-destruidas-deja-incendio-en-campamento-de-maipu.shtml"
+    },
+    {
+      "id": "p16",
+      "publisher": "BioBioChile",
+      "headline": "Un bus quemado, otro atacado y un intento de saqueo a supermercado deja noche del 18 de octubre en RM",
+      "published_on": "2026-10-19",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/19/un-bus-quemado-otro-atacado-y-un-intento-de-saqueo-a-supermercado-deja-noche-del-18-de-octubre-en-rm.shtml"
+    },
+    {
+      "id": "p17",
+      "publisher": "Cooperativa",
+      "headline": "Conmemoración del 18-O dejó al menos 30 detenidos, seis carabineros lesionados y un bus incendiado",
+      "published_on": "2026-10-19",
+      "canonical_url": "https://cooperativa.cl/noticias/pais/policial/conmemoracion-del-18-o-dejo-al-menos-30-detenidos-seis-carabineros/2026-10-19/072932.html"
+    },
+    {
+      "id": "p18",
+      "publisher": "24 Horas",
+      "headline": "Desconocidos queman bus del sistema Red en Pedro Aguirre Cerda",
+      "published_on": "2026-10-19",
+      "canonical_url": "https://www.24horas.cl/actualidad/nacional/desconocidos-queman-bus-del-sistema-red-en-pedro-aguirre-cerda"
+    },
+    {
+      "id": "p19",
+      "publisher": "BioBioChile",
+      "headline": "Vecinos de Maipú denuncian noche de disparos y fuegos artificiales: balas entraron a casas",
+      "published_on": "2026-10-15",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/15/vecinos-de-maipu-denuncian-noche-de-disparos-al-aire-y-fuegos-artificiales.shtml"
+    },
+    {
+      "id": "p20",
+      "publisher": "BioBioChile",
+      "headline": "Presidente Kast instruye expulsar a extranjeros que participaron en desmanes en conmemoración del 18-O",
+      "published_on": "2026-10-19",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/chile/2026/10/19/presidente-kast-instruye-expulsar-a-extranjeros-que-participaron-en-desmanes-en-conmemoracion-del-18-o.shtml"
+    }
+  ]
+}
