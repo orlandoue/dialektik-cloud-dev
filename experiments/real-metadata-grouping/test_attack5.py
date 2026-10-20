@@ -35,6 +35,19 @@ class Attack5GeoAndIdentity(unittest.TestCase):
         actual=geo_mentions("Carolina Tohá fue entrevistada",self.geo)
         self.assertFalse(actual)
 
+    def test_person_candidate_is_not_geo_identity(self):
+        p=feature(a(1,"Carolina Tohá analiza sismo en Copiapó"),self.geo)
+        self.assertTrue(any(x["kind"]=="PERSON_CANDIDATE" and
+                            x["text"]=="Carolina Tohá" for x in p["person_candidates"]))
+        self.assertTrue(any(h["kind"]=="GEO_COMMUNE" and
+                            h["text"]=="copiapo" for h in p["geography"]))
+        self.assertFalse(any("carolina" in h["text"] for h in p["geography"]))
+
+    def test_organization_candidate_never_authorizes_identity(self):
+        p=feature(a(1,"Dirección Meteorológica anuncia alerta por tornado en Penco"),self.geo)
+        self.assertTrue(any(x["kind"]=="ORGANIZATION_CANDIDATE" for x in p["organization_candidates"]))
+        self.assertTrue(all(x["kind"]!="GEO_COMMUNE" for x in p["organization_candidates"]))
+
     def test_region_vs_same_named_commune(self):
         city=geo_mentions("Emergencia en Los Lagos",self.geo)
         reg=geo_mentions("Alerta en Región de Los Lagos",self.geo)
