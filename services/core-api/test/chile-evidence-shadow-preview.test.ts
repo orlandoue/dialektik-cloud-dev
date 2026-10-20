@@ -7,6 +7,8 @@ import { PrivateBetaLiveController } from '../src/live/private-beta-live.control
 
 const saved = {
   NODE_ENV: process.env.NODE_ENV,
+  SUPABASE_AUTH_ISSUER: process.env.SUPABASE_AUTH_ISSUER,
+  DIALEKTIK_EVIDENCE_SHADOW_DEPLOYMENT: process.env.DIALEKTIK_EVIDENCE_SHADOW_DEPLOYMENT,
   DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED: process.env.DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED,
   DIALEKTIK_EVIDENCE_SHADOW_ENABLED: process.env.DIALEKTIK_EVIDENCE_SHADOW_ENABLED,
 };
@@ -62,17 +64,24 @@ describe('Private beta shadow uses existing curated event without authorizing pe
     expect(JSON.stringify(result)).not.toMatch(/"source_body"|"article_id"|"event_id"|"fulltext"|"semantic_score"/u);
   });
 
-  it('is fail-closed unless BOTH DEV preview flags are explicitly true', () => {
+  it('is fail-closed unless DEV issuer, explicit DEV deployment marker and both flags match', () => {
     const controller = new PrivateBetaLiveController({} as never);
-    process.env.NODE_ENV = 'development';
+    process.env.NODE_ENV = 'production'; // Render DEV runs compiled production Node.
+    delete process.env.SUPABASE_AUTH_ISSUER;
+    delete process.env.DIALEKTIK_EVIDENCE_SHADOW_DEPLOYMENT;
     delete process.env.DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED;
     delete process.env.DIALEKTIK_EVIDENCE_SHADOW_ENABLED;
     expect(() => controller.chileTornadoEvidenceShadow()).toThrow(NotFoundException);
     process.env.DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED = 'true';
-    expect(() => controller.chileTornadoEvidenceShadow()).toThrow(NotFoundException);
     process.env.DIALEKTIK_EVIDENCE_SHADOW_ENABLED = 'true';
+    expect(() => controller.chileTornadoEvidenceShadow()).toThrow(NotFoundException);
+    process.env.DIALEKTIK_EVIDENCE_SHADOW_DEPLOYMENT = 'dev';
+    expect(() => controller.chileTornadoEvidenceShadow()).toThrow(NotFoundException);
+    process.env.SUPABASE_AUTH_ISSUER = 'https://some-production-project.supabase.co/auth/v1';
+    expect(() => controller.chileTornadoEvidenceShadow()).toThrow(NotFoundException);
+    process.env.SUPABASE_AUTH_ISSUER = 'https://vclsswwfhljczxgnsciq.supabase.co/auth/v1';
     expect(controller.chileTornadoEvidenceShadow().source_count).toBe(5);
-    process.env.NODE_ENV = 'production';
+    process.env.DIALEKTIK_EVIDENCE_SHADOW_DEPLOYMENT = 'production';
     expect(() => controller.chileTornadoEvidenceShadow()).toThrow(NotFoundException);
   });
 
