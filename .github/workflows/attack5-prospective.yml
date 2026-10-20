@@ -1,0 +1,81 @@
+name: ATTACK 5 frozen typed geography on new real metadata (NO GOLD)
+on:
+  push:
+    branches: [codex/attack5-typed-georesolver-20261020]
+    paths:
+      - .github/workflows/attack5-prospective.yml
+      - experiments/real-metadata-grouping/attack5/prospective_corpus.json
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  predict-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out frozen candidate plus new corpus, no gold, tests or scorer
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+            experiments/real-metadata-grouping/attack5/prospective_corpus.json
+          sparse-checkout-cone-mode: false
+      - name: Authenticate model and gazetteer blobs and exclusion gates
+        shell: bash
+        run: |
+          test "$(git hash-object experiments/real-metadata-grouping/attack5.py)" = 930865a4ee073c7e3e10163a037e5bb1271de84e
+          test "$(git hash-object experiments/real-metadata-grouping/attack5/chile_geography.json)" = b77512235fea9559fca1a5c9ef9ca6514a4b5b04
+          test ! -e experiments/real-metadata-grouping/score_attack3.py
+          test ! -e experiments/real-metadata-grouping/attack5/reference.json
+          test ! -e experiments/real-metadata-grouping/attack4-prospective/corpus.json
+          echo 'FROZEN_CANDIDATE=PASS'
+          echo 'PREDICTOR_NEVER_LOADED_GOLD=PASS'
+      - name: Run new real-metadata prediction, permutation invariance and hashes
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/attack5"
+          python3 experiments/real-metadata-grouping/attack5.py \
+            --input experiments/real-metadata-grouping/attack5/prospective_corpus.json \
+            --output "$RUNNER_TEMP/attack5/predictions.json"
+          python3 - <<'PY'
+          import sys,json,hashlib,pathlib,os,collections
+          p=pathlib.Path('experiments/real-metadata-grouping').resolve()
+          sys.path.insert(0,str(p))
+          import attack5
+          bytes_in=(p/'attack5/prospective_corpus.json').read_bytes()
+          corpus=json.loads(bytes_in)
+          assert len(corpus['articles'])==26
+          assert len({x['canonical_url'] for x in corpus['articles']})==26
+          pred=attack5.run(corpus)
+          permuted=dict(corpus);permuted['articles']=list(reversed(corpus['articles']))
+          assert pred==attack5.run(permuted), 'PERMUTATION_FAILURE'
+          assert len(pred['pair_decisions'])==325
+          assert not pred['production_permission'] and not pred['semantically_authoritative']
+          assert pred['database_writes']==0 and pred['contradictions_detected']==0
+          labels=collections.Counter(x['decision'] for x in pred['pair_decisions'])
+          reasons=collections.Counter(x['reason'] for x in pred['pair_decisions'])
+          path=pathlib.Path(os.environ['RUNNER_TEMP'])/'attack5/predictions.json'
+          x={
+            'run_status':'FROZEN_CANDIDATE_EXECUTED','science_score':'UNSCORED_PENDING_INDEPENDENT_GOLD',
+            'candidate_blob':'930865a4ee073c7e3e10163a037e5bb1271de84e',
+            'geo_blob':'b77512235fea9559fca1a5c9ef9ca6514a4b5b04',
+            'corpus_sha256':hashlib.sha256(bytes_in).hexdigest(),
+            'predictions_sha256':hashlib.sha256(path.read_bytes()).hexdigest(),
+            'documents':len(pred['articles']),'pairs':len(pred['pair_decisions']),
+            'articles_with_geo':sum(bool(x['geography']) for x in pred['articles']),
+            'retrieved_pairs':pred['retrieved_pairs'],
+            'decisions':dict(sorted(labels.items())),'reasons':dict(sorted(reasons.items())),
+            'groups':[x['members'] for x in pred['occurrence_groups']],
+            'gold_access':False,'database_writes':0,'production_permission':False
+          }
+          m=pathlib.Path(os.environ['RUNNER_TEMP'])/'attack5/manifest.json'
+          m.write_text(json.dumps(x,ensure_ascii=False,indent=2,sort_keys=True)+'\n',encoding='utf8')
+          print('ATTACK5_UNLABELED_METRICS='+json.dumps(x,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: attack5-unlabeled-research-predictions
+          path: ${{ runner.temp }}/attack5/
+          retention-days: 7
+          if-no-files-found: error
