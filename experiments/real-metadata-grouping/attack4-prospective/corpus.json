@@ -1,0 +1,220 @@
+{
+  "schema": "public-real-metadata-only-v1",
+  "captured_on": "2026-10-20",
+  "acquisition": "human_selected_public_metadata_from_original_publisher_pages_after_frozen_attack4; NOT autonomous; source full text not ingested",
+  "source_text_acquired": false,
+  "reference_included": false,
+  "limitations": "Convenience sample concentrated in 2025 tornado Los Angeles, June Atacama earthquake, and July Kamchatka tsunami alert/evolving response. More than one occurrence may belong to each larger thread. Publicly visible publisher metadata does not authorize source-body ingestion. No blinded editorial reference available.",
+  "articles": [
+    {
+      "id": "v01",
+      "publisher": "Emol",
+      "headline": "Dejó daños en techos y canaletas: Meteorología informa que tornado afectó a Los Ángeles con vientos de hasta 137 km/h",
+      "published_on": "2025-05-18",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/05/18/1166687/tornado-los-angeles-danos-leves.html"
+    },
+    {
+      "id": "v02",
+      "publisher": "24 Horas",
+      "headline": "Con vientos de hasta 137 km/h: así fue el primer tornado de la temporada en el Biobío",
+      "published_on": "2025-05-20",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/biobio/primer-tornado-temporada-los-angeles-biobio"
+    },
+    {
+      "id": "v03",
+      "publisher": "Cooperativa",
+      "headline": "Fuerte sismo se sintió en el norte de Chile",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.cooperativa.cl/noticias/site/artic/20250606/pags-amp/20250606132346.html"
+    },
+    {
+      "id": "v04",
+      "publisher": "Emol",
+      "headline": "Video | Desprendimientos de rocas y negocios afectados: Los estragos que dejó el fuerte sismo en Atacama",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/06/06/1168568/sismo-temblor-atacama-chile-estragos.html"
+    },
+    {
+      "id": "v05",
+      "publisher": "Emol",
+      "headline": "Video | Se paró asustada: La reacción de Tohá en entrevista en vivo en Atacama por el fuerte sismo",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/06/06/1168541/temblor-atacama-reaccion-carolina-toha.html"
+    },
+    {
+      "id": "v06",
+      "publisher": "Emol",
+      "headline": "Casi 30 mil clientes sin suministro eléctrico, desprendimientos y caídas de productos: Efectos del sismo 6,4 en Atacama",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/06/06/1168543/sin-luz-sismo-atacama.html"
+    },
+    {
+      "id": "v07",
+      "publisher": "BioBioChile",
+      "headline": "Temblor magnitud 6,4 se sintió en la zona norte de Chile: descartan alerta de tsunami",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-atacama/2025/06/06/temblor-magnitud-65-se-sintio-en-la-zona-norte-de-chile.shtml"
+    },
+    {
+      "id": "v08",
+      "publisher": "BioBioChile",
+      "headline": "Carolina Tohá es sorprendida por sismo 6,4 en plena entrevista en el norte del país",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-atacama/2025/06/06/carolina-toha-es-sorprendida-por-sismo-64-en-plena-entrevista-en-el-norte-del-pais.shtml"
+    },
+    {
+      "id": "v09",
+      "publisher": "BioBioChile",
+      "headline": "Derrumbe de piedras, evacuación y caída de objetos: los videos del fuerte sismo en el norte del país",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/chile/2025/06/06/derrumbes-de-piedras-evacuaciones-y-caida-de-objetos-los-videos-del-fuerte-sismo-en-norte-del-pais.shtml"
+    },
+    {
+      "id": "v10",
+      "publisher": "24 Horas",
+      "headline": "Sismo se registra en la zona norte del país: 6.4 en la región de Atacama",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-norte/antofagasta/sismo-registra-zona-norte-del-pais---"
+    },
+    {
+      "id": "v11",
+      "publisher": "24 Horas",
+      "headline": "Usuarios en redes reportan afectación del sismo 6.4 en el norte del país",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-norte/atacama/usuarios-redes-reportan-afectacion-sismo-norte-del-pais"
+    },
+    {
+      "id": "v12",
+      "publisher": "24 Horas",
+      "headline": "Senapred confirma 23 mil clientes sin luz en Atacama tras sismo",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-norte/atacama/senapred-23-mil-clientes-sin-suministro-atacama-sismo"
+    },
+    {
+      "id": "v13",
+      "publisher": "24 Horas",
+      "headline": "Impactante registro de mall de Copiapó: gente escapaba en pleno temblor mientras caían ventanales",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-norte/antofagasta/video-impactante-registro-de-mall-de-copiapo-tras-fuerte-sismo-en-el-norte"
+    },
+    {
+      "id": "v14",
+      "publisher": "Meganoticias",
+      "headline": "\"¿Te sabí el número de tu mamá?\": Video muestra a jóvenes arrancando de gimnasio durante fuerte temblor en el norte",
+      "published_on": "2025-06-06",
+      "canonical_url": "https://www.meganoticias.cl/nacional/487917-te-sabi-el-numero-de-tu-mama-video-muestra-a-jovenes-arrancando-durante-fuerte-temblor-en-el-norte-06-06-2025.html"
+    },
+    {
+      "id": "v15",
+      "publisher": "Emol",
+      "headline": "Decretan alerta de tsunami para Chile tras terremoto 8,8 en Rusia: Primeras olas arribarían el miércoles por la mañana",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/07/29/1173536/alerta-tsunami-chile-terremoto-rusia.html"
+    },
+    {
+      "id": "v16",
+      "publisher": "Emol",
+      "headline": "Senapred evalúa riesgo de tsunami en Chile tras terremoto magnitud 8,7 en Rusia",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/07/29/1173532/riesgo-tsunami-chile-terremoto-rusia.html"
+    },
+    {
+      "id": "v17",
+      "publisher": "Emol",
+      "headline": "Balance por alerta de tsunami: Reportan elevación del mar de hasta 2,5 metros en playa Boyeruca, la más alta del país",
+      "published_on": "2025-07-30",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/07/30/1173651/tsunami-boyeruca-elevacion-alta-chile.html"
+    },
+    {
+      "id": "v18",
+      "publisher": "Emol",
+      "headline": "Alerta roja: Senapred eleva alarma para las comunas del borde costero entre Arica y Magallanes por tsunami",
+      "published_on": "2025-07-30",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/07/30/1173553/terremoto-en-rusiar-tsunami-chile.html"
+    },
+    {
+      "id": "v19",
+      "publisher": "Emol",
+      "headline": "Senapred baja alerta de tsunami: Solo cinco regiones se mantienen en estado de precaución",
+      "published_on": "2025-07-31",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/07/31/1173664/senapred-baja-alerta-tsunami.html"
+    },
+    {
+      "id": "v20",
+      "publisher": "Emol",
+      "headline": "Senapred declara alerta amarilla para comunas del borde costero por riesgo de tsunami",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/07/29/1173542/senapred-alerta-amarilla-borde-costero.html"
+    },
+    {
+      "id": "v21",
+      "publisher": "Cooperativa",
+      "headline": "Terremoto 8,8 en Rusia motiva amenaza de tsunami para toda la costa de Chile",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.cooperativa.cl/noticias/mundo/desastres-naturales/tsunamis/terremoto-8-8-en-rusia-motiva-amenaza-de-tsunami-para-toda-la-costa-de-chile/2025-07-29/213340.html"
+    },
+    {
+      "id": "v22",
+      "publisher": "Cooperativa",
+      "headline": "Autoridades anunciaron fin de la alerta de tsunami en toda la costa del país",
+      "published_on": "2025-07-31",
+      "canonical_url": "https://cooperativa.cl/noticias/pais/sismos/chile-levanto-la-alerta-de-tsunami-en-toda-la-costa/2025-07-31/071924.html"
+    },
+    {
+      "id": "v23",
+      "publisher": "24 Horas",
+      "headline": "SIGUE EN VIVO: amenaza de tsunami para Chile tras terremoto en Rusia",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.24horas.cl/actualidad/nacional/sigue-en-vivo-amenaza-de-tsunami-para-chile-tras-terremoto-en-rusia"
+    },
+    {
+      "id": "v24",
+      "publisher": "24 Horas",
+      "headline": "MINUTO A MINUTO | Estado de alerta por amenaza de tsunami desde Arica a Los Lagos",
+      "published_on": "2025-07-30",
+      "canonical_url": "https://www.24horas.cl/internacional/noticias/minuto-a-minuto-amenaza-de-tsunami-para-chile-tras-terremoto-en-rusia"
+    },
+    {
+      "id": "v25",
+      "publisher": "BioBioChile",
+      "headline": "Terremoto magnitud 8.8 se registró en Rusia: SHOA emite aviso por amenaza de tsunami para Chile",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.biobiochile.cl/noticias/internacional/asia/2025/07/29/terremoto-magnitud-80-se-registro-en-rusia-shoa-se-encuentra-evaluando-amenaza-de-tsunami-para-chile.shtml"
+    },
+    {
+      "id": "v26",
+      "publisher": "BioBioChile",
+      "headline": "Senapred declara Alerta Amarilla para comunas costeras por tsunami: revisa horas de evacuación",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/chile/2025/07/29/senapred-declara-alerta-amarilla-para-comunas-costeras-por-tsunami-revisa-horas-de-evacuacion.shtml"
+    },
+    {
+      "id": "v27",
+      "publisher": "BioBioChile",
+      "headline": "Senapred precisa que primeras olas de tsunami llegarán este miércoles tras terremoto 8.8 en Rusia",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/chile/2025/07/29/senapred-precisa-que-primeras-olas-de-tsunami-llegaran-este-miercoles-tras-terremoto-8-8-en-rusia.shtml"
+    },
+    {
+      "id": "v28",
+      "publisher": "BioBioChile",
+      "headline": "Cancelan totalmente los estados de amenaza por tsunami en Chile",
+      "published_on": "2025-07-31",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/chile/2025/07/31/solo-cuatro-regiones-siguen-en-estado-de-precaucion-segun-senapred-atacama-coquimbo-nuble-y-bio-bio.shtml"
+    },
+    {
+      "id": "v29",
+      "publisher": "ADN Radio",
+      "headline": "Alerta de tsunami en Chile: dónde y a qué hora llegarían las olas tras el terremoto en Rusia",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.adnradio.cl/2025/07/29/alerta-de-tsunami-en-chile-donde-y-a-que-hora-llegarian-las-olas-tras-el-terremoto-en-rusia/"
+    },
+    {
+      "id": "v30",
+      "publisher": "ADN Radio",
+      "headline": "SHOA confirma alerta de tsunami en costas chilenas tras terremoto 8,7 en Rusia",
+      "published_on": "2025-07-29",
+      "canonical_url": "https://www.adnradio.cl/2025/07/29/shoa-confirma-alerta-de-tsunami-en-costas-chilenas-tras-terremoto-87-en-rusia/"
+    }
+  ]
+}
