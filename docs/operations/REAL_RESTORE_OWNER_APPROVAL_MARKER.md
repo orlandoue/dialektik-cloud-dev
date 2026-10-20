@@ -1,6 +1,8 @@
 # DIALEKTIK — aprobación explícita de restauración aislada
 
-Estado: **PENDIENTE DE APROBACIÓN DEL PROPIETARIO**.
+Estado: **BLOQUEADO — NO EJECUTAR hasta disponer de un destino Supabase con Auth y ledger inicializados y workflow corregido**.
+
+**Advertencia:** la prueba [39494466690](https://github.com/orlandoue/dialektik-cloud-dev/actions/runs/39494466690) demostró que arrancar la imagen PostgreSQL 17.11 por sí sola deja sin crear `auth.identities`, `auth.sessions` y `supabase_migrations.schema_migrations`. El workflow protegido actual apunta a ese contenedor incompleto y su ejecución produciría una restauración fallida. Las siguientes instrucciones de autorización quedan SUSPENDIDAS hasta completar la inicialización real de destino.
 
 Esta marca permite solicitar, con un commit manual desde GitHub, una ejecución de
 `.github/workflows/real-backup-isolated-restore.yml` sobre el respaldo cifrado
