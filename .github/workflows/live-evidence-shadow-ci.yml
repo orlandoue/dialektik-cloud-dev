@@ -1,0 +1,46 @@
+name: Dialektik live curated evidence shadow - Core safe integration
+on:
+  push:
+    branches: [codex/live-evidence-shadow-integration-20261020]
+    paths:
+      - '.github/workflows/live-evidence-shadow-ci.yml'
+      - 'services/core-api/src/live/chile-evidence-shadow-preview.ts'
+      - 'services/core-api/src/live/private-beta-live.controller.ts'
+      - 'services/core-api/test/chile-evidence-shadow-preview.test.ts'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  core-readonly-shadow:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout operational cloud Core branch (not research-only branch)
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Setup pinned Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Match lockfile package manager
+        run: npm install --global npm@11.6.2
+      - name: Reproducible dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile Core and database types without DB access
+        run: npm run build
+      - name: Run new shadow and existing protected preview tests
+        run: |
+          npx vitest run --config services/core-api/vitest.config.mts \
+            services/core-api/test/chile-evidence-shadow-preview.test.ts \
+            services/core-api/test/chile-tornado-evidence-preview.test.ts \
+            services/core-api/test/govuk-private-beta-preview.test.ts
+      - name: Reject remote writes, accidental semantic-authority and migration steps
+        shell: bash
+        run: |
+          ! grep -E 'await .*db\.insertInto|await .*db\.updateTable|supabase\.from\(' services/core-api/src/live/chile-evidence-shadow-preview.ts
+          ! grep -E 'semantic_engine_executed:\s*true|production_permission:\s*true' services/core-api/src/live/chile-evidence-shadow-preview.ts
+          echo 'DATABASE_ACCESS=NOT_REQUIRED'
+          echo 'EXISTING_MOBILE_PREVIEW=UNCHANGED'
+          echo 'AUTONOMOUS_GROUPING=NOT_CLAIMED'
+          echo 'ACTIVATION_REQUIRES_SEPARATE_DEV_FLAG_AND_DEPLOY'
+          echo 'MIGRATIONS_043_044=NOT_EXECUTED'
