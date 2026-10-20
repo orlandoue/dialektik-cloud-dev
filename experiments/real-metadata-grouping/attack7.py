@@ -54,6 +54,17 @@ ACTIONS = (
  ("RETROSPECTIVE", r"\b(?:fotos?|videos?|imagenes|dia despues|"
                      r"consecuencias|tras el paso|balance de danos)\b"),
 )
+# Syntactic actor mentions: NEVER verified organization/person identity.
+ACTOR_MENTIONS = {
+ "SML": r"\b(?:sml|servicio medico legal)\b",
+ "SENAPRED": r"\bsenapred\b",
+ "GOVERNMENT": r"\b(?:gobierno|ministro|ministra|ministerio)\b",
+ "FISCALIA": r"\b(?:fiscalia|fiscal)\b",
+ "CODELCO": r"\bcodelco\b",
+ "PDI": r"\bpdi\b",
+ "PRESIDENTIAL_ROLE": r"\b(?:presidente|presidenta)\b",
+ "MAYOR_ROLE": r"\b(?:alcalde|alcaldesa)\b",
+}
 NUMERIC = {
  "DEATHS_REPORTED": re.compile(r"\b(?:(\d{1,4})\s+(?:personas?\s+)?(?:fallecid[oa]s?|muert[oa]s?|victimas fatales)|"
                               r"(?:fallecid[oa]s?|muert[oa]s?)\s+(?:aumenta(?:n)?\s+a|asciende(?:n)?\s+a|ya son|de)\s+(\d{1,4})|"
@@ -96,6 +107,11 @@ def mentions(row: dict, geography: dict) -> dict:
     priority=[x for x,_ in ACTIONS]
     primary=next((x for x in priority if any(z["type"]==x for z in actions)),
                  "EVENT_REPORT" if phenomena else "UNKNOWN")
+    actors=[]
+    for alias,rx in ACTOR_MENTIONS.items():
+        for m in re.finditer(rx,folded):
+            actors.append({"alias":alias,"verified_identity":False,
+                           **folded_span(title,folded,mapping,m)})
     numbers=[]
     for category,rx in NUMERIC.items():
         for m in rx.finditer(folded):
@@ -127,7 +143,7 @@ def mentions(row: dict, geography: dict) -> dict:
       "headline":title,"published_on":row["published_on"],
       "primary_documentary_action":primary,
       "primary_action_evidence":[x for x in actions if x["type"]==primary][:1],
-      "actions":actions,"physical_mentions":phenomena,"numeric_observations":numbers,
+      "actions":actions,"actor_mentions":actors,"physical_mentions":phenomena,"numeric_observations":numbers,
       "temporal_mentions":times,"facility_candidates":facility,
       "geography":geo["geography"],
       "multi_occurrence_cue":bool(MULTI.search(folded)),
@@ -190,6 +206,13 @@ def make_graph(corpus: dict) -> dict:
                                 "source":"chile-hub-third-party-DPA"})
             graph_edges.append({"from":art_id,"to":pid,"type":"MENTIONS_LOCATION",
                                 "authority":"ADMINISTRATIVE_NAME_MATCH"})
+        for ix,actor in enumerate(a["actor_mentions"]):
+            actor_id=f"actor:{ident}:{ix:02d}"
+            graph_nodes.append({"id":actor_id,"kind":"ActorMention",
+                                "alias":actor["alias"],"verified_external_id":None,
+                                "source_evidence":actor})
+            graph_edges.append({"from":art_id,"to":actor_id,"type":"MENTIONS_ACTOR",
+                                "authority":"LEXICAL_ONLY_NO_CLAIM_ATTRIBUTION"})
         for ix,fac in enumerate(a["facility_candidates"]):
             fid=f"facility:{ident}:{ix:02d}"
             graph_nodes.append({"id":fid,"kind":"FacilityMention",
@@ -247,6 +270,7 @@ def make_graph(corpus: dict) -> dict:
                            "primary_documentary_action":prepared[k]["primary_documentary_action"],
                            "phenomena":sorted({x["family"] for x in prepared[k]["physical_mentions"]}),
                            "facility_aliases":sorted({x["normalized_alias"] for x in prepared[k]["facility_candidates"]}),
+                           "actor_aliases":sorted({x["alias"] for x in prepared[k]["actor_mentions"]}),
                            "reported_numeric_observations":prepared[k]["numeric_observations"],
                            "time_mentions":prepared[k]["temporal_mentions"],
                            "geographical_mentions":prepared[k]["geography"],
