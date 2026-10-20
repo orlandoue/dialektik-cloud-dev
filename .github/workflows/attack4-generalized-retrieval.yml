@@ -1,0 +1,37 @@
+name: Attack 4 generalized headline retrieval (synthetic only)
+on:
+  push:
+    branches: [codex/attack4-generalized-retrieval-20261020]
+    paths:
+      - 'experiments/real-metadata-grouping/attack4.py'
+      - 'experiments/real-metadata-grouping/test_attack4.py'
+      - '.github/workflows/attack4-generalized-retrieval.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Sparse checkout no Gold and no source access
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack4.py
+            experiments/real-metadata-grouping/test_attack4.py
+          sparse-checkout-cone-mode: false
+      - name: Ensure no evaluator, Gold or credentials
+        run: |
+          test ! -e experiments/real-metadata-grouping/score_attack3.py
+          test ! -e experiments/real-metadata-grouping/attack3b/corpus.json
+          echo 'GOLD_AND_PREVIOUS_CORPORA_NOT_IN_CHECKOUT=PASS'
+      - name: Run adversarial synthetic and contract tests
+        working-directory: experiments/real-metadata-grouping
+        run: python3 -m unittest -v test_attack4.py
+      - name: Explicit scientific boundary
+        run: |
+          echo 'SYNTHETIC_ENGINEERING_GATE=PASS'
+          echo 'INDEPENDENT_REAL_PUBLICATION_SCORING=NOT_EXECUTED'
+          echo 'DATABASE_WRITES=0'
+          echo 'DEPLOYMENT_PERMISSION=FALSE'
