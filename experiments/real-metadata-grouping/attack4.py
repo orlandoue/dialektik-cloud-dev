@@ -162,8 +162,11 @@ def verify(a: dict, b: dict, retrieved: bool, e: dict) -> tuple[str,str]:
     if not roles <= physical:
         return "UNKNOWN","ACTION_UNRESOLVED"
     shared_objects = set(a["objects"]) & set(b["objects"])
-    # Place+hazard alone cannot equate two physical events. Require an object
-    # and a distinctive proper-name anchor or a rare-event kind.
+    # A generic apartment/house in a city does not identify a bounded event.
+    # Repeated same-place building fires can happen even on the same day.
+    if shared_objects and shared_objects <= {"apartment", "house"}:
+        return "UNKNOWN","GENERIC_RESIDENTIAL_OBJECT_NOT_INCIDENT_IDENTITY"
+    # Even a transport/venue type is only a non-authoritative hypothesis.
     if shared_objects and e["publication_gap_days"]<=2:
         return "SAME_OCCURRENCE","SHARED_NAMED_ANCHOR_KIND_OBJECT_WITHIN_PUBLICATION_WINDOW"
     if a["kind"] in {"tornado","earthquake"} and e["publication_gap_days"]<=1:
