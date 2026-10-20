@@ -1,0 +1,143 @@
+name: Dialektik real ciphertext isolated restore - protected
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/real-backup-isolated-restore.yml'
+      - 'scripts/operations/verify_real_restore_bundle.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  actual-backup-disposable-replay:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'EXECUTE_ISOLATED_ENCRYPTED_RESTORE_20261020'
+    environment: dialektik-dev-backup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Trusted read-only checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Download exact encrypted backup artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: orlandoue/dialektik-cloud-dev
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-real-replay"
+          mkdir -p "$w/download" "$w/derived"
+          gh run download 39488529000 --name dialektik-complete-dev-auth-ledger-encrypted --dir "$w/download" >/dev/null
+          test -s "$w/download/dialektik-complete-dev-20261020.tar.gpg"
+          echo 'EXACT_ENCRYPTED_GITHUB_ARTIFACT_DOWNLOADED=PASS'
+      - name: Decrypt only on ephemeral runner and verify source checksums
+        shell: bash
+        env:
+          BACKUP_PASSWORD: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-real-replay"
+          test "${#BACKUP_PASSWORD}" -ge 32 || { echo 'PASSPHRASE_SECRET_MISSING_OR_TOO_SHORT'; exit 1; }
+          printf '%s' "$BACKUP_PASSWORD" > "$w/derived/key"
+          gpg --quiet --batch --no-tty --pinentry-mode loopback \
+            --passphrase-file "$w/derived/key" --decrypt \
+            --output "$w/derived/backup.tar" \
+            "$w/download/dialektik-complete-dev-20261020.tar.gpg" \
+            > "$w/derived/gpg.log" 2>&1 || { echo 'CIPHERTEXT_DECRYPTION_FAILED_REDACTED'; exit 1; }
+          rm -f "$w/derived/key"
+          python3 scripts/operations/verify_real_restore_bundle.py verify \
+            --tar "$w/derived/backup.tar" --dest "$w/clear"
+          python3 scripts/operations/verify_real_restore_bundle.py sanitize \
+            --input "$w/clear/roles.sql" --output "$w/derived/roles.safe.sql"
+          python3 scripts/operations/verify_real_restore_bundle.py sanitize \
+            --input "$w/clear/schema.sql" --output "$w/derived/schema.safe.sql"
+          python3 scripts/operations/verify_real_restore_bundle.py sanitize \
+            --input "$w/clear/data.sql" --output "$w/derived/data.safe.sql"
+          echo 'AUTHENTIC_REAL_ENCRYPTED_SOURCE_AND_SHA256=PASS'
+      - name: Start disposable Supabase PostgreSQL 17.11.0.003 without network
+        shell: bash
+        run: |
+          set -euo pipefail
+          w="$RUNNER_TEMP/dialektik-real-replay"
+          image='supabase/postgres@sha256:d6844e71062a3c8e2f8021d644802850760ef970a45ac163ec8c9f0171075bda'
+          docker pull "$image" >/dev/null
+          docker run --detach --name dialektik-restored-20261020 --network none \
+            -e POSTGRES_PASSWORD=disposable_unshared_random_offline \
+            -v "$w/clear:/restore:ro" -v "$w/derived:/derived:ro" \
+            "$image" >/dev/null
+          ready=0
+          for i in $(seq 1 70); do
+            if docker exec dialektik-restored-20261020 pg_isready -U postgres -d postgres \
+              >/dev/null 2>&1; then ready=1; break; fi
+            sleep 2
+          done
+          if [ "$ready" != "1" ]; then
+            echo 'ISOLATED_SUPABASE_PG17_START=FAIL_REDACTED'
+            exit 1
+          fi
+          echo 'ISOLATED_SUPABASE_PG17_START=PASS'
+          echo 'ISOLATED_DOCKER_NETWORK=NONE'
+      - name: Attempt real application and managed data replay without emitting raw errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          w="$RUNNER_TEMP/dialektik-real-replay"
+          phase() {
+            label="$1"; shift
+            if "$@" > "$w/derived/phase_${label}.log" 2>&1; then
+              echo "$label=PASS"
+            else
+              echo "$label=FAIL_LOG_REDACTED"
+              exit 1
+            fi
+          }
+          phase RESTORE_APP_ROLES \
+            docker exec dialektik-restored-20261020 \
+            psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f /derived/roles.safe.sql
+          phase RESTORE_APP_SCHEMA \
+            docker exec dialektik-restored-20261020 \
+            psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f /derived/schema.safe.sql
+          phase RESTORE_APP_DATA \
+            docker exec dialektik-restored-20261020 \
+            psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f /derived/data.safe.sql
+          phase RESTORE_MANAGED_AUTH_DATA \
+            docker exec dialektik-restored-20261020 \
+            pg_restore -U postgres -d postgres --data-only --single-transaction \
+              --exit-on-error /restore/managed-auth.dump
+          phase RESTORE_MANAGED_LEDGER_DATA \
+            docker exec dialektik-restored-20261020 \
+            pg_restore -U postgres -d postgres --data-only --single-transaction \
+              --exit-on-error /restore/managed-ledger.dump
+          count_pair="$(docker exec dialektik-restored-20261020 \
+            psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c 'SELECT (SELECT count(*) FROM auth.users), (SELECT count(*) FROM supabase_migrations.schema_migrations);' \
+            | tr '|' ':')"
+          if [ "$count_pair" != "1:50" ]; then
+            echo 'AUTH_AND_MIGRATIONS_RESTORED_COUNTS=FAIL'
+            exit 1
+          fi
+          echo 'AUTH_AND_MIGRATIONS_RESTORED_COUNTS=PASS'
+          rls="$(docker exec dialektik-restored-20261020 \
+            psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "SELECT relrowsecurity FROM pg_class WHERE oid='public.articles'::regclass;")"
+          if [ "$rls" != "t" ]; then
+            echo 'RESTORED_ARTICLE_RLS=FAIL'
+            exit 1
+          fi
+          echo 'RESTORED_ARTICLE_RLS=PASS'
+          echo 'ISOLATED_POSTGRES_REPLAY_DATA_GATE=PASS'
+          echo 'CORE_AUTH_SERVICE_LOGIN_E2E=NOT_VERIFIED'
+          echo 'PRODUCTION_RESTORE_GATE=STILL_OPEN'
+      - name: Erase all temporary real data and isolated container
+        if: always()
+        shell: bash
+        run: |
+          docker rm --force dialektik-restored-20261020 >/dev/null 2>&1 || true
+          rm -rf -- "$RUNNER_TEMP/dialektik-real-replay"
+          echo 'EPHEMERAL_REAL_DATA_AND_CONTAINER_CLEANUP=COMPLETE'
+          echo 'REMOTE_SQL_WRITES=0'
+          echo 'SOURCE_AUTH_DATA_ARTIFACTS=NONE'
