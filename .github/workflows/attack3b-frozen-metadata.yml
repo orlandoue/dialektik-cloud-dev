@@ -1,0 +1,76 @@
+name: Attack 3B frozen candidate on new real-publication metadata (no Gold)
+on:
+  push:
+    branches: [codex/attack3b-prospective-metadata-20261020]
+    paths:
+      - '.github/workflows/attack3b-frozen-metadata.yml'
+      - 'experiments/real-metadata-grouping/attack3b/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  predict-without-gold:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Sparse checkout candidate and metadata, NEVER evaluator or references
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack3.py
+            experiments/real-metadata-grouping/signatures.py
+            experiments/real-metadata-grouping/attack3b/corpus.json
+          sparse-checkout-cone-mode: false
+      - name: Authenticate frozen candidate blobs and exclude any gold/evaluator
+        shell: bash
+        run: |
+          test "$(git hash-object experiments/real-metadata-grouping/attack3.py)" = 8ed5442839bd009f3a0095b1e27beef326eaea5a
+          test "$(git hash-object experiments/real-metadata-grouping/signatures.py)" = f55230d22348c888a864976d66349f58d0192f5c
+          test ! -f experiments/real-metadata-grouping/score_attack3.py
+          test ! -f experiments/real-metadata-grouping/attack3b/reference.json
+          test ! -f experiments/real-metadata-grouping/new-reference-20261020.evaluator-only.json
+          echo "FROZEN_MODEL_AUTHENTICATED=PASS"
+          echo "ANNOTATIONS_UNAVAILABLE_TO_PREDICTOR=PASS"
+      - name: Predict all unlabeled pairs and preserve hashes
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/attack3b"
+          python3 experiments/real-metadata-grouping/attack3.py \
+            --input experiments/real-metadata-grouping/attack3b/corpus.json \
+            --output "$RUNNER_TEMP/attack3b/predictions.json"
+          python3 - <<'PY'
+          import json,sys,hashlib,pathlib
+          from collections import Counter
+          p=pathlib.Path('experiments/real-metadata-grouping').resolve()
+          sys.path.insert(0,str(p))
+          import attack3
+          corpus_bytes=(p/'attack3b/corpus.json').read_bytes()
+          corpus=json.loads(corpus_bytes)
+          assert len(corpus['articles'])==48
+          assert len({x['canonical_url'] for x in corpus['articles']})==48
+          predicted=attack3.run(corpus)
+          changed=dict(corpus);changed['articles']=list(reversed(corpus['articles']))
+          assert predicted==attack3.run(changed), "PERMUTATION_VARIANCE"
+          assert len(predicted['pair_decisions'])==1128
+          assert not predicted['production_permission'] and predicted['database_writes']==0
+          counts=Counter(x['decision'] for x in predicted['pair_decisions'])
+          manifest={'corpus_sha256':hashlib.sha256(corpus_bytes).hexdigest(),
+                    'candidate_git_blob':'8ed5442839bd009f3a0095b1e27beef326eaea5a',
+                    'dependency_git_blob':'f55230d22348c888a864976d66349f58d0192f5c',
+                    'predictions_sha256':hashlib.sha256(pathlib.Path(__import__('os').environ['RUNNER_TEMP']+'/attack3b/predictions.json').read_bytes()).hexdigest(),
+                    'docs':48,'total_pairs':1128,'pair_decisions':dict(counts),
+                    'cluster_count':len(predicted['occurrence_groups']),
+                    'gold_access':False,'production_permission':False,
+                    'science_gate':'UNSCORED_PENDING_INDEPENDENT_ADJUDICATION'}
+          output=pathlib.Path(__import__('os').environ['RUNNER_TEMP']+'/attack3b/manifest.json')
+          output.write_text(json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+'\n',encoding='utf8')
+          print('COUNTS='+json.dumps(dict(counts),sort_keys=True))
+          print('SCIENCE_GATE=UNSCORED_PENDING_INDEPENDENT_ADJUDICATION')
+          PY
+      - name: Upload frozen candidate outputs and manifest, never gold
+        uses: actions/upload-artifact@v4
+        with:
+          name: attack3b-unlabeled-predictions
+          path: ${{ runner.temp }}/attack3b/
+          retention-days: 7
+          if-no-files-found: error
