@@ -53,7 +53,7 @@ jobs:
           from signatures import signature
           a=signature({'headline':'Incendio en teatro municipal de Maipú',
              'canonical_url':'https://example.org/news/test','published_on':'2026-10-07','publisher':'Example A'})
-          b=signature({'headline':'Rescatan a una familia tras incendio en teatro municipal de Maipú',
+          b=signature({'headline':'Rescate de una familia tras incendio en teatro municipal de Maipú',
              'canonical_url':'https://example.net/news/test','published_on':'2026-10-07','publisher':'Example B'})
           yes,why=hierarchy.compatible(a,b,'occurrence')
           assert not yes and why=='DIFFERENT_FOCAL_ACTION'
