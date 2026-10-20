@@ -19,6 +19,10 @@ phase() {
     echo "$label=PASS"
   else
     echo "$label=FAIL_REDACTED"
+    if [ "$label" = 'RESTORE_APPLICATION_ROLES' ]; then
+      python3 scripts/operations/classify_private_restore_error.py \
+        --private-log "$work/derived/$label.log"
+    fi
     exit 1
   fi
 }
