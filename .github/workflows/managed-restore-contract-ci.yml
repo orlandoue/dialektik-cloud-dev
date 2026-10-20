@@ -1,0 +1,82 @@
+name: Dialektik RESTORE-GATE managed Auth and migration ledger — synthetic isolation
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - 'scripts/operations/managed_backup_inventory.py'
+      - 'scripts/operations/test_managed_backup_inventory.py'
+      - '.github/workflows/managed-restore-contract-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  restore-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Fail-closed exact export/restore contracts
+        run: python3 -m unittest discover -s scripts/operations -p test_managed_backup_inventory.py -v
+      - name: Prove real Postgres 17 custom-format Auth/ledger data round-trip using FAKE users
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm -d --name dialektik-synthetic-managed-restore --network none \
+            -e POSTGRES_PASSWORD=local_ephemeral_only postgres:17.11 > /dev/null
+          trap 'docker rm -f dialektik-synthetic-managed-restore >/dev/null 2>&1 || true' EXIT
+          for i in $(seq 1 35); do
+            if docker exec dialektik-synthetic-managed-restore pg_isready -U postgres -d postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec dialektik-synthetic-managed-restore pg_isready -U postgres -d postgres
+          docker exec dialektik-synthetic-managed-restore psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c 'CREATE DATABASE recovered'
+          for db in postgres recovered; do
+            docker exec dialektik-synthetic-managed-restore psql -X -U postgres -d "$db" -v ON_ERROR_STOP=1 -c '
+              CREATE SCHEMA auth;
+              CREATE SCHEMA supabase_migrations;
+              CREATE TABLE auth.users (id text primary key);
+              CREATE TABLE auth.identities (id text primary key);
+              CREATE TABLE auth.sessions (id text primary key);
+              CREATE TABLE auth.refresh_tokens (id text primary key);
+              CREATE TABLE supabase_migrations.schema_migrations (version text primary key);
+              ALTER TABLE auth.users ENABLE ROW LEVEL SECURITY;'
+          done
+          docker exec dialektik-synthetic-managed-restore psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c "
+            INSERT INTO auth.users VALUES ('fake-user-not-sensitive');
+            INSERT INTO auth.identities VALUES ('fake-identity');
+            INSERT INTO auth.sessions VALUES ('fake-session');
+            INSERT INTO auth.refresh_tokens VALUES ('fake-refresh');
+            INSERT INTO supabase_migrations.schema_migrations VALUES ('fake-migration-v1');"
+          docker exec dialektik-synthetic-managed-restore pg_dump -U postgres -d postgres \
+            --format=custom --data-only --schema=auth --no-owner --no-privileges \
+            --file=/tmp/auth.dump
+          docker exec dialektik-synthetic-managed-restore pg_dump -U postgres -d postgres \
+            --format=custom --data-only --schema=supabase_migrations --no-owner --no-privileges \
+            --file=/tmp/ledger.dump
+          mkdir -p "$RUNNER_TEMP/restore-contract"
+          docker cp dialektik-synthetic-managed-restore:/tmp/auth.dump "$RUNNER_TEMP/restore-contract/auth.dump"
+          docker cp dialektik-synthetic-managed-restore:/tmp/ledger.dump "$RUNNER_TEMP/restore-contract/ledger.dump"
+          docker exec dialektik-synthetic-managed-restore pg_restore --list /tmp/auth.dump > "$RUNNER_TEMP/restore-contract/auth.toc"
+          docker exec dialektik-synthetic-managed-restore pg_restore --list /tmp/ledger.dump > "$RUNNER_TEMP/restore-contract/ledger.toc"
+          python3 scripts/operations/managed_backup_inventory.py \
+            --auth-toc "$RUNNER_TEMP/restore-contract/auth.toc" \
+            --ledger-toc "$RUNNER_TEMP/restore-contract/ledger.toc" \
+            --auth-archive "$RUNNER_TEMP/restore-contract/auth.dump" \
+            --ledger-archive "$RUNNER_TEMP/restore-contract/ledger.dump" \
+            --out "$RUNNER_TEMP/restore-contract/manifest.json"
+          docker exec dialektik-synthetic-managed-restore pg_restore -U postgres -d recovered \
+            --single-transaction --exit-on-error --data-only /tmp/auth.dump
+          docker exec dialektik-synthetic-managed-restore pg_restore -U postgres -d recovered \
+            --single-transaction --exit-on-error --data-only /tmp/ledger.dump
+          verify="$(docker exec dialektik-synthetic-managed-restore psql -XAt -U postgres -d recovered -v ON_ERROR_STOP=1 \
+            -c 'select (select count(*) from auth.users), (select count(*) from auth.identities), (select count(*) from auth.sessions), (select count(*) from auth.refresh_tokens), (select count(*) from supabase_migrations.schema_migrations);')"
+          test "$verify" = '1|1|1|1|1'
+          docker exec dialektik-synthetic-managed-restore psql -XAt -U postgres -d recovered \
+            -c "select relrowsecurity from pg_class where oid='auth.users'::regclass" | grep -qx t
+          echo 'OFFLINE_PG17_MANAGED_DATA_RESTORE=PASS'
+          echo 'SYNTHETIC_ONLY=TRUE'
+          echo 'REAL_AUTH_USERS_EXPORTED=FALSE'
+          echo 'REMOTE_DATABASE_WRITES=0'
