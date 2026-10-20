@@ -1,4 +1,5 @@
 name: Dialektik DEV complete encrypted snapshot - protected and gated
+# Owner-authorized protected backup: no remote writes; exact DEV host and TLS pin.
 on:
   push:
     branches: [codex/restore-gate-managed-recovery-20261020]
