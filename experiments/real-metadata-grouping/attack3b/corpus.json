@@ -1,0 +1,346 @@
+{
+  "schema": "public-real-metadata-only-v1",
+  "captured_on": "2026-10-20",
+  "acquisition": "manual_public_publisher_metadata_after_frozen_candidate_sha_80797b9; convenience_sample; NOT autonomous",
+  "source_text_acquired": false,
+  "reference_included": false,
+  "limitations": "Curator chose public titles by topical searching; sample convenience and not statistically representative. Dates based on publisher-stated dates or publisher-indexed snippets. No licensed full text, ingestion rights or independent editorial adjudication.",
+  "articles": [
+    {
+      "id": "q01",
+      "publisher": "Cooperativa",
+      "headline": "Incendio en garita de buses destruyó 14 vehículos en Villa Alemana",
+      "published_on": "2026-10-01",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/region-de-valparaiso/incendio-en-garita-de-buses-destruyo-14-vehiculos-en-villa-alemana/2026-10-01/081653.html"
+    },
+    {
+      "id": "q02",
+      "publisher": "Emol",
+      "headline": "Video | Incendio de gran magnitud afectó garita de buses en Villa Alemana: 14 vehículos quemados",
+      "published_on": "2026-10-01",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/01/1212916/villa-alemana-incendio-buses.html"
+    },
+    {
+      "id": "q03",
+      "publisher": "BioBioChile",
+      "headline": "Incendio destruyó 14 micros en terminal Las Acacias de Villa Alemana: revisa los recorridos afectados",
+      "published_on": "2026-10-01",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-valparaiso/2026/10/01/incendio-destruyo-14-micros-en-terminal-las-acacias-de-villa-alemana-revisa-los-recorridos-afectados.shtml"
+    },
+    {
+      "id": "q04",
+      "publisher": "SoyChile",
+      "headline": "[VIDEO] Incendio en garita de buses destruye 14 vehículos en Villa Alemana",
+      "published_on": "2026-10-01",
+      "canonical_url": "https://www.soychile.cl/valparaiso/sociedad/2026/10/01/967085/incendio-garita-buses-villa-alemana.html"
+    },
+    {
+      "id": "q05",
+      "publisher": "24 Horas",
+      "headline": "Incendio en garita consume al menos diez microbuses en Villa Alemana",
+      "published_on": "2026-10-01",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/valparaiso/incendio-en-garita-de-villa-alemana-consume-al-menos-diez-microbuses"
+    },
+    {
+      "id": "q06",
+      "publisher": "BioBioChile",
+      "headline": "Dos lesionados por inhalación de humo deja amago de incendio en el Centro Cultural La Moneda",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/08/bomberos-concurre-a-emanacion-de-humo-desde-el-centro-cultural-la-moneda.shtml"
+    },
+    {
+      "id": "q07",
+      "publisher": "Emol",
+      "headline": "Cierran Centro Cultural La Moneda tras incendio en cocina: Dos personas resultaron afectadas",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/08/1213630/bomberos-moneda-incendio.html"
+    },
+    {
+      "id": "q08",
+      "publisher": "Meganoticias",
+      "headline": "Emanación de humo en Centro Cultural La Moneda: Bomberos trabaja en la emergencia",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.meganoticias.cl/nacional/533459-bomberos-trabaja-controlar-emanacion-humo-interior-centro-cultural-la-moneda-08-10-2026.html"
+    },
+    {
+      "id": "q09",
+      "publisher": "Cooperativa",
+      "headline": "Bomberos controló amago de incendio en restaurante del subsuelo de La Moneda",
+      "published_on": "2026-10-08",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/policial/incendios/bomberos-controlo-amago-de-incendio-en-restaurante-del-subsuelo-de-la/2026-10-08/120832.html"
+    },
+    {
+      "id": "q10",
+      "publisher": "Cuerpo de Bomberos de Santiago",
+      "headline": "Cuerpo de Bomberos de Santiago controló fuego en Centro Cultural La Moneda",
+      "published_on": "2026-10-10",
+      "canonical_url": "https://www.cbs.cl/cuerpo-de-bomberos-de-santiago-controlo-fuego-en-centro-cultural-la-moneda/"
+    },
+    {
+      "id": "q11",
+      "publisher": "BioBioChile",
+      "headline": "San Miguel: Hombre muere tras incendiar departamento en contexto de violencia intrafamiliar",
+      "published_on": "2026-10-04",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/04/san-miguel-hombre-muere-tras-incendiar-departamento-en-contexto-de-violencia-intrafamiliar.shtml"
+    },
+    {
+      "id": "q12",
+      "publisher": "BioBioChile",
+      "headline": "VIDEO | Graban momento en que acusado de VIF comienza fatal incendio en San Miguel",
+      "published_on": "2026-10-04",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/04/video-graban-momento-en-que-acusado-de-vif-comienza-fatal-incendio-en-san-miguel.shtml"
+    },
+    {
+      "id": "q13",
+      "publisher": "Emol",
+      "headline": "Sujeto muere tras incendiar su departamento en San Miguel: Su esposa e hija lograron escapar",
+      "published_on": "2026-10-04",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/04/1213206/incendio-san-miguel-bomberos-amenaza.html"
+    },
+    {
+      "id": "q14",
+      "publisher": "Cooperativa",
+      "headline": "Hombre denunciado por violencia intrafamiliar murió tras incendiar departamento en San Miguel",
+      "published_on": "2026-10-04",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/policial/violencia-intrafamiliar/hombre-denunciado-por-violencia-intrafamiliar-murio-tras-incendiar/2026-10-04/114551.html"
+    },
+    {
+      "id": "q15",
+      "publisher": "Meganoticias",
+      "headline": "Hombre muere en incendio tras denuncia por violencia intrafamiliar: Mujer e hijas lograron escapar",
+      "published_on": "2026-10-04",
+      "canonical_url": "https://www.meganoticias.cl/nacional/533143-hombre-muere-incendio-tras-denuncia-por-violencia-intrafamiliar-san-miguel-04-10-2026.html"
+    },
+    {
+      "id": "q16",
+      "publisher": "TVN",
+      "headline": "Hombre muere tras incendio intencional en San Miguel: amenazó a su pareja antes del siniestro",
+      "published_on": "2026-10-04",
+      "canonical_url": "https://www.tvn.cl/actualidad-y-tendencias/actualidad/hombre-muere-tras-incendio-intencional-en-san-miguel-amenazo-a-su-pareja-"
+    },
+    {
+      "id": "q17",
+      "publisher": "24 Horas",
+      "headline": "Incendio intencional por violencia intrafamiliar deja un fallecido en San Miguel",
+      "published_on": "2026-10-04",
+      "canonical_url": "https://www.24horas.cl/actualidad/nacional/incendio-intencional-violencia-intrafamiliar-fallecido-san-miguel"
+    },
+    {
+      "id": "q18",
+      "publisher": "BioBioChile",
+      "headline": "Dos personas con heridas graves deja incendio en un edificio del centro de Santiago",
+      "published_on": "2026-10-05",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/05/reportan-incendio-en-un-departamento-ubicado-en-el-centro-de-santiago.shtml"
+    },
+    {
+      "id": "q19",
+      "publisher": "Cuerpo de Bomberos de Santiago",
+      "headline": "Evacuación por incendio declarado en piso 12 de céntrico edificio: 2 personas resultaron con lesiones graves",
+      "published_on": "2026-10-06",
+      "canonical_url": "https://www.cbs.cl/evacuacion-por-incendio-declarado-en-piso-12-de-centrico-edificio-2-personas-resultaron-con-lesiones-graves/"
+    },
+    {
+      "id": "q20",
+      "publisher": "24 Horas",
+      "headline": "Incendio en piso 12 deja dos personas gravemente heridas en Santiago Centro",
+      "published_on": "2026-10-05",
+      "canonical_url": "https://www.24horas.cl/actualidad/nacional/incendio-en-piso-12-santiago-centro"
+    },
+    {
+      "id": "q21",
+      "publisher": "SoyChile",
+      "headline": "Incendio destruyó departamento en el piso 12 de un edificio en Santiago Centro",
+      "published_on": "2026-10-05",
+      "canonical_url": "https://www.soychile.cl/Santiago/Sociedad/2026/10/05/967493/incendio-departamento-santiago-centro.html"
+    },
+    {
+      "id": "q22",
+      "publisher": "ADN Radio",
+      "headline": "Emergencia en el centro de Santiago: incendio afecta departamento residencial y obliga a desvíos de tránsito",
+      "published_on": "2026-10-05",
+      "canonical_url": "https://www.adnradio.cl/2026/10/05/emergencia-en-el-centro-de-santiago-incendio-afecta-departamento-residencial-y-obliga-a-desvios-de-transito/"
+    },
+    {
+      "id": "q23",
+      "publisher": "Publimetro",
+      "headline": "¿Cuál es el saldo del grave incendio en departamento del centro de Santiago que obligó a evacuar el edificio?",
+      "published_on": "2026-10-05",
+      "canonical_url": "https://www.publimetro.cl/noticias/2026/10/05/grave-incendio-en-departamento-del-centro-de-santiago-deja-a-dos-personas-en-estado-critico-y-obliga-a-evacuar-edificio/"
+    },
+    {
+      "id": "q24",
+      "publisher": "Emol",
+      "headline": "Tornado deja serios daños en Puerto Varas: Meteorología declara alarma para La Araucanía, Los Ríos y Los Lagos",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/05/25/1167315/tornado-puerto-varas.html"
+    },
+    {
+      "id": "q25",
+      "publisher": "Emol",
+      "headline": "Más de 100 viviendas afectadas y al menos ocho lesionados: Autoridades entregan balance por paso de tornado en Puerto Varas",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/05/25/1167320/balance-tornado-viviendas-personas.html"
+    },
+    {
+      "id": "q26",
+      "publisher": "Emol",
+      "headline": "Fotos y videos | La afectación en Puerto Varas tras el paso de un tornado este domingo",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/05/25/1167317/tornado-puerto-varas-fotos-videos.html"
+    },
+    {
+      "id": "q27",
+      "publisher": "24 Horas",
+      "headline": "Reporte preliminar: alcalde de Puerto Varas informa que no hay fallecidos producto del tornado",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-sur/los-lagos/reporte-preliminar-alcalde-de-puerto-varas-informa-que-no-hay-fallecidos"
+    },
+    {
+      "id": "q28",
+      "publisher": "BioBioChile",
+      "headline": "Alcalde de Pto Varas asegura que no hay reporte de personas muertas ni heridas de gravedad por tornado",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-los-lagos/2025/05/25/alcalde-de-pto-varas-asegura-que-no-hay-reporte-de-personas-muertas-ni-heridas-de-gravedad-por-tornado.shtml"
+    },
+    {
+      "id": "q29",
+      "publisher": "Cooperativa",
+      "headline": "Tornado provocó daños en sector céntrico de Puerto Varas",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://cooperativa.cl/noticias/pais/region-de-los-lagos/tornado-provoco-danos-en-sector-centrico-de-puerto-varas/2025-05-25/161352.html"
+    },
+    {
+      "id": "q30",
+      "publisher": "Meganoticias",
+      "headline": "\"Fue muy grande, nunca habíamos visto algo así\": Testigo cuenta cómo se vivió el tornado en Puerto Varas",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://www.meganoticias.cl/nacional/486376-testigo-tornado-puerto-varas-nunca-habiamos-visto-algo-asi-video-fds01-25-05-2025.html"
+    },
+    {
+      "id": "q31",
+      "publisher": "24 Horas",
+      "headline": "Tornado causó estragos en Puerto Varas: sigue ACÁ la señal EN VIVO",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-sur/los-lagos/tornado-causa-estragos-en-puerto-varas-sigue-aca-la-senal-en-vivo-"
+    },
+    {
+      "id": "q32",
+      "publisher": "Cooperativa",
+      "headline": "Tornado en Puerto Varas: Cifra de casas dañadas asciende a 250, según Senapred",
+      "published_on": "2025-05-25",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/desastres-naturales/tornado-en-puerto-varas-cifra-de-casas-danadas-asciende-a-250-segun/2025-05-25/230938.html"
+    },
+    {
+      "id": "q33",
+      "publisher": "Meganoticias",
+      "headline": "Tornado deja 250 viviendas dañadas, 19 lesionados y más de 4 mil clientes sin luz en Puerto Varas",
+      "published_on": "2025-05-26",
+      "canonical_url": "https://www.meganoticias.cl/nacional/486407-tornado-puerto-varas-250-viviendas-danadas-8-lesionados-7-mil-clientes-sin-luz-brk-26-05-2025.html"
+    },
+    {
+      "id": "q34",
+      "publisher": "Emol",
+      "headline": "Estado de excepción constitucional de catástrofe: Qué implica la medida decretada por inédito apagón",
+      "published_on": "2025-02-25",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/02/25/1158590/estado-excepcion-catastrofe-chile.html"
+    },
+    {
+      "id": "q35",
+      "publisher": "Emol",
+      "headline": "Gobierno declara estado de excepción y toque de queda en todas las regiones afectadas por el apagón",
+      "published_on": "2025-02-25",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/02/25/1158589/gobierno-toque-queda.html"
+    },
+    {
+      "id": "q36",
+      "publisher": "Emol",
+      "headline": "Boric califica de \"indignante\" inédito apagón en el país y apunta en contra de las \"empresas responsables\"",
+      "published_on": "2025-02-25",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/02/25/1158599/boric-corte-luz-apagon.html"
+    },
+    {
+      "id": "q37",
+      "publisher": "Cooperativa",
+      "headline": "Boric y el apagón masivo: \"Nos indigna y no lo vamos a dejar pasar\"",
+      "published_on": "2025-02-25",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/servicios-basicos/electricidad/boric-y-el-apago-n-masivo-nos-indigna-y-no-lo-vamos-a-dejar-pasar/2025-02-25/224250.html"
+    },
+    {
+      "id": "q38",
+      "publisher": "Emol",
+      "headline": "Firma a cargo de la línea de transmisión que provocó apagón da explicaciones: Confirma que \"no ha existido atentado\"",
+      "published_on": "2025-02-25",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/02/25/1158580/isa-interchile-apagon.html"
+    },
+    {
+      "id": "q39",
+      "publisher": "El País",
+      "headline": "Santiago se prepara para el día más crítico del nuevo sistema frontal",
+      "published_on": "2026-10-20",
+      "canonical_url": "https://elpais.com/chile/2026-10-20/santiago-se-prepara-para-el-dia-mas-critico-del-nuevo-sistema-frontal.html"
+    },
+    {
+      "id": "q40",
+      "publisher": "El País",
+      "headline": "Lluvia en Santiago: cuándo termina y qué comunas suspenden las clases por el sistema frontal",
+      "published_on": "2026-10-20",
+      "canonical_url": "https://elpais.com/chile/2026-10-20/lluvia-en-santiago-cuando-termina-y-que-comunas-suspenden-las-clases-por-el-sistema-frontal.html"
+    },
+    {
+      "id": "q41",
+      "publisher": "Emol",
+      "headline": "Kit de emergencia, teletrabajo y revisar estructuras: Medidas para \"anticiparse\" a efectos del sistema frontal",
+      "published_on": "2026-10-20",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/20/1214583/como-prepararse-sistema-frontal.html"
+    },
+    {
+      "id": "q42",
+      "publisher": "Emol",
+      "headline": "Interior advierte que sistema frontal podría generar condiciones similares a las que provocaron aluviones en la RM",
+      "published_on": "2026-10-19",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/19/1214518/pavez-sistema-frontal.html"
+    },
+    {
+      "id": "q43",
+      "publisher": "Emol",
+      "headline": "Hasta 35 mm y probables tormentas eléctricas: Lo que se espera del sistema frontal este martes en la RM",
+      "published_on": "2026-10-19",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/10/19/1214602/pronostico-meteorologia-martes-lluvias.html"
+    },
+    {
+      "id": "q44",
+      "publisher": "BioBioChile",
+      "headline": "Suspenden clases en 10 comunas de la RM para este martes por alerta roja ante nuevo sistema frontal",
+      "published_on": "2026-10-18",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/18/suspenden-clases-en-10-comunas-de-la-rm-para-este-martes-por-alerta-roja-ante-nuevo-sistema-frontal.shtml"
+    },
+    {
+      "id": "q45",
+      "publisher": "Ministerio del Interior de Chile",
+      "headline": "Ministerio del Interior informa medidas preventivas ante llegada de nuevo sistema frontal",
+      "published_on": "2026-10-19",
+      "canonical_url": "https://www.interior.gob.cl/noticias/2026/10/19/ministerio-del-interior-informa-medidas-preventivas-ante-llegada-de-nuevo-sistema-frontal/"
+    },
+    {
+      "id": "q46",
+      "publisher": "BioBioChile",
+      "headline": "Incendio destruyó viviendas, locales y un conocido restaurante en pleno centro de Pomaire",
+      "published_on": "2026-10-06",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-metropolitana/2026/10/06/incendio-destruyo-viviendas-locales-y-un-conocido-restaurante-en-pleno-centro-de-pomaire.shtml"
+    },
+    {
+      "id": "q47",
+      "publisher": "Emol",
+      "headline": "Incendio deja 70 casas afectadas en campamento de San Bernardo: Hay tres lesionados con quemaduras",
+      "published_on": "2026-09-07",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/09/07/1210768/incendio-campamento-san-bernardo-viviendas.html"
+    },
+    {
+      "id": "q48",
+      "publisher": "Emol",
+      "headline": "Incendio en Nevados de Chillán: Trasladan a 150 personas y este lunes cerrarán el Centro de Ski y el Parque de Agua Termal",
+      "published_on": "2026-09-07",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2026/09/07/1210719/incendio-nevados-chillan-suspension-operaciones.html"
+    }
+  ]
+}
