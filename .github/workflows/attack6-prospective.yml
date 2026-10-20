@@ -1,0 +1,138 @@
+name: ATTACK 6 truly new real-metadata predictions (NO GOLD)
+on:
+  push:
+    branches: [codex/attack6-prospective-eval-20261020]
+    paths:
+      - '.github/workflows/attack6-prospective.yml'
+      - 'experiments/real-metadata-grouping/attack6-prospective/corpus.json'
+      - 'experiments/real-metadata-grouping/attack6-prospective/prepare_review_packets.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  frozen-gold-free-predictor:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Sparse checkout ONLY frozen candidate and new public headlines
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack6.py
+            experiments/real-metadata-grouping/attack6_roles.py
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+            experiments/real-metadata-grouping/attack6-prospective/corpus.json
+          sparse-checkout-cone-mode: false
+      - name: Authenticate model blobs, and absence of scorer/reviewer labels/other corpora
+        run: |
+          test "$(git hash-object experiments/real-metadata-grouping/attack6.py)" = 7d0cccd8a1abdb33256eae05fab93817747e3855
+          test "$(git hash-object experiments/real-metadata-grouping/attack6_roles.py)" = dd9b207e72d3fe4cc69de0d4020c3e5ef2363df4
+          test "$(git hash-object experiments/real-metadata-grouping/attack5.py)" = 930865a4ee073c7e3e10163a037e5bb1271de84e
+          test "$(git hash-object experiments/real-metadata-grouping/attack5/chile_geography.json)" = b77512235fea9559fca1a5c9ef9ca6514a4b5b04
+          test ! -f experiments/real-metadata-grouping/attack6-prospective/collection_evidence.json
+          test ! -f experiments/real-metadata-grouping/attack6-prospective/prepare_review_packets.py
+          test ! -f experiments/real-metadata-grouping/attack5/prospective_corpus.json
+          test ! -f experiments/real-metadata-grouping/score_attack3.py
+          test ! -f experiments/real-metadata-grouping/attack6-prospective/reference.json
+          echo 'FROZEN_AUTHENTICATION_AND_GOLD_EXCLUSION=PASS'
+      - name: Run isolated prediction, order invariance and manifest
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/attack6-prospective"
+          python3 experiments/real-metadata-grouping/attack6.py \
+            --input experiments/real-metadata-grouping/attack6-prospective/corpus.json \
+            --output "$RUNNER_TEMP/attack6-prospective/predictions.json"
+          python3 - <<'PY'
+          from collections import Counter
+          from hashlib import sha256
+          import json,os,pathlib,sys
+          root=pathlib.Path('experiments/real-metadata-grouping').resolve()
+          sys.path.insert(0,str(root))
+          import attack6
+          input_bytes=(root/'attack6-prospective/corpus.json').read_bytes()
+          corpus=json.loads(input_bytes)
+          docs=corpus['articles']
+          assert len(docs)==31
+          assert len({x['canonical_url'] for x in docs})==31
+          p=attack6.run(corpus)
+          reversed_corpus=dict(corpus)
+          reversed_corpus['articles']=list(reversed(docs))
+          assert p==attack6.run(reversed_corpus),'ORDER_INVARIANCE_FAIL'
+          assert len(p['pair_decisions'])==465
+          assert p['database_writes']==0 and p['contradictions_detected']==0
+          assert not p['production_permission'] and not p['source_body_used']
+          out=pathlib.Path(os.environ['RUNNER_TEMP'])/'attack6-prospective/predictions.json'
+          decisions=Counter(x['decision'] for x in p['pair_decisions'])
+          reasons=Counter(x['reason'] for x in p['pair_decisions'])
+          roles=Counter(x['primary_action'] for x in p['articles'])
+          manifest={
+            'candidate_blobs':{
+              'attack6.py':'7d0cccd8a1abdb33256eae05fab93817747e3855',
+              'attack6_roles.py':'dd9b207e72d3fe4cc69de0d4020c3e5ef2363df4',
+              'attack5.py':'930865a4ee073c7e3e10163a037e5bb1271de84e',
+              'geo':'b77512235fea9559fca1a5c9ef9ca6514a4b5b04'},
+            'corpus_sha256':sha256(input_bytes).hexdigest(),
+            'predictions_sha256':sha256(out.read_bytes()).hexdigest(),
+            'documents':len(docs),'pairs':len(p['pair_decisions']),
+            'articles_with_geo':sum(bool(x['geography']) for x in p['articles']),
+            'retrieved_pairs':p['retrieved_pairs'],
+            'pair_predictions':dict(sorted(decisions.items())),
+            'abstention_count':decisions.get('UNKNOWN',0),
+            'primary_roles':dict(sorted(roles.items())),
+            'reasons':dict(sorted(reasons.items())),
+            'clusters':[x['members'] for x in p['occurrence_groups']],
+            'evaluation':'NOT_SCORED_NO_INDEPENDENT_HUMAN_REFERENCE',
+            'production_permission':False,'gold_access':False,'database_writes':0
+          }
+          (pathlib.Path(os.environ['RUNNER_TEMP'])/'attack6-prospective/manifest.json').write_text(
+            json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+'\n',
+            encoding='utf-8')
+          print('ATTACK6_PROSPECTIVE_MANIFEST='+json.dumps(manifest,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: attack6-prospective-unlabeled-predictions
+          path: ${{ runner.temp }}/attack6-prospective/
+          retention-days: 30
+          if-no-files-found: error
+  two-human-review-blank-packets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Sparse checkout only new source metadata and blank generator
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack6-prospective/corpus.json
+            experiments/real-metadata-grouping/attack6-prospective/prepare_review_packets.py
+          sparse-checkout-cone-mode: false
+      - name: Ensure reviewer workspace cannot read prediction/model
+        run: |
+          test ! -f experiments/real-metadata-grouping/attack6.py
+          test ! -f experiments/real-metadata-grouping/attack6_roles.py
+          test ! -f experiments/real-metadata-grouping/attack6-prospective/reference.json
+          echo 'REVIEWER_INPUT_UNLABELED=PASS'
+      - name: Create blank independent human packets and assert all pairs unlabeled
+        shell: bash
+        run: |
+          python3 experiments/real-metadata-grouping/attack6-prospective/prepare_review_packets.py \
+            --corpus experiments/real-metadata-grouping/attack6-prospective/corpus.json \
+            --output-dir "$RUNNER_TEMP/attack6-blank-reviewers"
+          python3 - <<'PY'
+          import os,json,pathlib
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'attack6-blank-reviewers'
+          for slot in ('A','B'):
+            p=json.loads((root/f'reviewer_{slot}_BLANK.json').read_text())
+            assert len(p['articles'])==31 and len(p['pairs'])==465
+            assert all(z['label'] is None for z in p['pairs'])
+            assert not p['complete'] and not p['gold']
+            assert not p['independent_editorial_review_performed']
+          print('BLANK_PACKET_CONTRACTS=PASS; REAL_REVIEWERS=0; GOLD=NOT_CREATED')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: attack6-prospective-blank-human-review-packets
+          path: ${{ runner.temp }}/attack6-blank-reviewers/
+          retention-days: 30
+          if-no-files-found: error
