@@ -107,3 +107,27 @@ qualification and deployment permission remain NO_GO.
 Supabase managed recovery GitHub issue #4 is open. No migration 043/044,
 no persistence, no autonomous acquisition scheduler, no R14 final holdout use,
 no V10.11 candidate execution and no Flutter modifications.
+
+## Implemented separated scorer, without prospective scoring yet
+
+Run contract-only checks:
+    python3 -m unittest -v test_attack3.py test_score_attack3.py
+
+On a genuinely new corpus, run the predictor on a checkout containing ONLY
+attack3.py, signatures.py, and the public metadata corpus. Persist the
+predictions and hash BEFORE revealing labels. Then in a separate reviewer-only
+checkout run:
+    python3 score_attack3.py --corpus NEW_CORPUS.json --predictions FROZEN_PREDICTIONS.json --reference INDEPENDENT_REFERENCE.json --out ATTACK3_RESULT.json
+
+The evaluator requires exhaustive all-pair adjudications (ids and expected
+SAME_OCCURRENCE / SAME_THREAD_DIFFERENT_OCCURRENCE / UNRELATED / UNKNOWN)
+for EVERY pair, exact corpus_sha256, schema attack3-independent-pair-reference-v1
+and adjudication with independent_annotators >= 2, conflicts_resolved=true.
+These declarations do not cryptographically prove independence: actual reviewer
+records, conflict ledger and dated source evidence remain mandatory.
+
+The scorer computes pair confusion/per-class metrics, selective coverage/error,
+false complete-link joins and missed same-occurrence pairs. It ALWAYS returns
+NO_GO_PENDING_EXTERNAL_REVIEW, never permission to deploy.
+
+Do not reuse Attack-1 or Attack-2 references as a new prospectively blind score.
