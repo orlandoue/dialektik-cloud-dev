@@ -1,0 +1,226 @@
+{
+  "schema": "public-real-metadata-only-v1",
+  "captured_on": "2026-10-20",
+  "source_text_acquired": false,
+  "reference_included": false,
+  "collection_process": "Manually selected from publicly indexed original publisher pages after frozen ATTACK-6 code and preregistration; convenience sample; no source bodies acquired or continuous source permissions.",
+  "articles": [
+    {
+      "id": "r01",
+      "publisher": "BioBioChile",
+      "published_on": "2024-02-03",
+      "headline": "Incendio en Viña del Mar provoca explosiones en planta química Reno",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-valparaiso/2024/02/03/incendio-en-vina-del-mar-provoca-explosiones-en-planta-quimica-reno-ordenan-evacuacion-inmediata.shtml"
+    },
+    {
+      "id": "r02",
+      "publisher": "BioBioChile",
+      "published_on": "2024-02-03",
+      "headline": "Senapred solicita evacuar de forma inmediata sectores de Viña del Mar y Quilpué",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-valparaiso/2024/02/03/senapred-solicita-evacuar-de-forma-inmediata-sector-el-salto-en-vina-del-mar-por-incendios.shtml"
+    },
+    {
+      "id": "r03",
+      "publisher": "BioBioChile",
+      "published_on": "2024-02-03",
+      "headline": "Incendios región de Valparaíso: Comienza toque de queda en 4 comunas y delegada entrega balance",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-valparaiso/2024/02/03/amp/incendios-region-de-valparaiso-comienza-toque-de-queda-en-4-comunas-y-delega-gonzalez-entrega-balance.shtml"
+    },
+    {
+      "id": "r04",
+      "publisher": "Emol",
+      "published_on": "2024-02-04",
+      "headline": "Valparaíso: Gobierno informa que cifra de fallecidos aumentó a 112 personas y estima más de 15 mil viviendas afectadas",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2024/02/04/1120669/balance-incendios-forestales-valparaiso.html"
+    },
+    {
+      "id": "r05",
+      "publisher": "Emol",
+      "published_on": "2024-02-05",
+      "headline": "Cifra de fallecidos por incendios en Valparaíso aumentan a 123 personas: Sólo 33 han podido ser identificadas",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2024/02/05/1120778/cifra-de-fallecidos-incendios-valparaiso.html"
+    },
+    {
+      "id": "r06",
+      "publisher": "Cooperativa",
+      "published_on": "2024-02-04",
+      "headline": "Fallecidos por los incendios forestales en la Región de Valparaíso aumentaron a 56",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/desastres-naturales/incendios-forestales/fallecidos-por-los-incendios-forestales-en-la-region-de-valparaiso/2024-02-04/110245.html"
+    },
+    {
+      "id": "r07",
+      "publisher": "Cooperativa",
+      "published_on": "2024-02-04",
+      "headline": "SML: 99 fallecidos por los incendios forestales de la Región de Valparaíso",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/desastres-naturales/incendios-forestales/sml-99-fallecidos-por-los-incendios-forestales-de-la-region-de/2024-02-04/172637.html"
+    },
+    {
+      "id": "r08",
+      "publisher": "Cooperativa",
+      "published_on": "2024-02-10",
+      "headline": "Catástrofe de incendios forestales en Valparaíso destruyó 7 mil viviendas",
+      "canonical_url": "https://cooperativa.cl/noticias/pais/desastres-naturales/incendios-forestales/catastrofe-de-incendios-forestales-en-valparaiso-destruyo-7-mil/2024-02-10/190804.html"
+    },
+    {
+      "id": "r09",
+      "publisher": "Meganoticias",
+      "published_on": "2024-02-03",
+      "headline": "Se retoma el toque de queda: Se impondrá en cuatro comunas de la región de Valparaíso por incendios forestales",
+      "canonical_url": "https://www.meganoticias.cl/nacional/438255-toque-de-queda-se-retoma-cuatro-comunas-region-de-valparaiso-incendios-forestales-horario-03-02-2024.html"
+    },
+    {
+      "id": "r10",
+      "publisher": "24 Horas",
+      "published_on": "2024-02-04",
+      "headline": "Toque de queda se mantendrá en las 4 comunas de la región de Valparaíso",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/valparaiso/toque-de-queda-comunas-region-de-valparaiso"
+    },
+    {
+      "id": "r11",
+      "publisher": "ADN Radio",
+      "published_on": "2024-02-03",
+      "headline": "Toque de queda en Valparaíso y Viña del Mar: a qué hora comienza y termina y cuáles son las comunas donde rige",
+      "canonical_url": "https://www.adnradio.cl/2024/02/03/toque-de-queda-en-valparaiso-y-vina-del-mar-a-que-hora-comienza-y-termina-y-cuales-son-las-comunas-donde-rige/"
+    },
+    {
+      "id": "r12",
+      "publisher": "Emol",
+      "published_on": "2025-08-03",
+      "headline": "El Teniente: SML toma muestras sanguíneas a familiares de trabajadores desaparecidos para identificar cuerpo",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/08/02/1173937/sml-muestras-familiares-trabajadores-elteniente.html"
+    },
+    {
+      "id": "r13",
+      "publisher": "Emol",
+      "published_on": "2025-08-03",
+      "headline": "El Teniente: Fiscalía ordena clausurar lugar del accidente y Gobierno dice que \"no hay plazo\" para reanudar faenas",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2025/08/03/1173975/clausuran-sirio-elteniente-plazo-faenas.html"
+    },
+    {
+      "id": "r14",
+      "publisher": "Cooperativa",
+      "published_on": "2025-08-03",
+      "headline": "Dos nuevos cuerpos fueron hallados en El Teniente: ya son cuatro los fallecidos",
+      "canonical_url": "https://www.cooperativa.cl/noticias/site/artic/20250803/pags-amp/20250803082808.html"
+    },
+    {
+      "id": "r15",
+      "publisher": "Cooperativa",
+      "published_on": "2025-08-03",
+      "headline": "Tragedia en El Teniente se saldó con seis mineros fallecidos",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/empresas-del-estado/codelco/derrumbe-en-el-teniente-dejo-a-seis-mineros-fallecidos/2025-08-03/173420.html"
+    },
+    {
+      "id": "r16",
+      "publisher": "BioBioChile",
+      "published_on": "2025-08-02",
+      "headline": "Rescate en El Teniente: avanzan 16 metros de un total de 20 para acceder a zona donde estarían mineros",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-ohiggins/2025/08/02/rescate-en-el-teniente-avanzan-15-metros-de-un-total-de-20-para-acceder-a-zona-donde-estarian-mineros.shtml"
+    },
+    {
+      "id": "r17",
+      "publisher": "BioBioChile",
+      "published_on": "2025-08-02",
+      "headline": "Presidente Boric por rescate en El Teniente: \"No se ha podido establecer contacto con los mineros\"",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-ohiggins/2025/08/02/presidente-boric-por-rescate-en-el-teniente-no-se-ha-podido-establecer-contacto-con-los-mineros.shtml"
+    },
+    {
+      "id": "r18",
+      "publisher": "BioBioChile",
+      "published_on": "2025-08-02",
+      "headline": "Fiscalía y PDI trabajan para identificar restos humanos encontrados en mina El Teniente",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-ohiggins/2025/08/02/fiscalia-y-pdi-trabajan-para-identificar-restos-encontrados-en-mina-el-teniente.shtml"
+    },
+    {
+      "id": "r19",
+      "publisher": "BioBioChile",
+      "published_on": "2025-08-02",
+      "headline": "Laurence Golborne se suma al equipo de gestión de rescate en la Mina El Teniente",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-de-ohiggins/2025/08/02/laurence-golborne-se-suma-al-equipo-de-gestion-de-rescate-en-la-mina-el-teniente.shtml"
+    },
+    {
+      "id": "r20",
+      "publisher": "24 Horas",
+      "published_on": "2025-08-03",
+      "headline": "FOTOS | Derrumbe en El Teniente dejó a 6 mineros muertos: ¿quiénes fueron las víctimas fatales?",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/ohiggins/fotos-derrumbe-en-el-teniente-dejo-a-6-mineros-muertos-quienes"
+    },
+    {
+      "id": "r21",
+      "publisher": "24 Horas",
+      "published_on": "2025-08-04",
+      "headline": "\"Busqué un refugio\": habla sobreviviente de derrumbe en Andesita en 2023",
+      "canonical_url": "https://www.24horas.cl/24horas/site/artic/20250804/pagspar/20250804213635_general_escroll.html"
+    },
+    {
+      "id": "r22",
+      "publisher": "Emol",
+      "published_on": "2023-08-21",
+      "headline": "Gobernadora del Maule y sistema frontal: \"Todo lo que se invirtió para mitigar (...) hoy día no quedó nada\"",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2023/08/21/1104694/gobernadora-del-maule-sistema-frontal.html"
+    },
+    {
+      "id": "r23",
+      "publisher": "Emol",
+      "published_on": "2023-08-23",
+      "headline": "El día después del sistema frontal en el Maule: Casi 40 mil aislados y 24.792 evacuados",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2023/08/23/1104999/sistema-frontal-en-el-maule.html"
+    },
+    {
+      "id": "r24",
+      "publisher": "Emol",
+      "published_on": "2023-08-22",
+      "headline": "\"Cualquier camino hoy parece río\": El relato de alcaldes del Maule tras los daños del sistema frontal",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2023/08/22/1104887/maule-sistema-frontal-balance-alcaldes.html"
+    },
+    {
+      "id": "r25",
+      "publisher": "Emol",
+      "published_on": "2023-08-24",
+      "headline": "OO.PP. cifra en 600 las afectaciones a infraestructura por sistema frontal: \"Fue más dañino que el anterior\"",
+      "canonical_url": "https://www.emol.com/noticias/Nacional/2023/08/24/1105080/sistema-frontal-afectaciones-mop-regiones.html"
+    },
+    {
+      "id": "r26",
+      "publisher": "BioBioChile",
+      "published_on": "2023-08-21",
+      "headline": "Constitución: piden evacuar ribera del río Maule por desborde y anuncian diversos cortes de agua",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-del-maule/2023/08/21/constitucion-informan-corte-de-agua-en-distintos-sectores-por-rotura-de-tuberia-tras-precipitaciones.shtml"
+    },
+    {
+      "id": "r27",
+      "publisher": "BioBioChile",
+      "published_on": "2023-08-21",
+      "headline": "Maule: Senapred solicita evacuar ribera de Curepto por desbordes de ríos y esteros",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/region-del-maule/2023/08/21/maule-senapred-solicita-evacuar-ribera-de-curepto-por-desbordes-de-rios-y-esteros.shtml"
+    },
+    {
+      "id": "r28",
+      "publisher": "BioBioChile",
+      "published_on": "2023-08-21",
+      "headline": "Presidente Boric decreta Estado de Catástrofe desde la región de O’Higgins a Bío Bío",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/chile/2023/08/21/presidente-boric-decreta-estado-de-catastrofe-desde-la-region-de-ohiggins-a-bio-bio.shtml"
+    },
+    {
+      "id": "r29",
+      "publisher": "BioBioChile",
+      "published_on": "2023-08-21",
+      "headline": "Anegamientos, puentes y rutas cortadas deja sistema frontal en la región del Maule",
+      "canonical_url": "https://www.biobiochile.cl/noticias/nacional/chile/2023/08/21/anegamientos-puentes-y-rutas-cortadas-deja-sistema-frontal-en-la-region-del-maule.shtml"
+    },
+    {
+      "id": "r30",
+      "publisher": "Cooperativa",
+      "published_on": "2023-08-21",
+      "headline": "Se registra el desborde del rio Claro en Molina: Cubrió parte del camino",
+      "canonical_url": "https://www.cooperativa.cl/noticias/pais/region-del-maule/se-registra-el-desborde-del-rio-claro-en-molina-cubrio-parte-del-camino/2023-08-21/115859.html"
+    },
+    {
+      "id": "r31",
+      "publisher": "24 Horas",
+      "published_on": "2023-08-21",
+      "headline": "Situacion crítica: así luce Constitución tras desborde de esteros",
+      "canonical_url": "https://www.24horas.cl/regiones/zona-centro/maule/situacion-critica-asi-luce-constitucion-tras-desborde-de-esteros"
+    }
+  ]
+}
