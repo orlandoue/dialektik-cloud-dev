@@ -1,0 +1,40 @@
+name: ATTACK 7 graph coverage on SEEN development data (NOT SCIENCE)
+on:
+  push:
+    branches: [codex/attack7-evidence-graph-20261020]
+    paths:
+      - '.github/workflows/attack7-seen-diagnostic.yml'
+      - 'experiments/real-metadata-grouping/attack7/diagnose_seen_corpus.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  graph-coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Sparse checkout graph and already exposed source metadata, never labels
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack7.py
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack6_roles.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+            experiments/real-metadata-grouping/attack6-prospective/corpus.json
+            experiments/real-metadata-grouping/attack6-prospective/collection_evidence.json
+            experiments/real-metadata-grouping/attack7/diagnose_seen_corpus.py
+          sparse-checkout-cone-mode: false
+      - name: Refuse Gold and outside software actions
+        run: |
+          test ! -f experiments/real-metadata-grouping/attack6-prospective/reference.json
+          test ! -f experiments/real-metadata-grouping/score_attack3.py
+          echo 'PREVIOUSLY_EXPOSED_CORPUS=TRUE'
+      - name: Execute graph feature-coverage diagnostic
+        run: python3 experiments/real-metadata-grouping/attack7/diagnose_seen_corpus.py
+      - name: Bound conclusion
+        run: |
+          echo 'PRECISION_RECALL_F1=NOT_COMPUTED'
+          echo 'SCIENTIFIC_GO=FALSE'
+          echo 'DATABASE_WRITES=0'
+          echo 'PRODUCTION_PERMISSION=FALSE'
