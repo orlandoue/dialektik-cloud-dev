@@ -1,0 +1,66 @@
+name: Dialektik DEV bounded GOVUK metadata watcher (no persistence)
+on:
+  push:
+    branches: [codex/govuk-bounded-metadata-watch-20261020]
+    paths:
+      - '.github/scripts/govuk-metadata-watch.mjs'
+      - '.github/scripts/govuk-metadata-watch.test.mjs'
+      - '.github/workflows/govuk-metadata-watch.yml'
+  workflow_dispatch:
+  # GitHub only activates scheduled workflows from the repository DEFAULT branch.
+  # Never schedules from this development branch. On default, still needs
+  # explicit operator-enabled variable DIALEKTIK_GOVUK_READONLY_WATCH_ENABLED.
+  schedule:
+    - cron: '23 10 * * *'
+permissions:
+  contents: read
+concurrency:
+  group: govuk-rsh-bounded-readonly-watch
+  cancel-in-progress: false
+jobs:
+  readonly-watch:
+    if: ${{ github.event_name != 'schedule' || vars.DIALEKTIK_GOVUK_READONLY_WATCH_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      # No DATABASE_URL, no PostgreSQL role, no Supabase service secret, no tokens.
+      DIALEKTIK_WATCH_OUTPUT: ${{ runner.temp }}/govuk-watch/manifest.json
+    steps:
+      - name: Checkout without retained GitHub write credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Use pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install pinned package manager
+        run: npm install --global npm@11.6.2
+      - name: Install reproducible dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Compile current Core and database contract (no database connection)
+        run: npm run build
+      - name: Contract tests without Internet or secrets
+        run: |
+          node --test .github/scripts/govuk-metadata-watch.test.mjs
+          npx vitest run --config services/core-api/vitest.config.mts \
+            services/core-api/test/govuk-private-beta-preview.test.ts \
+            services/core-api/test/govuk-product-acquisition.test.ts
+      - name: Call approved source once, on allowlist and after live rights/robots check
+        run: node .github/scripts/govuk-metadata-watch.mjs
+      - name: Save seven-day metadata receipt for audit (NO DB)
+        uses: actions/upload-artifact@v4
+        with:
+          name: govuk-rsh-readonly-receipt
+          path: ${{ runner.temp }}/govuk-watch/manifest.json
+          retention-days: 7
+          if-no-files-found: error
+      - name: Explicit output boundary
+        run: |
+          echo 'REAL_EXTERNAL_API_CHECK=PASS'
+          echo 'SOURCE_COUNT=1'
+          echo 'AUTONOMOUS_NEW_ARTICLE_DISCOVERY=FALSE'
+          echo 'POSTGRES_ACCESS=NONE'
+          echo 'ARTICLE_EVENT_WRITES=0'
+          echo 'PRODUCTION_READY=FALSE'
