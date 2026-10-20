@@ -110,8 +110,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(find.text('Agrupación editorial piloto · País'), findsOneWidget);
+      expect(find.textContaining('4 medios'), findsOneWidget);
+      expect(find.text('Ver fuentes y evidencia'), findsOneWidget);
+      expect(find.textContaining('No es un Event almacenado'), findsNothing);
+      await tester.tap(find.text('Ver fuentes y evidencia'));
+      await tester.pumpAndSettle();
       expect(find.textContaining('No es un Event almacenado'), findsWidgets);
-      expect(find.textContaining('4 medios independientes'), findsOneWidget);
       expect(
         find.byKey(const Key('chile-preview-evidence-expand')),
         findsOneWidget,
