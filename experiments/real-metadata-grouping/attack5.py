@@ -113,6 +113,9 @@ def geo_mentions(headline,geo):
     for phrase,rows in communes.items():
         if len(phrase)<4:continue
         for a,b in _phrase_hits(text,phrase):
+            # A qualified "region de Los Lagos" is not the commune Los Lagos.
+            if re.search(r"\bregion\s+(?:de |del )?$",text[max(0,a-20):a]):
+                continue
             out.append({"start":a,"end":b,"text":phrase,
                 "kind":"GEO_COMMUNE" if len(rows)==1 else "GEO_AMBIGUOUS",
                 "ids":sorted({row["code"] for row in rows}),
