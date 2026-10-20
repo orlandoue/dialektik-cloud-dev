@@ -5,6 +5,8 @@ on:
     paths:
       - 'scripts/operations/managed_backup_inventory.py'
       - 'scripts/operations/test_managed_backup_inventory.py'
+      - 'scripts/operations/verify_real_restore_bundle.py'
+      - 'scripts/operations/test_verify_real_restore_bundle.py'
       - '.github/workflows/managed-restore-contract-ci.yml'
   workflow_dispatch:
 permissions:
@@ -18,7 +20,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Fail-closed exact export/restore contracts
-        run: python3 -m unittest discover -s scripts/operations -p test_managed_backup_inventory.py -v
+        run: |
+          python3 -m unittest discover -s scripts/operations -p test_managed_backup_inventory.py -v
+          python3 -m unittest discover -s scripts/operations -p test_verify_real_restore_bundle.py -v
       - name: Prove real Postgres 17 custom-format Auth/ledger data round-trip using FAKE users
         shell: bash
         run: |
