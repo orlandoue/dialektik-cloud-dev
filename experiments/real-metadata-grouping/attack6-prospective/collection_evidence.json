@@ -1,0 +1,289 @@
+{
+  "schema": "attack6-collection-evidence-v1",
+  "scope": "CURATION_ONLY_NOT_PREDICTOR_INPUT",
+  "capture_date": "2026-10-20",
+  "verification_method": "Web search result showing original publisher headline and source publication date; some results accessed as original full page. Public visibility does not confer ingest/redistribution rights.",
+  "rows": [
+    {
+      "id": "r01",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn416836search7",
+      "publisher": "BioBioChile",
+      "publication_date": "2024-02-03",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-de-valparaiso/2024/02/03/incendio-en-vina-del-mar-provoca-explosiones-en-planta-quimica-reno-ordenan-evacuacion-inmediata.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r02",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn416836search14",
+      "publisher": "BioBioChile",
+      "publication_date": "2024-02-03",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-de-valparaiso/2024/02/03/senapred-solicita-evacuar-de-forma-inmediata-sector-el-salto-en-vina-del-mar-por-incendios.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r03",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn416836search10",
+      "publisher": "BioBioChile",
+      "publication_date": "2024-02-03",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-de-valparaiso/2024/02/03/amp/incendios-region-de-valparaiso-comienza-toque-de-queda-en-4-comunas-y-delega-gonzalez-entrega-balance.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r04",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn416836search16",
+      "publisher": "Emol",
+      "publication_date": "2024-02-04",
+      "url": "https://www.emol.com/noticias/Nacional/2024/02/04/1120669/balance-incendios-forestales-valparaiso.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r05",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn416836search9",
+      "publisher": "Emol",
+      "publication_date": "2024-02-05",
+      "url": "https://www.emol.com/noticias/Nacional/2024/02/05/1120778/cifra-de-fallecidos-incendios-valparaiso.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r06",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn389364search4",
+      "publisher": "Cooperativa",
+      "publication_date": "2024-02-04",
+      "url": "https://www.cooperativa.cl/noticias/pais/desastres-naturales/incendios-forestales/fallecidos-por-los-incendios-forestales-en-la-region-de-valparaiso/2024-02-04/110245.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r07",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn389364search7",
+      "publisher": "Cooperativa",
+      "publication_date": "2024-02-04",
+      "url": "https://www.cooperativa.cl/noticias/pais/desastres-naturales/incendios-forestales/sml-99-fallecidos-por-los-incendios-forestales-de-la-region-de/2024-02-04/172637.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r08",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn389364search3",
+      "publisher": "Cooperativa",
+      "publication_date": "2024-02-10",
+      "url": "https://cooperativa.cl/noticias/pais/desastres-naturales/incendios-forestales/catastrofe-de-incendios-forestales-en-valparaiso-destruyo-7-mil/2024-02-10/190804.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r09",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn389364search13",
+      "publisher": "Meganoticias",
+      "publication_date": "2024-02-03",
+      "url": "https://www.meganoticias.cl/nacional/438255-toque-de-queda-se-retoma-cuatro-comunas-region-de-valparaiso-incendios-forestales-horario-03-02-2024.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r10",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn728365search1",
+      "publisher": "24 Horas",
+      "publication_date": "2024-02-04",
+      "url": "https://www.24horas.cl/regiones/zona-centro/valparaiso/toque-de-queda-comunas-region-de-valparaiso",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r11",
+      "grouping_stratum": "fire",
+      "source_result_ref": "turn389364search15",
+      "publisher": "ADN Radio",
+      "publication_date": "2024-02-03",
+      "url": "https://www.adnradio.cl/2024/02/03/toque-de-queda-en-valparaiso-y-vina-del-mar-a-que-hora-comienza-y-termina-y-cuales-son-las-comunas-donde-rige/",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r12",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn416836search1",
+      "publisher": "Emol",
+      "publication_date": "2025-08-03",
+      "url": "https://www.emol.com/noticias/Nacional/2025/08/02/1173937/sml-muestras-familiares-trabajadores-elteniente.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r13",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn416836search8",
+      "publisher": "Emol",
+      "publication_date": "2025-08-03",
+      "url": "https://www.emol.com/noticias/Nacional/2025/08/03/1173975/clausuran-sirio-elteniente-plazo-faenas.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r14",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn416836search11",
+      "publisher": "Cooperativa",
+      "publication_date": "2025-08-03",
+      "url": "https://www.cooperativa.cl/noticias/site/artic/20250803/pags-amp/20250803082808.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r15",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn416836search12",
+      "publisher": "Cooperativa",
+      "publication_date": "2025-08-03",
+      "url": "https://www.cooperativa.cl/noticias/pais/empresas-del-estado/codelco/derrumbe-en-el-teniente-dejo-a-seis-mineros-fallecidos/2025-08-03/173420.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r16",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn389364search0",
+      "publisher": "BioBioChile",
+      "publication_date": "2025-08-02",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-de-ohiggins/2025/08/02/rescate-en-el-teniente-avanzan-15-metros-de-un-total-de-20-para-acceder-a-zona-donde-estarian-mineros.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r17",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn389364search2",
+      "publisher": "BioBioChile",
+      "publication_date": "2025-08-02",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-de-ohiggins/2025/08/02/presidente-boric-por-rescate-en-el-teniente-no-se-ha-podido-establecer-contacto-con-los-mineros.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r18",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn389364search5",
+      "publisher": "BioBioChile",
+      "publication_date": "2025-08-02",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-de-ohiggins/2025/08/02/fiscalia-y-pdi-trabajan-para-identificar-restos-encontrados-en-mina-el-teniente.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r19",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn389364search6",
+      "publisher": "BioBioChile",
+      "publication_date": "2025-08-02",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-de-ohiggins/2025/08/02/laurence-golborne-se-suma-al-equipo-de-gestion-de-rescate-en-la-mina-el-teniente.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r20",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn728365search15",
+      "publisher": "24 Horas",
+      "publication_date": "2025-08-03",
+      "url": "https://www.24horas.cl/regiones/zona-centro/ohiggins/fotos-derrumbe-en-el-teniente-dejo-a-6-mineros-muertos-quienes",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r21",
+      "grouping_stratum": "mine",
+      "source_result_ref": "turn728365search12",
+      "publisher": "24 Horas",
+      "publication_date": "2025-08-04",
+      "url": "https://www.24horas.cl/24horas/site/artic/20250804/pagspar/20250804213635_general_escroll.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r22",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn416836search0",
+      "publisher": "Emol",
+      "publication_date": "2023-08-21",
+      "url": "https://www.emol.com/noticias/Nacional/2023/08/21/1104694/gobernadora-del-maule-sistema-frontal.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r23",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn416836search3",
+      "publisher": "Emol",
+      "publication_date": "2023-08-23",
+      "url": "https://www.emol.com/noticias/Nacional/2023/08/23/1104999/sistema-frontal-en-el-maule.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r24",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn416836search17",
+      "publisher": "Emol",
+      "publication_date": "2023-08-22",
+      "url": "https://www.emol.com/noticias/Nacional/2023/08/22/1104887/maule-sistema-frontal-balance-alcaldes.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r25",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn416836search15",
+      "publisher": "Emol",
+      "publication_date": "2023-08-24",
+      "url": "https://www.emol.com/noticias/Nacional/2023/08/24/1105080/sistema-frontal-afectaciones-mop-regiones.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r26",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn416836search2",
+      "publisher": "BioBioChile",
+      "publication_date": "2023-08-21",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-del-maule/2023/08/21/constitucion-informan-corte-de-agua-en-distintos-sectores-por-rotura-de-tuberia-tras-precipitaciones.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r27",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn416836search4",
+      "publisher": "BioBioChile",
+      "publication_date": "2023-08-21",
+      "url": "https://www.biobiochile.cl/noticias/nacional/region-del-maule/2023/08/21/maule-senapred-solicita-evacuar-ribera-de-curepto-por-desbordes-de-rios-y-esteros.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r28",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn416836search5",
+      "publisher": "BioBioChile",
+      "publication_date": "2023-08-21",
+      "url": "https://www.biobiochile.cl/noticias/nacional/chile/2023/08/21/presidente-boric-decreta-estado-de-catastrofe-desde-la-region-de-ohiggins-a-bio-bio.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r29",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn416836search6",
+      "publisher": "BioBioChile",
+      "publication_date": "2023-08-21",
+      "url": "https://www.biobiochile.cl/noticias/nacional/chile/2023/08/21/anegamientos-puentes-y-rutas-cortadas-deja-sistema-frontal-en-la-region-del-maule.shtml",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r30",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn389364search9",
+      "publisher": "Cooperativa",
+      "publication_date": "2023-08-21",
+      "url": "https://www.cooperativa.cl/noticias/pais/region-del-maule/se-registra-el-desborde-del-rio-claro-en-molina-cubrio-parte-del-camino/2023-08-21/115859.html",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    },
+    {
+      "id": "r31",
+      "grouping_stratum": "flood",
+      "source_result_ref": "turn728365search13",
+      "publisher": "24 Horas",
+      "publication_date": "2023-08-21",
+      "url": "https://www.24horas.cl/regiones/zona-centro/maule/situacion-critica-asi-luce-constitucion-tras-desborde-de-esteros",
+      "verification_level": "SOURCE_INDEXED_NOT_HTTP_HEADER_VERIFIED"
+    }
+  ],
+  "shortfalls": [],
+  "notes": "31 article URLs from six distinct publishers. Check redirects/canonical/robots independently before operational onboarding. No labels or model output in manifest."
+}
