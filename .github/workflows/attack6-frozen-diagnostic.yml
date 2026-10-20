@@ -1,0 +1,42 @@
+name: ATTACK 6 frozen post-prediction diagnostics (NOT GOLD)
+on:
+  push:
+    branches: [codex/attack6-prospective-eval-20261020]
+    paths:
+      - '.github/workflows/attack6-frozen-diagnostic.yml'
+      - 'experiments/real-metadata-grouping/attack6-prospective/diagnose_failure.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  failure-diagnosis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack6.py
+            experiments/real-metadata-grouping/attack6_roles.py
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+            experiments/real-metadata-grouping/attack6-prospective/corpus.json
+            experiments/real-metadata-grouping/attack6-prospective/collection_evidence.json
+            experiments/real-metadata-grouping/attack6-prospective/diagnose_failure.py
+          sparse-checkout-cone-mode: false
+      - name: Re-authenticate frozen candidate blobs without Gold
+        run: |
+          test "$(git hash-object experiments/real-metadata-grouping/attack6.py)" = 7d0cccd8a1abdb33256eae05fab93817747e3855
+          test "$(git hash-object experiments/real-metadata-grouping/attack6_roles.py)" = dd9b207e72d3fe4cc69de0d4020c3e5ef2363df4
+          test "$(git hash-object experiments/real-metadata-grouping/attack5.py)" = 930865a4ee073c7e3e10163a037e5bb1271de84e
+          test "$(git hash-object experiments/real-metadata-grouping/attack5/chile_geography.json)" = b77512235fea9559fca1a5c9ef9ca6514a4b5b04
+          test ! -e experiments/real-metadata-grouping/attack6-prospective/reference.json
+          echo 'FROZEN_MODEL_AND_NO_GOLD=PASS'
+      - name: Diagnose only frozen output by published source strata
+        run: python3 experiments/real-metadata-grouping/attack6-prospective/diagnose_failure.py
+      - name: No production or scientific authorization
+        run: |
+          echo 'SCIENCE_GATE=NO_GO_ZERO_COVERAGE'
+          echo 'FROZEN_CANDIDATE_UNCHANGED=TRUE'
+          echo 'DATABASE_WRITES=0'
+          echo 'DEPLOYMENT_PERMISSION=FALSE'
