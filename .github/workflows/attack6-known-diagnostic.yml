@@ -1,0 +1,123 @@
+name: ATTACK 6 known-corpus diagnostic and blank adjudication packets
+on:
+  push:
+    branches: [codex/attack6-evidence-actions-20261020]
+    paths:
+      - 'experiments/real-metadata-grouping/attack6.py'
+      - 'experiments/real-metadata-grouping/attack6_roles.py'
+      - 'experiments/real-metadata-grouping/attack5/adjudication_prepare.py'
+      - '.github/workflows/attack6-known-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  retrospective-developer-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout only metadata, model, and geography
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack6.py
+            experiments/real-metadata-grouping/attack6_roles.py
+            experiments/real-metadata-grouping/attack5.py
+            experiments/real-metadata-grouping/attack5/chile_geography.json
+            experiments/real-metadata-grouping/attack5/prospective_corpus.json
+          sparse-checkout-cone-mode: false
+      - name: Explicit exclusion of any editorial reference
+        shell: bash
+        run: |
+          test ! -f experiments/real-metadata-grouping/score_attack3.py
+          test ! -f experiments/real-metadata-grouping/attack5/reference.json
+          echo "CORPUS_ALREADY_SEEN=TRUE"
+          echo "GOLD_ACCESS=FALSE"
+      - name: Run candidate role separation against previously seen Penco/Arauco case
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/attack6"
+          python3 experiments/real-metadata-grouping/attack6.py \
+            --input experiments/real-metadata-grouping/attack5/prospective_corpus.json \
+            --output "$RUNNER_TEMP/attack6/predictions.json"
+          python3 - <<'PY'
+          import sys,json,pathlib,collections,hashlib,os
+          p=pathlib.Path('experiments/real-metadata-grouping').resolve()
+          sys.path.insert(0,str(p))
+          from attack6 import run
+          raw=(p/'attack5/prospective_corpus.json').read_bytes()
+          corpus=json.loads(raw)
+          pred=run(corpus)
+          shuffled=dict(corpus);shuffled['articles']=list(reversed(corpus['articles']))
+          assert pred==run(shuffled),'PERMUTATION_MISMATCH'
+          q={x['id']:x for x in pred['articles']}
+          assert q['z04']['primary_action']=='CORRECTION'
+          assert q['z09']['primary_action']=='EXPLANATION'
+          merged={member for g in pred['occurrence_groups'] for member in g['members']}
+          assert 'z04' not in merged and 'z09' not in merged, 'DOCUMENTARY_ACT_FALSE_MERGE'
+          assert not pred['production_permission'] and pred['database_writes']==0
+          decisions=collections.Counter(x['decision'] for x in pred['pair_decisions'])
+          reasons=collections.Counter(x['reason'] for x in pred['pair_decisions'])
+          manifest={
+            'scope':'REUSED_SEEN_CORPUS_NOT_INDEPENDENT',
+            'science_score':'NOT_COMPUTED',
+            'input_sha256':hashlib.sha256(raw).hexdigest(),
+            'prediction_sha256':hashlib.sha256((pathlib.Path(os.environ['RUNNER_TEMP'])/'attack6/predictions.json').read_bytes()).hexdigest(),
+            'documents':26,'pairs':325,
+            'class_counts':dict(sorted(decisions.items())),
+            'reason_counts':dict(sorted(reasons.items())),
+            'clusters':[x['members'] for x in pred['occurrence_groups']],
+            'z04_role':q['z04']['primary_action'],'z09_role':q['z09']['primary_action'],
+            'z04_and_z09_not_physically_merged':True,
+            'gold_access':False,'database_writes':0,'production_permission':False}
+          (pathlib.Path(os.environ['RUNNER_TEMP'])/'attack6/manifest.json').write_text(
+            json.dumps(manifest,ensure_ascii=False,sort_keys=True,indent=2)+'\n',encoding='utf8')
+          print('ATTACK6_RETROSPECTIVE_DIAGNOSTIC='+json.dumps(manifest,sort_keys=True))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: attack6-development-predictions-NOT-GOLD
+          path: ${{ runner.temp }}/attack6/
+          retention-days: 7
+          if-no-files-found: error
+  generate-two-blank-reviewer-packets:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Sparse checkout metadata and blank packet generator, never predictor
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          sparse-checkout: |
+            experiments/real-metadata-grouping/attack5/prospective_corpus.json
+            experiments/real-metadata-grouping/attack5/adjudication_prepare.py
+          sparse-checkout-cone-mode: false
+      - name: Verify complete evaluator/predictor isolation
+        shell: bash
+        run: |
+          test ! -e experiments/real-metadata-grouping/attack5.py
+          test ! -e experiments/real-metadata-grouping/attack6.py
+          test ! -e experiments/real-metadata-grouping/attack5/independent-reference.json
+          echo 'ANNOTATOR_PREDICTION_ACCESS=FALSE'
+      - name: Create two separate unlabeled review packets
+        shell: bash
+        run: |
+          python3 experiments/real-metadata-grouping/attack5/adjudication_prepare.py \
+            --corpus experiments/real-metadata-grouping/attack5/prospective_corpus.json \
+            --output-dir "$RUNNER_TEMP/attack5-blank-reviews"
+          python3 - <<'PY'
+          import os,json,pathlib
+          folder=pathlib.Path(os.environ['RUNNER_TEMP'])/'attack5-blank-reviews'
+          for slot in ('A','B'):
+            r=json.loads((folder/f'reviewer_{slot}_BLANK.json').read_text())
+            assert len(r['articles'])==26 and len(r['pairs'])==325
+            assert all(p['label'] is None for p in r['pairs'])
+            assert all(a['primary_occurrence_id'] is None for a in r['articles'])
+            assert not r['complete'] and not r['is_gold']
+          print('TWO_UNLABELED_INDEPENDENT_REVIEW_SLOTS_CREATED=PASS')
+          print('REAL_INDEPENDENT_ANNOTATIONS=0')
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: attack5-independent-review-BLANK-NOT-GOLD
+          path: ${{ runner.temp }}/attack5-blank-reviews/
+          retention-days: 30
+          if-no-files-found: error
