@@ -152,13 +152,32 @@ phase RESTORE_MIGRATION_LEDGER_DATA \
   docker exec "$db" pg_restore -U postgres -d postgres \
     --data-only --single-transaction --exit-on-error \
     /tmp/dialektik_restore_real/ledger.dump
+# The verified managed Auth custom archive was restored above.
+# A general dump may duplicate Auth COPY rows: compare every Auth COPY from that
+# general dump against the original independent managed archive first.
+# Fail closed on ANY row, column, table-coverage or sequence mismatch.
+phase EXTRACT_ARCHIVED_AUTH_DATA_FOR_EQUALITY \
+  docker exec "$db" pg_restore --data-only \
+    --file /tmp/dialektik_restore_real/auth-original-compare.sql \
+    /tmp/dialektik_restore_real/auth.dump
+docker cp "$db:/tmp/dialektik_restore_real/auth-original-compare.sql" \
+  "$work/derived/auth-original-compare.sql"
+python3 scripts/operations/auth_data_copy_equivalence.py \
+  --general-data "$work/derived/data.safe.sql" \
+  --archive-data "$work/derived/auth-original-compare.sql" \
+  --out "$work/derived/data.auth-reconciled.sql"
+docker cp "$work/derived/data.auth-reconciled.sql" \
+  "$db:/tmp/dialektik_restore_real/data.auth-reconciled.sql"
+docker exec -u root "$db" chown postgres:postgres \
+  /tmp/dialektik_restore_real/data.auth-reconciled.sql
+echo 'AUTH_DUPLICATE_SOURCE_COPY_BLOCKS_EXACTLY_RECONCILED=PASS'
 # Application data is separately atomic in the disposable target. A failure
 # rolls back all rows from this stage, preserving Auth + ledger for investigation.
 # Only the FIRST SQL ERROR class is released as a fixed allowlisted marker.
 phase RESTORE_APPLICATION_DATA \
   docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
     --single-transaction \
-    -f /tmp/dialektik_restore_real/data.sql
+    -f /tmp/dialektik_restore_real/data.auth-reconciled.sql
 
 count="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
   -c "SELECT (SELECT count(*) FROM auth.users), (SELECT count(*) FROM supabase_migrations.schema_migrations);" | tr '|' ':')"
