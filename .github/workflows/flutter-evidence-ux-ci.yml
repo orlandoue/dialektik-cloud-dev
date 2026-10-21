@@ -1,0 +1,44 @@
+name: Flutter real Android DEV curated evidence UI validation
+on:
+  push:
+    branches: [codex/flutter-evidence-ux-20261020]
+    paths:
+      - 'app/**'
+      - '.github/workflows/flutter-evidence-ux-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  flutter-ux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - name: Install pinned dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Validate committed Dart formatting
+        run: dart format --output=none --set-exit-if-changed lib/features/consumer/presentation/widgets/curated_event_preview_card.dart test/consumer/curated_event_preview_test.dart
+      - name: Analyze all Flutter source
+        run: flutter analyze --no-pub
+      - name: Test source attribution and small Android layout
+        run: flutter test --no-pub test/consumer/curated_event_preview_test.dart --test-randomize-ordering-seed=0
+      - name: Check design and epistemic constraints
+        run: dart run tool/check_design_invariants.dart
+      - name: Verify this PR does not alter live backend or production settings
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'FLUTTER_EDITORIAL_EVIDENCE_UX=PASS'
+          echo 'AUTONOMOUS_GROUPING_CLAIM=NONE'
+          echo 'PRODUCTION_DEPLOYMENT=NONE'
+          echo 'SUPABASE_DEV_CHANGES=0'
