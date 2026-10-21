@@ -3,6 +3,9 @@ on:
   push:
     branches: [codex/restore-gate-managed-recovery-20261020]
     paths:
+      - 'scripts/operations/test_logging_guc_sanitizer.py'
+      - 'scripts/operations/test_managed_backup_inventory.py'
+      - 'scripts/operations/managed_backup_inventory.py'
       - '.github/workflows/real-backup-local-supabase-restore.yml'
       - 'scripts/operations/real_supabase_offline_replay.sh'
       - 'scripts/operations/check_local_restore_target.py'
@@ -27,6 +30,7 @@ jobs:
           python3 -m py_compile scripts/operations/verify_real_restore_bundle.py
           python3 -m py_compile scripts/operations/check_local_restore_target.py
           python3 -m unittest discover -s scripts/operations -p test_managed_backup_inventory.py -v
+          python3 -m unittest discover -s scripts/operations -p test_logging_guc_sanitizer.py -v
           python3 -m unittest discover -s scripts/operations -p test_verify_real_restore_bundle.py -v
           python3 -m unittest discover -s scripts/operations -p test_classify_private_restore_error.py -v
           echo 'ALL_REPLAY_CONTRACT_SCRIPTS_PARSE=PASS'
