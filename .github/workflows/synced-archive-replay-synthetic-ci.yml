@@ -82,7 +82,7 @@ jobs:
                (SELECT relrowsecurity FROM pg_class WHERE oid=
                 'public.example_archive_article'::regclass)
                FROM public.example_archive_article;" 2>/dev/null)" || exit 1
-          [ "$result" = '1|t' ] || {
+          [ "$result" = '1|true' ] || {
             echo 'SYNTHETIC_RESTORED_RLS_OR_ROWS=FAIL'; exit 1;
           }
           echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_AND_DATA_REPLAY=PASS'
