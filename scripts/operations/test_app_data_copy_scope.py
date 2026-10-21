@@ -42,7 +42,7 @@ class ApplicationCopyScopeRedaction(unittest.TestCase):
     def test_unknown_copy_syntax_and_no_copy_fail_closed(self):
         self.assertEqual(first_duplicate_copy_scope(error_at(2),
             'COPY "private;content" (id) FROM stdin;\n1\n\\.\n'),
-            "FIRST_ERROR_COPY_UNRESOLVED")
+            "FIRST_ERROR_OUTSIDE_COPY")
         self.assertEqual(first_duplicate_copy_scope(error_at(9),
             'COPY public.anything (id) FROM stdin;\n1\n'),
             "FIRST_ERROR_COPY_UNRESOLVED")
