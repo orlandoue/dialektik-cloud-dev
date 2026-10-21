@@ -1,0 +1,69 @@
+name: Compare DEV Auth catalog to disposable Supabase (no real Auth data)
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/auth-source-local-catalog-ci.yml'
+      - 'scripts/operations/auth_source_catalog_contract.py'
+      - 'scripts/operations/test_auth_source_catalog_contract.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  baseline-catalog:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Test schema-only comparison with synthetic metadata
+        run: python3 -m unittest discover -s scripts/operations -p test_auth_source_catalog_contract.py -v
+      - name: Bootstrap empty local Supabase and compare Auth schema only
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/auth-schema-target"
+          mkdir -p "$work"
+          cd "$work"
+          npx --yes supabase@2.120.0 init > "$RUNNER_TEMP/auth-catalog-init.log" 2>&1
+          npx --yes supabase@2.120.0 start > "$RUNNER_TEMP/auth-catalog-start.log" 2>&1 || {
+            echo "LOCAL_SUPABASE_BOOTSTRAP=FAIL_REDACTED"
+            exit 1
+          }
+          echo 'LOCAL_SUPABASE_BOOTSTRAP=PASS'
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db"
+          cat > "$RUNNER_TEMP/auth-catalog.sql" <<'SQL'
+          SELECT c.relname, count(a.attnum),
+            md5(string_agg(a.attname||':'||format_type(a.atttypid,a.atttypmod)
+                ||':'||a.attnotnull::text||':'||
+                COALESCE(pg_get_expr(d.adbin,d.adrelid),''),
+              E'\n' ORDER BY a.attnum))
+          FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+          JOIN pg_attribute a ON a.attrelid=c.oid
+            AND a.attnum>0 AND NOT a.attisdropped
+          LEFT JOIN pg_attrdef d ON d.adrelid=c.oid AND d.adnum=a.attnum
+          WHERE n.nspname='auth' AND c.relkind IN ('r','p')
+          GROUP BY c.relname ORDER BY c.relname;
+          SQL
+          docker cp "$RUNNER_TEMP/auth-catalog.sql" "$db:/tmp/schema-only.sql"
+          docker exec "$db" psql -XAt -F '|' -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -f /tmp/schema-only.sql > "$RUNNER_TEMP/local-auth-catalog.txt"
+          python3 "$GITHUB_WORKSPACE/scripts/operations/auth_source_catalog_contract.py" \
+            --local-catalog "$RUNNER_TEMP/local-auth-catalog.txt"
+          counts="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 \
+            -c 'SELECT (SELECT count(*) FROM auth.schema_migrations), (SELECT count(*) FROM auth.users), (SELECT count(*) FROM auth.sessions), (SELECT count(*) FROM auth.identities);')"
+          echo "DISPOSABLE_LOCAL_AUTH_INTERNAL_MIGRATIONS_USERS_SESSIONS_IDENTITIES=$counts"
+          echo "SOURCE_AUTH_INTERNAL_MIGRATIONS=82"
+          echo 'NO_SOURCE_AUTH_USER_DATA_ACCESSED=TRUE'
+          echo 'REMOTE_SUPABASE_SQL_MUTATIONS=0'
+      - name: Destroy synthetic local stack and temporary catalog
+        if: always()
+        shell: bash
+        run: |
+          (cd "$RUNNER_TEMP/auth-schema-target" && \
+            npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1) || true
+          rm -rf -- "$RUNNER_TEMP/auth-schema-target" "$RUNNER_TEMP/local-auth-catalog.txt" "$RUNNER_TEMP/auth-catalog.sql"
+          echo 'DISPOSABLE_SOURCE_INDEPENDENT_CLEANUP=COMPLETE'
