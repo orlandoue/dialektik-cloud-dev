@@ -1,4 +1,5 @@
 # OWNER_AUTHORIZED_SINGLE_PROTECTED_ROLE_SQL_SHAPE_20261020
+# OWNER_AUTHORIZED_PHYSICAL_GUC_SHAPE_20261020
 name: Protected diagnostics of role GUC without starting Supabase
 on:
   push:
