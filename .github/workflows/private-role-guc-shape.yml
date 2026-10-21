@@ -51,6 +51,10 @@ jobs:
             --tar "$d/derived/backup.tar" --dest "$d/clear"
           python3 scripts/operations/inspect_role_guc_shape.py \
             --roles-sql "$d/clear/roles.sql"
+          python3 scripts/operations/isolate_parameter_grant.py \
+            --source "$d/clear/roles.sql" \
+            --ordinary-out "$d/derived/roles.normal.sql" \
+            --privileged-out "$d/derived/roles.grant.sql"
           echo 'CIPHERTEXT_SOURCE_UNMODIFIED=TRUE'
           echo 'REMOTE_DEV_DB_CALLS=0'
           echo 'AUTH_DATA_PUBLISHED=FALSE'
