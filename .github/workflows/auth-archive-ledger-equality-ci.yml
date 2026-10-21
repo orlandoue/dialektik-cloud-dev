@@ -5,6 +5,7 @@ on:
     paths:
       - 'scripts/operations/auth_archive_ledger_gate.py'
       - 'scripts/operations/test_auth_archive_ledger_gate.py'
+      - 'scripts/operations/real_supabase_offline_replay.sh'
       - '.github/workflows/auth-archive-ledger-equality-ci.yml'
   workflow_dispatch:
 permissions:
@@ -17,6 +18,15 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Verify protected runner contract remains opt-in and runner script parses
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq "AUTH_ARCHIVE_VERSION_EQUALITY" scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq -- '--version-sets-confirmed-identical' scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq "APPROVE_REAL_SUPABASE_OFFLINE_RESTORE_20261020" .github/workflows/real-backup-local-supabase-restore.yml
+          echo 'REAL_RESTORE_TRIGGER_REMAINS_OWNER_GATED=PASS'
       - name: Python archive gate negative tests
         run: python3 -m unittest discover -s scripts/operations -p test_auth_archive_ledger_gate.py -v
       - name: Synthetic native PostgreSQL 17 custom archive and extracted COPY comparison

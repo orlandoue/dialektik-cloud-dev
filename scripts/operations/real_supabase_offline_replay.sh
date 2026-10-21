@@ -98,9 +98,45 @@ echo 'SOURCE_PARAMETER_PRIVILEGE_PRESERVED_IN_ISOLATED_TARGET=PASS'
 phase RESTORE_APPLICATION_SCHEMA \
   docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -f /tmp/dialektik_restore_real/schema.sql
+# The initialized offline Auth target already contains 82 internal versions.
+# Extract *only* the archived migration table via a derived pg_restore TOC.
+# No source Auth user/session rows are restored or filtered in this preflight.
+python3 scripts/operations/auth_archive_ledger_gate.py prepare \
+  --toc-in "$work/derived/auth.toc" \
+  --toc-out "$work/derived/auth-archive-only-migrations.toc"
+docker cp "$work/derived/auth-archive-only-migrations.toc" \
+  "$db:/tmp/dialektik_restore_real/auth-archive-only-migrations.toc"
+phase EXTRACT_AUTH_ARCHIVE_MIGRATION_DATA \
+  docker exec "$db" pg_restore --data-only \
+    --use-list /tmp/dialektik_restore_real/auth-archive-only-migrations.toc \
+    --file /tmp/dialektik_restore_real/auth-archive-versions.sql \
+    /tmp/dialektik_restore_real/auth.dump
+docker cp "$db:/tmp/dialektik_restore_real/auth-archive-versions.sql" \
+  "$work/derived/auth-archive-versions.sql"
+docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c "SELECT version FROM auth.schema_migrations ORDER BY version;" \
+  > "$work/derived/auth-local-seeded-versions.txt"
+chmod 0600 "$work/derived/auth-archive-versions.sql" \
+  "$work/derived/auth-local-seeded-versions.txt"
+# Fail closed if ANY of the archived 82 versions differs from the 82 seeded local
+# versions. A live-source equality proof is NOT an acceptable substitute.
+phase CHECK_AUTH_ARCHIVE_VERSION_EQUALITY \
+  python3 scripts/operations/auth_archive_ledger_gate.py compare \
+    --archive-sql "$work/derived/auth-archive-versions.sql" \
+    --target-versions "$work/derived/auth-local-seeded-versions.txt"
+echo 'ORIGINAL_ARCHIVE_VERSUS_ISOLATED_AUTH_82_VERSIONS=IDENTICAL'
+# Only now derive an approved TOC that removes exactly one seeded ledger table.
+# This retains all other 26 Auth TABLE DATA entries, including users and sessions.
+python3 scripts/operations/filter_auth_migration_toc.py \
+  --toc-in "$work/derived/auth.toc" \
+  --toc-out "$work/derived/auth-exclude-identical-migration-ledger.toc" \
+  --version-sets-confirmed-identical
+docker cp "$work/derived/auth-exclude-identical-migration-ledger.toc" \
+  "$db:/tmp/dialektik_restore_real/auth-exclude-identical-migration-ledger.toc"
 phase RESTORE_MANAGED_AUTH_DATA \
   docker exec "$db" pg_restore -U postgres -d postgres \
     --data-only --single-transaction --exit-on-error \
+    --use-list /tmp/dialektik_restore_real/auth-exclude-identical-migration-ledger.toc \
     /tmp/dialektik_restore_real/auth.dump
 phase RESTORE_MIGRATION_LEDGER_DATA \
   docker exec "$db" pg_restore -U postgres -d postgres \
