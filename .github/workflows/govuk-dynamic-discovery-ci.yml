@@ -3,10 +3,15 @@ on:
   push:
     branches: [codex/govuk-dynamic-discovery-20261021]
   workflow_dispatch:
+  # Scheduled runs work ONLY after this workflow is merged into the default branch.
+  # OFF by default: operator must enable DIALEKTIK_GOVUK_DISCOVERY_WATCH_ENABLED.
+  schedule:
+    - cron: '17 */3 * * *'
 permissions:
   contents: read
 jobs:
   prewrite-probe:
+    if: ${{ github.event_name != 'schedule' || vars.DIALEKTIK_GOVUK_DISCOVERY_WATCH_ENABLED == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
