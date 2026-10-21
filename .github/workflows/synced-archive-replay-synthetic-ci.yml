@@ -48,7 +48,9 @@ jobs:
           docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
             --schema-only --no-owner --no-privileges --single-transaction --exit-on-error \
             /tmp/native-public.dump > "$w/schema-restore-private.log" 2>&1 || {
-            echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_RESTORE=FAIL_REDACTED'; exit 1;
+            echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_RESTORE=FAIL_REDACTED'
+            grep -E 'already exists|permission denied|schema|ERROR:|pg_restore: error' "$w/schema-restore-private.log" | head -12 || true
+            exit 1;
           }
           docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
             --data-only --no-owner --no-privileges --single-transaction --exit-on-error \
