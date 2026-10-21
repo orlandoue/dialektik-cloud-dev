@@ -190,6 +190,36 @@ has_rls="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=
   -c "SELECT coalesce((SELECT relrowsecurity FROM pg_class WHERE oid=to_regclass('public.articles')),false);")"
 [ "$has_rls" = 't' ] || { echo 'PUBLIC_ARTICLES_RLS_NOT_RESTORED'; exit 1; }
 echo 'REAL_PUBLIC_ARTICLES_RLS=PASS'
+# Fixed snapshot contract, independently observed on remote DEV read-only:
+# one Auth user, one matching authorized private-beta identity, seven categories,
+# no source/articles/events/live records and writer NOLOGIN.
+# Query results (including identities) are never printed to GitHub logs.
+if ! docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c "SELECT CASE WHEN
+    (SELECT count(*) FROM auth.users)=1 AND
+    (SELECT count(*) FROM public.private_beta_testers)=1 AND
+    (SELECT count(*) FROM public.private_beta_testers b JOIN auth.users u ON u.id=b.user_id)=1 AND
+    (SELECT count(*) FROM public.categories)=7 AND
+    (SELECT count(*) FROM public.sources)=0 AND
+    (SELECT count(*) FROM public.articles)=0 AND
+    (SELECT count(*) FROM public.events)=0 AND
+    (SELECT count(*) FROM public.live_acquisition_receipts)=0 AND
+    (SELECT count(*) FROM public.live_article_versions)=0 AND
+    (SELECT max(version) FROM supabase_migrations.schema_migrations)='20261016074743' AND
+    EXISTS (SELECT 1 FROM pg_roles
+            WHERE rolname='dialektik_govuk_metadata_writer' AND NOT rolcanlogin)
+    THEN 'PASS' ELSE 'FAIL' END;" \
+  > "$work/derived/restored-relational-integrity.log" 2>&1; then
+  echo 'REAL_AUTH_APP_RELATIONAL_INTEGRITY=FAIL_REDACTED'
+  exit 1
+fi
+if [ "$(cat "$work/derived/restored-relational-integrity.log")" != "PASS" ]; then
+  echo 'REAL_AUTH_APP_RELATIONAL_INTEGRITY=FAIL_REDACTED'
+  exit 1
+fi
+echo 'REAL_AUTH_APP_RELATIONAL_INTEGRITY=PASS'
+echo 'AUTH_APP_TESTER_LINKS=PASS'
+echo 'RESTORED_GOVUK_WRITER_STILL_NOLOGIN=PASS'
 echo 'REAL_BACKUP_OFFLINE_DATABASE_REPLAY=PASS'
 echo 'AUTH_API_LOGIN_VERIFICATION=NOT_EXECUTED'
 echo 'DATABASE_BACKUP_ATOMICITY=NOT_ESTABLISHED'
