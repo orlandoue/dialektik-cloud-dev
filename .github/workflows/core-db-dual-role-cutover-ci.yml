@@ -17,6 +17,7 @@ jobs:
           node-version: '22'
       - name: Install and compile exact existing Core/DB
         run: |
+          npm install --global npm@11.6.2
           npm ci --no-audit --no-fund
           npm run build
       - name: Exercise candidate-only role cutover and refusal tests
