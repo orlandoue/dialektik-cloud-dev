@@ -135,7 +135,7 @@ export function planRightsGatedMetadata(
         policy.robotsAllowsPlannedPath !== true) {
       throw new Error('METADATA_SOURCE_POLICY_NOT_AUTHORIZED');
     }
-    const origin = assertExternalHttps(policy.canonicalOrigin, 'METADATA_SOURCE_ORIGIN_INVALID');
+    const origin = assertExternalHttps(policy.canonicalOrigin + '/', 'METADATA_SOURCE_ORIGIN_INVALID');
     if (origin.href !== origin.origin + '/' || policy.canonicalOrigin !== origin.origin) {
       throw new Error('METADATA_SOURCE_ORIGIN_INVALID');
     }
