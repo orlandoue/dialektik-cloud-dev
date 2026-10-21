@@ -224,7 +224,22 @@ echo 'RESTORED_GOVUK_WRITER_STILL_NOLOGIN=PASS'
 # Validate the restored Core and disabled writer ACL/RLS, then intentionally
 # fail a transaction containing a synthetic table and row; prove rollback.
 bash scripts/operations/verify_restored_roles_rollback.sh "$db" "$work"
+# The original Auth user is still present. Launch an actual GoTrue 2.197.0
+# process in the SAME disconnected database network namespace (no egress).
+# Authenticate only a newly created random synthetic user, never original PII.
+bash scripts/operations/networkless_gotrue_replay_smoke.sh "$db" "$work/derived"
+post_auth_api="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c "SELECT CASE WHEN (SELECT count(*) FROM auth.users)=2
+     AND (SELECT count(*) FROM public.private_beta_testers t
+          JOIN auth.users u ON t.user_id=u.id)=1
+     THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || {
+  echo 'AUTH_API_RESTORED_FIXTURE_INTEGRITY=FAIL_REDACTED'; exit 1;
+}
+[ "$post_auth_api" = PASS ] || {
+  echo 'AUTH_API_RESTORED_FIXTURE_INTEGRITY=FAIL_REDACTED'; exit 1;
+}
+echo 'AUTH_API_RESTORED_FIXTURE_INTEGRITY=PASS'
 echo 'REAL_BACKUP_OFFLINE_DATABASE_REPLAY=PASS'
-echo 'AUTH_API_LOGIN_VERIFICATION=NOT_EXECUTED'
+echo 'AUTH_API_LOGIN_VERIFICATION=PASS_SYNTHETIC_ACCOUNT_ON_REAL_RESTORE'
 echo 'DATABASE_BACKUP_ATOMICITY=NOT_ESTABLISHED'
 echo 'PRODUCTION_RESTORE_GATE=STILL_PENDING_SEPARATE_APPROVAL'
