@@ -1,0 +1,52 @@
+name: Protected diagnostics of role GUC without starting Supabase
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/private-role-guc-shape.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  classified-source-shape:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'APPROVE_PROTECTED_ROLE_SQL_SHAPE_DIAGNOSTIC_20261020'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    environment: dialektik-dev-backup
+    steps:
+      - name: Checkout no persisted credentials
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify synthetic classifier before decrypting
+        run: python3 -m unittest discover -s scripts/operations -p test_inspect_role_guc_shape.py -v
+      - name: Download and diagnose original ciphertext privately
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: orlandoue/dialektik-cloud-dev
+          BACKUP_PASSWORD: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          d="$RUNNER_TEMP/protected-guc-shape"
+          mkdir -p "$d/download" "$d/derived"
+          trap 'rm -rf -- "$RUNNER_TEMP/protected-guc-shape"' EXIT
+          gh run download 39488529000 --name dialektik-complete-dev-auth-ledger-encrypted --dir "$d/download" >/dev/null
+          test -s "$d/download/dialektik-complete-dev-20261020.tar.gpg"
+          test "${#BACKUP_PASSWORD}" -ge 32 || { echo 'PROTECTED_PASSPHRASE_PRECONDITION_FAILED'; exit 1; }
+          printf '%s' "$BACKUP_PASSWORD" > "$d/derived/key"
+          gpg --quiet --batch --no-tty --pinentry-mode loopback --passphrase-file "$d/derived/key" \
+            --decrypt --output "$d/derived/backup.tar" \
+            "$d/download/dialektik-complete-dev-20261020.tar.gpg" \
+            > "$d/derived/gpg.log" 2>&1 || { echo 'CIPHERTEXT_DECRYPTION_FAILED'; exit 1; }
+          rm -f -- "$d/derived/key"
+          unset BACKUP_PASSWORD
+          python3 scripts/operations/verify_real_restore_bundle.py verify \
+            --tar "$d/derived/backup.tar" --dest "$d/clear"
+          python3 scripts/operations/inspect_role_guc_shape.py \
+            --roles-sql "$d/clear/roles.sql"
+          echo 'CIPHERTEXT_SOURCE_UNMODIFIED=TRUE'
+          echo 'REMOTE_DEV_DB_CALLS=0'
+          echo 'AUTH_DATA_PUBLISHED=FALSE'
