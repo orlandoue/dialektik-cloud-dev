@@ -43,6 +43,12 @@ class PrivateSqlShapeTests(unittest.TestCase):
         self.assertEqual(observed["LINE_STARTS_SET"],1)
         self.assertEqual(observed["LINE_STARTS_ALTER_ROLE"],0)
 
+    def test_database_alter_and_system_are_separate_safe_categories(self):
+        db=physical_guc_shapes('ALTER DATABASE "test_db" SET "log_min_messages" TO warning;')
+        sys=physical_guc_shapes('ALTER SYSTEM SET "log_min_messages" TO warning;')
+        self.assertEqual(db["LINE_STARTS_ALTER_DATABASE"],1)
+        self.assertEqual(sys["LINE_STARTS_ALTER_SYSTEM"],1)
+
     def test_no_matching_parameter(self):
         parsed=bounded_shapes("CREATE ROLE anon;")
         self.assertEqual(sum(parsed.values()),0)
