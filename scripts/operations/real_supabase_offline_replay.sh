@@ -27,6 +27,10 @@ phase() {
         if [ "$label" = "RESTORE_APPLICATION_DATA" ]; then
           python3 scripts/operations/classify_private_restore_error.py \
             --private-log "$work/derived/$label.log" --first-error-only
+          # Fixed classification only; never emit SQL, relation names or rows.
+          python3 scripts/operations/app_data_copy_scope.py \
+            --private-log "$work/derived/$label.log" \
+            --data-sql "$work/derived/data.safe.sql"
         fi ;;
     esac
     exit 1
