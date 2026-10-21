@@ -54,6 +54,9 @@ def physical_guc_shapes(contents: str) -> dict[str,int]:
         "LINE_STARTS_ALTER_USER":0,
         "LINE_STARTS_ALTER_DATABASE":0,
         "LINE_STARTS_ALTER_SYSTEM":0,
+        "LINE_STARTS_GRANT":0,
+        "LINE_STARTS_REVOKE":0,
+        "LINE_MATCHES_GRANT_SET_ON_PARAMETER":0,
         "LINE_STARTS_SET":0,
         "LINE_STARTS_SELECT":0,
         "LINE_STARTS_COMMENT":0,
@@ -79,6 +82,10 @@ def physical_guc_shapes(contents: str) -> dict[str,int]:
             summary["LINE_STARTS_ALTER_DATABASE"] += 1
         elif re.match(r"^ALTER\s+SYSTEM\b",stripped,re.I):
             summary["LINE_STARTS_ALTER_SYSTEM"] += 1
+        elif re.match(r"^GRANT\b",stripped,re.I):
+            summary["LINE_STARTS_GRANT"] += 1
+        elif re.match(r"^REVOKE\b",stripped,re.I):
+            summary["LINE_STARTS_REVOKE"] += 1
         elif re.match(r"^SET\b",stripped,re.I):
             summary["LINE_STARTS_SET"] += 1
         elif re.match(r"^SELECT\b",stripped,re.I):
@@ -89,6 +96,8 @@ def physical_guc_shapes(contents: str) -> dict[str,int]:
             bool(re.search(r"\bALTER\s+ROLE\b",line,re.I)))
         summary["LINE_HAS_SET_ANYWHERE"] += int(
             bool(re.search(r"\bSET\b",line,re.I)))
+        summary["LINE_MATCHES_GRANT_SET_ON_PARAMETER"] += int(
+            bool(re.match(r'^\s*GRANT\s+SET\s+ON\s+PARAMETER\s+"?log_min_messages"?\s+TO\b',line,re.I)))
         summary["GUC_IDENTIFIER_DOUBLE_QUOTED"] += int(
             bool(re.search(r'"log_min_messages"',line,re.I)))
         summary["GUC_IDENTIFIER_SINGLE_QUOTED"] += int(
