@@ -23,7 +23,20 @@ class ApplicationCopyScopeRedaction(unittest.TestCase):
             "MANAGED_MIGRATION_LEDGER_CANDIDATE")
         self.assertEqual(first_duplicate_copy_scope(error_at(3),
             'COPY auth.users (id) FROM stdin;\n17\n\\.\n'),
-            "OTHER_MANAGED_COPY")
+            "OTHER_AUTH_COPY")
+
+    def test_managed_schema_classifies_only_allowlisted_schema_not_table(self):
+        samples = (
+            ('auth.users', 'OTHER_AUTH_COPY'),
+            ('storage.objects', 'OTHER_STORAGE_COPY'),
+            ('realtime.messages', 'OTHER_REALTIME_COPY'),
+            ('supabase_migrations.special_internal', 'OTHER_SUPABASE_MIGRATIONS_COPY'),
+        )
+        for relation, expected in samples:
+            dump = 'COPY '+relation+' (id) FROM stdin;\n1\n\\.\n'
+            actual=first_duplicate_copy_scope(error_at(3), dump)
+            self.assertEqual(actual,expected)
+            self.assertNotIn(relation,actual)
 
     def test_first_error_only_never_overridden_by_second_failure(self):
         raw=error_at(2)+"\n"+error_at(5)

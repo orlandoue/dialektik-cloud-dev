@@ -43,8 +43,14 @@ def _copy_scope(schema: str, table: str) -> str:
         return "MANAGED_MIGRATION_LEDGER_CANDIDATE"
     if schema == "public":
         return "APPLICATION_PUBLIC_COPY"
-    if schema in ("auth", "realtime", "storage", "supabase_migrations"):
-        return "OTHER_MANAGED_COPY"
+    if schema == "auth":
+        return "OTHER_AUTH_COPY"
+    if schema == "realtime":
+        return "OTHER_REALTIME_COPY"
+    if schema == "storage":
+        return "OTHER_STORAGE_COPY"
+    if schema == "supabase_migrations":
+        return "OTHER_SUPABASE_MIGRATIONS_COPY"
     return "OTHER_OR_UNSUPPORTED_SCHEMA_COPY"
 
 
