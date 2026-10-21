@@ -15,8 +15,11 @@ jobs:
           persist-credentials: false
       - name: Redaction and copy-boundary unit tests
         run: |
+          bash -n scripts/operations/real_supabase_offline_replay.sh
           python3 -m py_compile scripts/operations/app_data_copy_scope.py
           python3 -m unittest discover -s scripts/operations -p test_app_data_copy_scope.py -v
+          grep -Fq 'scripts/operations/app_data_copy_scope.py' scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq 'CHECK_AUTH_ARCHIVE_VERSION_EQUALITY' scripts/operations/real_supabase_offline_replay.sh
           echo 'AUTHENTIC_BACKUP_ACCESS=NONE'
       - name: Real PostgreSQL 17 COPY duplicate on entirely synthetic networkless database
         shell: bash
