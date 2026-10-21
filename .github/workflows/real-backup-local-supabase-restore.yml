@@ -67,6 +67,18 @@ jobs:
             echo 'EMPTY_AUTH_AND_LEDGER_TARGET_STRUCTURE_NOT_READY'
             exit 1
           }
+          # Pull Auth validation images BEFORE ciphertext download or DB isolation.
+          # They will subsequently run in --network container:$DB_CONTAINER,
+          # sharing only the disconnected database's loopback namespace.
+          docker pull public.ecr.aws/supabase/gotrue:v2.197.0 > "$w/derived/gotrue-image-pull.log" 2>&1 || {
+            echo 'OFFLINE_GOTRUE_IMAGE_PULL=FAIL_REDACTED'
+            exit 1
+          }
+          docker pull node:22-alpine > "$w/derived/node-image-pull.log" 2>&1 || {
+            echo 'OFFLINE_GOTRUE_CLIENT_IMAGE_PULL=FAIL_REDACTED'
+            exit 1
+          }
+          echo 'OFFLINE_GOTRUE_IMAGES_CACHED_BEFORE_DECRYPT=PASS'
           echo "DB_CONTAINER=$db" >> "$GITHUB_ENV"
           echo 'BOOTSTRAP_MODE=DATABASE_ONLY'
           echo 'EMPTY_OFFLINE_RESTORE_TARGET=READY'
@@ -122,6 +134,7 @@ jobs:
         shell: bash
         if: always()
         run: |
+          docker rm -f dialektik_gotrue_networkless_fixture >/dev/null 2>&1 || true
           if [ -n "${DB_CONTAINER:-}" ]; then
             docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
           fi
