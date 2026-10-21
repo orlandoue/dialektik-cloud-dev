@@ -35,11 +35,11 @@ test('two verified original publishers, distinct Article identities, no DB/seman
   const replay=await discoverGovUkHousingPublishers({fetcher,at,previous});
   assert.deepEqual(replay.counts,{new:0,updated:0,unchanged:2});
 });
-test('normalize spacing only; refuse dangerous control characters in ministry title',async()=>{
-  const {fetcher}=fixture({ministryTitle:'  Ministry  housing\\n safety announcement  '});
+test('normalize harmless publisher spacing and reject dangerous control characters',async()=>{
+  const {fetcher}=fixture({ministryTitle:'  Ministry  housing'+String.fromCharCode(10)+' safety announcement  '});
   const x=await discoverGovUkHousingPublishers({fetcher,at});
-  assert.equal(x.items.find(i=>i.sourceId==='govuk_mhclg_official').title,'Ministry housing\\n safety announcement');
-  const bad=fixture({ministryTitle:'bad\\u0000title'});
+  assert.equal(x.items.find(i=>i.sourceId==='govuk_mhclg_official').title,'Ministry housing safety announcement');
+  const bad=fixture({ministryTitle:'bad'+String.fromCharCode(0)+'title'});
   await assert.rejects(discoverGovUkHousingPublishers({fetcher:bad.fetcher,at}),/MULTISOURCE_MINISTRY_TITLE_INVALID/);
 });
 test('reject claimed second publisher when official Content API identity differs',async()=>{
