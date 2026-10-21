@@ -19,10 +19,11 @@ phase() {
     echo "$label=PASS"
   else
     echo "$label=FAIL_REDACTED"
-    if [ "$label" = 'RESTORE_APPLICATION_ROLES' ]; then
-      python3 scripts/operations/classify_private_restore_error.py \
-        --private-log "$work/derived/$label.log"
-    fi
+    case "$label" in
+      RESTORE_APPLICATION_ROLES|RESTORE_PRIVILEGED_PARAMETER_GRANT|RESTORE_APPLICATION_SCHEMA|RESTORE_MANAGED_AUTH_DATA|RESTORE_MIGRATION_LEDGER_DATA|RESTORE_APPLICATION_DATA)
+        python3 scripts/operations/classify_private_restore_error.py \
+          --private-log "$work/derived/$label.log" ;;
+    esac
     exit 1
   fi
 }
