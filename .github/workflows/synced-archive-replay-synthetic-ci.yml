@@ -22,80 +22,69 @@ jobs:
           grep -Fq "EXECUTE_SYNC_DEV_BACKUP_OFFLINE_RESTORE_20261021" .github/workflows/real-synced-backup-isolated-restore.yml
           grep -Fq "environment: dialektik-dev-backup" .github/workflows/real-synced-backup-isolated-restore.yml
           echo 'NO_REAL_BACKUP_OR_DEV_ACCESS=TRUE'
-      - name: Native PG17 custom public schema and data replay
+      - name: Native Supabase local PG17 custom archive and RLS roundtrip
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           w="$RUNNER_TEMP/synthetic-synced-restore"
-          mkdir -p "$w"
-          if ! docker run --rm -d --network none --name dialektik-synced-restore-native \
-            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 \
-            > "$w/container-id-private.log" 2> "$w/container-start-private.log"; then
-            echo 'SYNTHETIC_DATABASE_CONTAINER_START=FAIL_REDACTED'
+          mkdir -p "$w/local" "$w/private"
+          cd "$w/local"
+          trap 'npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
+          npx --yes supabase@2.120.0 init > "$w/private/init.log" 2>&1
+          if ! npx --yes supabase@2.120.0 db start > "$w/private/db-start.log" 2>&1; then
+            echo 'SYNTHETIC_SUPABASE_DB_START=FAIL_REDACTED'
             exit 1
           fi
-          echo 'SYNTHETIC_DATABASE_CONTAINER_START=PASS'
-          trap 'docker rm -f dialektik-synced-restore-native >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
-          ready=0
-          for n in $(seq 1 45); do
-            if docker exec dialektik-synced-restore-native psql -XAt -U postgres -d postgres \
-              -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then
-              ready=1
-              break
-            fi
-            sleep 1
-          done
-          [ "$ready" = 1 ] || {
-            echo 'SYNTHETIC_POSTGRES_SQL_NOT_READY'
-            docker inspect dialektik-synced-restore-native --format 'POSTGRES_CONTAINER_STATE={{.State.Status}}' 2>/dev/null || true
-            exit 1
-          }
-          echo 'SYNTHETIC_DB_SQL_READY=PASS'
-          if ! docker exec dialektik-synced-restore-native psql -X -U postgres -d postgres \
-            -v ON_ERROR_STOP=1 -c "CREATE TABLE public.example_article(id text PRIMARY KEY); \
-              ALTER TABLE public.example_article ENABLE ROW LEVEL SECURITY; \
-              INSERT INTO public.example_article VALUES ('synthetic-only');" > "$w/schema.log" 2>&1; then
-            echo 'SYNTHETIC_PUBLIC_SOURCE_FIXTURE=FAIL_REDACTED'
-            grep -E 'ERROR:|FATAL:|connection|already exists' "$w/schema.log" | head -5 || true
-            exit 1
-          fi
-          echo 'SYNTHETIC_PUBLIC_SOURCE_FIXTURE=PASS'
-          if ! docker exec dialektik-synced-restore-native pg_dump -U postgres -d postgres \
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db"
+          docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "SELECT CASE WHEN to_regclass('auth.users') IS NOT NULL AND
+               to_regnamespace('public') IS NOT NULL THEN 'PASS' ELSE 'FAIL' END;" \
+            > "$w/private/db-ready.log" 2>&1 || exit 1
+          [ "$(cat "$w/private/db-ready.log")" = PASS ] || exit 1
+          echo 'SYNTHETIC_SUPABASE_DB_READY=PASS'
+          docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE TABLE public.example_archive_article(id text PRIMARY KEY);
+                ALTER TABLE public.example_archive_article ENABLE ROW LEVEL SECURITY;
+                INSERT INTO public.example_archive_article VALUES ('synthetic-only');" \
+            > "$w/private/fixture.log" 2>&1 || {
+              echo 'SYNTHETIC_PUBLIC_FIXTURE=FAIL_REDACTED'; exit 1;
+            }
+          docker exec "$db" pg_dump -U postgres -d postgres \
             --format=custom --no-owner --no-privileges --schema=public \
-            --file=/tmp/native-public.dump > "$w/dump-private.log" 2>&1; then
-            echo 'SYNTHETIC_NATIVE_DUMP=FAIL_REDACTED'
-            grep -E 'pg_dump: error|FATAL|permission denied|could not' "$w/dump-private.log" | head -8 || true
-            exit 1
-          fi
-          echo 'SYNTHETIC_NATIVE_DUMP=PASS'
-          docker exec dialektik-synced-restore-native createdb -U postgres isolated_target
-          echo 'SYNTHETIC_TARGET_CREATED=PASS'
-          docker exec dialektik-synced-restore-native pg_restore --list /tmp/native-public.dump \
-            > "$w/public.toc"
-          echo 'SYNTHETIC_PUBLIC_ARCHIVE_TOC=PASS'
-          python3 scripts/operations/filter_seeded_public_schema_toc.py \
-            --input "$w/public.toc" --output "$w/public-filtered.toc"
-          echo 'SYNTHETIC_PUBLIC_SCHEMA_FILTERED=PASS'
-          docker cp "$w/public-filtered.toc" dialektik-synced-restore-native:/tmp/public-filtered.toc
-          echo 'SYNTHETIC_PUBLIC_TOC_COPIED=PASS'
-          docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
+            --file=/tmp/dialektik-native-public.dump > "$w/private/dump.log" 2>&1 || {
+              echo 'SYNTHETIC_NATIVE_PUBLIC_DUMP=FAIL_REDACTED'; exit 1;
+            }
+          echo 'SYNTHETIC_NATIVE_PUBLIC_DUMP=PASS'
+          docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "DROP TABLE public.example_archive_article;" \
+            > "$w/private/drop.log" 2>&1 || exit 1
+          docker exec "$db" pg_restore --list /tmp/dialektik-native-public.dump > "$w/private/public.toc"
+          python3 "$GITHUB_WORKSPACE/scripts/operations/filter_seeded_public_schema_toc.py" \
+            --input "$w/private/public.toc" --output "$w/private/public-only-dedup.toc"
+          docker cp "$w/private/public-only-dedup.toc" "$db:/tmp/dialektik-native-public-dedup.toc"
+          docker exec "$db" pg_restore -U postgres -d postgres \
             --schema-only --no-owner --no-privileges --single-transaction --exit-on-error \
-            --use-list /tmp/public-filtered.toc \
-            /tmp/native-public.dump > "$w/schema-restore-private.log" 2>&1 || {
-            echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_RESTORE=FAIL_REDACTED'
-            grep -E 'already exists|permission denied|schema|ERROR:|pg_restore: error' "$w/schema-restore-private.log" | head -12 || true
-            exit 1;
-          }
+            --use-list /tmp/dialektik-native-public-dedup.toc \
+            /tmp/dialektik-native-public.dump > "$w/private/schema.log" 2>&1 || {
+              echo 'SYNTHETIC_PUBLIC_SCHEMA_RESTORE=FAIL_REDACTED'; exit 1;
+            }
           echo 'SYNTHETIC_PUBLIC_SCHEMA_RESTORE=PASS'
-          docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
+          docker exec "$db" pg_restore -U postgres -d postgres \
             --data-only --no-owner --no-privileges --single-transaction --exit-on-error \
-            /tmp/native-public.dump > "$w/data-restore-private.log" 2>&1 || {
-            echo 'SYNTHETIC_PUBLIC_CUSTOM_DATA_RESTORE=FAIL_REDACTED'; exit 1;
-          }
+            /tmp/dialektik-native-public.dump > "$w/private/data.log" 2>&1 || {
+              echo 'SYNTHETIC_PUBLIC_DATA_RESTORE=FAIL_REDACTED'; exit 1;
+            }
           echo 'SYNTHETIC_PUBLIC_DATA_RESTORE=PASS'
-          out="$(docker exec dialektik-synced-restore-native psql -XAt -U postgres -d isolated_target \
-            -c "SELECT count(*) || '|' || (SELECT relrowsecurity FROM pg_class WHERE oid='public.example_article'::regclass) FROM public.example_article;")"
-          [ "$out" = '1|t' ] || { echo 'SYNTHETIC_PUBLIC_COUNT_OR_RLS=FAIL'; exit 1; }
+          result="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "SELECT count(*) || '|' ||
+               (SELECT relrowsecurity FROM pg_class WHERE oid=
+                'public.example_archive_article'::regclass)
+               FROM public.example_archive_article;" 2>/dev/null)" || exit 1
+          [ "$result" = '1|t' ] || {
+            echo 'SYNTHETIC_RESTORED_RLS_OR_ROWS=FAIL'; exit 1;
+          }
           echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_AND_DATA_REPLAY=PASS'
           echo 'SYNTHETIC_PUBLIC_RLS_PRESERVATION=PASS'
+          echo 'SYNTHETIC_REAL_BACKUP_OPENED=FALSE'
