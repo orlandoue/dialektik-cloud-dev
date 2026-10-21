@@ -23,10 +23,7 @@ final class CuratedEventPreviewCard extends StatelessWidget {
       padding: const EdgeInsets.all(DialektikSpacing.space6),
       child: FutureBuilder<CuratedEventPreview>(
         future: future,
-        builder: (
-          BuildContext context,
-          AsyncSnapshot<CuratedEventPreview> snapshot,
-        ) {
+        builder: (BuildContext context, AsyncSnapshot<CuratedEventPreview> snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
             return const Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,9 +96,7 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: DialektikSpacing.space4),
-              const Text(
-                'Selección editorial · no es agrupación automática',
-              ),
+              const Text('Selección editorial · no es agrupación automática'),
               const SizedBox(height: DialektikSpacing.space2),
               Text(
                 'Las publicaciones se presentan juntas porque un editor revisó '
@@ -138,9 +133,8 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                           '${item.publisherKind == 'PRIMARY_GOVERNMENT_SOURCE' ? ' · Fuente primaria' : ''}',
                         ),
                         trailing: const Icon(Icons.open_in_new, size: 18),
-                        onTap: () => unawaited(
-                          openExternalHttpLink(item.canonicalUrl),
-                        ),
+                        onTap: () =>
+                            unawaited(openExternalHttpLink(item.canonicalUrl)),
                       ),
                     ),
                   const SizedBox(height: DialektikSpacing.space3),
@@ -188,10 +182,7 @@ final class _EvidenceMetadata extends StatelessWidget {
           children: <Widget>[
             Icon(icon, size: 15),
             const SizedBox(width: DialektikSpacing.space2),
-            Text(
-              text,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
+            Text(text, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
       ),

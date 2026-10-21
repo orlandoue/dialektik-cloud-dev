@@ -122,31 +122,41 @@ void main() {
       );
     },
   );
-  testWidgets('editorial source counts and manual review are visible without opening details', (
-    WidgetTester tester,
-  ) async {
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SingleChildScrollView(
-            child: CuratedEventPreviewCard(
-              future: Future<CuratedEventPreview>.value(
-                CuratedEventPreview.fromJson(sample()),
+  testWidgets(
+    'editorial source counts and manual review are visible without opening details',
+    (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: CuratedEventPreviewCard(
+                future: Future<CuratedEventPreview>.value(
+                  CuratedEventPreview.fromJson(sample()),
+                ),
+                onRetry: () {},
               ),
-              onRetry: () {},
             ),
           ),
         ),
-      ),
-    );
-    await tester.pumpAndSettle();
-    expect(find.text('Selección editorial · no es agrupación automática'), findsOneWidget);
-    expect(find.text('5 publicaciones'), findsOneWidget);
-    expect(find.text('4 medios'), findsOneWidget);
-    expect(find.text('1 fuente oficial'), findsOneWidget);
-    expect(find.textContaining('motor de agrupación automática aún no'), findsOneWidget);
-    expect(find.byKey(const Key('chile-preview-evidence-expand')), findsOneWidget);
-  });
+      );
+      await tester.pumpAndSettle();
+      expect(
+        find.text('Selección editorial · no es agrupación automática'),
+        findsOneWidget,
+      );
+      expect(find.text('5 publicaciones'), findsOneWidget);
+      expect(find.text('4 medios'), findsOneWidget);
+      expect(find.text('1 fuente oficial'), findsOneWidget);
+      expect(
+        find.textContaining('motor de agrupación automática aún no'),
+        findsOneWidget,
+      );
+      expect(
+        find.byKey(const Key('chile-preview-evidence-expand')),
+        findsOneWidget,
+      );
+    },
+  );
 
   testWidgets('editorial preview is usable on a narrow Android screen', (
     WidgetTester tester,
@@ -174,5 +184,4 @@ void main() {
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);
   });
-
 }
