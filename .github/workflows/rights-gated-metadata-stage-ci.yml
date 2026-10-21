@@ -1,0 +1,50 @@
+name: Dialektik policy-gated multi-publisher metadata staging (offline, no DB)
+on:
+  push:
+    branches: [codex/rights-gated-metadata-stage-20261020]
+    paths:
+      - '.github/workflows/rights-gated-metadata-stage-ci.yml'
+      - 'services/core-api/src/live/rights-gated-metadata-stage.ts'
+      - 'services/core-api/test/rights-gated-metadata-stage.test.ts'
+      - 'docs/operations/RIGHTS_GATED_METADATA_STAGE_2026-10-20.md'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Read-only checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Pinned Node 22
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Use repository lockfile
+        run: |
+          npm install --global npm@11.6.2
+          npm ci --no-audit --no-fund
+      - name: Build actual Core and shared database package
+        run: npm run build
+      - name: Prove rights gates, independent publishers, dedupe and no Event claims
+        run: |
+          npx vitest run --config services/core-api/vitest.config.mts \
+            services/core-api/test/rights-gated-metadata-stage.test.ts \
+            services/core-api/test/govuk-product-acquisition.test.ts \
+            services/core-api/test/chile-tornado-evidence-preview.test.ts
+      - name: Confirm no import into private beta controller or runtime DB writer
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -E 'from .*(kysely|@dialektik/database|typeorm|supabase)' services/core-api/src/live/rights-gated-metadata-stage.ts
+          ! grep -E '(INSERT INTO|UPDATE public|CREATE EVENT|database\.execute|fetch\()' services/core-api/src/live/rights-gated-metadata-stage.ts
+          echo 'SOURCE_STAGE_DB_WRITES=0'
+          echo 'SOURCE_STAGE_NETWORK_REQUESTS=0'
+          echo 'MULTIPUBLISHER_RIGHTS_LEGALLY_VERIFIED=FALSE'
+          echo 'AUTONOMOUS_EVENTS=FALSE'
+          echo 'CONTRADICTIONS=FALSE'
+          echo 'PUBLIC_LAUNCH_GO=FALSE'
