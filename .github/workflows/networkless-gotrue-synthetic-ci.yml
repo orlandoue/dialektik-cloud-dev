@@ -1,0 +1,70 @@
+name: GoTrue isolated API on disconnected PostgreSQL (synthetic)
+on:
+  push:
+    branches: [codex/gotrue-networkless-restore-smoke-20261021]
+permissions:
+  contents: read
+jobs:
+  networkless-gotrue:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Prepare disposable local Auth schema and pre-pull test images
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/gotrue-isolated-test"
+          mkdir -p "$work/local" "$work/derived"
+          cd "$work/local"
+          npx --yes supabase@2.120.0 init > "$work/derived/init.log" 2>&1
+          if ! npx --yes supabase@2.120.0 db start > "$work/derived/db-start.log" 2>&1; then
+            echo 'GOTRUE_LOCAL_DB_BOOTSTRAP=FAIL_REDACTED'; exit 1
+          fi
+          docker pull public.ecr.aws/supabase/gotrue:v2.197.0 >/dev/null
+          docker pull node:22-alpine >/dev/null
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db"
+          docker exec -e PGPASSWORD=postgres "$db" psql -XAt -h 127.0.0.1 -U postgres \
+            -d postgres -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM auth.schema_migrations;' \
+            > "$work/derived/auth-ledger-private.log" 2>&1 || {
+            echo 'GOTRUE_LOCAL_AUTH_DB_TCP=FAIL_REDACTED'; exit 1
+          }
+          echo "GOTRUE_TEST_DB=$db" >> "$GITHUB_ENV"
+          echo 'GOTRUE_LOCAL_DB_BOOTSTRAP=PASS'
+      - name: Disconnect every external database network before synthetic API test
+        shell: bash
+        run: |
+          set -euo pipefail
+          for c in $(docker ps --format '{{.Names}}' | grep '^supabase_' || true); do
+            [ "$c" = "$GOTRUE_TEST_DB" ] || docker stop "$c" >/dev/null
+          done
+          while IFS= read -r n; do
+            [ -z "$n" ] || docker network disconnect --force "$n" "$GOTRUE_TEST_DB"
+          done < <(docker inspect "$GOTRUE_TEST_DB" --format '{{range $n,$_ := .NetworkSettings.Networks}}{{println $n}}{{end}}')
+          [ "$(docker inspect "$GOTRUE_TEST_DB" --format '{{json .NetworkSettings.Networks}}')" = '{}' ] || exit 1
+          echo 'GOTRUE_TEST_DB_EXTERNAL_NETWORKS=NONE'
+      - name: Test GoTrue synthetic login, JWT and rejection inside same offline namespace
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/operations/networkless_gotrue_replay_smoke.sh \
+            "$GOTRUE_TEST_DB" "$RUNNER_TEMP/gotrue-isolated-test/derived"
+          echo 'REAL_AUTH_RECORDS_ACCESSED=FALSE'
+      - name: Remove local databases, synthetic credentials and test containers
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f dialektik_gotrue_networkless_fixture >/dev/null 2>&1 || true
+          if [ -n "${GOTRUE_TEST_DB:-}" ]; then
+            docker rm -f "$GOTRUE_TEST_DB" >/dev/null 2>&1 || true
+          fi
+          if [ -d "$RUNNER_TEMP/gotrue-isolated-test/local" ]; then
+            (cd "$RUNNER_TEMP/gotrue-isolated-test/local" &&
+             npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1) || true
+          fi
+          rm -rf -- "$RUNNER_TEMP/gotrue-isolated-test"
+          echo 'NETWORKLESS_AUTH_EPHEMERAL_CLEANUP=COMPLETE'
