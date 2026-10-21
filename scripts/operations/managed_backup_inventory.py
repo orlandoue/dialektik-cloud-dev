@@ -59,27 +59,48 @@ def audit(auth_toc: str, ledger_toc: str) -> dict:
         "restoration_verified":False
     }
 
-# This is deliberately exact and narrowly allowed: do not blindly remove
-# platform role grants, security policy, extensions, or function definitions.
-SPECIAL_SET=re.compile(
-    r"^\s*SET\s+log_min_messages\s*(?:=|TO)\s*"
-    r"(?:'(?:warning|notice|error)'|(?:warning|notice|error))\s*;\s*$",
-    flags=re.IGNORECASE,
+# Restore-only reconciliation: this never modifies the encrypted source dump.
+# The isolated PG replica has preexisting Supabase roles; the source may ask
+# those roles (or the restore session) to set log_min_messages, a privileged
+# LOGGING GUC. Skip ONLY an entire, bounded, literal statement setting that
+# exact GUC. Never alter CREATE ROLE, login, password, BYPASSRLS or GRANT.
+# Security-relevant settings, unknown statements and multiline forms remain.
+_SQL_NAME = r'(?:"(?:[^"]|"")*"|[A-Za-z_][A-Za-z0-9_$]*)'
+_LOG_SEVERITY = r"(?:debug[1-5]|info|notice|warning|error|log|fatal|panic|default)"
+_LOG_VALUE = rf"(?:'{_LOG_SEVERITY}'|{_LOG_SEVERITY})"
+_LOG_ASSIGN = rf"(?:=|TO)\s*{_LOG_VALUE}"
+_RESTORE_LOG_SETTINGS: tuple[tuple[str, re.Pattern[str]], ...] = (
+    ("SESSION_SET", re.compile(
+        rf"^\s*SET\s+log_min_messages\s*{_LOG_ASSIGN}\s*;\s*$", re.IGNORECASE)),
+    ("ROLE_SET", re.compile(
+        rf"^\s*ALTER\s+ROLE\s+{_SQL_NAME}"
+        rf"(?:\s+IN\s+DATABASE\s+{_SQL_NAME})?"
+        rf"\s+SET\s+log_min_messages\s*{_LOG_ASSIGN}\s*;\s*$", re.IGNORECASE)),
+    ("DATABASE_SET", re.compile(
+        rf"^\s*ALTER\s+DATABASE\s+{_SQL_NAME}"
+        rf"\s+SET\s+log_min_messages\s*{_LOG_ASSIGN}\s*;\s*$", re.IGNORECASE)),
 )
+# Conservative upper bound. This protects against an unexpected role export.
+_MAX_DERIVED_LOGGING_OVERRIDES = 48
 
-def sanitize_roles_sql(text: str) -> tuple[str,int]:
-    lines=text.splitlines(keepends=True)
-    removed=0
-    sanitized=[]
+def sanitize_roles_sql(text: str) -> tuple[str, int]:
+    lines = text.splitlines(keepends=True)
+    changed: list[str] = []
+    removed = 0
     for line in lines:
-        if SPECIAL_SET.fullmatch(line.strip()):
-            removed+=1
-            sanitized.append("-- ISOLATED_RESTORE_ONLY: stripped nonprivileged log_min_messages SET\n")
+        matched = next((kind for kind, pattern in _RESTORE_LOG_SETTINGS
+                        if pattern.fullmatch(line.strip()) is not None), None)
+        if matched:
+            removed += 1
+            changed.append(
+                "-- ISOLATED_REPLAY_ONLY: skipped privileged logging GUC; "
+                "source ciphertext unchanged\n"
+            )
         else:
-            sanitized.append(line)
-    if removed>3:
-        raise ValueError("TOO_MANY_PLATFORM_LOG_PARAMETER_STMTS")
-    return "".join(sanitized),removed
+            changed.append(line)
+    if removed > _MAX_DERIVED_LOGGING_OVERRIDES:
+        raise ValueError("TOO_MANY_ISOLATED_REPLAY_LOGGING_OVERRIDES")
+    return "".join(changed), removed
 
 def validate_source_untouched(path: Path, original_hash: str) -> None:
     if not re.fullmatch(r"[a-f0-9]{64}",original_hash):
