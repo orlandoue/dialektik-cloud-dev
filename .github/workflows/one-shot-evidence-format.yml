@@ -1,0 +1,35 @@
+name: One-time Dart formatting for isolated evidence-UX review
+on:
+  push:
+    branches: [codex/flutter-evidence-ux-20261020]
+    paths: ['.github/workflows/one-shot-evidence-format.yml']
+permissions:
+  contents: write
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - name: Commit only deterministic Dart formatter changes to exact review branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          dart format app/lib/features/consumer/presentation/widgets/curated_event_preview_card.dart app/test/consumer/curated_event_preview_test.dart
+          git add -- app/lib/features/consumer/presentation/widgets/curated_event_preview_card.dart app/test/consumer/curated_event_preview_test.dart
+          if git diff --cached --quiet; then
+            echo 'DART_FORMAT_ALREADY_CLEAN=PASS'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'style(flutter): apply pinned Dart formatter to evidence UX review'
+          git push origin HEAD:refs/heads/codex/flutter-evidence-ux-20261020
+          echo 'DART_FORMAT_COMMITTED_ON_REVIEW_BRANCH=PASS'
