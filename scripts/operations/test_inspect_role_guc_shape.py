@@ -49,6 +49,19 @@ class PrivateSqlShapeTests(unittest.TestCase):
         self.assertEqual(db["LINE_STARTS_ALTER_DATABASE"],1)
         self.assertEqual(sys["LINE_STARTS_ALTER_SYSTEM"],1)
 
+    def test_grant_set_on_parameter_is_security_critical(self):
+        text='GRANT SET ON PARAMETER "log_min_messages" TO "private_role";'
+        result=physical_guc_shapes(text)
+        self.assertEqual(result["LINE_STARTS_GRANT"],1)
+        self.assertEqual(result["LINE_MATCHES_GRANT_SET_ON_PARAMETER"],1)
+        self.assertNotIn("private_role",repr(result))
+
+    def test_parameter_revoke_remains_distinct_from_guc_setting(self):
+        text='REVOKE SET ON PARAMETER "log_min_messages" FROM "private_role";'
+        result=physical_guc_shapes(text)
+        self.assertEqual(result["LINE_STARTS_REVOKE"],1)
+        self.assertEqual(result["LINE_MATCHES_GRANT_SET_ON_PARAMETER"],0)
+
     def test_no_matching_parameter(self):
         parsed=bounded_shapes("CREATE ROLE anon;")
         self.assertEqual(sum(parsed.values()),0)
