@@ -121,7 +121,7 @@ function readDatabaseUrl(source: NodeJS.ProcessEnv): string {
   // Expected PostgreSQL pooler-style user is role.project_ref; direct role is role.
   const primaryUser = decodeURIComponent(primaryUrl.username);
   const candidateUser = decodeURIComponent(candidateUrl.username);
-  if (!/^dialektik_core_app(?:\\.[a-z0-9]+)?$/u.test(primaryUser) ||
+  if (!/^dialektik_core_app(?:\.[a-z0-9]+)?$/u.test(primaryUser) ||
       candidateUser !== primaryUser.replace(/^dialektik_core_app/u, 'dialektik_core_app_next') ||
       candidateUrl.password.length === 0 ||
       candidateUrl.protocol !== primaryUrl.protocol ||
