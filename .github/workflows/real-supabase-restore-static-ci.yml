@@ -35,6 +35,8 @@ jobs:
       - name: Parse shell and Python scripts without real Auth input
         run: |
           bash -n scripts/operations/real_supabase_offline_replay.sh
+          bash -n scripts/operations/verify_restored_roles_rollback.sh
+          grep -Fq 'verify_restored_roles_rollback.sh' scripts/operations/real_supabase_offline_replay.sh
           python3 -m py_compile scripts/operations/managed_backup_inventory.py
           python3 -m py_compile scripts/operations/isolate_parameter_grant.py
           python3 -m py_compile scripts/operations/filter_auth_migration_toc.py
