@@ -7,6 +7,8 @@ on:
       - 'services/core-api/src/live/rights-gated-metadata-stage.ts'
       - 'services/core-api/test/rights-gated-metadata-stage.test.ts'
       - 'docs/operations/RIGHTS_GATED_METADATA_STAGE_2026-10-20.md'
+      - 'docs/operations/chile-official-source-candidates-2026-10-20.json'
+      - 'docs/operations/CHILE_OFFICIAL_SOURCE_PREFLIGHT_2026-10-20.md'
   workflow_dispatch:
 permissions:
   contents: read
@@ -36,6 +38,21 @@ jobs:
             services/core-api/test/rights-gated-metadata-stage.test.ts \
             services/core-api/test/govuk-product-acquisition.test.ts \
             services/core-api/test/chile-tornado-evidence-preview.test.ts
+      - name: Confirm Chilean source research candidates cannot be acquired or persisted
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {readFileSync} from 'node:fs';
+          const c=JSON.parse(readFileSync('docs/operations/chile-official-source-candidates-2026-10-20.json','utf8'));
+          if(c.appliesTo!=='RESEARCH_ONLY_NOT_RUNTIME' || c.sourceCandidates.length!==3) throw Error('SOURCE_REGISTRY_SHAPE_INVALID');
+          for(const candidate of c.sourceCandidates){
+            for(const field of ['legalReuseScopeVerified','canonicalDiscoveryVerified','robotsVerified','metadataAcquisitionEnabled','bodyAcquisitionEnabled','postgresWritesEnabled']){
+              if(candidate[field]!==false) throw Error('CHILE_UNAPPROVED_SOURCE_MUST_REMAIN_DISABLED');
+            }
+          }
+          console.log('CHILE_SOURCE_ACQUISITION=DISABLED_BY_DEFAULT');
+          console.log('CHILE_SOURCE_DB_WRITES=DISABLED_BY_DEFAULT');
+          NODE
       - name: Confirm no import into private beta controller or runtime DB writer
         shell: bash
         run: |
