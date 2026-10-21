@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Protected CI only. Isolated PG17 has zero Docker network interfaces.
+# Owner-approved synchronized six-scope authentic offline replay, 2026-10-21.
 # Original encrypted archive supplies *roles only*. Synchronized archive
 # supplies public/schema+data and all managed data from one MVCC snapshot.
 set -euo pipefail
