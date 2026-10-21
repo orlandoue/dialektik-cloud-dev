@@ -72,7 +72,7 @@ def compare(rows:str)->dict:
         "column_count_mismatches":len(different_cols),
         "full_column_default_fingerprint_mismatches":len(different_shapes),
         "same_name_catalog_only":not missing and not extras,
-        "exact_catalog_compatibility":not (missing or extras or different_shapes),
+        "exact_catalog_compatibility":not (missing or extras or different_cols or different_shapes),
         "data_restore_completed":False,
     }
 
