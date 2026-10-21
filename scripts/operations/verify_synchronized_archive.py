@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Fail-closed, source-redacted structural audit for synchronized encrypted DEV data.
 
+# Approved one-shot encrypted synchronized backup audit in GitHub protected runner; no DEV queries.
+
 No network; only accepts the exact expected archive file names and byte hashes.
 Never releases SQL, Auth row values, IDs, migration versions or fingerprints.
 """
