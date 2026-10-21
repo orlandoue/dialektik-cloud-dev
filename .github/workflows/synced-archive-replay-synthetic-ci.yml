@@ -33,7 +33,8 @@ jobs:
             -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 >/dev/null
           trap 'docker rm -f dialektik-synced-restore-native >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
           for n in $(seq 1 40); do
-            docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null 2>&1 && break
+            docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null
+          echo 'SYNTHETIC_DB_READY=PASS' 2>&1 && break
             sleep 1
           done
           docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null
@@ -49,12 +50,17 @@ jobs:
           docker exec dialektik-synced-restore-native pg_dump -U postgres -d postgres \
             --format=custom --no-owner --no-privileges --schema=public \
             --file=/tmp/native-public.dump
+          echo 'SYNTHETIC_NATIVE_DUMP=PASS'
           docker exec dialektik-synced-restore-native createdb -U postgres isolated_target
+          echo 'SYNTHETIC_TARGET_CREATED=PASS'
           docker exec dialektik-synced-restore-native pg_restore --list /tmp/native-public.dump \
             > "$w/public.toc"
+          echo 'SYNTHETIC_PUBLIC_ARCHIVE_TOC=PASS'
           python3 scripts/operations/filter_seeded_public_schema_toc.py \
             --input "$w/public.toc" --output "$w/public-filtered.toc"
+          echo 'SYNTHETIC_PUBLIC_SCHEMA_FILTERED=PASS'
           docker cp "$w/public-filtered.toc" dialektik-synced-restore-native:/tmp/public-filtered.toc
+          echo 'SYNTHETIC_PUBLIC_TOC_COPIED=PASS'
           docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
             --schema-only --no-owner --no-privileges --single-transaction --exit-on-error \
             --use-list /tmp/public-filtered.toc \
