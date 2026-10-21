@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          source="$RUNNER_TEMP/original-encrypted/dialektik-complete-dev-20261020.tar.gpg"
+          source="$RUNNER_TEMP/original-encrypted/dialektik-complete-dev-auth-ledger-encrypted/dialektik-complete-dev-20261020.tar.gpg"
           target="$RUNNER_TEMP/retained-encrypted/dialektik-complete-dev-20261020.tar.gpg"
           test -f "$source" && test ! -L "$source"
           test "$(find "$RUNNER_TEMP/original-encrypted" -type f | wc -l)" -eq 1
