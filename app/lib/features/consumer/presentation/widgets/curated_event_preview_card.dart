@@ -86,8 +86,15 @@ final class CuratedEventPreviewCard extends StatelessWidget {
                   ),
                   _EvidenceMetadata(
                     icon: Icons.article_outlined,
-                    text:
-                        '${preview.publications.length} publicaciones · $newsroomCount medios · 1 fuente oficial',
+                    text: '${preview.publications.length} publicaciones',
+                  ),
+                  _EvidenceMetadata(
+                    icon: Icons.people_outline,
+                    text: '$newsroomCount medios',
+                  ),
+                  const _EvidenceMetadata(
+                    icon: Icons.account_balance_outlined,
+                    text: '1 fuente oficial',
                   ),
                 ],
               ),
@@ -181,11 +188,9 @@ final class _EvidenceMetadata extends StatelessWidget {
           children: <Widget>[
             Icon(icon, size: 15),
             const SizedBox(width: DialektikSpacing.space2),
-            Flexible(
-              child: Text(
-                text,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+            Text(
+              text,
+              style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
         ),
