@@ -37,17 +37,21 @@ jobs:
           fi
           echo 'SYNTHETIC_DATABASE_CONTAINER_START=PASS'
           trap 'docker rm -f dialektik-synced-restore-native >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
-          for n in $(seq 1 40); do
-            if docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null 2>&1; then
+          ready=0
+          for n in $(seq 1 45); do
+            if docker exec dialektik-synced-restore-native psql -XAt -U postgres -d postgres \
+              -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then
+              ready=1
               break
             fi
             sleep 1
           done
-          docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null || {
-            echo 'SYNTHETIC_POSTGRES_NOT_READY'
+          [ "$ready" = 1 ] || {
+            echo 'SYNTHETIC_POSTGRES_SQL_NOT_READY'
+            docker inspect dialektik-synced-restore-native --format 'POSTGRES_CONTAINER_STATE={{.State.Status}}' 2>/dev/null || true
             exit 1
           }
-          echo 'SYNTHETIC_DB_READY=PASS'
+          echo 'SYNTHETIC_DB_SQL_READY=PASS'
           if ! docker exec dialektik-synced-restore-native psql -X -U postgres -d postgres \
             -v ON_ERROR_STOP=1 -c "CREATE TABLE public.example_article(id text PRIMARY KEY); \
               ALTER TABLE public.example_article ENABLE ROW LEVEL SECURITY; \
