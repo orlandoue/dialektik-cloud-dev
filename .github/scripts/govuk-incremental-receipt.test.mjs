@@ -44,3 +44,12 @@ test('invalid or absent source snapshot fails without inferred counts',()=>{
  assert.throws(()=>validatePreviousDiscoveryReceipt({},at),/INCREMENTAL_RECEIPT_/);
  assert.throws(()=>validatePreviousDiscoveryReceipt(make({items:[]}),at),/INCREMENTAL_RECEIPT_/);
 });
+
+test('invalid metadata hashes, item IDs and re-used source keys are rejected',()=>{
+  const original=make();
+  for(const raw of [
+    make({items:[{...original.items[0],metadataHash:'wrong'},original.items[1]]}),
+    make({items:[{...original.items[0],sourceItemId:'bad/injection'},original.items[1]]}),
+    make({items:[original.items[0],{...original.items[0],canonicalUrl:'https://www.gov.uk/government/news/a-second-url'}]})
+  ])assert.throws(()=>validatePreviousDiscoveryReceipt(raw,at),/INCREMENTAL_RECEIPT_/);
+});
