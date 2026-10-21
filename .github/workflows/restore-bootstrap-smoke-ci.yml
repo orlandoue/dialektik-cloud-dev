@@ -1,0 +1,63 @@
+name: Recovery bootstrap smoke — no ciphertext or remote access
+on:
+  push:
+    branches: [codex/restore-db-bootstrap-smoke-20261021]
+permissions:
+  contents: read
+jobs:
+  db-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Try pinned database-only bootstrap with no real backup
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          d="$RUNNER_TEMP/dialektik-db-only-smoke"; mkdir -p "$d"; cd "$d"
+          trap 'npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1 || true; rm -rf -- "$d"' EXIT
+          npx --yes supabase@2.120.0 init > "$d/init.log" 2>&1
+          if ! npx --yes supabase@2.120.0 db start > "$d/start.log" 2>&1; then
+            echo 'DB_ONLY_BOOTSTRAP=FAIL_NO_BACKUP'; exit 1
+          fi
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db" || { echo 'DB_ONLY_CONTAINER=ABSENT'; exit 1; }
+          count="$(docker exec "$db" psql -XAt -U postgres -d postgres -c "select count(*) from pg_tables where schemaname='auth';")"
+          version="$(docker exec "$db" psql -XAt -U postgres -d postgres -c "select count(*) from auth.schema_migrations;" 2>/dev/null || true)"
+          if [[ "$count" == 27 && "$version" == 82 ]]; then
+            echo 'DB_ONLY_AUTH_SCHEMA_AND_82_VERSIONS=PASS'
+          else
+            echo 'DB_ONLY_AUTH_SCHEMA_AND_82_VERSIONS=NOT_COMPATIBLE'; exit 1
+          fi
+          echo 'REAL_AUTH_ARTIFACTS_OPENED=NONE'
+  trimmed-stack:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Try pinned minimal Supabase Auth stack without optional services
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          d="$RUNNER_TEMP/dialektik-minimal-smoke"; mkdir -p "$d"; cd "$d"
+          trap 'npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1 || true; rm -rf -- "$d"' EXIT
+          npx --yes supabase@2.120.0 init > "$d/init.log" 2>&1
+          if ! npx --yes supabase@2.120.0 start -x studio,imgproxy,logflare,vector,supavisor,edge-runtime > "$d/start.log" 2>&1; then
+            echo 'MINIMAL_STACK_BOOTSTRAP=FAIL_NO_BACKUP'; exit 1
+          fi
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db" || { echo 'MINIMAL_STACK_DB_CONTAINER=ABSENT'; exit 1; }
+          count="$(docker exec "$db" psql -XAt -U postgres -d postgres -c "select count(*) from pg_tables where schemaname='auth';")"
+          version="$(docker exec "$db" psql -XAt -U postgres -d postgres -c "select count(*) from auth.schema_migrations;" 2>/dev/null || true)"
+          if [[ "$count" == 27 && "$version" == 82 ]]; then
+            echo 'MINIMAL_STACK_AUTH_SCHEMA_AND_82_VERSIONS=PASS'
+          else
+            echo 'MINIMAL_STACK_AUTH_SCHEMA_AND_82_VERSIONS=NOT_COMPATIBLE'; exit 1
+          fi
+          echo 'REAL_AUTH_ARTIFACTS_OPENED=NONE'
