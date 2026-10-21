@@ -18,10 +18,11 @@ final class CuratedEventPreviewCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return DialektikSurface(
+    return Card(
       key: const Key('chile-curated-event-preview'),
-      padding: const EdgeInsets.all(DialektikSpacing.space6),
-      child: FutureBuilder<CuratedEventPreview>(
+      child: Padding(
+        padding: const EdgeInsets.all(DialektikSpacing.space6),
+        child: FutureBuilder<CuratedEventPreview>(
         future: future,
         builder: (BuildContext context, AsyncSnapshot<CuratedEventPreview> snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
@@ -153,6 +154,7 @@ final class CuratedEventPreviewCard extends StatelessWidget {
             ],
           );
         },
+        ),
       ),
     );
   }
