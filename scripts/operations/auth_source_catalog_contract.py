@@ -26,7 +26,7 @@ SOURCE_AUTH_CATALOG={
     "mfa_recovery_codes": (5,"8cc46cd9bf18306c5e12f3f34da5f9ed"),
     "oauth_authorizations": (17,"1d653b825e72f9de13ebce8fdee2a8b4"),
     "oauth_client_states": (4,"6ce1cbe52aad9f95e736873c929ab282"),
-    "oauth_clients": (13,"87fba9b5afdd82b9c32234d5b707b0"),
+    "oauth_clients": (13,"87fba9b5afdd82b9c32234d5b707b0f0"),
     "oauth_consents": (6,"0f237ebb8d8f052ed79a66cff2cf2ef7"),
     "one_time_tokens": (8,"ff3ff9e33808324117bac40ba55f977a"),
     "refresh_tokens": (9,"53974303948f00d8c0e7ad4a095790b6"),
