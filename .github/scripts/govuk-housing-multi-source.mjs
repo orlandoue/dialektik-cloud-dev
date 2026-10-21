@@ -3,6 +3,7 @@
 // verified against the official Content API, never inferred from a Search API hit alone.
 import {resolve,dirname} from 'node:path';
 import {mkdir,writeFile} from 'node:fs/promises';
+import {loadPreviousDiscoveryReceipt} from './govuk-incremental-receipt.mjs';
 import {discoverGovUkRshNews} from './govuk-search-discovery.mjs';
 import {planRightsGatedMetadata} from '../../services/core-api/dist/live/rights-gated-metadata-stage.js';
 import {govUkRobotsAllowsPath} from '../../services/core-api/dist/live/govuk-product-acquisition.js';
@@ -105,10 +106,16 @@ async function main(){
   const out=process.env.DIALEKTIK_MULTI_DISCOVERY_OUTPUT;
   const temp=resolve(process.env.RUNNER_TEMP||'/tmp');
   if(typeof out!=='string'||!resolve(out).startsWith(temp+'/'))deny('MULTISOURCE_OUTPUT_DENIED');
-  const receipt=await discoverGovUkHousingPublishers();
+  const now=new Date();
+  const stateFile=process.env.DIALEKTIK_PREVIOUS_DISCOVERY_RECEIPT;
+  if(stateFile!==undefined&&!resolve(stateFile).startsWith(temp+'/'))deny('MULTISOURCE_HISTORY_OUT_OF_SCOPE');
+  const {previous,continuity}=await loadPreviousDiscoveryReceipt(stateFile,now);
+  const result=await discoverGovUkHousingPublishers({at:now,previous});
+  const receipt={...result,comparisonMode:continuity,
+    publicationFreshnessEstablished:false,completeHistoricalLedger:false};
   await mkdir(dirname(out),{recursive:true});
   await writeFile(out,JSON.stringify(receipt,null,2)+'\n',{flag:'wx',mode:0o600});
-  console.log('TWO_GOVUK_PUBLISHERS_VERIFIED=2; METADATA_CANDIDATES='+receipt.items.length+'; DB_WRITES=0; EVENTS=0; CONTRADICTIONS=0');
+  console.log('TWO_GOVUK_PUBLISHERS_VERIFIED=2; METADATA_CANDIDATES='+receipt.items.length+'; COMPARISON='+receipt.comparisonMode+'; STATUS_NEW='+receipt.counts.new+'; STATUS_UPDATED='+receipt.counts.updated+'; STATUS_UNCHANGED='+receipt.counts.unchanged+'; DB_WRITES=0; EVENTS=0; CONTRADICTIONS=0');
 }
 if(process.argv[1]&&import.meta.url===new URL('file://'+resolve(process.argv[1])).href)
   main().catch(e=>{console.error('GOVUK_TWO_PUBLISHER_FAIL_CLOSED',e.message);process.exitCode=1});
