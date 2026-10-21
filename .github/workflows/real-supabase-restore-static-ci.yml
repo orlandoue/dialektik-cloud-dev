@@ -15,6 +15,8 @@ on:
       - 'scripts/operations/check_local_restore_target.py'
       - 'scripts/operations/classify_private_restore_error.py'
       - 'scripts/operations/auth_data_copy_equivalence.py'
+      - 'scripts/operations/networkless_gotrue_replay_smoke.sh'
+      - '.github/scripts/networkless-auth-api-smoke.mjs'
       - 'scripts/operations/test_auth_data_copy_equivalence.py'
       - 'scripts/operations/test_classify_private_restore_error.py'
       - '.github/workflows/real-supabase-restore-static-ci.yml'
@@ -36,6 +38,9 @@ jobs:
         run: |
           bash -n scripts/operations/real_supabase_offline_replay.sh
           bash -n scripts/operations/verify_restored_roles_rollback.sh
+          bash -n scripts/operations/networkless_gotrue_replay_smoke.sh
+          node --check .github/scripts/networkless-auth-api-smoke.mjs
+          grep -Fq 'networkless_gotrue_replay_smoke.sh' scripts/operations/real_supabase_offline_replay.sh
           grep -Fq 'verify_restored_roles_rollback.sh' scripts/operations/real_supabase_offline_replay.sh
           python3 -m py_compile scripts/operations/managed_backup_inventory.py
           python3 -m py_compile scripts/operations/isolate_parameter_grant.py
