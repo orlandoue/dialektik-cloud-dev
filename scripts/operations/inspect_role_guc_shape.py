@@ -43,6 +43,54 @@ def bounded_shapes(contents: str) -> dict[str,int]:
         found[category] += 1
     return found
 
+_FIRST_KEYWORD_ALLOWLIST = {
+    "ALTER","SET","SELECT","DO","COPY","COMMENT","RESET",
+    "GRANT","REVOKE","CREATE","BEGIN","END"
+}
+
+def physical_guc_shapes(contents: str) -> dict[str,int]:
+    summary = {
+        "LINE_STARTS_ALTER_ROLE":0,
+        "LINE_STARTS_ALTER_USER":0,
+        "LINE_STARTS_SET":0,
+        "LINE_STARTS_SELECT":0,
+        "LINE_STARTS_COMMENT":0,
+        "LINE_STARTS_OTHER":0,
+        "LINE_HAS_ALTER_ROLE_ANYWHERE":0,
+        "LINE_HAS_SET_ANYWHERE":0,
+        "GUC_IDENTIFIER_DOUBLE_QUOTED":0,
+        "GUC_IDENTIFIER_SINGLE_QUOTED":0,
+        "GUC_LINE_ENDS_SEMICOLON":0,
+        "GUC_LINE_MULTIPLE_COMMAND_DELIMITERS":0,
+    }
+    for line in contents.splitlines():
+        if not GUC.search(line):
+            continue
+        stripped=line.lstrip()
+        if stripped.startswith("--"):
+            summary["LINE_STARTS_COMMENT"] += 1
+        elif re.match(r"^ALTER\s+ROLE\b",stripped,re.I):
+            summary["LINE_STARTS_ALTER_ROLE"] += 1
+        elif re.match(r"^ALTER\s+USER\b",stripped,re.I):
+            summary["LINE_STARTS_ALTER_USER"] += 1
+        elif re.match(r"^SET\b",stripped,re.I):
+            summary["LINE_STARTS_SET"] += 1
+        elif re.match(r"^SELECT\b",stripped,re.I):
+            summary["LINE_STARTS_SELECT"] += 1
+        else:
+            summary["LINE_STARTS_OTHER"] += 1
+        summary["LINE_HAS_ALTER_ROLE_ANYWHERE"] += int(
+            bool(re.search(r"\bALTER\s+ROLE\b",line,re.I)))
+        summary["LINE_HAS_SET_ANYWHERE"] += int(
+            bool(re.search(r"\bSET\b",line,re.I)))
+        summary["GUC_IDENTIFIER_DOUBLE_QUOTED"] += int(
+            bool(re.search(r'"log_min_messages"',line,re.I)))
+        summary["GUC_IDENTIFIER_SINGLE_QUOTED"] += int(
+            bool(re.search(r"'log_min_messages'",line,re.I)))
+        summary["GUC_LINE_ENDS_SEMICOLON"] += int(stripped.rstrip().endswith(";"))
+        summary["GUC_LINE_MULTIPLE_COMMAND_DELIMITERS"] += int(line.count(";")>1)
+    return summary
+
 def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--roles-sql", type=Path, required=True)
@@ -53,6 +101,9 @@ def main():
     print("REDACTED_LOG_GUC_OCCURRENCES="+str(sum(result.values())))
     for name in sorted(result):
         print("REDACTED_SQL_SHAPE_"+name+"="+str(result[name]))
+    physical=physical_guc_shapes(text)
+    for name in sorted(physical):
+        print("REDACTED_PHYSICAL_"+name+"="+str(physical[name]))
     print("NO_SQL_OR_ROLE_NAMES_PRINTED=TRUE")
     print("LOGGING_GUC_SOURCE_SQL_MODIFIED=FALSE")
     print("SUPABASE_DEV_ACCESS=NONE")
