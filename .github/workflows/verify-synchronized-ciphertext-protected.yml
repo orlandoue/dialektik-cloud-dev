@@ -1,0 +1,85 @@
+name: Dialektik verify synchronized ciphertext archive (protected opt-in)
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - 'scripts/operations/verify_synchronized_archive.py'
+      - '.github/workflows/verify-synchronized-ciphertext-protected.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  synchronized-backup-offline-audit:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'VERIFY_SYNCHRONIZED_DEV_DATA_ARCHIVE_20261021'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    environment: dialektik-dev-backup
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Download ciphertext only, not connected to any source database
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/synced-archive-private"
+          mkdir -p "$w/download"
+          gh run download 39671122200 --name dialektik-synchronized-dev-data-encrypted-20261021 \
+            --dir "$w/download" >/dev/null
+          test -s "$w/download/dialektik-synced-dev-20261021.tar.gpg"
+          echo 'SYNCHRONIZED_CIPHERTEXT_DOWNLOADED=PASS'
+      - name: Decrypt and verify exact archive hash and scope allowlist privately
+        shell: bash
+        env:
+          BACKUP_PASSWORD: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/synced-archive-private"
+          test -n "${BACKUP_PASSWORD:-}" && test "${#BACKUP_PASSWORD}" -ge 32
+          printf '%s' "$BACKUP_PASSWORD" > "$w/key"
+          gpg --quiet --batch --no-tty --pinentry-mode loopback \
+            --passphrase-file "$w/key" \
+            --decrypt --output "$w/scope.tar" \
+            "$w/download/dialektik-synced-dev-20261021.tar.gpg" \
+            > "$w/decrypt-private.log" 2>&1 || {
+            echo 'SYNCHRONIZED_PRIVATE_DECRYPT=FAIL_REDACTED'; exit 1
+          }
+          rm -f -- "$w/key"
+          echo 'SYNCHRONIZED_PRIVATE_DECRYPT=PASS'
+          python3 scripts/operations/verify_synchronized_archive.py \
+            "$w/scope.tar" "$w/verified"
+      - name: Validate authentic PostgreSQL17 custom-format archive catalogs offline
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/synced-archive-private"
+          for file in public-full.snapshot.dump auth-data.snapshot.dump \
+            migration-ledger.snapshot.dump storage-data.snapshot.dump \
+            realtime-data.snapshot.dump vault-data.snapshot.dump; do
+            docker run --rm --network none --user "$(id -u):$(id -g)" \
+              -v "$w/verified:/scope:ro" postgres:17.11 \
+              pg_restore --list "/scope/$file" > "$w/$file.toc" 2>&1 || {
+              echo 'SYNCHRONIZED_PG_RESTORE_TOC=FAIL_REDACTED'; exit 1
+            }
+          done
+          python3 scripts/operations/managed_backup_inventory.py \
+            --auth-toc "$w/auth-data.snapshot.dump.toc" \
+            --ledger-toc "$w/migration-ledger.snapshot.dump.toc" \
+            --auth-archive "$w/verified/auth-data.snapshot.dump" \
+            --ledger-archive "$w/verified/migration-ledger.snapshot.dump" \
+            --out "$w/verified-second-inventory.json" >/dev/null
+          echo 'SYNCHRONIZED_PG17_SIX_ARCHIVE_TOC_AND_AUTH_LEDGER=PASS'
+          echo 'SYNCHRONIZED_NEW_BUNDLE_RESTORE=NOT_EXECUTED'
+          echo 'REMOTE_DEV_SQL_CHANGES=0'
+      - name: Destroy all transient decrypted data, files and passphrase
+        if: always()
+        shell: bash
+        run: |
+          rm -rf -- "$RUNNER_TEMP/synced-archive-private"
+          echo 'SYNCHRONIZED_DECRYPTED_DATA_CLEANUP=COMPLETE'
+          echo 'PRIVATE_SOURCE_ARTIFACTS_UPLOADED=NONE'
