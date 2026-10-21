@@ -32,26 +32,32 @@ export function releaseDecision({ runtime } = {}) {
   };
 }
 
-async function probe(fetchImpl, path, timeoutMs = 15_000) {
-  let response;
-  try {
-    response = await fetchImpl(DEV_ORIGIN + path, {
-      method: 'GET',
-      headers: { Accept: 'application/json', 'Cache-Control': 'no-store' },
-      redirect: 'manual',
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-  } catch {
-    return { kind: 'UNAVAILABLE', status: null };
+async function probe(fetchImpl, path, timeoutMs = 15_000, attempts = 1) {
+  // Render DEV can be cold. Retry only transport errors; never hide a real
+  // HTTP 503, 404 or an auth bypass behind subsequent responses.
+  for (let index = 1; index <= attempts; index++) {
+    let response;
+    try {
+      response = await fetchImpl(DEV_ORIGIN + path, {
+        method: 'GET',
+        headers: { Accept: 'application/json', 'Cache-Control': 'no-store' },
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+    } catch {
+      if (index < attempts) continue;
+      return { kind: 'UNAVAILABLE', status: null, attempts: index };
+    }
+    // Deliberately NEVER read the response body of a protected route.
+    if (!Number.isInteger(response.status)) return { kind: 'INVALID', status: null, attempts: index };
+    return { kind: 'HTTP', status: response.status, attempts: index };
   }
-  // Deliberately NEVER read the response body of a protected route.
-  if (!Number.isInteger(response.status)) return { kind: 'INVALID', status: null };
-  return { kind: 'HTTP', status: response.status };
+  throw new Error('UNREACHABLE_ATTEMPT_LIMIT');
 }
 
 export async function inspectRuntime(fetchImpl = fetch) {
-  const live = await probe(fetchImpl, '/health/live');
-  const ready = await probe(fetchImpl, '/health/ready');
+  const live = await probe(fetchImpl, '/health/live', 15_000, 4);
+  const ready = await probe(fetchImpl, '/health/ready', 15_000, 4);
   const guarded = {};
   for (const path of PROTECTED_PATHS) {
     guarded[path] = await probe(fetchImpl, path);
