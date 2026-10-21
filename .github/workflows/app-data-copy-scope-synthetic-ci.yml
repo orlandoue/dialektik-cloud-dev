@@ -1,0 +1,47 @@
+name: Dialektik application COPY duplicate scope (synthetic, no secrets)
+on:
+  push:
+    branches: [codex/restore-data-copy-scope-20261021]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fail-closed-copy-scope:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Redaction and copy-boundary unit tests
+        run: |
+          python3 -m py_compile scripts/operations/app_data_copy_scope.py
+          python3 -m unittest discover -s scripts/operations -p test_app_data_copy_scope.py -v
+          echo 'AUTHENTIC_BACKUP_ACCESS=NONE'
+      - name: Real PostgreSQL 17 COPY duplicate on entirely synthetic networkless database
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/dialektik-copy-probe"
+          mkdir -p "$work"
+          docker run --rm -d --network none --name dialektik-copy-probe -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11
+          trap 'docker rm -f dialektik-copy-probe >/dev/null 2>&1 || true; rm -rf -- "$work"' EXIT
+          for i in $(seq 1 35); do
+            if docker exec dialektik-copy-probe pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec dialektik-copy-probe psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'create table public.synthetic_copy(id integer primary key); insert into public.synthetic_copy values (1)' >/dev/null
+          docker exec dialektik-copy-probe mkdir -p /tmp/dialektik_restore_real
+          docker exec dialektik-copy-probe pg_dump -U postgres -d postgres --data-only --table=public.synthetic_copy -f /tmp/dialektik_restore_real/data.sql
+          docker cp dialektik-copy-probe:/tmp/dialektik_restore_real/data.sql "$work/data.sql"
+          if docker exec dialektik-copy-probe psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 --single-transaction -f /tmp/dialektik_restore_real/data.sql > "$work/private.log" 2>&1; then
+            echo 'SYNTHETIC_DUPLICATE_NOT_DETECTED'; exit 1
+          fi
+          python3 scripts/operations/app_data_copy_scope.py --private-log "$work/private.log" --data-sql "$work/data.sql" > "$work/safe.txt"
+          grep -qx 'REDACTED_FIRST_APPLICATION_COPY_SCOPE=APPLICATION_PUBLIC_COPY' "$work/safe.txt"
+          grep -qx 'APPLICATION_SOURCE_ROWS_OR_TABLE_IDENTIFIERS_EXPOSED=FALSE' "$work/safe.txt"
+          ! grep -E '(synthetic_copy|/tmp/dialektik_restore_real|Key|COPY)' "$work/safe.txt"
+          test "$(docker exec dialektik-copy-probe psql -XAt -U postgres -d postgres -c 'select count(*) from public.synthetic_copy')" = 1
+          echo 'POSTGRES17_STRUCTURAL_DUPLICATE_DIAGNOSTIC=PASS'
+          echo 'REAL_SOURCE_DATA_ACCESSED=FALSE'
