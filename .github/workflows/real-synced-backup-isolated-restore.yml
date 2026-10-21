@@ -1,0 +1,180 @@
+name: Dialektik synchronized six-schema offline recovery (protected opt-in)
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/real-synced-backup-isolated-restore.yml'
+      - 'scripts/operations/replay_synchronized_data_offline.sh'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  supervised-protected-real-restore:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'EXECUTE_SYNC_DEV_BACKUP_OFFLINE_RESTORE_20261021'
+    environment: dialektik-dev-backup
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Trusted checkout without persistent token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Bootstrap disposable empty Supabase Auth and migration ledger
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-protected-replay"
+          mkdir -p "$w/local" "$w/derived" "$w/download"
+          cd "$w/local"
+          npx --yes supabase@2.120.0 init > "$w/derived/local-init.log" 2>&1
+          # Database-only mode was independently smoke-tested with 27 Auth tables and 82 versions.
+          # It avoids unrelated service health checks before ciphertext is even available.
+          if ! npx --yes supabase@2.120.0 db start > "$w/derived/local-start.log" 2>&1; then
+            echo 'DB_ONLY_BOOTSTRAP_FIRST_ATTEMPT=FAIL_REDACTED'
+            # No real backup has been downloaded or decrypted; safe to discard
+            # only this disposable local project's partially created volume.
+            npx --yes supabase@2.120.0 stop --no-backup > "$w/derived/local-stop-before-retry.log" 2>&1 || true
+            sleep 5
+            if ! npx --yes supabase@2.120.0 db start > "$w/derived/local-start-retry.log" 2>&1; then
+              echo 'DB_ONLY_BOOTSTRAP_RETRY=FAIL_REDACTED'
+              echo 'EMPTY_SUPABASE_BOOTSTRAP_FAILED_LOG_REDACTED'
+              exit 1
+            fi
+            echo 'DB_ONLY_BOOTSTRAP_RECOVERED_ON_RETRY=PASS'
+          else
+            echo 'DB_ONLY_BOOTSTRAP_FIRST_ATTEMPT=PASS'
+          fi
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db" || { echo 'ISOLATED_SUPABASE_DATABASE_NOT_FOUND'; exit 1; }
+          docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
+            "CREATE SCHEMA IF NOT EXISTS supabase_migrations; CREATE TABLE IF NOT EXISTS supabase_migrations.schema_migrations (
+              version text PRIMARY KEY, statements text[], name text,
+              created_by text, idempotency_key text, rollback text[]
+            );" > "$w/derived/local-ledger.log" 2>&1 || {
+              echo 'EMPTY_LEDGER_BOOTSTRAP_FAILED_LOG_REDACTED'
+              exit 1
+            }
+          local_structure="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -c "SELECT (to_regclass('auth.users') IS NOT NULL)::integer, (to_regclass('auth.identities') IS NOT NULL)::integer, (to_regclass('auth.sessions') IS NOT NULL)::integer, (to_regclass('auth.refresh_tokens') IS NOT NULL)::integer, (to_regclass('supabase_migrations.schema_migrations') IS NOT NULL)::integer;")"
+          test "$local_structure" = '1|1|1|1|1' || {
+            echo 'EMPTY_AUTH_AND_LEDGER_TARGET_STRUCTURE_NOT_READY'
+            exit 1
+          }
+          # Pull Auth validation images BEFORE ciphertext download or DB isolation.
+          # They will subsequently run in --network container:$DB_CONTAINER,
+          # sharing only the disconnected database's loopback namespace.
+          docker pull public.ecr.aws/supabase/gotrue:v2.197.0 > "$w/derived/gotrue-image-pull.log" 2>&1 || {
+            echo 'OFFLINE_GOTRUE_IMAGE_PULL=FAIL_REDACTED'
+            exit 1
+          }
+          docker pull node:22-alpine > "$w/derived/node-image-pull.log" 2>&1 || {
+            echo 'OFFLINE_GOTRUE_CLIENT_IMAGE_PULL=FAIL_REDACTED'
+            exit 1
+          }
+          echo 'OFFLINE_GOTRUE_IMAGES_CACHED_BEFORE_DECRYPT=PASS'
+          echo "DB_CONTAINER=$db" >> "$GITHUB_ENV"
+          echo 'BOOTSTRAP_MODE=DATABASE_ONLY'
+          echo 'EMPTY_OFFLINE_RESTORE_TARGET=READY'
+      - name: Stop all non-database services and remove ALL database network interfaces
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$DB_CONTAINER"
+          # Real backup has NOT been downloaded or decrypted at this point.
+          for c in $(docker ps --format '{{.Names}}' | grep '^supabase_' || true); do
+            if [ "$c" != "$DB_CONTAINER" ]; then
+              docker stop "$c" >/dev/null
+            fi
+          done
+          while IFS= read -r network; do
+            if [ -n "$network" ]; then
+              docker network disconnect --force "$network" "$DB_CONTAINER"
+            fi
+          done < <(docker inspect "$DB_CONTAINER" --format '{{range $n,$_ := .NetworkSettings.Networks}}{{println $n}}{{end}}')
+          if [ "$(docker inspect "$DB_CONTAINER" --format '{{json .NetworkSettings.Networks}}')" != '{}' ]; then
+            echo 'DATABASE_STILL_HAS_NETWORK_ABORT'
+            exit 1
+          fi
+          docker exec "$DB_CONTAINER" pg_isready -U postgres -d postgres >/dev/null
+          echo 'ISOLATED_DATABASE_NETWORKS=NONE'
+          echo 'SENSITIVE_USER_BACKUP_NOT_YET_DECRYPTED=TRUE'
+      - name: Download exact original roles and synchronized encrypted backup without opening either
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: orlandoue/dialektik-cloud-dev
+        run: |
+          set -euo pipefail
+          w="$RUNNER_TEMP/dialektik-protected-replay"
+          # Byte-identical encrypted copy independently validated on 2026-10-21.
+          # Original seven-day artifact expires 2026-10-27; copied ciphertext
+          # artifact is retained through 2026-12-20. No decryption at this step.
+          gh run download 39548209248 --name dialektik-complete-dev-original-ciphertext-preserved-20261021 \
+            --dir "$w/download" >/dev/null
+          test -s "$w/download/dialektik-complete-dev-20261020.tar.gpg"
+          echo 'PRESERVED_BYTE_IDENTICAL_CIPHERTEXT_AVAILABLE=PASS'
+          echo 'SOURCE_CIPHERTEXT_AVAILABLE=PASS'
+          gh run download 39671122200 --name dialektik-synchronized-dev-data-encrypted-20261021 \
+            --dir "$w/download" >/dev/null
+          test -s "$w/download/dialektik-synced-dev-20261021.tar.gpg"
+          echo 'SOURCE_SYNCED_CIPHERTEXT_AVAILABLE=PASS'
+      - name: Decrypt both authenticated ciphertext archives offline and validate each hash contract
+        shell: bash
+        env:
+          BACKUP_PASSWORD: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-protected-replay"
+          [ "$(docker inspect "$DB_CONTAINER" --format '{{json .NetworkSettings.Networks}}')" = '{}' ] || {
+            echo 'SYNC_REPLAY_NETWORK_PRECONDITION=FAIL'; exit 1
+          }
+          test -n "${BACKUP_PASSWORD:-}" && test "${#BACKUP_PASSWORD}" -ge 32
+          mkdir -p "$w/old" "$w/new"
+          printf '%s' "$BACKUP_PASSWORD" > "$w/derived/offline-only-key"
+          if ! gpg --quiet --batch --no-tty --pinentry-mode loopback \
+            --passphrase-file "$w/derived/offline-only-key" \
+            --decrypt --output "$w/old/backup.tar" \
+            "$w/download/dialektik-complete-dev-20261020.tar.gpg" \
+            > "$w/derived/old-decrypt-private.log" 2>&1; then
+            echo 'ORIGINAL_GLOBAL_ROLES_DECRYPT=FAIL_REDACTED'; exit 1
+          fi
+          if ! gpg --quiet --batch --no-tty --pinentry-mode loopback \
+            --passphrase-file "$w/derived/offline-only-key" \
+            --decrypt --output "$w/new/scope.tar" \
+            "$w/download/dialektik-synced-dev-20261021.tar.gpg" \
+            > "$w/derived/new-decrypt-private.log" 2>&1; then
+            echo 'SYNCHRONIZED_SIX_SCOPE_DECRYPT=FAIL_REDACTED'; exit 1
+          fi
+          rm -f -- "$w/derived/offline-only-key"
+          unset BACKUP_PASSWORD
+          python3 scripts/operations/verify_real_restore_bundle.py verify \
+            --tar "$w/old/backup.tar" --dest "$w/old/clear"
+          python3 scripts/operations/verify_synchronized_archive.py \
+            "$w/new/scope.tar" "$w/new/verified"
+          echo 'TWO_ENCRYPTED_ARCHIVE_INTEGRITY_GATES=PASS'
+      - name: Replay synchronized schema and all scopes with strict managed conflicts
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          bash scripts/operations/replay_synchronized_data_offline.sh \
+            "$DB_CONTAINER" "$RUNNER_TEMP/dialektik-protected-replay"
+      - name: Irreversibly discard local real-data containers and ephemeral plaintext
+        shell: bash
+        if: always()
+        run: |
+          docker rm -f dialektik_gotrue_networkless_fixture >/dev/null 2>&1 || true
+          if [ -n "${DB_CONTAINER:-}" ]; then
+            docker rm -f "$DB_CONTAINER" >/dev/null 2>&1 || true
+          fi
+          if [ -d "$RUNNER_TEMP/dialektik-protected-replay/local" ]; then
+            (cd "$RUNNER_TEMP/dialektik-protected-replay/local" &&
+              npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1) || true
+          fi
+          rm -rf -- "$RUNNER_TEMP/dialektik-protected-replay"
+          echo 'LOCAL_REAL_AUTH_PLAINTEXT_AND_DATA_CONTAINER_CLEANUP=COMPLETE'
+          echo 'REMOTE_DEV_SQL_CHANGES=0'
+          echo 'AUTH_BODY_OR_SOURCE_BACKUP_ARTIFACTS_UPLOADED=NONE'

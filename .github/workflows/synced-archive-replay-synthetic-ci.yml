@@ -1,0 +1,62 @@
+name: Synchronized archive native restore negative/synthetic gate
+on:
+  push:
+    branches: [codex/synced-archive-isolated-replay-20261021]
+permissions:
+  contents: read
+jobs:
+  pg17-synthetic-custom-archive:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Static safety and Bash syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          python3 -m py_compile scripts/operations/verify_synchronized_archive.py
+          grep -Fq "TARGET_CONTAINER_HAS_NETWORK_FAIL_CLOSED" scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq "EXECUTE_SYNC_DEV_BACKUP_OFFLINE_RESTORE_20261021" .github/workflows/real-synced-backup-isolated-restore.yml
+          grep -Fq "environment: dialektik-dev-backup" .github/workflows/real-synced-backup-isolated-restore.yml
+          echo 'NO_REAL_BACKUP_OR_DEV_ACCESS=TRUE'
+      - name: Native PG17 custom public schema and data replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/synthetic-synced-restore"
+          mkdir -p "$w"
+          docker run --rm -d --network none --name dialektik-synced-restore-native \
+            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 >/dev/null
+          trap 'docker rm -f dialektik-synced-restore-native >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
+          for n in $(seq 1 40); do
+            docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null
+          docker exec dialektik-synced-restore-native psql -X -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "CREATE TABLE public.example_article(id text PRIMARY KEY); \
+              ALTER TABLE public.example_article ENABLE ROW LEVEL SECURITY; \
+              INSERT INTO public.example_article VALUES ('synthetic-only');" > "$w/schema.log" 2>&1
+          docker exec dialektik-synced-restore-native pg_dump -U postgres -d postgres \
+            --format=custom --no-owner --no-privileges --schema=public \
+            --file=/tmp/native-public.dump
+          docker exec dialektik-synced-restore-native createdb -U postgres isolated_target
+          docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
+            --schema-only --no-owner --no-privileges --single-transaction --exit-on-error \
+            /tmp/native-public.dump > "$w/schema-restore-private.log" 2>&1 || {
+            echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_RESTORE=FAIL_REDACTED'; exit 1;
+          }
+          docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
+            --data-only --no-owner --no-privileges --single-transaction --exit-on-error \
+            /tmp/native-public.dump > "$w/data-restore-private.log" 2>&1 || {
+            echo 'SYNTHETIC_PUBLIC_CUSTOM_DATA_RESTORE=FAIL_REDACTED'; exit 1;
+          }
+          out="$(docker exec dialektik-synced-restore-native psql -XAt -U postgres -d isolated_target \
+            -c "SELECT count(*) || '|' || (SELECT relrowsecurity FROM pg_class WHERE oid='public.example_article'::regclass) FROM public.example_article;")"
+          [ "$out" = '1|t' ] || exit 1
+          echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_AND_DATA_REPLAY=PASS'
+          echo 'SYNTHETIC_PUBLIC_RLS_PRESERVATION=PASS'
