@@ -82,26 +82,56 @@ function readInteger(
 }
 
 function readDatabaseUrl(source: NodeJS.ProcessEnv): string {
-  const raw = source.DATABASE_URL?.trim();
-  if (raw === undefined || raw.length === 0) {
+  const primary = source.DATABASE_URL?.trim();
+  if (primary === undefined || primary.length === 0) {
     throw new Error('DATABASE_URL is required');
   }
 
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw new Error('DATABASE_URL must be a valid PostgreSQL URL');
+  const slot = source.DIALEKTIK_CORE_DB_SLOT?.trim() || 'primary';
+  if (slot !== 'primary' && slot !== 'candidate') {
+    throw new Error('DIALEKTIK_CORE_DB_SLOT must be primary or candidate');
   }
 
-  if (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') {
-    throw new Error('DATABASE_URL must use the postgres or postgresql scheme');
-  }
-  if (parsed.hostname.length === 0 || parsed.pathname.length <= 1) {
-    throw new Error('DATABASE_URL must identify a host and database');
+  const parse = (raw: string): URL => {
+    let parsed: URL;
+    try {
+      parsed = new URL(raw);
+    } catch {
+      throw new Error('Core database URL must be a valid PostgreSQL URL');
+    }
+    if ((parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') ||
+      parsed.hostname.length === 0 || parsed.pathname.length <= 1) {
+      throw new Error('Core database URL must identify a PostgreSQL database');
+    }
+    return parsed;
+  };
+
+  const primaryUrl = parse(primary);
+  if (slot === 'primary') {
+    return primary;
   }
 
-  return raw;
+  const alternate = source.DATABASE_URL_CANDIDATE?.trim();
+  if (alternate === undefined || alternate.length === 0) {
+    throw new Error('Candidate Core database URL is required');
+  }
+  const candidateUrl = parse(alternate);
+
+  // Never rotate to another DB, pooler, port, SSL policy or privileged username.
+  // Expected PostgreSQL pooler-style user is role.project_ref; direct role is role.
+  const primaryUser = decodeURIComponent(primaryUrl.username);
+  const candidateUser = decodeURIComponent(candidateUrl.username);
+  if (!/^dialektik_core_app(?:\\.[a-z0-9]+)?$/u.test(primaryUser) ||
+      candidateUser !== primaryUser.replace(/^dialektik_core_app/u, 'dialektik_core_app_next') ||
+      candidateUrl.password.length === 0 ||
+      candidateUrl.protocol !== primaryUrl.protocol ||
+      candidateUrl.hostname !== primaryUrl.hostname ||
+      candidateUrl.port !== primaryUrl.port ||
+      candidateUrl.pathname !== primaryUrl.pathname ||
+      candidateUrl.search !== primaryUrl.search) {
+    throw new Error('Candidate Core database target or role is not authorized');
+  }
+  return alternate;
 }
 
 function readDatabaseCaCertificate(source: NodeJS.ProcessEnv): string | undefined {
