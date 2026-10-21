@@ -23,12 +23,14 @@ const sources: readonly MetadataSourcePolicy[] = [
     sourceId: 'example_agency_a',
     publisherId: 'official_publisher_a',
     canonicalOrigin: 'https://agency-a.example',
+    reviewedPathPrefix: '/news/',
   },
   {
     ...base,
     sourceId: 'example_agency_b',
     publisherId: 'official_publisher_b',
     canonicalOrigin: 'https://agency-b.example',
+    reviewedPathPrefix: '/noticias/',
   },
 ];
 
@@ -153,6 +155,18 @@ describe('source-policy gated, deterministic pre-write Article metadata staging'
       .toThrow('METADATA_SOURCE_BOUNDARY_VIOLATION');
     expect(() => decide(sources, [{ ...a, canonicalUrl: 'https://agency-a.example@evil.example/news' }]))
       .toThrow('METADATA_CANONICAL_URL_INVALID');
+  });
+
+  it('limits every staged URL to the path subtree actually reviewed by the operator', () => {
+    expect(() => decide(sources, [{
+      ...a, canonicalUrl: 'https://agency-a.example/internal/undisclosed',
+    }])).toThrow('METADATA_ITEM_OUTSIDE_REVIEWED_PATH');
+    expect(() => decide([{ ...sources[0]!, reviewedPathPrefix: '/' }], [a]))
+      .toThrow('METADATA_REVIEWED_PATH_INVALID');
+    expect(() => decide([{ ...sources[0]!, reviewedPathPrefix: '/news/../' }], [a]))
+      .toThrow('METADATA_REVIEWED_PATH_INVALID');
+    expect(() => decide([{ ...sources[0]!, reviewedPathPrefix: '/news' }], [a]))
+      .toThrow('METADATA_REVIEWED_PATH_INVALID');
   });
 
   it('rejects canonical query strings, anchors, credentials and unnormalized URLs', () => {

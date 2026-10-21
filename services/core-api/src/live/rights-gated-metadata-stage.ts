@@ -12,6 +12,8 @@ export interface MetadataSourcePolicy {
   readonly sourceId: string;
   readonly publisherId: string;
   readonly canonicalOrigin: string;
+  /** Explicit URL path subtree covered by the operator's source/robots review. */
+  readonly reviewedPathPrefix: string;
   readonly rightsDecisionId: string;
   readonly rightsEvidenceUrl: string;
   readonly rightsReviewedAt: string;
@@ -135,6 +137,11 @@ export function planRightsGatedMetadata(
         policy.robotsAllowsPlannedPath !== true) {
       throw new Error('METADATA_SOURCE_POLICY_NOT_AUTHORIZED');
     }
+    if (typeof policy.reviewedPathPrefix !== 'string' ||
+        !/^\/(?:[A-Za-z0-9._~-]+\/)+$/u.test(policy.reviewedPathPrefix) ||
+        policy.reviewedPathPrefix.includes('/../') || policy.reviewedPathPrefix.includes('/./')) {
+      throw new Error('METADATA_REVIEWED_PATH_INVALID');
+    }
     const origin = assertExternalHttps(policy.canonicalOrigin + '/', 'METADATA_SOURCE_ORIGIN_INVALID');
     if (origin.href !== origin.origin + '/' || policy.canonicalOrigin !== origin.origin) {
       throw new Error('METADATA_SOURCE_ORIGIN_INVALID');
@@ -176,6 +183,9 @@ export function planRightsGatedMetadata(
     const canonical = assertExternalHttps(item.canonicalUrl, 'METADATA_CANONICAL_URL_INVALID');
     if (canonical.origin !== policy.canonicalOrigin || canonical.pathname === '/') {
       throw new Error('METADATA_SOURCE_BOUNDARY_VIOLATION');
+    }
+    if (!canonical.pathname.startsWith(policy.reviewedPathPrefix)) {
+      throw new Error('METADATA_ITEM_OUTSIDE_REVIEWED_PATH');
     }
     const publication = assertCanonicalTimestamp(item.publishedAt, 'METADATA_PUBLICATION_DATE_INVALID');
     const revision = item.modifiedAt === null
