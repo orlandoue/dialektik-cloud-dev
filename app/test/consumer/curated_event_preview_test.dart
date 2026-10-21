@@ -1,3 +1,4 @@
+// Regression: this Android preview is editorial, not autonomous inference.
 import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/curated_event_preview_card.dart';
 import 'package:flutter/material.dart';
