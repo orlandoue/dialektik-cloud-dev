@@ -14,6 +14,8 @@ on:
       - 'scripts/operations/real_supabase_offline_replay.sh'
       - 'scripts/operations/check_local_restore_target.py'
       - 'scripts/operations/classify_private_restore_error.py'
+      - 'scripts/operations/auth_data_copy_equivalence.py'
+      - 'scripts/operations/test_auth_data_copy_equivalence.py'
       - 'scripts/operations/test_classify_private_restore_error.py'
       - '.github/workflows/real-supabase-restore-static-ci.yml'
       - 'scripts/operations/inspect_role_guc_shape.py'
@@ -38,12 +40,14 @@ jobs:
           python3 -m py_compile scripts/operations/filter_auth_migration_toc.py
           python3 -m py_compile scripts/operations/verify_real_restore_bundle.py
           python3 -m py_compile scripts/operations/check_local_restore_target.py
+          python3 -m py_compile scripts/operations/auth_data_copy_equivalence.py
           python3 -m unittest discover -s scripts/operations -p test_managed_backup_inventory.py -v
           python3 -m unittest discover -s scripts/operations -p test_logging_guc_sanitizer.py -v
           python3 -m unittest discover -s scripts/operations -p test_filter_auth_migration_toc.py -v
           python3 -m unittest discover -s scripts/operations -p test_isolate_parameter_grant.py -v
           python3 -m unittest discover -s scripts/operations -p test_verify_real_restore_bundle.py -v
           python3 -m unittest discover -s scripts/operations -p test_classify_private_restore_error.py -v
+          python3 -m unittest discover -s scripts/operations -p test_auth_data_copy_equivalence.py -v
           python3 -m unittest discover -s scripts/operations -p test_inspect_role_guc_shape.py -v
           echo 'ALL_REPLAY_CONTRACT_SCRIPTS_PARSE=PASS'
       - name: Ensure protected flow does not access remote DEV or upload source data
