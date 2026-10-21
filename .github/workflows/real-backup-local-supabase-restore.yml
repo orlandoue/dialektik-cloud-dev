@@ -101,9 +101,13 @@ jobs:
         run: |
           set -euo pipefail
           w="$RUNNER_TEMP/dialektik-protected-replay"
-          gh run download 39488529000 --name dialektik-complete-dev-auth-ledger-encrypted \
+          # Byte-identical encrypted copy independently validated on 2026-10-21.
+          # Original seven-day artifact expires 2026-10-27; copied ciphertext
+          # artifact is retained through 2026-12-20. No decryption at this step.
+          gh run download 39548209248 --name dialektik-complete-dev-original-ciphertext-preserved-20261021 \
             --dir "$w/download" >/dev/null
           test -s "$w/download/dialektik-complete-dev-20261020.tar.gpg"
+          echo 'PRESERVED_BYTE_IDENTICAL_CIPHERTEXT_AVAILABLE=PASS'
           echo 'SOURCE_CIPHERTEXT_AVAILABLE=PASS'
       - name: Attempt actual networkless Supabase Auth and 50-migration replay
         shell: bash
