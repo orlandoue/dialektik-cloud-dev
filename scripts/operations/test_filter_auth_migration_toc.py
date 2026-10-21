@@ -44,7 +44,7 @@ class AuthRestoreTocTests(unittest.TestCase):
     def test_wrong_schema_migration_is_never_excluded(self):
         src=toc().replace("TABLE DATA auth schema_migrations",
                           "TABLE DATA public schema_migrations")
-        with self.assertRaisesRegex(ValueError,"AUTH_MIGRATION_EXCLUSION_PRECONDITION"):
+        with self.assertRaisesRegex(ValueError,"AUTH_ARCHIVE_TABLE_INVENTORY"):
             prepare(src)
 
     def test_source_backup_bytes_not_modified(self):
