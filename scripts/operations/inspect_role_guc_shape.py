@@ -52,6 +52,8 @@ def physical_guc_shapes(contents: str) -> dict[str,int]:
     summary = {
         "LINE_STARTS_ALTER_ROLE":0,
         "LINE_STARTS_ALTER_USER":0,
+        "LINE_STARTS_ALTER_DATABASE":0,
+        "LINE_STARTS_ALTER_SYSTEM":0,
         "LINE_STARTS_SET":0,
         "LINE_STARTS_SELECT":0,
         "LINE_STARTS_COMMENT":0,
@@ -73,6 +75,10 @@ def physical_guc_shapes(contents: str) -> dict[str,int]:
             summary["LINE_STARTS_ALTER_ROLE"] += 1
         elif re.match(r"^ALTER\s+USER\b",stripped,re.I):
             summary["LINE_STARTS_ALTER_USER"] += 1
+        elif re.match(r"^ALTER\s+DATABASE\b",stripped,re.I):
+            summary["LINE_STARTS_ALTER_DATABASE"] += 1
+        elif re.match(r"^ALTER\s+SYSTEM\b",stripped,re.I):
+            summary["LINE_STARTS_ALTER_SYSTEM"] += 1
         elif re.match(r"^SET\b",stripped,re.I):
             summary["LINE_STARTS_SET"] += 1
         elif re.match(r"^SELECT\b",stripped,re.I):
