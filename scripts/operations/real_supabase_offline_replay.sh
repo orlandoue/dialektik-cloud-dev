@@ -220,6 +220,10 @@ fi
 echo 'REAL_AUTH_APP_RELATIONAL_INTEGRITY=PASS'
 echo 'AUTH_APP_TESTER_LINKS=PASS'
 echo 'RESTORED_GOVUK_WRITER_STILL_NOLOGIN=PASS'
+
+# Validate the restored Core and disabled writer ACL/RLS, then intentionally
+# fail a transaction containing a synthetic table and row; prove rollback.
+bash scripts/operations/verify_restored_roles_rollback.sh "$db" "$work"
 echo 'REAL_BACKUP_OFFLINE_DATABASE_REPLAY=PASS'
 echo 'AUTH_API_LOGIN_VERIFICATION=NOT_EXECUTED'
 echo 'DATABASE_BACKUP_ATOMICITY=NOT_ESTABLISHED'
