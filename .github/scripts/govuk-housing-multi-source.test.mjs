@@ -3,7 +3,7 @@ import {test} from 'node:test';
 import {discoverGovUkHousingPublishers} from './govuk-housing-multi-source.mjs';
 const at=new Date('2026-10-21T06:00:00.000Z');
 const r='/government/news/rsh-housing-release-a',m='/government/news/mhclg-housing-release-b';
-function fixture({ministryName='Ministry of Housing, Communities and Local Government',shared=false,robots='User-agent: *\nAllow: /\n'}={}){
+function fixture({ministryName='Ministry of Housing, Communities and Local Government',shared=false,ministryTitle='Ministry housing safety announcement',robots='User-agent: *\nAllow: /\n'}={}){
   const calls=[];
   const fetcher=async(url,init)=>{
     calls.push([url,init]);
@@ -13,7 +13,7 @@ function fixture({ministryName='Ministry of Housing, Communities and Local Gover
     const path=new URL(url).pathname.replace('/api/content','');
     const d={base_path:path,document_type:'press_release',schema_name:'news_article',locale:'en',
       links:{organisations:[{title:ministry?ministryName:'Regulator of Social Housing'}]},
-      title:ministry?'Ministry housing safety announcement':'Regulator housing safety announcement',
+      title:ministry?ministryTitle:'Regulator housing safety announcement',
       first_published_at:'2026-10-20T10:00:00Z',public_updated_at:null,
       content_id:ministry?'a23e4567-e89b-12d3-a456-426614174001':'a23e4567-e89b-12d3-a456-426614174000',
       details:{body:'NEVER DISCLOSE FULL TEXT'}};
@@ -34,6 +34,13 @@ test('two verified original publishers, distinct Article identities, no DB/seman
   const previous=x.items.map(i=>({sourceId:i.sourceId,sourceItemId:i.sourceItemId,canonicalUrl:i.canonicalUrl,metadataHash:i.metadataHash}));
   const replay=await discoverGovUkHousingPublishers({fetcher,at,previous});
   assert.deepEqual(replay.counts,{new:0,updated:0,unchanged:2});
+});
+test('normalize spacing only; refuse dangerous control characters in ministry title',async()=>{
+  const {fetcher}=fixture({ministryTitle:'  Ministry  housing\\n safety announcement  '});
+  const x=await discoverGovUkHousingPublishers({fetcher,at});
+  assert.equal(x.items.find(i=>i.sourceId==='govuk_mhclg_official').title,'Ministry housing\\n safety announcement');
+  const bad=fixture({ministryTitle:'bad\\u0000title'});
+  await assert.rejects(discoverGovUkHousingPublishers({fetcher:bad.fetcher,at}),/MULTISOURCE_MINISTRY_TITLE_INVALID/);
 });
 test('reject claimed second publisher when official Content API identity differs',async()=>{
   const {fetcher}=fixture({ministryName:'Unrelated Publisher'});

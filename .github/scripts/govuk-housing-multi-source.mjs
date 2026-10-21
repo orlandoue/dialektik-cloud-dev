@@ -48,11 +48,13 @@ function verifyMinistryMetadata(data,path,now){
     data.locale&&data.locale!=='en'||!Array.isArray(data.links?.organisations)||
     !data.links.organisations.some(o=>o?.title===MINISTRY)||
     typeof data.content_id!=='string'||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(data.content_id))deny('MULTISOURCE_MINISTRY_ORIGIN_DENIED');
-  if(typeof data.title!=='string'||data.title.length>1024||!data.title.trim()||data.title!==data.title.trim()||/[\u0000-\u001f\u007f]/u.test(data.title))deny('MULTISOURCE_MINISTRY_TITLE_INVALID');
+  if(typeof data.title!=='string'||/[\u0000-\u0008\u000e-\u001f\u007f]/u.test(data.title))deny('MULTISOURCE_MINISTRY_TITLE_INVALID');
+  const headline=data.title.replace(/\s+/gu,' ').trim().normalize('NFC');
+  if(!headline||Array.from(headline).length>1024||/[\u0000-\u001f\u007f]/u.test(headline))deny('MULTISOURCE_MINISTRY_TITLE_INVALID');
   const publishedAt=instant(data.first_published_at,now);
   const modifiedAt=instant(data.public_updated_at,now,true);
   if(modifiedAt!==null&&modifiedAt<publishedAt)deny('MULTISOURCE_MINISTRY_TIMESTAMP_ORDER');
-  return {sourceId:MHCLG_SOURCE,sourceItemId:data.content_id,canonicalUrl:ORIGIN+path,title:data.title,publishedAt,modifiedAt};
+  return {sourceId:MHCLG_SOURCE,sourceItemId:data.content_id,canonicalUrl:ORIGIN+path,title:headline,publishedAt,modifiedAt};
 }
 export async function discoverGovUkHousingPublishers({fetcher=fetch,at=new Date(),previous=[]}={}){
   if(!Number.isFinite(at.getTime())||at.getTime()<Date.parse(RIGHTS_REVIEW)||at.getTime()-Date.parse(RIGHTS_REVIEW)>30*86400000)
