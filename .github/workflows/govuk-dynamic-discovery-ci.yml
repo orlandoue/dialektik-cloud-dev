@@ -1,7 +1,7 @@
 name: Dialektik GOVUK dynamic discovery read-only proof
 on:
   push:
-    branches: [codex/govuk-dynamic-discovery-20261021]
+    branches: [codex/govuk-two-publisher-discovery-20261021]
   workflow_dispatch:
   # Scheduled runs work ONLY after this workflow is merged into the default branch.
   # OFF by default: operator must enable DIALEKTIK_GOVUK_DISCOVERY_WATCH_ENABLED.
@@ -29,16 +29,20 @@ jobs:
           npm run build
       - name: Offline rights, robots, source identity and dedupe tests
         run: |
-          node --test .github/scripts/govuk-search-discovery.test.mjs
+          node --test .github/scripts/govuk-search-discovery.test.mjs .github/scripts/govuk-housing-multi-source.test.mjs
           npx vitest run --config services/core-api/vitest.config.mts services/core-api/test/rights-gated-metadata-stage.test.ts
       - name: Real GOVUK search + content proof (read only, fail closed)
         env:
           DIALEKTIK_DISCOVERY_OUTPUT: ${{ runner.temp }}/dialektik-discovery/receipt.json
         run: node .github/scripts/govuk-search-discovery.mjs
+      - name: Real independent ministry publisher + regulator discovery (read-only)
+        env:
+          DIALEKTIK_MULTI_DISCOVERY_OUTPUT: ${{ runner.temp }}/dialektik-discovery/two-publishers.json
+        run: node .github/scripts/govuk-housing-multi-source.mjs
       - name: Preserve only minimal metadata for 3 days
         uses: actions/upload-artifact@v4
         with:
           name: govuk-dynamic-readonly-receipt
-          path: ${{ runner.temp }}/dialektik-discovery/receipt.json
+          path: ${{ runner.temp }}/dialektik-discovery/
           retention-days: 3
           if-no-files-found: error
