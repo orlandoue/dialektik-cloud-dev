@@ -14,6 +14,14 @@ CLASSES=(
  ("MISSING_DEPENDENT_ROLE",r'(?:role|rol)\s+["\x27].*?["\x27]\s+does not exist'),
  ("INSUFFICIENT_PRIVILEGE",r'permission denied|must be (?:superuser|owner|member of)|insufficient privilege'),
  ("PARAMETER_PERMISSION",r'permission denied (?:for|to set) parameter|must be superuser to set parameter'),
+ ("AUTH_DATA_DUPLICATE_KEY",r'duplicate key value violates unique constraint'),
+ ("AUTH_DATA_FOREIGN_KEY",r'violates foreign key constraint'),
+ ("AUTH_DATA_NULL_CONSTRAINT",r'null value in column .* violates not-null constraint'),
+ ("AUTH_DATA_COLUMN_MISMATCH",r'extra data after last expected column|missing data for column|column .* does not exist'),
+ ("AUTH_DATA_INVALID_VALUE",r'invalid input syntax for type|value too long for type|invalid byte sequence'),
+ ("AUTH_DATA_ROW_SECURITY",r'violates row-level security policy'),
+ ("AUTH_DATA_RELATION_MISSING",r'relation .* does not exist'),
+ ("AUTH_DATA_UNIQUE_INDEX",r'could not create unique index'),
  ("DUPLICATE_OBJECT",r'already exists|duplicate_object'),
  ("MISSING_DEPENDENCY",r'does not exist|undefined_object'),
  ("INVALID_CONFIGURATION",r'unrecognized configuration parameter|invalid parameter value'),
@@ -35,6 +43,8 @@ def category(log:str)->str:
     if "EXISTING_ROLE_COLLISION" in found:
         found.discard("DUPLICATE_OBJECT")
     if "MISSING_DEPENDENT_ROLE" in found:
+        found.discard("MISSING_DEPENDENCY")
+    if "AUTH_DATA_RELATION_MISSING" in found:
         found.discard("MISSING_DEPENDENCY")
     # Multiple distinct classes deserve investigation: do not guess.
     if len(found)>1:return "MULTIPLE_INCOMPATIBLE_CATEGORIES"
