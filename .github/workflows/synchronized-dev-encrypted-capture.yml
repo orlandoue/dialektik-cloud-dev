@@ -1,0 +1,71 @@
+name: DIALEKTIK synchronized DEV data snapshot encrypted (protected opt-in)
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/synchronized-dev-encrypted-capture.yml'
+      - 'scripts/operations/capture_synchronized_dev_data.py'
+permissions:
+  contents: read
+jobs:
+  protected-same-snapshot:
+    if: github.event_name == 'push' && github.event.head_commit.message == 'EXECUTE_SYNCHRONIZED_DEV_DATA_CAPTURE_20261021'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: dialektik-dev-backup
+    env:
+      DEV_URL: ${{ secrets.DIALEKTIK_DEV_BACKUP_DATABASE_URL }}
+      DEV_CA_PEM: ${{ secrets.DIALEKTIK_DEV_DATABASE_CA_PEM }}
+      BACKUP_PASSWORD: ${{ secrets.DIALEKTIK_DEV_BACKUP_PASSPHRASE }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Capture one MVCC snapshot with read-only PostgreSQL clients
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 -m py_compile scripts/operations/capture_synchronized_dev_data.py
+          docker run --rm postgres:17.11 pg_dump --version >/dev/null
+          python3 scripts/operations/capture_synchronized_dev_data.py
+          echo 'REMOTE_DEV_DDL_OR_DML=0'
+      - name: Encrypt ONLY synchronized data archives before artifact transfer
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-synchronized-capture"
+          test -s "$w/SHA256SUMS" && test -s "$w/SCOPE.json"
+          test -n "${BACKUP_PASSWORD:-}" && test "${#BACKUP_PASSWORD}" -ge 32
+          printf '%s' "$BACKUP_PASSWORD" > "$w/key"
+          chmod 0600 "$w/key"
+          tar -C "$w" -cf - \
+            public-full.snapshot.dump auth-data.snapshot.dump \
+            migration-ledger.snapshot.dump storage-data.snapshot.dump \
+            realtime-data.snapshot.dump vault-data.snapshot.dump \
+            managed-coverage.json SHA256SUMS SCOPE.json |
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase-file "$w/key" --symmetric --cipher-algo AES256 \
+              --s2k-digest-algo SHA512 \
+              --output "$RUNNER_TEMP/dialektik-synced-dev-20261021.tar.gpg"
+          rm -f -- "$w/key"
+          test -s "$RUNNER_TEMP/dialektik-synced-dev-20261021.tar.gpg"
+          echo 'SYNCHRONIZED_ROW_SNAPSHOT_ENCRYPTED=PASS'
+          echo 'CONSISTENT_GLOBAL_ROLES=NOT_ESTABLISHED'
+          echo 'RESTORE_OF_NEW_ARCHIVE=NOT_EXECUTED'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dialektik-synchronized-dev-data-encrypted-20261021
+          path: ${{ runner.temp }}/dialektik-synced-dev-20261021.tar.gpg
+          if-no-files-found: error
+          retention-days: 60
+          compression-level: 0
+      - name: Delete all source data and ciphertext on ephemeral runner
+        if: always()
+        shell: bash
+        run: |
+          rm -rf -- "$RUNNER_TEMP/dialektik-synchronized-capture" \
+            "$RUNNER_TEMP/dialektik-synced-dev-20261021.tar.gpg"
+          echo 'SYNC_SNAPSHOT_EPHEMERAL_PLAINTEXT_CLEANUP=COMPLETE'
+          echo 'REMOTE_DEV_DDL_DML=0'
