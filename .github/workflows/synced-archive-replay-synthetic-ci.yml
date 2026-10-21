@@ -79,13 +79,15 @@ jobs:
             grep -E 'already exists|permission denied|schema|ERROR:|pg_restore: error' "$w/schema-restore-private.log" | head -12 || true
             exit 1;
           }
+          echo 'SYNTHETIC_PUBLIC_SCHEMA_RESTORE=PASS'
           docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
             --data-only --no-owner --no-privileges --single-transaction --exit-on-error \
             /tmp/native-public.dump > "$w/data-restore-private.log" 2>&1 || {
             echo 'SYNTHETIC_PUBLIC_CUSTOM_DATA_RESTORE=FAIL_REDACTED'; exit 1;
           }
+          echo 'SYNTHETIC_PUBLIC_DATA_RESTORE=PASS'
           out="$(docker exec dialektik-synced-restore-native psql -XAt -U postgres -d isolated_target \
             -c "SELECT count(*) || '|' || (SELECT relrowsecurity FROM pg_class WHERE oid='public.example_article'::regclass) FROM public.example_article;")"
-          [ "$out" = '1|t' ] || exit 1
+          [ "$out" = '1|t' ] || { echo 'SYNTHETIC_PUBLIC_COUNT_OR_RLS=FAIL'; exit 1; }
           echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_AND_DATA_REPLAY=PASS'
           echo 'SYNTHETIC_PUBLIC_RLS_PRESERVATION=PASS'
