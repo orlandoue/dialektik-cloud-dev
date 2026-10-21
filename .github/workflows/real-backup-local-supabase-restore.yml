@@ -36,10 +36,21 @@ jobs:
           npx --yes supabase@2.120.0 init > "$w/derived/local-init.log" 2>&1
           # Database-only mode was independently smoke-tested with 27 Auth tables and 82 versions.
           # It avoids unrelated service health checks before ciphertext is even available.
-          npx --yes supabase@2.120.0 db start > "$w/derived/local-start.log" 2>&1 || {
-            echo 'EMPTY_SUPABASE_BOOTSTRAP_FAILED_LOG_REDACTED'
-            exit 1
-          }
+          if ! npx --yes supabase@2.120.0 db start > "$w/derived/local-start.log" 2>&1; then
+            echo 'DB_ONLY_BOOTSTRAP_FIRST_ATTEMPT=FAIL_REDACTED'
+            # No real backup has been downloaded or decrypted; safe to discard
+            # only this disposable local project's partially created volume.
+            npx --yes supabase@2.120.0 stop --no-backup > "$w/derived/local-stop-before-retry.log" 2>&1 || true
+            sleep 5
+            if ! npx --yes supabase@2.120.0 db start > "$w/derived/local-start-retry.log" 2>&1; then
+              echo 'DB_ONLY_BOOTSTRAP_RETRY=FAIL_REDACTED'
+              echo 'EMPTY_SUPABASE_BOOTSTRAP_FAILED_LOG_REDACTED'
+              exit 1
+            fi
+            echo 'DB_ONLY_BOOTSTRAP_RECOVERED_ON_RETRY=PASS'
+          else
+            echo 'DB_ONLY_BOOTSTRAP_FIRST_ATTEMPT=PASS'
+          fi
           db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
           test -n "$db" || { echo 'ISOLATED_SUPABASE_DATABASE_NOT_FOUND'; exit 1; }
           docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c \
