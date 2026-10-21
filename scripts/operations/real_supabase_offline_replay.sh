@@ -44,13 +44,27 @@ for part in roles schema data; do
   python3 scripts/operations/verify_real_restore_bundle.py sanitize \
     --input "$work/clear/$part.sql" --output "$work/derived/$part.safe.sql"
 done
+# The target synthetic PG17 proof showed postgres is non-superuser while the
+# built-in supabase_admin CAN replay this exact source parameter GRANT.
+# Preserve every privilege from source: split the single GRANT rather than
+# discarding it, and do NOT permit any other source SQL mutation.
+cmp -s "$work/clear/roles.sql" "$work/derived/roles.safe.sql" || {
+  echo 'SOURCE_ROLE_SQL_SANITIZER_CHANGED_UNEXPECTED_CONTENT_ABORT'
+  exit 1
+}
+python3 scripts/operations/isolate_parameter_grant.py \
+  --source "$work/clear/roles.sql" \
+  --ordinary-out "$work/derived/roles.ordinary.sql" \
+  --privileged-out "$work/derived/roles.parameter-grant.sql"
 
 # Copies of authenticated encrypted-source files exist only in this runner and
 # this networkless container. No SQL content or user IDs leave either process.
 docker exec -u root "$db" mkdir -p /tmp/dialektik_restore_real
 docker cp "$work/clear/managed-auth.dump" "$db:/tmp/dialektik_restore_real/auth.dump"
 docker cp "$work/clear/managed-ledger.dump" "$db:/tmp/dialektik_restore_real/ledger.dump"
-for part in roles schema data; do
+docker cp "$work/derived/roles.ordinary.sql" "$db:/tmp/dialektik_restore_real/roles.sql"
+docker cp "$work/derived/roles.parameter-grant.sql" "$db:/tmp/dialektik_restore_real/parameter-grant.sql"
+for part in schema data; do
   docker cp "$work/derived/$part.safe.sql" "$db:/tmp/dialektik_restore_real/$part.sql"
 done
 docker exec -u root "$db" chown -R postgres:postgres /tmp/dialektik_restore_real
@@ -76,6 +90,10 @@ python3 scripts/operations/check_local_restore_target.py \
 phase RESTORE_APPLICATION_ROLES \
   docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -f /tmp/dialektik_restore_real/roles.sql
+phase RESTORE_PRIVILEGED_PARAMETER_GRANT \
+  docker exec "$db" psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 \
+    -f /tmp/dialektik_restore_real/parameter-grant.sql
+echo 'SOURCE_PARAMETER_PRIVILEGE_PRESERVED_IN_ISOLATED_TARGET=PASS'
 phase RESTORE_APPLICATION_SCHEMA \
   docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
     -f /tmp/dialektik_restore_real/schema.sql
