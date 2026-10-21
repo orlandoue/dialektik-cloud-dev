@@ -35,6 +35,30 @@ class PrivateRestoreDiagnosis(unittest.TestCase):
         self.assertEqual(parameter_marker("ERROR: permission denied to set parameter client_min_messages"),
                          "CLIENT_MIN_MESSAGES")
 
+    def test_auth_data_duplicate_key_redacts_identifier(self):
+        raw='pg_restore: error: COPY failed for table "secret_auth_table": ERROR: duplicate key value violates unique constraint "private_key"'
+        self.assertEqual(category(raw),"AUTH_DATA_DUPLICATE_KEY")
+        self.assertNotIn("secret_auth_table",repr(safe_report(raw)))
+
+    def test_auth_data_foreign_key(self):
+        self.assertEqual(category('pg_restore: error: COPY failed: ERROR: insert or update on table "x" violates foreign key constraint "y"'),"AUTH_DATA_FOREIGN_KEY")
+
+    def test_auth_data_missing_relation(self):
+        self.assertEqual(category('pg_restore: error: could not execute query: ERROR: relation "private.x" does not exist'),"AUTH_DATA_RELATION_MISSING")
+
+    def test_auth_data_null_constraint(self):
+        self.assertEqual(category('ERROR: null value in column "id" violates not-null constraint'),"AUTH_DATA_NULL_CONSTRAINT")
+
+    def test_auth_data_bad_value(self):
+        self.assertEqual(category('ERROR: invalid input syntax for type uuid: "never_expose_value"'),"AUTH_DATA_INVALID_VALUE")
+        self.assertNotIn("never_expose_value",repr(safe_report('ERROR: invalid input syntax for type uuid: "never_expose_value"')))
+
+    def test_auth_data_column_count_mismatch(self):
+        self.assertEqual(category('pg_restore: error: COPY failed: ERROR: extra data after last expected column'),"AUTH_DATA_COLUMN_MISMATCH")
+
+    def test_auth_data_multiple_errors_is_unknown_safe(self):
+        self.assertEqual(category('ERROR: duplicate key value violates unique constraint\nERROR: violates foreign key constraint'),"MULTIPLE_INCOMPATIBLE_CATEGORIES")
+
     def test_fail_closed_on_empty_or_unknown(self):
         self.assertEqual(category(""),"NO_REDACTED_LOG_CAPTURED")
         self.assertEqual(category("return code 1"),"UNKNOWN_NON_SQL_FAILURE")
