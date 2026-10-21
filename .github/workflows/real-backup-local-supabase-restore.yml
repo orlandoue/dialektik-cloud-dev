@@ -34,7 +34,9 @@ jobs:
           mkdir -p "$w/local" "$w/derived" "$w/download"
           cd "$w/local"
           npx --yes supabase@2.120.0 init > "$w/derived/local-init.log" 2>&1
-          npx --yes supabase@2.120.0 start > "$w/derived/local-start.log" 2>&1 || {
+          # Database-only mode was independently smoke-tested with 27 Auth tables and 82 versions.
+          # It avoids unrelated service health checks before ciphertext is even available.
+          npx --yes supabase@2.120.0 db start > "$w/derived/local-start.log" 2>&1 || {
             echo 'EMPTY_SUPABASE_BOOTSTRAP_FAILED_LOG_REDACTED'
             exit 1
           }
@@ -55,6 +57,7 @@ jobs:
             exit 1
           }
           echo "DB_CONTAINER=$db" >> "$GITHUB_ENV"
+          echo 'BOOTSTRAP_MODE=DATABASE_ONLY'
           echo 'EMPTY_OFFLINE_RESTORE_TARGET=READY'
       - name: Stop all non-database services and remove ALL database network interfaces
         shell: bash
