@@ -186,7 +186,9 @@ final class _EvidenceMetadata extends StatelessWidget {
           children: <Widget>[
             Icon(icon, size: 15),
             const SizedBox(width: DialektikSpacing.space2),
-            Text(text, style: Theme.of(context).textTheme.bodySmall),
+            Flexible(
+              child: Text(text, style: Theme.of(context).textTheme.bodySmall),
+            ),
           ],
         ),
       ),
