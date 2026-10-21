@@ -23,7 +23,11 @@ phase() {
     case "$label" in
       RESTORE_APPLICATION_ROLES|RESTORE_PRIVILEGED_PARAMETER_GRANT|RESTORE_APPLICATION_SCHEMA|RESTORE_MANAGED_AUTH_DATA|RESTORE_MIGRATION_LEDGER_DATA|RESTORE_APPLICATION_DATA)
         python3 scripts/operations/classify_private_restore_error.py \
-          --private-log "$work/derived/$label.log" ;;
+          --private-log "$work/derived/$label.log"
+        if [ "$label" = "RESTORE_APPLICATION_DATA" ]; then
+          python3 scripts/operations/classify_private_restore_error.py \
+            --private-log "$work/derived/$label.log" --first-error-only
+        fi ;;
     esac
     exit 1
   fi
@@ -143,8 +147,12 @@ phase RESTORE_MIGRATION_LEDGER_DATA \
   docker exec "$db" pg_restore -U postgres -d postgres \
     --data-only --single-transaction --exit-on-error \
     /tmp/dialektik_restore_real/ledger.dump
+# Application data is separately atomic in the disposable target. A failure
+# rolls back all rows from this stage, preserving Auth + ledger for investigation.
+# Only the FIRST SQL ERROR class is released as a fixed allowlisted marker.
 phase RESTORE_APPLICATION_DATA \
   docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
+    --single-transaction \
     -f /tmp/dialektik_restore_real/data.sql
 
 count="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \

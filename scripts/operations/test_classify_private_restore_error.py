@@ -1,5 +1,5 @@
 import unittest
-from classify_private_restore_error import category, parameter_marker, safe_report
+from classify_private_restore_error import category, parameter_marker, safe_report, first_sql_error_category
 
 class PrivateRestoreDiagnosis(unittest.TestCase):
     def test_duplicate_role_does_not_reveal_role_name(self):
@@ -58,6 +58,25 @@ class PrivateRestoreDiagnosis(unittest.TestCase):
 
     def test_auth_data_multiple_errors_is_unknown_safe(self):
         self.assertEqual(category('ERROR: duplicate key value violates unique constraint\nERROR: violates foreign key constraint'),"MULTIPLE_INCOMPATIBLE_CATEGORIES")
+
+    def test_primary_sql_error_not_confused_by_unrelated_later_messages(self):
+        log=('psql:/tmp/private.sql:121: ERROR: duplicate key value violates unique constraint "secret-id"\n'
+             'DETAIL: Key (id)=(private-row) already exists.\n'
+             'CONTEXT: COPY internal_secrets, line 4\n'
+             'ERROR: violates foreign key constraint "different-secret"\n')
+        self.assertEqual(category(log),"MULTIPLE_INCOMPATIBLE_CATEGORIES")
+        self.assertEqual(first_sql_error_category(log),"AUTH_DATA_DUPLICATE_KEY")
+        self.assertNotIn("private-row",first_sql_error_category(log))
+
+    def test_first_sql_error_foreign_key_and_no_diagnostic(self):
+        self.assertEqual(first_sql_error_category('psql:fake.sql:7: ERROR: insert or update violates foreign key constraint "secret"'),
+                         "AUTH_DATA_FOREIGN_KEY")
+        self.assertEqual(first_sql_error_category('COPY 19\nCOPY 0\n'),"UNKNOWN_NON_SQL_FAILURE")
+
+    def test_first_error_does_not_echo_sensitive_identifiers(self):
+        message='psql:private.sql:2: ERROR: invalid input syntax for type uuid: "USER_SECRET_TOKEN"'
+        self.assertEqual(first_sql_error_category(message),"AUTH_DATA_INVALID_VALUE")
+        self.assertNotIn("USER_SECRET_TOKEN",repr(first_sql_error_category(message)))
 
     def test_fail_closed_on_empty_or_unknown(self):
         self.assertEqual(category(""),"NO_REDACTED_LOG_CAPTURED")

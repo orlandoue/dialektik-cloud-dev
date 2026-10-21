@@ -50,6 +50,85 @@ def category(log:str)->str:
     if len(found)>1:return "MULTIPLE_INCOMPATIBLE_CATEGORIES"
     return next(iter(found),"UNKNOWN_SQL_FAILURE")
 
+
+# Scan *only the first error diagnostic line*. The earlier broad classifier scans
+# the entire private transcript and can conflate mutually unrelated messages
+# on separate lines. This additional marker is never a substitute for the log.
+_FIRST_ERROR_LINE = re.compile(r'(?:^|[ \t])(?:ERROR|FATAL):[ \t]*(.*), non-secret PostgreSQL configuration names.
+# Values, role identifiers, query text, source lines and free-form names are
+# never emitted. UNRECOGNIZED has no fallback raw value.
+SAFE_PARAMETER_NAMES={
+    "log_min_messages":"LOG_MIN_MESSAGES",
+    "client_min_messages":"CLIENT_MIN_MESSAGES",
+    "default_transaction_read_only":"DEFAULT_TRANSACTION_READ_ONLY",
+    "search_path":"SEARCH_PATH",
+    "statement_timeout":"STATEMENT_TIMEOUT",
+}
+PERMISSION_PARAMETER=re.compile(
+    r'''(?:permission denied (?:for|to set) parameter|must be superuser to set parameter)\s+["']?([a-z_][a-z0-9_.]*)''',
+    flags=re.IGNORECASE,
+)
+
+def parameter_marker(log:str)->str:
+    if category(log)!="PARAMETER_PERMISSION":
+        return "NOT_APPLICABLE"
+    found={m.group(1).lower() for m in PERMISSION_PARAMETER.finditer(log)}
+    if len(found)>1:
+        return "MULTIPLE_PARAMETER_IDENTIFIERS"
+    if not found:
+        return "UNAVAILABLE"
+    item=next(iter(found))
+    return SAFE_PARAMETER_NAMES.get(item,"NON_ALLOWLISTED_PARAMETER")
+
+def safe_report(log:str)->dict[str,str]:
+    return {
+        "REDACTED_RESTORE_FAILURE_CATEGORY":category(log),
+        "REDACTED_POSTGRES_PARAMETER":parameter_marker(log),
+        "ROLE_NAMES_AND_SQL_CONTENT_SUPPRESSED":"TRUE",
+    }
+
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument("--private-log",type=Path,required=True)
+    p.add_argument("--first-error-only",action="store_true")
+    args=p.parse_args()
+    raw=args.private_log.read_text(encoding="utf-8",errors="replace")
+    if len(raw)>1_000_000:
+        raise ValueError("RESTORE_LOG_EXCEEDS_PRIVATE_CLASSIFIER_LIMIT")
+    if args.first_error_only:
+        print("REDACTED_FIRST_SQL_ERROR_CATEGORY="+first_sql_error_category(raw))
+        print("PERSONAL_IDENTIFIERS_AND_QUERY_TEXT_SUPPRESSED=TRUE")
+    else:
+        for key,value in safe_report(raw).items():
+            print(key+"="+value)
+
+if __name__=="__main__":
+    main()
+, re.IGNORECASE)
+
+def first_sql_error_category(log: str) -> str:
+    if not log.strip():
+        return "NO_REDACTED_LOG_CAPTURED"
+    for line in log.splitlines():
+        match = _FIRST_ERROR_LINE.search(line)
+        if match is None:
+            continue
+        message = match.group(1).lower()
+        found = {name for name, pattern in CLASSES
+                 if re.search(pattern, message, re.IGNORECASE)}
+        if "PARAMETER_PERMISSION" in found:
+            found.discard("INSUFFICIENT_PRIVILEGE")
+        if "EXISTING_ROLE_COLLISION" in found:
+            found.discard("DUPLICATE_OBJECT")
+        if "MISSING_DEPENDENT_ROLE" in found:
+            found.discard("MISSING_DEPENDENCY")
+        if "AUTH_DATA_RELATION_MISSING" in found:
+            found.discard("MISSING_DEPENDENCY")
+        if len(found) > 1:
+            return "FIRST_ERROR_AMBIGUOUS"
+        return next(iter(found), "FIRST_SQL_ERROR_UNCLASSIFIED")
+    return "UNKNOWN_NON_SQL_FAILURE"
+
 # Only disclose explicitly audited, non-secret PostgreSQL configuration names.
 # Values, role identifiers, query text, source lines and free-form names are
 # never emitted. UNRECOGNIZED has no fallback raw value.
