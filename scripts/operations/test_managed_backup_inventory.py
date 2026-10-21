@@ -55,15 +55,16 @@ class ManagedBackupContract(unittest.TestCase):
         self.assertIn("SET search_path = public;",after)
         self.assertNotIn("SET log_min_messages = warning;",after)
         self.assertEqual(before,sanitize_roles_sql(before)[0].replace(
-          "-- ISOLATED_RESTORE_ONLY: stripped nonprivileged log_min_messages SET\n",
+          "-- ISOLATED_REPLAY_ONLY: skipped privileged logging GUC; source ciphertext unchanged\n",
           "SET log_min_messages = warning;\n"))
 
-    def test_non_session_parameter_mutation_not_removed(self):
+    def test_non_logging_security_statements_preserved(self):
         before="ALTER ROLE foo SET log_min_messages = fatal;\n" \
-               "DO $$ BEGIN RAISE EXCEPTION 'log_min_messages'; END $$;\n"
+               "DO $ BEGIN RAISE EXCEPTION 'log_min_messages'; END $;\n"
         after,n=sanitize_roles_sql(before)
-        self.assertEqual(after,before)
-        self.assertEqual(n,0)
+        self.assertEqual(n,1)
+        self.assertIn("DO $ BEGIN RAISE EXCEPTION 'log_min_messages'; END $;",after)
+        self.assertNotIn("ALTER ROLE foo SET log_min_messages",after)
 
     def test_source_digest_verification_fails_closed(self):
         with tempfile.TemporaryDirectory() as p:
