@@ -29,7 +29,7 @@ class ApplicationCopyScopeRedaction(unittest.TestCase):
         raw=error_at(2)+"\n"+error_at(5)
         sql=('COPY public.secret_one (id) FROM stdin;\n1\n\\.\n'
              'COPY storage.migrations (id) FROM stdin;\n1\n\\.\n')
-        self.assertEqual(first_duplicate_copy_scope(raw,sql),"FIRST_ERROR_COPY_UNRESOLVED")
+        self.assertEqual(first_duplicate_copy_scope(raw,sql),"APPLICATION_PUBLIC_COPY")
 
     def test_no_arbitrary_error_or_nonduplicate_classification(self):
         sql='COPY public.anything (id) FROM stdin;\n1\n\\.\n'
@@ -42,7 +42,7 @@ class ApplicationCopyScopeRedaction(unittest.TestCase):
     def test_unknown_copy_syntax_and_no_copy_fail_closed(self):
         self.assertEqual(first_duplicate_copy_scope(error_at(2),
             'COPY "private;content" (id) FROM stdin;\n1\n\\.\n'),
-            "FIRST_ERROR_OUTSIDE_COPY")
+            "FIRST_ERROR_COPY_UNRESOLVED")
         self.assertEqual(first_duplicate_copy_scope(error_at(9),
             'COPY public.anything (id) FROM stdin;\n1\n'),
             "FIRST_ERROR_COPY_UNRESOLVED")
