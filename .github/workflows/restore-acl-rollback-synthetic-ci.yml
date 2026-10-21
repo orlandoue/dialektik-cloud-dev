@@ -51,7 +51,12 @@ jobs:
           INSERT INTO public.categories VALUES ('synthetic-category');
           SQL
           docker cp "$work/fixture.sql" dialektik-acl-rollback-probe:/tmp/fixture.sql
-          docker exec dialektik-acl-rollback-probe psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tmp/fixture.sql > "$work/fixture-private.log" 2>&1
+          if ! docker exec dialektik-acl-rollback-probe psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tmp/fixture.sql > "$work/fixture-private.log" 2>&1; then
+            echo 'SYNTHETIC_FIXTURE_CREATION=FAIL'
+            grep -Ei '^psql:.*ERROR:|^ERROR:|^FATAL:' "$work/fixture-private.log" | sed -E 's/(VALUES).*/SQL_REDACTED/' || true
+            exit 1
+          fi
+          echo 'SYNTHETIC_FIXTURE_CREATION=PASS'
           bash scripts/operations/verify_restored_roles_rollback.sh dialektik-acl-rollback-probe "$work"
           echo 'SYNTHETIC_CORE_ACL_AND_TRANSACTION_ROLLBACK=PASS'
           echo 'LIVE_DATABASE_WRITES=0'
