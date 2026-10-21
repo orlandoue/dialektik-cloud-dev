@@ -56,6 +56,18 @@ jobs:
             -v ON_ERROR_STOP=1 \
             -c 'SELECT (SELECT count(*) FROM auth.schema_migrations), (SELECT count(*) FROM auth.users), (SELECT count(*) FROM auth.sessions), (SELECT count(*) FROM auth.identities);')"
           echo "DISPOSABLE_LOCAL_AUTH_INTERNAL_MIGRATIONS_USERS_SESSIONS_IDENTITIES=$counts"
+          target_digest="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 \
+            -c "SELECT md5(string_agg(version::text, E'\n' ORDER BY version::text)) FROM auth.schema_migrations;")"
+          # The source-only fingerprint was independently queried from live
+          # pg_catalog/data via SELECT, never from credentials or Auth tokens.
+          source_digest='9a4aaa2a6a116b038491fde94dca7601'
+          if [ "$target_digest" = "$source_digest" ]; then
+            echo 'SOURCE_LOCAL_AUTH_INTERNAL_MIGRATION_VERSION_SET=EXACT_MATCH'
+          else
+            echo 'SOURCE_LOCAL_AUTH_INTERNAL_MIGRATION_VERSION_SET=DIFFERENT'
+          fi
+          echo 'AUTH_MIGRATION_VERSION_ROWS_PUBLISHED=FALSE'
           echo "SOURCE_AUTH_INTERNAL_MIGRATIONS=82"
           echo 'NO_SOURCE_AUTH_USER_DATA_ACCESSED=TRUE'
           echo 'REMOTE_SUPABASE_SQL_MUTATIONS=0'
