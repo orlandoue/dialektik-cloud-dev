@@ -1,0 +1,51 @@
+name: Dialektik preserve original encrypted DEV snapshot (ciphertext ONLY)
+on:
+  push:
+    branches: [codex/backup-ciphertext-retention-20261021]
+    paths: ['.github/workflows/preserve-encrypted-dev-snapshot.yml']
+permissions:
+  actions: read
+  contents: read
+jobs:
+  ciphertext-only-renewal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Download exact existing encrypted artifact from an earlier run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          artifact-ids: '12295491516'
+          run-id: '39488529000'
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/original-encrypted
+      - name: Validate ciphertext-only payload, type and exact copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          source="$RUNNER_TEMP/original-encrypted/dialektik-complete-dev-20261020.tar.gpg"
+          target="$RUNNER_TEMP/retained-encrypted/dialektik-complete-dev-20261020.tar.gpg"
+          test -f "$source" && test ! -L "$source"
+          test "$(find "$RUNNER_TEMP/original-encrypted" -type f | wc -l)" -eq 1
+          size="$(stat -c %s "$source")"
+          test "$size" -gt 1024 && test "$size" -lt 16777216
+          mkdir -p -- "$(dirname "$target")"
+          install -m 600 -- "$source" "$target"
+          test "$(sha256sum "$source" | cut -d' ' -f1)" = "$(sha256sum "$target" | cut -d' ' -f1)"
+          echo 'ORIGINAL_CIPHERTEXT_ONLY=PASS'
+          echo 'REUPLOAD_BYTES_IDENTICAL=PASS'
+          echo 'NO_DECRYPTION_NO_REMOTE_DATABASE=PASS'
+      - name: Re-upload unchanged ciphertext (retention 60 days subject to repo policy)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dialektik-complete-dev-original-ciphertext-preserved-20261021
+          path: ${{ runner.temp }}/retained-encrypted/dialektik-complete-dev-20261020.tar.gpg
+          if-no-files-found: error
+          retention-days: 60
+          compression-level: 0
+      - name: Ephemeral encrypted file cleanup
+        if: always()
+        shell: bash
+        run: |
+          rm -rf -- "$RUNNER_TEMP/original-encrypted" "$RUNNER_TEMP/retained-encrypted"
+          echo 'EPHEMERAL_COPY_CLEANUP=PASS'
