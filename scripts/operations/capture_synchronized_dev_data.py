@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Capture synchronized DEV PostgreSQL row versions, protected CI only.
 
+Owner-approved initial strictly read-only protected synchronized capture, 2026-10-21.
+
 Never print source SQL, rows, credentials, snapshot identifier or connection URL.
 No database mutations. Public schema DDL/DATA and every non-system managed
 table-data schema use pg_dump sessions sharing one exported MVCC snapshot.
