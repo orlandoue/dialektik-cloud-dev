@@ -80,7 +80,7 @@ def first_duplicate_copy_scope(error_log: str, data_sql: str) -> str:
                 # A COPY failure can be reported at the terminator, not the row.
                 # No target can be released until a structurally complete COPY.
                 continue
-    return "FIRST_ERROR_COPY_UNRESOLVED"
+    return "FIRST_ERROR_COPY_UNRESOLVED" if active is not None else "FIRST_ERROR_OUTSIDE_COPY"
 
 
 def main() -> None:
