@@ -37,10 +37,15 @@ jobs:
             sleep 1
           done
           docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null
-          docker exec dialektik-synced-restore-native psql -X -U postgres -d postgres \
+          if ! docker exec dialektik-synced-restore-native psql -X -U postgres -d postgres \
             -v ON_ERROR_STOP=1 -c "CREATE TABLE public.example_article(id text PRIMARY KEY); \
               ALTER TABLE public.example_article ENABLE ROW LEVEL SECURITY; \
-              INSERT INTO public.example_article VALUES ('synthetic-only');" > "$w/schema.log" 2>&1
+              INSERT INTO public.example_article VALUES ('synthetic-only');" > "$w/schema.log" 2>&1; then
+            echo 'SYNTHETIC_PUBLIC_SOURCE_FIXTURE=FAIL_REDACTED'
+            grep -E 'ERROR:|FATAL:|connection|already exists' "$w/schema.log" | head -5 || true
+            exit 1
+          fi
+          echo 'SYNTHETIC_PUBLIC_SOURCE_FIXTURE=PASS'
           docker exec dialektik-synced-restore-native pg_dump -U postgres -d postgres \
             --format=custom --no-owner --no-privileges --schema=public \
             --file=/tmp/native-public.dump
