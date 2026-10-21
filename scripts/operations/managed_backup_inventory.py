@@ -87,9 +87,14 @@ def sanitize_roles_sql(text: str) -> tuple[str, int]:
     lines = text.splitlines(keepends=True)
     changed: list[str] = []
     removed = 0
+    at_boundary = True
     for line in lines:
+        stripped = line.strip()
+        # Multiline SQL continuations must never become standalone SET commands
+        # simply because surrounding whitespace has been trimmed.
+        eligible = at_boundary and not line[:1].isspace()
         matched = next((kind for kind, pattern in _RESTORE_LOG_SETTINGS
-                        if pattern.fullmatch(line.strip()) is not None), None)
+                        if eligible and pattern.fullmatch(stripped) is not None), None)
         if matched:
             removed += 1
             changed.append(
@@ -98,6 +103,8 @@ def sanitize_roles_sql(text: str) -> tuple[str, int]:
             )
         else:
             changed.append(line)
+        if stripped and not stripped.startswith(("--", "/*", "*")):
+            at_boundary = stripped.endswith(";")
     if removed > _MAX_DERIVED_LOGGING_OVERRIDES:
         raise ValueError("TOO_MANY_ISOLATED_REPLAY_LOGGING_OVERRIDES")
     return "".join(changed), removed
