@@ -42,3 +42,56 @@ jobs:
           echo 'AUTONOMOUS_GROUPING_CLAIM=NONE'
           echo 'PRODUCTION_DEPLOYMENT=NONE'
           echo 'SUPABASE_DEV_CHANGES=0'
+
+  android-preview-debug:
+    needs: flutter-ux
+    if: ${{ vars.DIALEKTIK_SUPABASE_PUBLISHABLE_KEY != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: app
+    env:
+      DIALEKTIK_SUPABASE_PUBLISHABLE_KEY: ${{ vars.DIALEKTIK_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - name: Install pinned dependencies
+        run: flutter pub get --enforce-lockfile
+      - name: Check DEV public-build setting
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$DIALEKTIK_SUPABASE_PUBLISHABLE_KEY" in
+            sb_publishable_*) ;;
+            *) echo 'Invalid DEV publishable key format'; exit 1 ;;
+          esac
+      - name: Build Android APK in debug mode against existing private DEV Core
+        shell: bash
+        run: |
+          set -euo pipefail
+          flutter build apk --debug --no-pub \
+            --dart-define=DIALEKTIK_ENVIRONMENT=production \
+            --dart-define=DIALEKTIK_API_BASE_URL=https://dialektik-core-dev.onrender.com \
+            --dart-define=DIALEKTIK_SUPABASE_URL=https://vclsswwfhljczxgnsciq.supabase.co \
+            --dart-define="DIALEKTIK_SUPABASE_PUBLISHABLE_KEY=$DIALEKTIK_SUPABASE_PUBLISHABLE_KEY" \
+            --dart-define=DIALEKTIK_NEWS_READER_ENABLED=true \
+            --dart-define=DIALEKTIK_GOVUK_PREVIEW_ENABLED=true \
+            --dart-define=DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED=true \
+            --dart-define=DIALEKTIK_SEMANTIC_MODE=disabled \
+            --dart-define=DIALEKTIK_OWNERSHIP_MODE=corporate
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk
+          echo 'DEV DEBUG APK ONLY; private beta auth enforced; public distribution NOT authorized.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload preview Android APK for owner QA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dialektik-editorial-evidence-dev-debug-${{ github.sha }}
+          path: app/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
