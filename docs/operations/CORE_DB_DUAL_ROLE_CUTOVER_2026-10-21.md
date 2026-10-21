@@ -1,0 +1,9 @@
+# Core database credential cutover — candidate-first, 2026-10-21
+
+The existing Core deployment on Render is dialektik-core-dev, one Free web-service instance on branch codex/v7i-operational-product-pipeline. PostgreSQL currently uses a dedicated low-privilege Core role. The default production configuration in this PR retains DATABASE_URL, completely unchanged.
+
+The optional setting DIALEKTIK_CORE_DB_SLOT=candidate only selects DATABASE_URL_CANDIDATE after verifying the primary is dialektik_core_app (with optional pooler project suffix), the alternate is exactly dialektik_core_app_next on the same project, host, port, database and SSL query. Failure aborts startup without printing DB secrets, and Render would retain the old healthy deploy when a new one cannot start. A fast rollback is switching the slot back to primary, assuming old credentials remain valid.
+
+No actual new DB role was created, no secrets were generated or exposed, and Render's environment variables and deployment were NOT modified. The primary password is deliberately not read or copied. Before any real switch: (1) completed genuine recovery and Auth API smoke, (2) consistent source backup real restore and proof, (3) prepare least privilege next role using secure secret transport and strict GRANT diff, (4) stage candidate secret on Render without changing the primary slot, (5) explicit operator-controlled deploy and ready/auth 200/401 probes, (6) keep old role valid for an explicit rollback window before revocation.
+
+Render documents a zero-downtime deploy mechanism, but the Free plan can spin down while idle and does not supply a user-facing availability SLA. This code alone cannot certify real service continuity. No migration 043/044, writer LOGIN, Core role mutation or Render deploy is performed by the branch.
