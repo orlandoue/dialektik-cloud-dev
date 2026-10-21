@@ -90,3 +90,25 @@ test('missing runtime check is never reported as deployment verification',()=>{
   assert.equal(d.authenticated_private_beta,'RUNTIME_NOT_VERIFIED');
   assert.equal(d.release_status,'NO_GO_PUBLIC_LAUNCH');
 });
+
+
+test('bounded cold-start transport retries succeed without changing guarded HTTP rules',async()=>{
+  const {fn:working}=fakeFetch(okStatuses);
+  let coldStarts=0;
+  const fetchWithWarmup=async(url,init)=>{
+    if(url.endsWith('/health/live') && coldStarts++ < 2) throw Error('ECONNRESET');
+    return working(url,init);
+  };
+  const result=await inspectRuntime(fetchWithWarmup);
+  assert.equal(result.status,'PASS');
+  assert.equal(result.health_live_status,200);
+  assert.equal(result.unauthenticated_private_routes_all_401,true);
+});
+
+test('a real 503 must not be retried away as cold-start transport failure',async()=>{
+  const {fn,requests}=fakeFetch({...okStatuses,'/health/ready':503});
+  const result=await inspectRuntime(fn);
+  assert.equal(result.status,'NO_GO');
+  const probes=requests.filter(r=>r.url.endsWith('/health/ready'));
+  assert.equal(probes.length,1);
+});
