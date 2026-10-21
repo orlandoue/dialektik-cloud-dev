@@ -30,6 +30,15 @@ jobs:
             exit 1
           fi
           echo 'AUTH_LOCAL_STACK_START=PASS'
+      - name: Identify local GoTrue image and safe configuration field names
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="$(docker ps --format '{{.Names}}' | grep '^supabase_auth_' | head -1)"
+          test -n "$auth"
+          echo "LOCAL_GOTRUE_IMAGE=$(docker inspect "$auth" --format '{{.Config.Image}}')"
+          docker inspect "$auth" --format '{{json .Config.Env}}' |
+            python3 -c 'import sys,json; es=json.load(sys.stdin); keys=sorted({e.split("=",1)[0] for e in es if e.startswith("GOTRUE_")}); print("LOCAL_GOTRUE_ENV_KEYS_ONLY="+",".join(keys))'
       - name: Test synthetic signup, password, JWT and unauthorized request
         shell: bash
         env:
