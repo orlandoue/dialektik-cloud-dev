@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Protected GitHub runner only. Real encrypted Auth data never printed or uploaded.
 # 2026-10-21 second owner-authorized protected replay: identify first application data SQL error, no DEV writes.
-# Fifth owner-approved isolated replay: classify approved managed COPY scope, no remote DEV writes.
+# Sixth owner-approved isolated replay: verify exact Auth duplicate-COPY equality; no remote DEV writes.
 # DB and all services must be fully offline BEFORE invoking this script.
 set -euo pipefail
 umask 077
