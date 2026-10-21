@@ -4,7 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { planRightsGatedMetadata } from '../../services/core-api/dist/live/rights-gated-metadata-stage.js';
 import { govUkRobotsAllowsPath, GOVUK_RSH_RIGHTS_REVIEWED_AT } from '../../services/core-api/dist/live/govuk-product-acquisition.js';
 const ORIGIN='https://www.gov.uk';
-const SEARCH=ORIGIN+'/api/search.json?filter_organisations=regulator-of-social-housing&count=8&order=-public_timestamp&fields=link,title,public_timestamp';
+const SEARCH=ORIGIN+'/api/search.json?filter_organisations=regulator-of-social-housing&count=40&order=-public_timestamp&fields=link,title,public_timestamp';
 const SOURCE='govuk_rsh_official';
 const MAX=5;
 const reject=(code)=>{throw Error(code)};
@@ -44,7 +44,7 @@ export async function discoverGovUkRshNews({fetcher=fetch,at=new Date(),previous
   const robots=new TextDecoder('utf-8',{fatal:true}).decode(bytes);bytes.fill(0);
   if(!govUkRobotsAllowsPath(robots,'/api/search.json'))reject('DISCOVERY_ROBOTS_SEARCH_DENIED');
   const search=asJson(await get(fetcher,SEARCH,'application/json',768*1024));
-  if(!Array.isArray(search?.results)||search.results.length>8)reject('DISCOVERY_SEARCH_SCHEMA_INVALID');
+  if(!Array.isArray(search?.results)||search.results.length>40)reject('DISCOVERY_SEARCH_SCHEMA_INVALID');
   const paths=[];
   for(const item of search.results){
     if(typeof item?.link!=='string')reject('DISCOVERY_SEARCH_SCHEMA_INVALID');
