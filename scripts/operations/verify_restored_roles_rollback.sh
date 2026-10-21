@@ -6,7 +6,13 @@ umask 077
 db="$1"
 work="$2"
 test -n "$db" && test -d "$work" || exit 1
-if [ "$(docker inspect "$db" --format '{{json .NetworkSettings.Networks}}')" != '{}' ]; then
+network_json="$(docker inspect "$db" --format '{{json .NetworkSettings.Networks}}')"
+network_mode="$(docker inspect "$db" --format '{{.HostConfig.NetworkMode}}')"
+network_names="$(docker inspect "$db" --format '{{range $n,$v := .NetworkSettings.Networks}}{{println $n}}{{end}}' | tr -d '\\r')"
+# Production replay has exactly {} after physically disconnecting every network.
+# A synthetic container launched with --network none has the sole 'none' network.
+if [ "$network_json" != '{}' ] &&
+   ! { [ "$network_mode" = 'none' ] && [ "$network_names" = 'none' ]; }; then
   echo 'RESTORED_SECURITY_TARGET_MUST_BE_NETWORKLESS'
   exit 1
 fi
