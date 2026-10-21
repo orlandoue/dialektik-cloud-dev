@@ -29,8 +29,13 @@ jobs:
           umask 077
           w="$RUNNER_TEMP/synthetic-synced-restore"
           mkdir -p "$w"
-          docker run --rm -d --network none --name dialektik-synced-restore-native \
-            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 >/dev/null
+          if ! docker run --rm -d --network none --name dialektik-synced-restore-native \
+            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 \
+            > "$w/container-id-private.log" 2> "$w/container-start-private.log"; then
+            echo 'SYNTHETIC_DATABASE_CONTAINER_START=FAIL_REDACTED'
+            exit 1
+          fi
+          echo 'SYNTHETIC_DATABASE_CONTAINER_START=PASS'
           trap 'docker rm -f dialektik-synced-restore-native >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
           for n in $(seq 1 40); do
             docker exec dialektik-synced-restore-native pg_isready -U postgres >/dev/null
