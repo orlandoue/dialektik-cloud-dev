@@ -12,6 +12,9 @@ on:
       - 'scripts/operations/classify_private_restore_error.py'
       - 'scripts/operations/test_classify_private_restore_error.py'
       - '.github/workflows/real-supabase-restore-static-ci.yml'
+      - 'scripts/operations/inspect_role_guc_shape.py'
+      - 'scripts/operations/test_inspect_role_guc_shape.py'
+      - '.github/workflows/private-role-guc-shape.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -33,6 +36,7 @@ jobs:
           python3 -m unittest discover -s scripts/operations -p test_logging_guc_sanitizer.py -v
           python3 -m unittest discover -s scripts/operations -p test_verify_real_restore_bundle.py -v
           python3 -m unittest discover -s scripts/operations -p test_classify_private_restore_error.py -v
+          python3 -m unittest discover -s scripts/operations -p test_inspect_role_guc_shape.py -v
           echo 'ALL_REPLAY_CONTRACT_SCRIPTS_PARSE=PASS'
       - name: Ensure protected flow does not access remote DEV or upload source data
         shell: bash
