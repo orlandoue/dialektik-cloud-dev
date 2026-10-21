@@ -1,0 +1,45 @@
+name: Auth dual-COPY exact equivalence gate (synthetic, no secrets)
+on:
+  push:
+    branches: [codex/auth-dual-copy-exact-equality-20261021]
+permissions:
+  contents: read
+jobs:
+  strict-auth-duplicate-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Test all negative and byte preservation conditions
+        run: |
+          python3 -m py_compile scripts/operations/auth_data_copy_equivalence.py
+          python3 -m unittest discover -s scripts/operations -p test_auth_data_copy_equivalence.py -v
+          echo 'REAL_SOURCE_DATA_ACCESSED=FALSE'
+      - name: Native PostgreSQL17 original archive versus general data COPY match
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/auth-copy-equality-synthetic"; mkdir -p "$work"
+          docker run --rm -d --network none --name dialektik-auth-copy-equality -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11
+          trap 'docker rm -f dialektik-auth-copy-equality >/dev/null 2>&1 || true; rm -rf -- "$work"' EXIT
+          for n in $(seq 1 35); do
+            if docker exec dialektik-auth-copy-equality pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec dialektik-auth-copy-equality psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE SCHEMA auth; CREATE TABLE auth.users(id text PRIMARY KEY,email text); CREATE TABLE public.sources(id text PRIMARY KEY); INSERT INTO auth.users VALUES ('synthetic','not-real@example.invalid'); INSERT INTO public.sources VALUES('demo');" > "$work/prepare.log" 2>&1
+          docker exec dialektik-auth-copy-equality pg_dump -U postgres -d postgres --data-only --table=auth.users --table=public.sources -f /tmp/general.sql
+          docker exec dialektik-auth-copy-equality pg_dump -U postgres -d postgres --format=custom --data-only --schema=auth -f /tmp/auth.dump
+          docker exec dialektik-auth-copy-equality pg_restore --data-only --file=/tmp/archive.sql /tmp/auth.dump
+          docker cp dialektik-auth-copy-equality:/tmp/general.sql "$work/general.sql"
+          docker cp dialektik-auth-copy-equality:/tmp/archive.sql "$work/archive.sql"
+          python3 scripts/operations/auth_data_copy_equivalence.py --general-data "$work/general.sql" --archive-data "$work/archive.sql" --out "$work/filtered.sql" > "$work/safe-markers.log"
+          grep -qx 'AUTH_DUPLICATE_COPY_EQUIVALENCE=PASS' "$work/safe-markers.log"
+          grep -qx 'AUTH_ARCHIVE_COVERS_ALL_REMOVED_COPY_BLOCKS=TRUE' "$work/safe-markers.log"
+          ! grep -q 'not-real@example.invalid' "$work/safe-markers.log"
+          ! grep -q 'COPY auth.users' "$work/filtered.sql"
+          grep -Fq 'COPY public.sources' "$work/filtered.sql"
+          echo 'SYNTHETIC_AUTH_EXACT_EQUIVALENCE_NATIVE_PG17=PASS'
+          echo 'SOURCE_PII_EXPOSED=FALSE'
