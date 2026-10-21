@@ -50,8 +50,14 @@ jobs:
             --format=custom --no-owner --no-privileges --schema=public \
             --file=/tmp/native-public.dump
           docker exec dialektik-synced-restore-native createdb -U postgres isolated_target
+          docker exec dialektik-synced-restore-native pg_restore --list /tmp/native-public.dump \
+            > "$w/public.toc"
+          python3 scripts/operations/filter_seeded_public_schema_toc.py \
+            --input "$w/public.toc" --output "$w/public-filtered.toc"
+          docker cp "$w/public-filtered.toc" dialektik-synced-restore-native:/tmp/public-filtered.toc
           docker exec dialektik-synced-restore-native pg_restore -U postgres -d isolated_target \
             --schema-only --no-owner --no-privileges --single-transaction --exit-on-error \
+            --use-list /tmp/public-filtered.toc \
             /tmp/native-public.dump > "$w/schema-restore-private.log" 2>&1 || {
             echo 'SYNTHETIC_PUBLIC_CUSTOM_SCHEMA_RESTORE=FAIL_REDACTED'
             grep -E 'already exists|permission denied|schema|ERROR:|pg_restore: error' "$w/schema-restore-private.log" | head -12 || true

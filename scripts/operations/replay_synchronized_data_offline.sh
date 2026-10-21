@@ -45,10 +45,23 @@ phase RESTORE_SYNC_PARAMETER_GRANT \
   docker exec "$db" psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 \
     -f /tmp/dialektik_sync_replay/parameter-grant.sql
 
-# Source PG dump was already verified to be public-only; no silent table drops.
+# The virgin PostgreSQL target already owns the built-in public namespace.
+# Exclude ONLY that exact redundant SCHEMA CREATE TOC entry, nothing else.
+existing="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c "SELECT to_regnamespace('public') IS NOT NULL AND has_schema_privilege('postgres','public','CREATE');" 2>/dev/null)" || exit 1
+[ "$existing" = t ] || { echo 'SYNC_PUBLIC_SCHEMA_PRECONDITION=FAIL'; exit 1; }
+docker exec "$db" pg_restore --list /tmp/dialektik_sync_replay/public-full.dump \
+  > "$work/derived/public-original.toc"
+phase CHECK_PUBLIC_SCHEMA_TOC_EXACT_SKIP \
+  python3 scripts/operations/filter_seeded_public_schema_toc.py \
+    --input "$work/derived/public-original.toc" \
+    --output "$work/derived/public-exclude-only-existing-schema.toc"
+docker cp "$work/derived/public-exclude-only-existing-schema.toc" \
+  "$db:/tmp/dialektik_sync_replay/public-exclude-only-existing-schema.toc"
 phase RESTORE_SYNC_PUBLIC_SCHEMA \
   docker exec "$db" pg_restore -U postgres -d postgres \
     --schema-only --no-owner --no-privileges --single-transaction --exit-on-error \
+    --use-list /tmp/dialektik_sync_replay/public-exclude-only-existing-schema.toc \
     /tmp/dialektik_sync_replay/public-full.dump
 
 # Built-in Auth migrations are preseeded in Supabase local target. Before
