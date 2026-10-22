@@ -56,7 +56,7 @@ jobs:
             echo "REALTIME_LOCAL_VERSION_COUNT=$realtime"
           fi
           [ "$auth" = 82 ] && echo 'AUTH_82_MIGRATIONS_COUNT=PASS' || echo 'AUTH_82_MIGRATIONS_COUNT=FAIL'
-          [ "$storage" = 74 ] && echo 'STORAGE_74_MIGRATIONS_COUNT=PASS' || echo 'STORAGE_74_MIGRATIONS_COUNT=FAIL'
+          [ "$storage" = 74 ] && echo 'STORAGE_74_MIGRATIONS_COUNT=PASS' || { echo 'STORAGE_74_MIGRATIONS_COUNT=FAIL'; echo STORAGE_LOCAL_MIGRATION_COUNT=$storage; }
           [ "$storage_tables" = 10 ] && echo 'STORAGE_10_TABLE_SUPERSET_COUNT=PASS' || echo 'STORAGE_10_TABLE_SUPERSET_COUNT=FAIL'
           case "$pgver" in 17*) echo 'POSTGRESQL_17=PASS';; *) echo 'POSTGRESQL_17=FAIL';; esac
           echo 'REAL_DEV_QUERIES_OR_WRITES=0'
