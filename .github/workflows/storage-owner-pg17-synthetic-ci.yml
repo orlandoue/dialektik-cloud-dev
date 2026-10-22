@@ -53,7 +53,13 @@ jobs:
           done
           [ "$ready" = 1 ] || { echo 'SYNTHETIC_PG17_READY=FAIL'; exit 1; }
           [ "$(docker inspect dialektik-storage-owner-ci \
-            --format '{{json .NetworkSettings.Networks}}')" = '{}' ] || {
+            --format '{{.HostConfig.NetworkMode}}')" = 'none' ] || {
+              echo 'SYNTHETIC_DB_NETWORK_ISOLATION=FAIL'; exit 1;
+            }
+          names="$(docker inspect dialektik-storage-owner-ci \
+            --format '{{range $name,$_ := .NetworkSettings.Networks}}{{println $name}}{{end}}')"
+          names="$(printf '%s' "$names" | tr -d '\r\n ')"
+          [ "$names" = 'none' ] || {
               echo 'SYNTHETIC_DB_NETWORK_ISOLATION=FAIL'; exit 1;
             }
           echo 'SYNTHETIC_DB_NETWORK_ISOLATION=PASS'
