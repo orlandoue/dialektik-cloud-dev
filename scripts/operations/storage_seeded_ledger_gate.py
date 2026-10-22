@@ -66,6 +66,18 @@ def extract_source_rows(sql: str) -> tuple[str, ...]:
         raise StorageGateError("STORAGE_COPY_DUPLICATE_ID")
     return tuple(sorted(rows))
 
+# All category values are static/allowlisted and carry no source IDs,
+# names, hashes, data values, timestamps or counts.
+SAFE_DIFFERENCES = frozenset({
+    "STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH",
+    "STORAGE_TARGET_DUPLICATE_ID",
+    "STORAGE_MIGRATION_ID_SET_MISMATCH",
+    "STORAGE_MIGRATION_NAME_OR_HASH_MISMATCH",
+    "STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH",
+    "STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT",
+    "STORAGE_COPY_SIZE_OR_TERMINATOR_INVALID",
+})
+
 def exact_compare(source_sql: str, target_copy: str) -> None:
     a=extract_source_rows(source_sql)
     b=target_copy.splitlines()
@@ -73,8 +85,17 @@ def exact_compare(source_sql: str, target_copy: str) -> None:
         raise StorageGateError("STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH")
     if len(set(row.split("\t")[0] for row in b))!=EXPECTED_ROWS:
         raise StorageGateError("STORAGE_TARGET_DUPLICATE_ID")
-    if a != tuple(sorted(b)):
-        raise StorageGateError("STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT")
+    if a == tuple(sorted(b)):
+        return
+    archive={row.split("\t")[0]: row.split("\t") for row in a}
+    target={row.split("\t")[0]: row.split("\t") for row in b}
+    if set(archive)!=set(target):
+        raise StorageGateError("STORAGE_MIGRATION_ID_SET_MISMATCH")
+    if any(archive[k][1:3] != target[k][1:3] for k in archive):
+        raise StorageGateError("STORAGE_MIGRATION_NAME_OR_HASH_MISMATCH")
+    if any(archive[k][3] != target[k][3] for k in archive):
+        raise StorageGateError("STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH")
+    raise StorageGateError("STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT")
 
 def exclusive_write(path: Path, text: str) -> None:
     if path.exists():
@@ -110,6 +131,12 @@ def main() -> None:
 
 if __name__=="__main__":
     try: main()
+    except StorageGateError as exc:
+        category = str(exc)
+        if category in SAFE_DIFFERENCES:
+            print("STORAGE_MIGRATION_SAFE_MISMATCH_CLASS="+category,file=sys.stderr)
+        print("STORAGE_SEEDED_LEDGER_CHECK=FAIL_REDACTED",file=sys.stderr)
+        raise SystemExit(1)
     except Exception:
         print("STORAGE_SEEDED_LEDGER_CHECK=FAIL_REDACTED",file=sys.stderr)
         raise SystemExit(1)
