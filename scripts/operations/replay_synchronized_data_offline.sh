@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Protected CI only. Isolated PG17 has zero Docker network interfaces.
-# Fourth owner-approved isolated replay; exact migration IDs/names/hashes, Storage execution timestamps metadata-only.
+# Fifth owner-approved offline replay; redact-only PostgreSQL Storage first-error category.
 # Original encrypted archive supplies *roles only*. Synchronized archive
 # supplies public/schema+data and all managed data from one MVCC snapshot.
 set -euo pipefail
