@@ -23,7 +23,7 @@ jobs:
             scripts/operations/replay_synchronized_data_offline.sh
           grep -Fq 'STORAGE_LOCAL_OWNER_LOGIN=PASS' \
             scripts/operations/replay_synchronized_data_offline.sh
-          grep -Fq 'pg_restore -U supabase_storage_admin' \
+          grep -Fq 'pg_restore -h 127.0.0.1 -U supabase_storage_admin' \
             scripts/operations/replay_synchronized_data_offline.sh
           grep -Fq 'for scope in realtime vault; do' \
             scripts/operations/replay_synchronized_data_offline.sh
