@@ -1,0 +1,5 @@
+# Realtime version-set classification — 2026-10-22
+
+Authenticated isolated replay [39719030213](https://github.com/orlandoue/dialektik-cloud-dev/actions/runs/39719030213) passed public schema/data, Auth, 74 Storage migration immutable identities, Storage owner login, Storage replay, and count verification. It failed **before** Realtime data restoration at the precise set-equality check for 91 migration versions, which already intentionally ignores inserted_at timestamps.
+
+This feature branch **does not** skip Realtime migration records, nor change source archives, migration identifiers, grants, privileges, credentials, target boot versions or roles. It enhances the protected comparison to log only allowlisted source-only and target-only **counts** bounded 0..91 and the fixed category DIFFERENT_VERSION_SET, never IDs, timestamps or SQL. It remains fail-closed unless all 91 versions match exactly. The next step is to identify the compatible Supabase Realtime managed schema/runtime lineage, **not** suppress or overwrite a nonidentical migration ledger. The encrypted backup remains unchanged and no remote DEV or Render writes occur.

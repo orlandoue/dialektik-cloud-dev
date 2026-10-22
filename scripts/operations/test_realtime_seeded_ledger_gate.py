@@ -23,6 +23,18 @@ class RealtimeGateTests(unittest.TestCase):
    with self.assertRaises(RealtimeGateError):source_versions(bad)
   for bad in (TOC+TOC,TOC.replace("TABLE DATA realtime messages","TABLE DATA public articles")):
    with self.assertRaises(RealtimeGateError):filter_toc(bad,exclude=True)
+ def test_version_gap_outputs_only_bounded_counts(self):
+  import io,contextlib
+  stderr=io.StringIO()
+  source_only=ROWS[:-1]+[ROWS[-1].replace("91\t","99\t")]
+  with self.assertRaises(RealtimeGateError),contextlib.redirect_stderr(stderr):
+   compare(SQL,"\n".join(source_only))
+  logged=stderr.getvalue()
+  self.assertIn("REALTIME_VERSION_DIFF_CATEGORY=DIFFERENT_VERSION_SET",logged)
+  self.assertIn("REALTIME_SOURCE_ONLY_VERSION_COUNT=1",logged)
+  self.assertIn("REALTIME_TARGET_ONLY_VERSION_COUNT=1",logged)
+  self.assertNotIn("2026-10-21",logged)
+  self.assertNotIn("99",logged)
  def test_no_values_in_errors(self):
   with self.assertRaises(RealtimeGateError) as e:compare(SQL,"\n".join(ROWS[:-1]))
   self.assertNotIn("2026-10-21",str(e.exception))
