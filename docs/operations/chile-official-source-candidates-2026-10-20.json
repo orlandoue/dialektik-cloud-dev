@@ -1,0 +1,52 @@
+{
+  "schema": "dialektik-chile-source-rights-research-v1",
+  "reviewDate": "2026-10-20",
+  "appliesTo": "RESEARCH_ONLY_NOT_RUNTIME",
+  "sourceCandidates": [
+    {
+      "sourceKey": "cl-ine-press",
+      "publisher": "Instituto Nacional de Estadísticas",
+      "candidateOrigin": "https://www.ine.gob.cl",
+      "newsroomUrl": "https://www.ine.gob.cl/sala-de-prensa",
+      "rightsEvidenceUrl": "https://www.ine.gob.cl/terminos-de-uso-y-licencia-de-datos-abiertos",
+      "rightsStatus": "OPEN_LICENSE_CANDIDATE_NEEDS_ITEM_AND_EXTRACTION_SCOPE_REVIEW",
+      "notes": "Official site describes CC BY-SA 4.0 including commercial reuse, requiring attribution and sharealike. Must verify item exceptions, metadata extraction permissions, sitemap/feed/robots and polling parameters before use.",
+      "legalReuseScopeVerified": false,
+      "canonicalDiscoveryVerified": false,
+      "robotsVerified": false,
+      "metadataAcquisitionEnabled": false,
+      "bodyAcquisitionEnabled": false,
+      "postgresWritesEnabled": false
+    },
+    {
+      "sourceKey": "cl-senapred-news",
+      "publisher": "SENAPRED",
+      "candidateOrigin": "https://senapred.cl",
+      "newsroomUrl": "https://senapred.cl/noticias/",
+      "rightsEvidenceUrl": null,
+      "rightsStatus": "UNVERIFIED_RIGHTS_AND_ROBOTS",
+      "notes": "Live official news listing exists, but rights, legitimate reuse and robots/access terms are not verified; do not poll.",
+      "legalReuseScopeVerified": false,
+      "canonicalDiscoveryVerified": false,
+      "robotsVerified": false,
+      "metadataAcquisitionEnabled": false,
+      "bodyAcquisitionEnabled": false,
+      "postgresWritesEnabled": false
+    },
+    {
+      "sourceKey": "cl-bcn-news",
+      "publisher": "Biblioteca del Congreso Nacional",
+      "candidateOrigin": "https://www.bcn.cl",
+      "newsroomUrl": "https://www.bcn.cl/portal/noticias",
+      "rightsEvidenceUrl": "https://www.bcn.cl/portal/api-servicios/servicio/ObtenerNoticiaPorIdNoticiaHTML?id=contenidos-web-de-la-bcn-con-derechos-de-uso-liberados",
+      "rightsStatus": "NONCOMMERCIAL_NEWS_REUSE_RESTRICTION_REQUIRES_LEGAL_REVIEW",
+      "notes": "BCN's general news content page limits reuse to non-commercial purposes; open linked-data datasets separately use an attribution license. Do not conflate datasets with newsroom articles.",
+      "legalReuseScopeVerified": false,
+      "canonicalDiscoveryVerified": false,
+      "robotsVerified": false,
+      "metadataAcquisitionEnabled": false,
+      "bodyAcquisitionEnabled": false,
+      "postgresWritesEnabled": false
+    }
+  ]
+}
