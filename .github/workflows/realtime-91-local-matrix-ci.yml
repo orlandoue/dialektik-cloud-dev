@@ -72,6 +72,12 @@ jobs:
             SELECT count(*) FROM pg_class WHERE relnamespace='storage'::regnamespace
              AND relkind IN ('r','p');" 2>/dev/null)" || exit 1
           echo "LOCAL_STORAGE_TABLE_COUNT=$storage"
+          storage_migrations="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM storage.migrations;" 2>/dev/null)" || exit 1
+          case "$storage_migrations" in
+            ''|*[!0-9]*) echo 'LOCAL_STORAGE_MIGRATION_COUNT_FORMAT=FAIL'; exit 1;;
+          esac
+          echo "LOCAL_STORAGE_MIGRATION_COUNT=$storage_migrations"
           # This CI has ZERO access to the authentic backup. A count match
           # does not prove the 91 exact version identifiers or schema parity.
           if [ "$c" = 91 ] && [ "$auth" = 82 ] && [ "$storage" = 10 ]; then
