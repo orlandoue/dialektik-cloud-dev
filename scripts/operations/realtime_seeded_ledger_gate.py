@@ -73,8 +73,12 @@ def compare(source_sql:str,target_copy:str)->None:
         if len(cells)!=2 or not VERSION_RE.fullmatch(cells[0]) or not cells[1]:
             raise RealtimeGateError("REALTIME_TARGET_COPY_MALFORMED")
         b.append((cells[0],cells[1]))
-    if len(b)!=EXPECTED_ROWS or len({v for v,_ in b})!=EXPECTED_ROWS:
+    if len(b)!=EXPECTED_ROWS:
+        if 0<=len(b)<=200:
+            print(f"REALTIME_TARGET_MIGRATION_COUNT={len(b)}",file=sys.stderr)
         raise RealtimeGateError("REALTIME_TARGET_VERSION_COUNT_MISMATCH")
+    if len({v for v,_ in b})!=EXPECTED_ROWS:
+        raise RealtimeGateError("REALTIME_TARGET_DUPLICATE_VERSION")
     source_versions_set={v for v,_ in a}
     target_versions_set={v for v,_ in b}
     if source_versions_set != target_versions_set:
@@ -115,8 +119,26 @@ def main()->None:
         compare(args.source_sql.read_text("utf8"),args.target_copy.read_text("utf8"))
         print("REALTIME_COMPLETE_91_VERSION_SET_EQUAL=PASS")
 
+# Error categories only. No migrated version IDs or timestamps.
+SAFE_FAILURE_CLASSES=frozenset({
+    "REALTIME_ARCHIVE_SQL_TOO_LARGE",
+    "REALTIME_LEDGER_COPY_DUPLICATE",
+    "REALTIME_LEDGER_COPY_UNKNOWN",
+    "REALTIME_LEDGER_COPY_MALFORMED",
+    "REALTIME_LEDGER_COUNT_MISMATCH",
+    "REALTIME_LEDGER_DUPLICATE_VERSION",
+    "REALTIME_TARGET_COPY_MALFORMED",
+    "REALTIME_TARGET_VERSION_COUNT_MISMATCH",
+    "REALTIME_TARGET_DUPLICATE_VERSION",
+    "REALTIME_MIGRATION_VERSION_SET_MISMATCH",
+})
 if __name__=="__main__":
     try:main()
+    except RealtimeGateError as exc:
+        if str(exc) in SAFE_FAILURE_CLASSES:
+            print("REALTIME_SAFE_FAILURE_CLASS="+str(exc),file=sys.stderr)
+        print("REALTIME_SEEDED_LEDGER_GATE=FAIL_REDACTED",file=sys.stderr)
+        raise SystemExit(1)
     except Exception:
         print("REALTIME_SEEDED_LEDGER_GATE=FAIL_REDACTED",file=sys.stderr)
         raise SystemExit(1)

@@ -35,6 +35,18 @@ class RealtimeGateTests(unittest.TestCase):
   self.assertIn("REALTIME_TARGET_ONLY_VERSION_COUNT=1",logged)
   self.assertNotIn("2026-10-21",logged)
   self.assertNotIn("99",logged)
+ def test_target_count_mismatch_emits_count_only(self):
+  import io,contextlib
+  log=io.StringIO()
+  with self.assertRaises(RealtimeGateError) as err,contextlib.redirect_stderr(log):
+   compare(SQL,"\n".join(ROWS[:-1]))
+  self.assertEqual(str(err.exception),"REALTIME_TARGET_VERSION_COUNT_MISMATCH")
+  self.assertIn("REALTIME_TARGET_MIGRATION_COUNT=90",log.getvalue())
+  self.assertNotIn("2026-10-21",log.getvalue())
+ def test_duplicate_id_classification(self):
+  with self.assertRaises(RealtimeGateError) as err:
+   compare(SQL,"\n".join(ROWS[:-1]+[ROWS[0]]))
+  self.assertEqual(str(err.exception),"REALTIME_TARGET_DUPLICATE_VERSION")
  def test_no_values_in_errors(self):
   with self.assertRaises(RealtimeGateError) as e:compare(SQL,"\n".join(ROWS[:-1]))
   self.assertNotIn("2026-10-21",str(e.exception))
