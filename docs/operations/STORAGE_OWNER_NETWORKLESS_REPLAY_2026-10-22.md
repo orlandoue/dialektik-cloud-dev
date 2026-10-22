@@ -1,0 +1,9 @@
+# Offline Storage owner replay — 22 October 2026
+
+The authentic synchronized DEV backup has passed public/Auth recovery, the 74 Storage migration IDs/names/hashes are equal (timestamps differ), and first blocked managed import with `INSUFFICIENT_PRIVILEGE`. Read-only DEV confirms `supabase_storage_admin` owns eight Storage tables and has INSERT access; `postgres` lacks INSERT on some. `postgres` is **not a member** of the owner role. No remote privilege changes are authorized.
+
+This feature branch changes **only the Storage data importer user** to `supabase_storage_admin` in the isolated, networkless PostgreSQL container. Before touching any archive it asserts no attached Docker networks, correct existing role identity and properties (LOGIN, no SUPERUSER, no BYPASSRLS), schema usage, exact expected eight owned tables, no FORCE RLS, INSERT ability, and direct `psql -U supabase_storage_admin` authentication. It checks final Storage ledger/other table counts before proceeding to Realtime/Vault. No password, `GRANT`, `ALTER ROLE`, `SET ROLE`, bypass, data-file modification, migration reset or deployment.
+
+This branch's CI uses only a synthetic PostgreSQL 17.11 fixture, checks a deliberately unprivileged role cannot import an archive and the schema owner can; validates RLS preserved and no external DB network. The CI is **not equivalent to the authentic restored Supabase instance**. The authentic offline replay remains protected by exact commit marker, GitHub protected environment and independent permission/consistency gates and requires distinct, explicit authorization for that run.
+
+Expected fail-closed possibility: local Supabase may not permit direct Unix-socket connection as `supabase_storage_admin` or may have a different managed table inventory. Never bypass this by changing role passwords/privileges or reducing checks. Full storage objects, realtime/vault, GoTrue and rollback must pass before recovery sign-off.
