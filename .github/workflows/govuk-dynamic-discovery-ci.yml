@@ -1,17 +1,20 @@
 name: Dialektik GOVUK dynamic discovery read-only proof
 on:
   push:
-    branches: [codex/govuk-two-publisher-discovery-20261021]
+    branches: [codex/govuk-incremental-discovery-state-20261021, codex/v7i-operational-product-pipeline]
   workflow_dispatch:
-  # Scheduled runs work ONLY after this workflow is merged into the default branch.
-  # OFF by default: operator must enable DIALEKTIK_GOVUK_DISCOVERY_WATCH_ENABLED.
+  # Safe metadata-only discovery, on the default branch after guarded merge.
+  # No database, tokens, semantic inference or release authority.
   schedule:
-    - cron: '17 */3 * * *'
+    - cron: '17 */6 * * *'
 permissions:
   contents: read
+  actions: read
+concurrency:
+  group: govuk-discovery-state-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   prewrite-probe:
-    if: ${{ github.event_name != 'schedule' || vars.DIALEKTIK_GOVUK_DISCOVERY_WATCH_ENABLED == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -29,8 +32,28 @@ jobs:
           npm run build
       - name: Offline rights, robots, source identity and dedupe tests
         run: |
-          node --test .github/scripts/govuk-search-discovery.test.mjs .github/scripts/govuk-housing-multi-source.test.mjs
+          node --test .github/scripts/govuk-search-discovery.test.mjs .github/scripts/govuk-housing-multi-source.test.mjs .github/scripts/govuk-incremental-receipt.test.mjs .github/scripts/govuk-workflow-contract.test.mjs
           npx vitest run --config services/core-api/vitest.config.mts services/core-api/test/rights-gated-metadata-stage.test.ts
+      - name: Download last successful same-branch metadata receipt, when available
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          HISTORY_PATH: ${{ runner.temp }}/dialektik-discovery-history
+          GH_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$HISTORY_PATH"
+          run="$(gh api "repos/$GH_REPO/actions/workflows/govuk-dynamic-discovery-ci.yml/runs?branch=$GH_BRANCH&status=success&per_page=1" --jq '.workflow_runs[0].id // 0')"
+          if [ "$run" = '0' ]; then
+            echo 'COMPARISON=BOOTSTRAP_UNVERIFIED_HISTORY'
+          else
+            gh run download "$run" --name govuk-dynamic-readonly-receipt --dir "$HISTORY_PATH"
+            test -s "$HISTORY_PATH/two-publishers.json"
+            echo "DIALEKTIK_PREVIOUS_DISCOVERY_RECEIPT=$HISTORY_PATH/two-publishers.json" >> "$GITHUB_ENV"
+            echo 'COMPARISON=PRIOR_SUCCESSFUL_CI'
+          fi
       - name: Real GOVUK search + content proof (read only, fail closed)
         env:
           DIALEKTIK_DISCOVERY_OUTPUT: ${{ runner.temp }}/dialektik-discovery/receipt.json
