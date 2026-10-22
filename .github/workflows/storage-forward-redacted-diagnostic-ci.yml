@@ -1,0 +1,40 @@
+name: Storage forward failure categories - redacted diagnostic (synthetic)
+on:
+  push:
+    branches: [codex/storage-safe-forward-failure-code-20261022]
+  pull_request:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+permissions:
+  contents: read
+jobs:
+  no-secrets-storage-forward:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Prove forward failures stay categorical and no recovery is executed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/operations/storage_seeded_ledger_gate.py
+          python3 -m unittest discover -s scripts/operations -p test_storage_seeded_ledger_gate.py -v
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          script=Path('scripts/operations/replay_synchronized_data_offline.sh').read_text()
+          gate=Path('scripts/operations/storage_seeded_ledger_gate.py').read_text()
+          assert 'CHECK_STORAGE_ONLY_ONE_STRICT_FORWARD_MIGRATION' in script
+          assert 'STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=$category' in script
+          assert 'grep -Fxq' in script
+          assert 'STORAGE_FORWARD_NAME_HASH_CHANGED' in gate
+          assert 'STORAGE_FORWARD_SOURCE_NOT_SUBSET' in gate
+          assert 'REALTIME_SAFE_FAILURE_CLASS=' in script
+          assert "echo \"$label=FAIL_REDACTED\"" in script
+          assert 'RESTORE_SYNC_MANAGED_storage' in script
+          print('REDACTED_STORAGE_FORWARD_FAILURE_CONTRACT=PASS')
+          print('RESTORE_FAIL_CLOSED_NOT_BYPASSED=PASS')
+          print('AUTHENTIC_BACKUP_ACCESSED=FALSE')
+          print('REMOTE_SQL_WRITES=0')
+          PY
