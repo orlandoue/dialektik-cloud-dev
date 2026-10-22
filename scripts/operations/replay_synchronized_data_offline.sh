@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Protected CI only. Isolated PG17 has zero Docker network interfaces.
-# Sixth owner-approved synchronized offline replay; Storage owner role and known empty Iceberg superset.
+# Seventh owner-approved synchronized offline replay; strict Realtime 91-version ledger reconciliation.
 # Original encrypted archive supplies *roles only*. Synchronized archive
 # supplies public/schema+data and all managed data from one MVCC snapshot.
 set -euo pipefail
