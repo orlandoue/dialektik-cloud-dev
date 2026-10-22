@@ -176,6 +176,10 @@ if ! docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
 fi
 # Prefer byte-identical rows; the only reviewed exception is an already
 # proven timestamp-only mismatch. No names, hashes, IDs, row counts may differ.
+# Reuse the exact comparison when possible; otherwise only a previously
+# classified timestamp difference OR one local forward migration is eligible.
+# Semantic gate independently verifies every one of the 74 original ID/name/hash
+# triplets, a single strictly newer local version and no source rows skipped.
 if python3 scripts/operations/storage_seeded_ledger_gate.py compare \
   --source-sql "$work/derived/storage-migrations.sql" \
   --target-copy "$work/derived/storage-local-copy.private" \
@@ -184,6 +188,9 @@ if python3 scripts/operations/storage_seeded_ledger_gate.py compare \
 else
   if ! grep -Fxq \
     'STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH' \
+    "$work/derived/storage-exact-check.private.log" && \
+    ! grep -Fxq \
+    'STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH' \
     "$work/derived/storage-exact-check.private.log"; then
     echo 'STORAGE_MIGRATION_SCHEMA_IDENTITY_DIFFERENCE=FAIL_REDACTED'
     exit 1
@@ -193,6 +200,7 @@ else
       --source-sql "$work/derived/storage-migrations.sql" \
       --target-copy "$work/derived/storage-local-copy.private"
   echo 'STORAGE_EXECUTED_AT_METADATA_DIFFERENCE_ACKNOWLEDGED=TRUE'
+  echo 'STORAGE_LOCAL_FORWARD_MIGRATION_MAY_BE_PRESERVED=TRUE'
 fi
 phase PREPARE_SYNC_STORAGE_NON_DUPLICATED_TOC \
   python3 scripts/operations/storage_seeded_ledger_gate.py exclude-if-compatible \

@@ -48,6 +48,19 @@ class StorageSeededGateTests(unittest.TestCase):
     ):
       with self.assertRaises(StorageGateError):
         semantic_migration_compare(SOURCE,"\n".join(changed))
+  def test_forward_one_newer_storage_migration_preserves_all_source_signatures(self):
+    forward="75\tlocal-forward-migration\t"+"a"*40+"\t2026-10-22 01:00:00"
+    semantic_migration_compare(SOURCE,"\n".join(ROWS+[forward]))
+    for rows in (
+      ROWS[:-1]+[forward],
+      ROWS+[forward.replace("75\t","74\t")],
+      ROWS+[forward.replace("75\t","0\t")],
+      ROWS+[forward.replace("a"*40,"f"*39)],
+      ROWS+[forward,forward.replace("75\t","76\t")],
+      ROWS[:-1]+[ROWS[-1].replace("hash-74","modified")]+[forward],
+    ):
+      with self.assertRaises(StorageGateError):
+        semantic_migration_compare(SOURCE,"\n".join(rows))
   def test_mismatched_target_count_or_duplicate_id_fails(self):
     with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]))
     with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]+[ROWS[0]]))
