@@ -156,6 +156,24 @@ jobs:
         run: |
           set -euo pipefail
           db="$STORAGE_LOCAL_DB"
+          # Local fixture schema metadata only; no article, Auth or user row reads.
+          docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+            SELECT relname || '|' ||
+                   CASE WHEN pg_get_userbyid(relowner)='supabase_storage_admin' THEN 'OWNED' ELSE 'OTHER_OWNER' END || '|' ||
+                   CASE WHEN has_table_privilege('supabase_storage_admin',oid,'INSERT') THEN 'CAN_INSERT' ELSE 'NO_INSERT' END || '|' ||
+                   CASE WHEN relforcerowsecurity THEN 'FORCE_RLS' ELSE 'NORMAL_RLS' END
+            FROM pg_class
+            WHERE relnamespace='storage'::regnamespace
+              AND relkind IN ('r','p') ORDER BY relname;" \
+            | sed 's/^/LOCAL_STORAGE_TABLE_METADATA=/' || exit 1
+          docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+            SELECT CASE WHEN EXISTS(
+              SELECT 1 FROM pg_roles WHERE rolname='supabase_storage_admin'
+               AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls)
+            THEN 'PASS' ELSE 'FAIL' END;" \
+            | sed 's/^/LOCAL_STORAGE_OWNER_ROLE_FLAGS=/' || exit 1
           owner="$(docker exec "$db" psql -XAt -U postgres -d postgres \
             -v ON_ERROR_STOP=1 -c "
           SELECT CASE WHEN
