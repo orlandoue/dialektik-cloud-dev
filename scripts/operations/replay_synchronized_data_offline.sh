@@ -19,6 +19,13 @@ phase() {
    echo "$label=PASS"
  else
    echo "$label=FAIL_REDACTED"
+   case "$label" in
+     RESTORE_SYNC_MANAGED_storage|RESTORE_SYNC_MANAGED_realtime|RESTORE_SYNC_MANAGED_vault)
+       # Never copy, echo or upload the private PostgreSQL error text.
+       python3 scripts/operations/classify_private_restore_error.py \
+         --private-log "$work/derived/$label.private.log" --first-error-only
+       ;;
+   esac
    if [ "$label" = CHECK_SYNC_STORAGE_ALL_74_ROWS_EXACT ]; then
      # Only print fixed category strings, not any private log content.
      for category in STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH STORAGE_TARGET_DUPLICATE_ID STORAGE_MIGRATION_ID_SET_MISMATCH STORAGE_MIGRATION_NAME_OR_HASH_MISMATCH STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT STORAGE_COPY_SIZE_OR_TERMINATOR_INVALID; do
