@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Protected CI only. Isolated PG17 has zero Docker network interfaces.
+# Explicitly approved 2026-10-22 isolated replay: 74 preserved Storage migrations plus one newer local migration, 91 Realtime versions.
 # Owner-approved 2026-10-22 isolated replay on Supabase CLI 2.121.0 with 91 exact Realtime version gate.
 # Ninth owner-authorized offline replay; fixed Realtime failure categories, strict 91-version equality.
 # Original encrypted archive supplies *roles only*. Synchronized archive
