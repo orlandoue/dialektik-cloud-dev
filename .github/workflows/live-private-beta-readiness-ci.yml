@@ -39,7 +39,7 @@ jobs:
             echo 'DEPLOYED_BETA_CORE_READY=FAIL'; exit 1
           }
           echo 'DEPLOYED_BETA_CORE_READY=PASS'
-          for route in /v1/live/news /v1/live/preview/govuk /v1/live/preview/events/chile-tornado; do
+          for route in /live/news /live/preview/govuk /live/preview/events/chile-tornado; do
             code="$(curl -sS --max-time 30 --connect-timeout 10 \
               --location --max-redirs 0 -o "$w/denied.json" \
               -w '%{http_code}' "$root$route")" || {
@@ -47,7 +47,7 @@ jobs:
             }
             case "$code" in
               401|403) echo 'DEPLOYED_PRIVATE_ROUTE_DENIAL=PASS';;
-              *) echo 'DEPLOYED_PRIVATE_ROUTE_DENIAL=FAIL'; exit 1;;
+              *) echo "DEPLOYED_PRIVATE_ROUTE_DENIAL=FAIL_HTTP_$code"; exit 1;;
             esac
           done
           echo 'NO_AUTH_TOKEN_OR_PERSONAL_DATA_USED=TRUE'
