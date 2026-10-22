@@ -1,0 +1,30 @@
+name: Live Render official metadata beta authentication smoke
+on:
+  push:
+    branches: [codex/govuk-housing-live-smoke-20261022]
+permissions:
+  contents: read
+jobs:
+  live-readonly:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Verify current Render health and private news access
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://dialektik-core-dev.onrender.com'
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          for path in health/live health/ready; do
+            status="$(curl -sS --max-time 90 --retry 1 --retry-delay 3 --output "$tmp" --write-out '%{http_code}' "$base/$path")"
+            test "$status" = '200' || { echo 'LIVE_HEALTH_FAILED'; exit 1; }
+            echo "$path=$status"
+          done
+          for path in live/news live/preview/govuk live/preview/govuk/housing; do
+            status="$(curl -sS --max-time 90 --output "$tmp" --write-out '%{http_code}' "$base/$path")"
+            case "$status" in 401|403) ;; *) echo "AUTH_GUARD_FAILURE=$path:$status"; exit 1 ;; esac
+            echo "$path=AUTH_REQUIRED"
+          done
+          echo 'LIVE_RENDER_BETA_PRIVATE=PASS'
+          echo 'DEV_SQL_WRITES=0'
