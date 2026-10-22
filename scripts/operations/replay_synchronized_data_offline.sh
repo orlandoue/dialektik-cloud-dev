@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Safety-only rerun: emit exclusively allowlisted Storage 74-to-75 mismatch class; all rejection gates remain unchanged.
 # Protected CI only. Isolated PG17 has zero Docker network interfaces.
 # Explicitly approved 2026-10-22 isolated replay: 74 preserved Storage migrations plus one newer local migration, 91 Realtime versions.
 # Owner-approved 2026-10-22 isolated replay on Supabase CLI 2.121.0 with 91 exact Realtime version gate.
