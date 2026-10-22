@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Protected CI only. Isolated PG17 has zero Docker network interfaces.
-# Seventh owner-approved synchronized offline replay; strict Realtime 91-version ledger reconciliation.
+# Eighth owner-approved isolated replay; Realtime version gap counts only, strict fail-closed.
 # Original encrypted archive supplies *roles only*. Synchronized archive
 # supplies public/schema+data and all managed data from one MVCC snapshot.
 set -euo pipefail
