@@ -72,7 +72,11 @@ jobs:
               ALTER TABLE storage.synthetic_restore_probe OWNER TO supabase_storage_admin;
               ALTER TABLE storage.synthetic_restore_probe ENABLE ROW LEVEL SECURITY;
             " > "$w/synthetic-schema.private" 2>&1 || {
-              echo 'SYNTHETIC_ROLE_SCHEMA_FIXTURE=FAIL_REDACTED'; exit 1;
+              echo 'SYNTHETIC_ROLE_SCHEMA_FIXTURE=FAIL_REDACTED'
+              # Fixture uses only generated fake objects; no authentic rows/IDs.
+              grep -E 'ERROR:|FATAL:|permission denied|already exists|must be member of' \
+                "$w/synthetic-schema.private" | head -6 || true
+              exit 1;
             }
           docker exec dialektik-storage-owner-ci psql -X -U supabase_storage_admin -d postgres \
             -v ON_ERROR_STOP=1 -c "
