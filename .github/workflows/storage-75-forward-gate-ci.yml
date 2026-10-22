@@ -1,0 +1,40 @@
+name: Storage one-forward-migration fail-closed tests (synthetic)
+on:
+  push:
+    branches: [codex/storage-75-forward-compatible-20261022]
+permissions:
+  contents: read
+jobs:
+  storage-forward:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Test one-forward migration identity proof and protected restore guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/operations/storage_seeded_ledger_gate.py
+          python3 -m unittest discover -s scripts/operations \
+            -p test_storage_seeded_ledger_gate.py -v
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          c=Path('scripts/operations/replay_synchronized_data_offline.sh').read_text()
+          w=Path('.github/workflows/real-synced-backup-isolated-restore.yml').read_text()
+          assert "CHECK_STORAGE_ONLY_ONE_STRICT_FORWARD_MIGRATION" in c
+          assert "STORAGE_LOCAL_FORWARD_SCHEMA_NONIDENTICAL_TO_SOURCE=TRUE" in c
+          assert "STORAGE_LOCAL_OWNER_PREFLIGHT=PASS" in c
+          assert "STORAGE_LOCAL_DATA_INTEGRITY=PASS" in c
+          assert "CHECK_REALTIME_ALL_91_VERSIONS_EXACT" in c
+          assert 'networkless_gotrue_replay_smoke.sh' in c
+          assert w.count('supabase@2.121.0') == 5
+          assert "environment: dialektik-dev-backup" in w
+          assert "github.event.head_commit.message == 'EXECUTE_SYNC_DEV_BACKUP_OFFLINE_RESTORE_20261021'" in w
+          assert w.index('ISOLATED_DATABASE_NETWORKS=NONE') < w.index('gh run download')
+          print('STORAGE_ONE_FORWARD_NO_LEAK_OR_BYPASS_CONTRACT=PASS')
+          print('AUTHENTIC_BACKUP_DECRYPTED=FALSE')
+          print('REMOTE_DATABASE_RECORD_MUTATION=0')
+          PY
