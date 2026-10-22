@@ -206,7 +206,10 @@ jobs:
           done < <(docker inspect "$db" --format '{{range $n,$_ := .NetworkSettings.Networks}}{{println $n}}{{end}}')
           [ "$(docker inspect "$db" --format '{{json .NetworkSettings.Networks}}')" = '{}' ] || exit 1
           echo 'STORAGE_LOCAL_ALL_EXTERNAL_NETWORKS_DETACHED=PASS'
-          who="$(docker exec "$db" psql -XAt -U supabase_storage_admin \
+          # CLI local dev password is the documented synthetic "postgres".
+          # Test only disconnected container loopback, not any remote endpoint.
+          who="$(docker exec -e PGPASSWORD=postgres "$db" \
+            psql -XAt -h 127.0.0.1 -U supabase_storage_admin \
             -d postgres -v ON_ERROR_STOP=1 -c 'SELECT current_user;' \
             2>/dev/null)" || {
             echo 'STORAGE_LOCAL_ADMIN_LOGIN=FAIL_REDACTED'; exit 1
