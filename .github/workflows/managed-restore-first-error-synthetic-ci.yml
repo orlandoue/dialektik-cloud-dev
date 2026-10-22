@@ -1,0 +1,24 @@
+name: Managed restore first SQL classifier (synthetic CI)
+on:
+  push:
+    branches: [codex/storage-first-error-redacted-20261021]
+permissions:
+  contents: read
+jobs:
+  static-redaction-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Parse protected replay and classification contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          python3 -m py_compile scripts/operations/classify_private_restore_error.py
+          python3 -m unittest discover -s scripts/operations -p test_classify_private_restore_error.py -v
+          grep -Fq -- '--first-error-only' scripts/operations/replay_synchronized_data_offline.sh
+          echo 'RESTORE_REDACTED_FIRST_SQL_FAILURE_CONTRACT=PASS'
+          echo 'REAL_BACKUP_ACCESSED=FALSE'
