@@ -180,15 +180,24 @@ jobs:
             EXISTS(SELECT 1 FROM pg_roles WHERE rolname='supabase_storage_admin'
               AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls)
             AND has_schema_privilege('supabase_storage_admin','storage','USAGE')
-            AND (SELECT count(*)=8 AND bool_and(
-              pg_get_userbyid(relowner)='supabase_storage_admin'
-              AND NOT relforcerowsecurity
-              AND has_table_privilege('supabase_storage_admin',oid,'INSERT'))
+            AND (SELECT count(*)=10
+              AND count(*) FILTER (WHERE relname IN
+                ('buckets','buckets_analytics','buckets_vectors','migrations',
+                 'objects','s3_multipart_uploads','s3_multipart_uploads_parts',
+                 'vector_indexes'))=8
+              AND count(*) FILTER (WHERE relname IN
+                ('iceberg_namespaces','iceberg_tables'))=2
+              AND bool_and(
+                pg_get_userbyid(relowner)='supabase_storage_admin'
+                AND NOT relforcerowsecurity
+                AND has_table_privilege('supabase_storage_admin',oid,'INSERT'))
               FROM pg_class WHERE relnamespace='storage'::regnamespace
                 AND relkind IN ('r','p'))
+            AND (SELECT count(*) FROM storage.iceberg_namespaces)=0
+            AND (SELECT count(*) FROM storage.iceberg_tables)=0
           THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || exit 1
-          [ "$owner" = PASS ] || { echo 'STORAGE_LOCAL_EIGHT_OWNED_TABLES=FAIL'; exit 1; }
-          echo 'STORAGE_LOCAL_EIGHT_OWNED_TABLES=PASS'
+          [ "$owner" = PASS ] || { echo 'STORAGE_LOCAL_MANAGED_SUPERSET=FAIL'; exit 1; }
+          echo 'STORAGE_LOCAL_MANAGED_SUPERSET=PASS'
           for c in $(docker ps --format '{{.Names}}' | grep '^supabase_' || true); do
             [ "$c" = "$db" ] || docker stop "$c" >/dev/null
           done
