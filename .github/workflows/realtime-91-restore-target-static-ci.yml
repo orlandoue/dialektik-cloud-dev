@@ -1,0 +1,40 @@
+name: Realtime 91 restore-target preflight (no secrets)
+on:
+  push:
+    branches: [codex/realtime-91-compatible-restore-target-20261022]
+permissions:
+  contents: read
+jobs:
+  guarded-restore-target:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Check exact protected restore opt-in, target and safe offline policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          w=Path('.github/workflows/real-synced-backup-isolated-restore.yml').read_text()
+          s=Path('scripts/operations/replay_synchronized_data_offline.sh').read_text()
+          assert w.count('supabase@2.121.0')==5
+          assert 'supabase@2.120.0' not in w
+          assert "github.event.head_commit.message == 'EXECUTE_SYNC_DEV_BACKUP_OFFLINE_RESTORE_20261021'" in w
+          assert 'environment: dialektik-dev-backup' in w
+          assert w.index('ISOLATED_DATABASE_NETWORKS=NONE')<w.index('gh run download')
+          assert 'LOCAL_REAL_AUTH_PLAINTEXT_AND_DATA_CONTAINER_CLEANUP=COMPLETE' in w
+          assert "CHECK_REALTIME_ALL_91_VERSIONS_EXACT" in s
+          assert "realtime_seeded_ledger_gate.py compare" in s
+          assert 'STORAGE_LOCAL_OWNER_PREFLIGHT=PASS' in s
+          assert 'STORAGE_LOCAL_DATA_INTEGRITY=PASS' in s
+          assert 'networkless_gotrue_replay_smoke.sh' in s
+          print('PROTECTED_RESTORE_91_COMPATIBLE_TARGET_CONTRACT=PASS')
+          print('AUTHENTIC_BACKUP_OPENED=FALSE')
+          print('REMOTE_DB_ROLE_OR_RECORD_MUTATION=0')
+          PY
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          python3 -m unittest discover -s scripts/operations \
+            -p test_realtime_seeded_ledger_gate.py -v
