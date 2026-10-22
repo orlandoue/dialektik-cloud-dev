@@ -6,7 +6,7 @@ const workflow = readFileSync(new URL('../workflows/govuk-dynamic-discovery-ci.y
 const source = readFileSync(new URL('./govuk-housing-multi-source.mjs', import.meta.url), 'utf8');
 
 test('periodic discovery is enabled only as readonly scheduled metadata', () => {
-  assert.match(workflow, /schedule:\s*\n\s*- cron: '17 \\*\\/6 \\* \\* \\*'/);
+  assert.ok(workflow.includes("    - cron: '17 */6 * * *'"));
   assert.match(workflow, /permissions:\s*\n\s*contents: read\s*\n\s*actions: read/);
   assert.ok(!workflow.includes('DIALEKTIK_GOVUK_DISCOVERY_WATCH_ENABLED'));
   assert.ok(!workflow.includes('DATABASE_URL:'));
