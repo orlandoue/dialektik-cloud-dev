@@ -1,0 +1,82 @@
+name: Supabase 2.121 Realtime migration compatibility (synthetic-only)
+on:
+  push:
+    branches: [codex/realtime-compatibility-cli-2121-20261022]
+permissions:
+  contents: read
+jobs:
+  managed-schema-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Start synthetic disposable local Supabase PG17
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if printenv DATABASE_URL >/dev/null || printenv SUPABASE_ACCESS_TOKEN >/dev/null; then
+            echo 'COMPAT_UNSAFE_CREDENTIALS_PRESENT=FAIL'; exit 1
+          fi
+          w="$RUNNER_TEMP/realtime-compatibility"
+          mkdir -p "$w/local" "$w/private"
+          cd "$w/local"
+          npx --yes supabase@2.121.0 init > "$w/private/init.log" 2>&1
+          if ! npx --yes supabase@2.121.0 db start > "$w/private/start.log" 2>&1; then
+            echo 'COMPAT_FRESH_TARGET_START=FAIL_REDACTED'
+            exit 1
+          fi
+          echo 'COMPAT_FRESH_TARGET_START=PASS'
+      - name: Compare managed schema migration counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db"
+          echo "SYNTHETIC_DATABASE_CONTAINER=$db" >> "$GITHUB_ENV"
+          result="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+             -v ON_ERROR_STOP=1 -c "
+             SELECT (SELECT count(*) FROM realtime.schema_migrations)||'|'||
+                    (SELECT count(*) FROM auth.schema_migrations)||'|'||
+                    (SELECT count(*) FROM storage.migrations)||'|'||
+                    (SELECT count(*) FROM pg_class c WHERE c.relnamespace='storage'::regnamespace AND c.relkind IN ('r','p'))||
+                    '|'||current_setting('server_version_num');" 2>/dev/null)" || {
+              echo 'COMPAT_TARGET_METADATA_QUERY=FAIL_REDACTED'; exit 1
+          }
+          IFS='|' read -r realtime auth storage storage_tables pgver <<< "$result"
+          if [ "$realtime" = 91 ]; then
+            echo 'REALTIME_MATCHES_CAPTURED_DEV_91=PASS'
+          else
+            echo 'REALTIME_MATCHES_CAPTURED_DEV_91=FAIL'
+            echo "REALTIME_LOCAL_VERSION_COUNT=$realtime"
+          fi
+          [ "$auth" = 82 ] && echo 'AUTH_82_MIGRATIONS_COUNT=PASS' || echo 'AUTH_82_MIGRATIONS_COUNT=FAIL'
+          [ "$storage" = 74 ] && echo 'STORAGE_74_MIGRATIONS_COUNT=PASS' || echo 'STORAGE_74_MIGRATIONS_COUNT=FAIL'
+          [ "$storage_tables" = 10 ] && echo 'STORAGE_10_TABLE_SUPERSET_COUNT=PASS' || echo 'STORAGE_10_TABLE_SUPERSET_COUNT=FAIL'
+          case "$pgver" in 17*) echo 'POSTGRESQL_17=PASS';; *) echo 'POSTGRESQL_17=FAIL';; esac
+          echo 'REAL_DEV_QUERIES_OR_WRITES=0'
+          echo 'CIPHERTEXT_OPENED=FALSE'
+          if [ "$realtime" != 91 ] || [ "$auth" != 82 ] ||
+             [ "$storage" != 74 ] || [ "$storage_tables" != 10 ]; then
+            echo 'MANAGED_SCHEMA_COMPATIBILITY=NO_GO'
+            exit 1
+          fi
+          echo 'MANAGED_SCHEMA_COMPATIBILITY_COUNT_PREFLIGHT=PASS'
+      - name: Destroy ephemeral synthetic target
+        if: always()
+        shell: bash
+        run: |
+          if [ -n "$SYNTHETIC_DATABASE_CONTAINER" ]; then
+            docker rm -f "$SYNTHETIC_DATABASE_CONTAINER" >/dev/null 2>&1 || true
+          fi
+          if [ -d "$RUNNER_TEMP/realtime-compatibility/local" ]; then
+            (cd "$RUNNER_TEMP/realtime-compatibility/local" &&
+              npx --yes supabase@2.121.0 stop --no-backup >/dev/null 2>&1) || true
+          fi
+          rm -rf -- "$RUNNER_TEMP/realtime-compatibility"
+          echo 'COMPAT_SYNTHETIC_CLEANUP=COMPLETE'
