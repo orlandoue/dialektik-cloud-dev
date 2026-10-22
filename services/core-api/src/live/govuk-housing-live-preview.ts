@@ -41,7 +41,7 @@ async function bytes(fetcher: Fetcher, path: string, mime: string, limit: number
   const response = await fetcher(url, {
     method: 'GET', redirect: 'error', credentials: 'omit', cache: 'no-store',
     signal: AbortSignal.timeout(8_000),
-    headers: { Accept: mime, 'User-Agent': 'DialektikMetadataBeta/1.0' },
+    headers: { Accept: mime, 'User-Agent': 'DialektikProductMetadata/1.0' },
   });
   if (response.status !== 200 || !response.headers.get('content-type')?.toLowerCase().includes(mime) ||
       (response.url && response.url !== url) || !response.body) {

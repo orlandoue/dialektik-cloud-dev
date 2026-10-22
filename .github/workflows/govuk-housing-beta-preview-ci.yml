@@ -1,7 +1,7 @@
 name: Dialektik GOVUK dual publisher beta preview safety
 on:
   push:
-    branches: [codex/govuk-housing-live-beta-preview-20261022]
+    branches: [codex/govuk-housing-live-beta-preview-20261022, codex/govuk-preview-robots-ua-20261022, codex/v7i-operational-product-pipeline]
 permissions:
   contents: read
 jobs:
