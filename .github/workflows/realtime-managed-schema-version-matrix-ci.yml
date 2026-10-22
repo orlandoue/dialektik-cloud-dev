@@ -1,0 +1,82 @@
+name: Local managed Realtime schema version compatibility (synthetic)
+on:
+  push:
+    branches: [codex/realtime-managed-schema-versions-20261022]
+permissions:
+  contents: read
+jobs:
+  cli-managed-schema-matrix:
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ['2.121.0', '2.122.0-beta.12']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    env:
+      SUPABASE_CLI_VERSION: ${{ matrix.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Boot isolated fixture Supabase PostgreSQL without remote secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/realtime-cli-probe"
+          mkdir -p "$w/local" "$w/private"
+          cd "$w/local"
+          if ! npx --yes "supabase@$SUPABASE_CLI_VERSION" init > "$w/private/init.log" 2>&1; then
+            echo 'LOCAL_REALTIME_CLI_INIT=FAIL_REDACTED'; exit 1;
+          fi
+          if ! npx --yes "supabase@$SUPABASE_CLI_VERSION" db start > "$w/private/db-start.log" 2>&1; then
+            echo 'LOCAL_REALTIME_CLI_DB_START=FAIL_REDACTED'; exit 1;
+          fi
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db"
+          echo "ISOLATED_DB_NAME=$db" >> "$GITHUB_ENV"
+          echo 'LOCAL_REALTIME_CLI_DB_START=PASS'
+      - name: Count only migrations in Auth, Storage and Realtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$ISOLATED_DB_NAME"
+          summary="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+              SELECT (SELECT count(*) FROM auth.schema_migrations)::text || '|' ||
+                     (SELECT count(*) FROM storage.migrations)::text || '|' ||
+                     (SELECT count(*) FROM realtime.schema_migrations)::text || '|' ||
+                     (SELECT count(*) FROM storage.iceberg_namespaces)::text || '|' ||
+                     (SELECT count(*) FROM storage.iceberg_tables)::text;" \
+            2>/dev/null)" || {
+              echo 'LOCAL_REALTIME_SCHEMA_COUNTS=FAIL_REDACTED'; exit 1;
+            }
+          IFS='|' read -r auth storage realtime iceberg_ns iceberg_tables <<< "$summary"
+          for n in "$auth" "$storage" "$realtime" "$iceberg_ns" "$iceberg_tables"; do
+            [[ "$n" =~ ^[0-9]{1,4}$ ]] || exit 1
+          done
+          echo "LOCAL_PROFILE_AUTH_MIGRATIONS=$auth"
+          echo "LOCAL_PROFILE_STORAGE_MIGRATIONS=$storage"
+          echo "LOCAL_PROFILE_REALTIME_MIGRATIONS=$realtime"
+          echo "LOCAL_PROFILE_EMPTY_ICEBERG=$([ "$iceberg_ns" = 0 ] && [ "$iceberg_tables" = 0 ] && echo PASS || echo FAIL)"
+          if [ "$auth" = 82 ] && [ "$storage" = 74 ] && [ "$realtime" = 91 ]; then
+            echo 'LOCAL_PRELIMINARY_MIGRATION_COUNTS_MATCH=PASS'
+          else
+            echo 'LOCAL_PRELIMINARY_MIGRATION_COUNTS_MATCH=FAIL'
+          fi
+          echo 'BACKUP_DATA_DOWNLOADED=FALSE'
+          echo 'REMOTE_DEV_SQL_MUTATIONS=0'
+      - name: Cleanup synthetic local services and DB
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f "$ISOLATED_DB_NAME" >/dev/null 2>&1 || true
+          if [ -d "$RUNNER_TEMP/realtime-cli-probe/local" ]; then
+            (cd "$RUNNER_TEMP/realtime-cli-probe/local" &&
+             npx --yes "supabase@$SUPABASE_CLI_VERSION" stop --no-backup > /dev/null 2>&1) || true
+          fi
+          rm -rf -- "$RUNNER_TEMP/realtime-cli-probe"
+          echo 'LOCAL_MANAGED_VERSION_PROFILE_CLEANUP=COMPLETE'
