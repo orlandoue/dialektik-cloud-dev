@@ -28,16 +28,16 @@ jobs:
           w="$RUNNER_TEMP/dialektik-protected-replay"
           mkdir -p "$w/local" "$w/derived" "$w/download"
           cd "$w/local"
-          npx --yes supabase@2.120.0 init > "$w/derived/local-init.log" 2>&1
+          npx --yes supabase@2.121.0 init > "$w/derived/local-init.log" 2>&1
           # Database-only mode was independently smoke-tested with 27 Auth tables and 82 versions.
           # It avoids unrelated service health checks before ciphertext is even available.
-          if ! npx --yes supabase@2.120.0 db start > "$w/derived/local-start.log" 2>&1; then
+          if ! npx --yes supabase@2.121.0 db start > "$w/derived/local-start.log" 2>&1; then
             echo 'DB_ONLY_BOOTSTRAP_FIRST_ATTEMPT=FAIL_REDACTED'
             # No real backup has been downloaded or decrypted; safe to discard
             # only this disposable local project's partially created volume.
-            npx --yes supabase@2.120.0 stop --no-backup > "$w/derived/local-stop-before-retry.log" 2>&1 || true
+            npx --yes supabase@2.121.0 stop --no-backup > "$w/derived/local-stop-before-retry.log" 2>&1 || true
             sleep 5
-            if ! npx --yes supabase@2.120.0 db start > "$w/derived/local-start-retry.log" 2>&1; then
+            if ! npx --yes supabase@2.121.0 db start > "$w/derived/local-start-retry.log" 2>&1; then
               echo 'DB_ONLY_BOOTSTRAP_RETRY=FAIL_REDACTED'
               echo 'EMPTY_SUPABASE_BOOTSTRAP_FAILED_LOG_REDACTED'
               exit 1
@@ -172,7 +172,7 @@ jobs:
           fi
           if [ -d "$RUNNER_TEMP/dialektik-protected-replay/local" ]; then
             (cd "$RUNNER_TEMP/dialektik-protected-replay/local" &&
-              npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1) || true
+              npx --yes supabase@2.121.0 stop --no-backup >/dev/null 2>&1) || true
           fi
           rm -rf -- "$RUNNER_TEMP/dialektik-protected-replay"
           echo 'LOCAL_REAL_AUTH_PLAINTEXT_AND_DATA_CONTAINER_CLEANUP=COMPLETE'

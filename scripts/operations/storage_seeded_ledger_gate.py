@@ -76,6 +76,8 @@ SAFE_DIFFERENCES = frozenset({
     "STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH",
     "STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT",
     "STORAGE_COPY_SIZE_OR_TERMINATOR_INVALID",
+    "STORAGE_FORWARD_MIGRATION_ID_NOT_NEWER",
+    "STORAGE_FORWARD_MIGRATION_SIGNATURE_INVALID",
 })
 
 def exact_compare(source_sql: str, target_copy: str) -> None:
@@ -98,16 +100,43 @@ def exact_compare(source_sql: str, target_copy: str) -> None:
     raise StorageGateError("STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT")
 
 def semantic_migration_compare(source_sql: str, target_copy: str) -> None:
-    """Permit only transient execution timestamps to vary.
+    """Exact original 74 ID/name/hash pairs, optionally one newer local version.
 
-    The exact set of 74 migration IDs, names and content hashes MUST match.
-    This does not reproduce the source's audit timestamps in the target.
+    Source rows are immutable. This check never adds or removes migrations.
+    A 75th destination version is only permitted if it has a newer integer
+    migration ID and a syntactically valid SHA-1 hash, plus every original
+    ID/name/hash pair. Source execution timestamps are not replayed.
     """
-    try:
-        exact_compare(source_sql, target_copy)
-    except StorageGateError as exc:
-        if str(exc) != "STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH":
-            raise
+    source_rows = extract_source_rows(source_sql)
+    target_rows = target_copy.splitlines()
+    if len(target_rows) not in (EXPECTED_ROWS, EXPECTED_ROWS + 1):
+        raise StorageGateError('STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH')
+    if any(len(row) > 8192 or len(row.split('\t')) != EXPECTED_COLUMNS for row in target_rows):
+        raise StorageGateError('STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH')
+    source = {row.split('\t')[0]: row.split('\t') for row in source_rows}
+    target = {row.split('\t')[0]: row.split('\t') for row in target_rows}
+    if len(target) != len(target_rows):
+        raise StorageGateError('STORAGE_TARGET_DUPLICATE_ID')
+    if not set(source).issubset(set(target)):
+        raise StorageGateError('STORAGE_MIGRATION_ID_SET_MISMATCH')
+    if any(source[key][1:3] != target[key][1:3] for key in source):
+        raise StorageGateError('STORAGE_MIGRATION_NAME_OR_HASH_MISMATCH')
+    extras = set(target) - set(source)
+    if extras:
+        if len(extras) != 1 or len(target_rows) != EXPECTED_ROWS + 1:
+            raise StorageGateError('STORAGE_MIGRATION_ID_SET_MISMATCH')
+        try:
+            highest = max(int(key) for key in source)
+            extra = next(iter(extras))
+            newer = int(extra) > highest and int(extra) > 0
+        except ValueError:
+            newer = False
+        if not newer:
+            raise StorageGateError('STORAGE_FORWARD_MIGRATION_ID_NOT_NEWER')
+        record = target[extra]
+        if not record[1] or not re.fullmatch(r'[0-9a-f]{40}', record[2], re.ASCII) or not record[3]:
+            raise StorageGateError('STORAGE_FORWARD_MIGRATION_SIGNATURE_INVALID')
+    # Any timestamp difference on preserved rows is metadata-only here.
 
 def exclusive_write(path: Path, text: str) -> None:
     if path.exists():
@@ -140,7 +169,8 @@ def main() -> None:
         print("STORAGE_MIGRATION_FULL_ROW_EXACT_EQUALITY=PASS")
     elif args.command=="compare-semantic":
         semantic_migration_compare(args.source_sql.read_text(encoding="utf8"),args.target_copy.read_text(encoding="utf8"))
-        print("STORAGE_MIGRATION_IMMUTABLE_ID_NAME_HASH_EQUALITY=PASS")
+        print("STORAGE_74_SOURCE_MIGRATIONS_IMMUTABLE_MATCH=PASS")
+        print("STORAGE_TARGET_FORWARD_VERSION_COUNT=" + str(len(args.target_copy.read_text(encoding="utf8").splitlines()) - EXPECTED_ROWS))
         print("STORAGE_SOURCE_EXECUTION_TIMESTAMPS_REPLAYED=FALSE")
     else:
         if not args.schema_identity_proved:
