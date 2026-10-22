@@ -233,10 +233,12 @@ THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || {
 }
 echo 'STORAGE_LOCAL_OWNER_PREFLIGHT=PASS'
 
-# Unix socket authentication inside the isolated PostgreSQL container.
-# Never inject a password, retrieve a managed secret, or use --role with
-# an unauthorised postgres membership assumption.
-storage_identity="$(docker exec "$db" psql -XAt -U supabase_storage_admin \
+# Authenticate only on the disconnected container's loopback. Supabase
+# local development has a documented non-production password ("postgres").
+# If the restored globals change that expected local credential, fail closed:
+# never recover any remote secret, change role passwords, or attach a network.
+storage_identity="$(docker exec -e PGPASSWORD=postgres "$db" \
+  psql -XAt -h 127.0.0.1 -U supabase_storage_admin \
   -d postgres -v ON_ERROR_STOP=1 -c 'SELECT current_user;' 2>/dev/null)" || {
   echo 'STORAGE_LOCAL_OWNER_LOGIN=FAIL_REDACTED'
   exit 1
@@ -251,7 +253,8 @@ echo 'STORAGE_LOCAL_OWNER_LOGIN=PASS'
 # Source archive, exact migration ID/name/hash comparison, derived TOC,
 # single-transaction and exit-on-error settings remain unmodified.
 phase RESTORE_SYNC_MANAGED_storage \
-  docker exec "$db" pg_restore -U supabase_storage_admin -d postgres --data-only \
+  docker exec -e PGPASSWORD=postgres "$db" \
+    pg_restore -h 127.0.0.1 -U supabase_storage_admin -d postgres --data-only \
     --no-owner --no-privileges --single-transaction --exit-on-error \
     --use-list /tmp/dialektik_sync_replay/storage-proven-identical-ledger-excluded.toc \
     /tmp/dialektik_sync_replay/storage-data.dump
