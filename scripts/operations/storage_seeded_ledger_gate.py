@@ -97,6 +97,18 @@ def exact_compare(source_sql: str, target_copy: str) -> None:
         raise StorageGateError("STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH")
     raise StorageGateError("STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT")
 
+def semantic_migration_compare(source_sql: str, target_copy: str) -> None:
+    """Permit only transient execution timestamps to vary.
+
+    The exact set of 74 migration IDs, names and content hashes MUST match.
+    This does not reproduce the source's audit timestamps in the target.
+    """
+    try:
+        exact_compare(source_sql, target_copy)
+    except StorageGateError as exc:
+        if str(exc) != "STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH":
+            raise
+
 def exclusive_write(path: Path, text: str) -> None:
     if path.exists():
         raise StorageGateError("STORAGE_OUTPUT_EXISTS")
@@ -112,10 +124,13 @@ def main() -> None:
     q=sub.add_parser("compare")
     q.add_argument("--source-sql",type=Path,required=True)
     q.add_argument("--target-copy",type=Path,required=True)
-    x=sub.add_parser("exclude-if-identical")
+    sem=sub.add_parser("compare-semantic")
+    sem.add_argument("--source-sql",type=Path,required=True)
+    sem.add_argument("--target-copy",type=Path,required=True)
+    x=sub.add_parser("exclude-if-compatible")
     x.add_argument("--toc",type=Path,required=True)
     x.add_argument("--out",type=Path,required=True)
-    x.add_argument("--equality-proved",action="store_true")
+    x.add_argument("--schema-identity-proved",action="store_true")
     args=parser.parse_args()
     if args.command=="only-migrations":
         exclusive_write(args.out,source_toc(args.toc.read_text(encoding="utf8"),exclude=False))
@@ -123,11 +138,15 @@ def main() -> None:
     elif args.command=="compare":
         exact_compare(args.source_sql.read_text(encoding="utf8"),args.target_copy.read_text(encoding="utf8"))
         print("STORAGE_MIGRATION_FULL_ROW_EXACT_EQUALITY=PASS")
+    elif args.command=="compare-semantic":
+        semantic_migration_compare(args.source_sql.read_text(encoding="utf8"),args.target_copy.read_text(encoding="utf8"))
+        print("STORAGE_MIGRATION_IMMUTABLE_ID_NAME_HASH_EQUALITY=PASS")
+        print("STORAGE_SOURCE_EXECUTION_TIMESTAMPS_REPLAYED=FALSE")
     else:
-        if not args.equality_proved:
+        if not args.schema_identity_proved:
             raise StorageGateError("STORAGE_EXCLUSION_NOT_AUTHORIZED")
         exclusive_write(args.out,source_toc(args.toc.read_text(encoding="utf8"),exclude=True))
-        print("STORAGE_ONLY_PROVEN_IDENTICAL_LEDGER_EXCLUDED=PASS")
+        print("STORAGE_ONLY_VERIFIED_COMPATIBLE_LEDGER_EXCLUDED=PASS")
 
 if __name__=="__main__":
     try: main()

@@ -154,15 +154,31 @@ if ! docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
   > "$work/derived/storage-local-copy.private" 2> "$work/derived/storage-target.private-error"; then
   echo 'SYNC_STORAGE_LOCAL_LEDGER_COPY=FAIL_REDACTED'; exit 1
 fi
-phase CHECK_SYNC_STORAGE_ALL_74_ROWS_EXACT \
-  python3 scripts/operations/storage_seeded_ledger_gate.py compare \
-    --source-sql "$work/derived/storage-migrations.sql" \
-    --target-copy "$work/derived/storage-local-copy.private"
+# Prefer byte-identical rows; the only reviewed exception is an already
+# proven timestamp-only mismatch. No names, hashes, IDs, row counts may differ.
+if python3 scripts/operations/storage_seeded_ledger_gate.py compare \
+  --source-sql "$work/derived/storage-migrations.sql" \
+  --target-copy "$work/derived/storage-local-copy.private" \
+  > "$work/derived/storage-exact-check.private.log" 2>&1; then
+  echo 'STORAGE_SEEDED_COMPLETE_ROW_EQUALITY=PASS'
+else
+  if ! grep -Fxq \
+    'STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH' \
+    "$work/derived/storage-exact-check.private.log"; then
+    echo 'STORAGE_MIGRATION_SCHEMA_IDENTITY_DIFFERENCE=FAIL_REDACTED'
+    exit 1
+  fi
+  phase CHECK_STORAGE_IMMUTABLE_MIGRATION_ID_NAME_HASH \
+    python3 scripts/operations/storage_seeded_ledger_gate.py compare-semantic \
+      --source-sql "$work/derived/storage-migrations.sql" \
+      --target-copy "$work/derived/storage-local-copy.private"
+  echo 'STORAGE_EXECUTED_AT_METADATA_DIFFERENCE_ACKNOWLEDGED=TRUE'
+fi
 phase PREPARE_SYNC_STORAGE_NON_DUPLICATED_TOC \
-  python3 scripts/operations/storage_seeded_ledger_gate.py exclude-if-identical \
+  python3 scripts/operations/storage_seeded_ledger_gate.py exclude-if-compatible \
     --toc "$work/derived/storage.toc" \
     --out "$work/derived/storage-proven-identical-ledger-excluded.toc" \
-    --equality-proved
+    --schema-identity-proved
 docker cp "$work/derived/storage-proven-identical-ledger-excluded.toc" \
   "$db:/tmp/dialektik_sync_replay/storage-proven-identical-ledger-excluded.toc"
 phase RESTORE_SYNC_MANAGED_storage \

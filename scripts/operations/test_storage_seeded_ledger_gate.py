@@ -1,5 +1,5 @@
 import unittest
-from scripts.operations.storage_seeded_ledger_gate import source_toc, exact_compare, StorageGateError, extract_source_rows
+from scripts.operations.storage_seeded_ledger_gate import source_toc, exact_compare, semantic_migration_compare, StorageGateError, extract_source_rows
 SAMPLE_TOC=(
   "; Archive header\n"
   "3652; 0 0 TABLE DATA storage migrations storage_admin\n"
@@ -37,6 +37,17 @@ class StorageSeededGateTests(unittest.TestCase):
       self.assertEqual(str(exc.exception),category)
       self.assertNotIn("name-74",str(exc.exception))
       self.assertNotIn("hash-74",str(exc.exception))
+  def test_only_timestamp_difference_is_semantically_compatible(self):
+    semantic_migration_compare(SOURCE,"\n".join(ROWS))
+    semantic_migration_compare(SOURCE,"\n".join(
+       ROWS[:-1]+[ROWS[-1].replace("10:00:00","10:00:01")]))
+    for changed in (
+      ROWS[:-1]+[ROWS[-1].replace("hash-74","other-hash")],
+      ROWS[:-1]+[ROWS[-1].replace("name-74","other-name")],
+      ROWS[:-1],
+    ):
+      with self.assertRaises(StorageGateError):
+        semantic_migration_compare(SOURCE,"\n".join(changed))
   def test_mismatched_target_count_or_duplicate_id_fails(self):
     with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]))
     with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]+[ROWS[0]]))
