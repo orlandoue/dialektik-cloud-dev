@@ -188,11 +188,85 @@ phase PREPARE_SYNC_STORAGE_NON_DUPLICATED_TOC \
     --schema-identity-proved
 docker cp "$work/derived/storage-proven-identical-ledger-excluded.toc" \
   "$db:/tmp/dialektik_sync_replay/storage-proven-identical-ledger-excluded.toc"
+
+# Fail closed: ONLY a disconnected disposable Supabase PG17 database.
+[ "$(docker inspect "$db" --format '{{json .NetworkSettings.Networks}}')" = '{}' ] || {
+  echo 'STORAGE_LOCAL_OWNER_NETWORK_ISOLATION=FAIL'
+  exit 1
+}
+# Do not GRANT, SET ROLE or alter managed ownership. The Storage-specific
+# database owner must already have exactly its intended eight tables.
+storage_owner_gate="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 -c "
+SELECT CASE WHEN
+  EXISTS (SELECT 1 FROM pg_roles
+    WHERE rolname='supabase_storage_admin'
+      AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls)
+  AND has_schema_privilege('supabase_storage_admin','storage','USAGE')
+  AND (
+    SELECT count(*)=8 AND bool_and(
+      pg_get_userbyid(relowner)='supabase_storage_admin'
+      AND NOT relforcerowsecurity
+      AND has_table_privilege('supabase_storage_admin',oid,'INSERT')
+    )
+    FROM pg_class
+    WHERE relnamespace='storage'::regnamespace AND relkind IN ('r','p')
+  )
+THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || {
+  echo 'STORAGE_LOCAL_OWNER_PREFLIGHT=FAIL_REDACTED'
+  exit 1
+}
+[ "$storage_owner_gate" = PASS ] || {
+  echo 'STORAGE_LOCAL_OWNER_PREFLIGHT=FAIL_REDACTED'
+  exit 1
+}
+echo 'STORAGE_LOCAL_OWNER_PREFLIGHT=PASS'
+
+# Unix socket authentication inside the isolated PostgreSQL container.
+# Never inject a password, retrieve a managed secret, or use --role with
+# an unauthorised postgres membership assumption.
+storage_identity="$(docker exec "$db" psql -XAt -U supabase_storage_admin \
+  -d postgres -v ON_ERROR_STOP=1 -c 'SELECT current_user;' 2>/dev/null)" || {
+  echo 'STORAGE_LOCAL_OWNER_LOGIN=FAIL_REDACTED'
+  exit 1
+}
+[ "$storage_identity" = supabase_storage_admin ] || {
+  echo 'STORAGE_LOCAL_OWNER_LOGIN=FAIL_REDACTED'
+  exit 1
+}
+echo 'STORAGE_LOCAL_OWNER_LOGIN=PASS'
+
+# Only this managed Storage archive switches database connection identity.
+# Source archive, exact migration ID/name/hash comparison, derived TOC,
+# single-transaction and exit-on-error settings remain unmodified.
 phase RESTORE_SYNC_MANAGED_storage \
-  docker exec "$db" pg_restore -U postgres -d postgres --data-only \
+  docker exec "$db" pg_restore -U supabase_storage_admin -d postgres --data-only \
     --no-owner --no-privileges --single-transaction --exit-on-error \
     --use-list /tmp/dialektik_sync_replay/storage-proven-identical-ledger-excluded.toc \
     /tmp/dialektik_sync_replay/storage-data.dump
+
+# Independently recheck finite source inventory without exposing row content.
+storage_restored="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 -c "
+SELECT CASE WHEN
+  (SELECT count(*) FROM storage.migrations)=74
+  AND (SELECT count(*) FROM storage.buckets)=0
+  AND (SELECT count(*) FROM storage.buckets_analytics)=0
+  AND (SELECT count(*) FROM storage.buckets_vectors)=0
+  AND (SELECT count(*) FROM storage.objects)=0
+  AND (SELECT count(*) FROM storage.s3_multipart_uploads)=0
+  AND (SELECT count(*) FROM storage.s3_multipart_uploads_parts)=0
+  AND (SELECT count(*) FROM storage.vector_indexes)=0
+THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || {
+  echo 'STORAGE_LOCAL_DATA_INTEGRITY=FAIL_REDACTED'
+  exit 1
+}
+[ "$storage_restored" = PASS ] || {
+  echo 'STORAGE_LOCAL_DATA_INTEGRITY=FAIL_REDACTED'
+  exit 1
+}
+echo 'STORAGE_LOCAL_DATA_INTEGRITY=PASS'
+
 for scope in realtime vault; do
   phase "RESTORE_SYNC_MANAGED_$scope" \
     docker exec "$db" pg_restore -U postgres -d postgres --data-only \
