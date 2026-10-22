@@ -109,6 +109,37 @@ def semantic_migration_compare(source_sql: str, target_copy: str) -> None:
         if str(exc) != "STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH":
             raise
 
+def forward_one_migration_compare(source_sql: str, target_copy: str) -> None:
+    """Require exactly one *later* local Storage schema migration.
+
+    74 archived immutable identities MUST be found unchanged among the 75
+    empty local target's migrations. Timestamp values may differ. This is
+    NOT an exact historical restoration of managed migration metadata.
+    """
+    source = extract_source_rows(source_sql)
+    target_lines = target_copy.splitlines()
+    if len(target_lines) != 75 or any(len(line.split("\t")) != EXPECTED_COLUMNS for line in target_lines):
+        raise StorageGateError("STORAGE_FORWARD_COUNT_OR_COLUMNS_MISMATCH")
+    source_by_id={int(row.split("\t")[0]): row.split("\t") for row in source
+                  if row.split("\t")[0].isdigit()}
+    if len(source_by_id) != EXPECTED_ROWS:
+        raise StorageGateError("STORAGE_FORWARD_SOURCE_ID_INVALID")
+    target_by_id={}
+    for row in target_lines:
+        c=row.split("\t")
+        if not c[0].isdigit() or int(c[0]) in target_by_id:
+            raise StorageGateError("STORAGE_FORWARD_TARGET_IDS_INVALID")
+        target_by_id[int(c[0])]=c
+    if len(target_by_id)!=75 or not set(source_by_id).issubset(target_by_id):
+        raise StorageGateError("STORAGE_FORWARD_SOURCE_NOT_SUBSET")
+    if any(source_by_id[k][1:3] != target_by_id[k][1:3] for k in source_by_id):
+        raise StorageGateError("STORAGE_FORWARD_NAME_HASH_CHANGED")
+    extra=set(target_by_id)-set(source_by_id)
+    if len(extra)!=1 or min(extra)<=max(source_by_id):
+        raise StorageGateError("STORAGE_FORWARD_EXTRA_NOT_LATER")
+    # Deliberately ignore executed_at: only future schema-forward metadata
+    # on the *disposable* managed target remains; archived original is intact.
+
 def exclusive_write(path: Path, text: str) -> None:
     if path.exists():
         raise StorageGateError("STORAGE_OUTPUT_EXISTS")
@@ -127,6 +158,9 @@ def main() -> None:
     sem=sub.add_parser("compare-semantic")
     sem.add_argument("--source-sql",type=Path,required=True)
     sem.add_argument("--target-copy",type=Path,required=True)
+    fwd=sub.add_parser("compare-forward-one")
+    fwd.add_argument("--source-sql",type=Path,required=True)
+    fwd.add_argument("--target-copy",type=Path,required=True)
     x=sub.add_parser("exclude-if-compatible")
     x.add_argument("--toc",type=Path,required=True)
     x.add_argument("--out",type=Path,required=True)
@@ -142,6 +176,12 @@ def main() -> None:
         semantic_migration_compare(args.source_sql.read_text(encoding="utf8"),args.target_copy.read_text(encoding="utf8"))
         print("STORAGE_MIGRATION_IMMUTABLE_ID_NAME_HASH_EQUALITY=PASS")
         print("STORAGE_SOURCE_EXECUTION_TIMESTAMPS_REPLAYED=FALSE")
+    elif args.command=="compare-forward-one":
+        forward_one_migration_compare(args.source_sql.read_text(encoding="utf8"),
+                                      args.target_copy.read_text(encoding="utf8"))
+        print("STORAGE_SOURCE_74_IDS_NAMES_HASHES_IN_LOCAL_75=PASS")
+        print("STORAGE_LOCAL_ONLY_LATER_MIGRATION_COUNT=1")
+        print("STORAGE_MANAGED_LEDGER_HISTORICAL_FIDELITY=NOT_EXACT")
     else:
         if not args.schema_identity_proved:
             raise StorageGateError("STORAGE_EXCLUSION_NOT_AUTHORIZED")

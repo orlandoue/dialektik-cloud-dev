@@ -1,5 +1,5 @@
 import unittest
-from scripts.operations.storage_seeded_ledger_gate import source_toc, exact_compare, semantic_migration_compare, StorageGateError, extract_source_rows
+from scripts.operations.storage_seeded_ledger_gate import source_toc, exact_compare, semantic_migration_compare, forward_one_migration_compare, StorageGateError, extract_source_rows
 SAMPLE_TOC=(
   "; Archive header\n"
   "3652; 0 0 TABLE DATA storage migrations storage_admin\n"
@@ -48,7 +48,21 @@ class StorageSeededGateTests(unittest.TestCase):
     ):
       with self.assertRaises(StorageGateError):
         semantic_migration_compare(SOURCE,"\n".join(changed))
+  def test_single_later_managed_migration_allowed_if_original_74_immutable(self):
+    extra="75\tlocal-new-only\tnew-hash\t2026-10-22 13:00:00"
+    forward_one_migration_compare(SOURCE,"\n".join(
+      [x.replace("10:00:00","12:00:00") for x in ROWS]+[extra]))
+    for target in (
+      ROWS+[extra.replace("75\t","20\t")],
+      ROWS+[extra.replace("75\t","70\t")],
+      ROWS+[extra, "76\tother\thash\t2026-10-22 13:00:00"],
+      ROWS[:-1]+[ROWS[-1].replace("hash-74","changed-hash"),extra],
+      ROWS[:-1]+[extra],
+    ):
+      with self.assertRaises(StorageGateError):
+        forward_one_migration_compare(SOURCE,"\n".join(target))
   def test_mismatched_target_count_or_duplicate_id_fails(self):
+
     with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]))
     with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]+[ROWS[0]]))
   def test_malformed_source_and_unexpected_schema_table_fails(self):

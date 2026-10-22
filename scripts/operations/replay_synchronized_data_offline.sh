@@ -183,17 +183,25 @@ if python3 scripts/operations/storage_seeded_ledger_gate.py compare \
   > "$work/derived/storage-exact-check.private.log" 2>&1; then
   echo 'STORAGE_SEEDED_COMPLETE_ROW_EQUALITY=PASS'
 else
-  if ! grep -Fxq \
+  if grep -Fxq \
     'STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH' \
     "$work/derived/storage-exact-check.private.log"; then
-    echo 'STORAGE_MIGRATION_SCHEMA_IDENTITY_DIFFERENCE=FAIL_REDACTED'
-    exit 1
+    phase CHECK_STORAGE_IMMUTABLE_MIGRATION_ID_NAME_HASH \
+      python3 scripts/operations/storage_seeded_ledger_gate.py compare-semantic \
+        --source-sql "$work/derived/storage-migrations.sql" \
+        --target-copy "$work/derived/storage-local-copy.private"
+    echo 'STORAGE_EXECUTED_AT_METADATA_DIFFERENCE_ACKNOWLEDGED=TRUE'
+  else
+    # A newer Supabase CLI has *exactly one* extra Storage migration.
+    # It may be accepted only on this disposable local schema with all
+    # immutable archived IDs, names and hashes unchanged. No source
+    # archive data or original migration row is overwritten.
+    phase CHECK_STORAGE_ONLY_ONE_STRICT_FORWARD_MIGRATION \
+      python3 scripts/operations/storage_seeded_ledger_gate.py compare-forward-one \
+        --source-sql "$work/derived/storage-migrations.sql" \
+        --target-copy "$work/derived/storage-local-copy.private"
+    echo 'STORAGE_LOCAL_FORWARD_SCHEMA_NONIDENTICAL_TO_SOURCE=TRUE'
   fi
-  phase CHECK_STORAGE_IMMUTABLE_MIGRATION_ID_NAME_HASH \
-    python3 scripts/operations/storage_seeded_ledger_gate.py compare-semantic \
-      --source-sql "$work/derived/storage-migrations.sql" \
-      --target-copy "$work/derived/storage-local-copy.private"
-  echo 'STORAGE_EXECUTED_AT_METADATA_DIFFERENCE_ACKNOWLEDGED=TRUE'
 fi
 phase PREPARE_SYNC_STORAGE_NON_DUPLICATED_TOC \
   python3 scripts/operations/storage_seeded_ledger_gate.py exclude-if-compatible \
