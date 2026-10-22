@@ -61,6 +61,30 @@ class StorageSeededGateTests(unittest.TestCase):
     ):
       with self.assertRaises(StorageGateError):
         forward_one_migration_compare(SOURCE,"\n".join(target))
+  def test_forward_failure_categories_are_redacted_and_fail_closed(self):
+    from scripts.operations.storage_seeded_ledger_gate import SAFE_DIFFERENCES
+    extra="75\tlocal-only\tnew-hash\t2026-10-22 13:00:00"
+    cases=(
+      (SOURCE,ROWS,"STORAGE_FORWARD_COUNT_OR_COLUMNS_MISMATCH"),
+      (SOURCE.replace("74\tname-74","invalid-id\tname-74"),ROWS+[extra],
+       "STORAGE_FORWARD_SOURCE_ID_INVALID"),
+      (SOURCE,ROWS+["invalid-id\tlocal-only\tnew-hash\t2026-10-22 13:00:00"],
+       "STORAGE_FORWARD_TARGET_IDS_INVALID"),
+      (SOURCE,ROWS[:-1]+[extra,"76\tnewer\tother\t2026-10-22 13:00:00"],
+       "STORAGE_FORWARD_SOURCE_NOT_SUBSET"),
+      (SOURCE,ROWS[:-1]+[ROWS[-1].replace("hash-74","SECRET_SENTINEL"),extra],
+       "STORAGE_FORWARD_NAME_HASH_CHANGED"),
+      (SOURCE,ROWS+["0\tlocal-only\tnew-hash\t2026-10-22 13:00:00"],
+       "STORAGE_FORWARD_EXTRA_NOT_LATER"),
+    )
+    for source,target,expected in cases:
+      with self.subTest(category=expected):
+        with self.assertRaises(StorageGateError) as outcome:
+          forward_one_migration_compare(source,"\n".join(target))
+        self.assertEqual(str(outcome.exception),expected)
+        self.assertIn(expected,SAFE_DIFFERENCES)
+        for sensitive in ("name-74","hash-74","SECRET_SENTINEL","local-only"):
+          self.assertNotIn(sensitive,str(outcome.exception))
   def test_mismatched_target_count_or_duplicate_id_fails(self):
 
     with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]))
