@@ -1,0 +1,9 @@
+# Storage internal migrations — no unsafe row exclusions
+
+The synchronized real archive [39681303683](https://github.com/orlandoue/dialektik-cloud-dev/actions/runs/39681303683) passed roles, Auth's complete migration equality, Auth data, application migration ledger, public schema and public data, but failed to import managed Storage. DEV read-only inspection shows `storage.migrations` has four columns (`id, name, hash, executed_at`) and 74 rows; Storage buckets and objects each have zero rows.
+
+The new protected preflight extracts only the `storage.migrations` COPY using an independently bounded PostgreSQL TOC. It compares all four original columns of all 74 archive records with the pre-seeded local destination, in sorted order. This comparison is **exact**, including migration timestamps. A single differing timestamp, extra/missing migration, differing id/hash or missing column results in a fail-closed rejection. There is no general deduplication. Only if complete equality passes does the gate comment out exactly one `TABLE DATA storage migrations` entry in a derived TOC (never the source archive). All other Storage data and sequence entries remain, with normal PostgreSQL errors treated as hard failures.
+
+CI tests use exclusively synthetic contents and exercise altered timestamp/hash, missing/duplicate rows, unknown COPY and TOC duplicates. The genuine replay must run only on disconnected disposable PostgreSQL, with an explicitly authorized protected commit. The test never prints migration IDs, SQL, Auth rows or hashes.
+
+**Do not extrapolate a PASS**: if timestamps differ because the managed local template booted at a different time, exact equivalence will fail and the correct recovery route is an equivalent managed template or an explicitly reviewed semantic migration-state policy; not silent skip. Realtime and Vault remain untested on the authentic synchronized archive.

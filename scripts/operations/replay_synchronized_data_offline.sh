@@ -111,9 +111,57 @@ phase RESTORE_SYNC_PUBLIC_DATA \
   docker exec "$db" pg_restore -U postgres -d postgres --data-only \
     --no-owner --no-privileges --single-transaction --exit-on-error \
     /tmp/dialektik_sync_replay/public-full.dump
-# Managed schemas are separately restored; any collision stops with no
-# arbitrary table exclusion, overwrite, TRUNCATE or ON CONFLICT.
-for scope in storage realtime vault; do
+# Supabase local pre-seeds its own Storage migration ledger. An archive COPY
+# of those same internal rows would fail with duplicate key. Never drop, truncate,
+# replace, or silently skip any COPY: prove byte-for-byte equivalence across ALL
+# four original columns (including executed_at), and verify the 74 source rows.
+# Even a harmless-looking timestamp difference is a hard mismatch and NO_GO.
+storage_shape="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c "SELECT string_agg(column_name,',' ORDER BY ordinal_position)
+      FROM information_schema.columns
+      WHERE table_schema='storage' AND table_name='migrations';" 2>/dev/null)" || exit 1
+[ "$storage_shape" = 'id,name,hash,executed_at' ] || {
+  echo 'SYNC_STORAGE_LEDGER_TARGET_SHAPE_MISMATCH'; exit 1;
+}
+echo 'SYNC_STORAGE_LEDGER_TARGET_SHAPE=PASS'
+docker exec "$db" pg_restore --list /tmp/dialektik_sync_replay/storage-data.dump \
+  > "$work/derived/storage.toc" || { echo 'SYNC_STORAGE_ARCHIVE_TOC=FAIL_REDACTED'; exit 1; }
+phase PREPARE_SYNC_STORAGE_MIGRATIONS_ONLY \
+  python3 scripts/operations/storage_seeded_ledger_gate.py only-migrations \
+    --toc "$work/derived/storage.toc" \
+    --out "$work/derived/storage-migrations-only.toc"
+docker cp "$work/derived/storage-migrations-only.toc" \
+  "$db:/tmp/dialektik_sync_replay/storage-migrations-only.toc"
+phase EXTRACT_SYNC_STORAGE_MIGRATIONS_SOURCE \
+  docker exec "$db" pg_restore --data-only \
+    --use-list /tmp/dialektik_sync_replay/storage-migrations-only.toc \
+    --file /tmp/dialektik_sync_replay/storage-migrations.sql \
+    /tmp/dialektik_sync_replay/storage-data.dump
+docker cp "$db:/tmp/dialektik_sync_replay/storage-migrations.sql" \
+  "$work/derived/storage-migrations.sql"
+if ! docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c "COPY (SELECT id, name, hash, executed_at
+       FROM storage.migrations ORDER BY id) TO STDOUT;" \
+  > "$work/derived/storage-local-copy.private" 2> "$work/derived/storage-target.private-error"; then
+  echo 'SYNC_STORAGE_LOCAL_LEDGER_COPY=FAIL_REDACTED'; exit 1
+fi
+phase CHECK_SYNC_STORAGE_ALL_74_ROWS_EXACT \
+  python3 scripts/operations/storage_seeded_ledger_gate.py compare \
+    --source-sql "$work/derived/storage-migrations.sql" \
+    --target-copy "$work/derived/storage-local-copy.private"
+phase PREPARE_SYNC_STORAGE_NON_DUPLICATED_TOC \
+  python3 scripts/operations/storage_seeded_ledger_gate.py exclude-if-identical \
+    --toc "$work/derived/storage.toc" \
+    --out "$work/derived/storage-proven-identical-ledger-excluded.toc" \
+    --equality-proved
+docker cp "$work/derived/storage-proven-identical-ledger-excluded.toc" \
+  "$db:/tmp/dialektik_sync_replay/storage-proven-identical-ledger-excluded.toc"
+phase RESTORE_SYNC_MANAGED_storage \
+  docker exec "$db" pg_restore -U postgres -d postgres --data-only \
+    --no-owner --no-privileges --single-transaction --exit-on-error \
+    --use-list /tmp/dialektik_sync_replay/storage-proven-identical-ledger-excluded.toc \
+    /tmp/dialektik_sync_replay/storage-data.dump
+for scope in realtime vault; do
   phase "RESTORE_SYNC_MANAGED_$scope" \
     docker exec "$db" pg_restore -U postgres -d postgres --data-only \
       --no-owner --no-privileges --single-transaction --exit-on-error \
