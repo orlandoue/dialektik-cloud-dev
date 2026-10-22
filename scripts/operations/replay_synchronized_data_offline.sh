@@ -194,8 +194,10 @@ docker cp "$work/derived/storage-proven-identical-ledger-excluded.toc" \
   echo 'STORAGE_LOCAL_OWNER_NETWORK_ISOLATION=FAIL'
   exit 1
 }
-# Do not GRANT, SET ROLE or alter managed ownership. The Storage-specific
-# database owner must already have exactly its intended eight tables.
+# Do not GRANT, SET ROLE or alter managed ownership. DEV has exactly
+# eight Storage tables; Supabase CLI 2.120.0 local has those exact eight
+# PLUS only two empty Iceberg metadata tables (a known schema superset).
+# The source pg_dump contains no Iceberg rows; never skip source TOC entries.
 storage_owner_gate="$(docker exec "$db" psql -XAt -U postgres -d postgres \
   -v ON_ERROR_STOP=1 -c "
 SELECT CASE WHEN
@@ -204,14 +206,23 @@ SELECT CASE WHEN
       AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls)
   AND has_schema_privilege('supabase_storage_admin','storage','USAGE')
   AND (
-    SELECT count(*)=8 AND bool_and(
-      pg_get_userbyid(relowner)='supabase_storage_admin'
-      AND NOT relforcerowsecurity
-      AND has_table_privilege('supabase_storage_admin',oid,'INSERT')
-    )
+    SELECT count(*)=10
+      AND count(*) FILTER (WHERE relname IN (
+        'buckets','buckets_analytics','buckets_vectors','migrations',
+        'objects','s3_multipart_uploads','s3_multipart_uploads_parts',
+        'vector_indexes'))=8
+      AND count(*) FILTER (WHERE relname IN (
+        'iceberg_namespaces','iceberg_tables'))=2
+      AND bool_and(
+        pg_get_userbyid(relowner)='supabase_storage_admin'
+        AND NOT relforcerowsecurity
+        AND has_table_privilege('supabase_storage_admin',oid,'INSERT')
+      )
     FROM pg_class
     WHERE relnamespace='storage'::regnamespace AND relkind IN ('r','p')
   )
+  AND (SELECT count(*) FROM storage.iceberg_namespaces)=0
+  AND (SELECT count(*) FROM storage.iceberg_tables)=0
 THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || {
   echo 'STORAGE_LOCAL_OWNER_PREFLIGHT=FAIL_REDACTED'
   exit 1
@@ -257,6 +268,8 @@ SELECT CASE WHEN
   AND (SELECT count(*) FROM storage.s3_multipart_uploads)=0
   AND (SELECT count(*) FROM storage.s3_multipart_uploads_parts)=0
   AND (SELECT count(*) FROM storage.vector_indexes)=0
+  AND (SELECT count(*) FROM storage.iceberg_namespaces)=0
+  AND (SELECT count(*) FROM storage.iceberg_tables)=0
 THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || {
   echo 'STORAGE_LOCAL_DATA_INTEGRITY=FAIL_REDACTED'
   exit 1
