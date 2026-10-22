@@ -1,0 +1,90 @@
+name: Stable Supabase 2.121 immutable managed schema lineage (synthetic)
+on:
+  push:
+    branches: [codex/realtime-storage-stable-lineage-20261022]
+permissions:
+  contents: read
+jobs:
+  stable-schema-lineage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Boot disposable local Supabase CLI 2.121.0 (no secrets)
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-lineage"
+          mkdir -p "$w/local" "$w/private"
+          cd "$w/local"
+          npx --yes supabase@2.121.0 init > "$w/private/init.log" 2>&1
+          npx --yes supabase@2.121.0 db start > "$w/private/db.log" 2>&1 || {
+            echo 'SUPABASE_LINEAGE_BOOT=FAIL_REDACTED'; exit 1;
+          }
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db"
+          echo "ISOLATED_LINEAGE_DB=$db" >> "$GITHUB_ENV"
+          echo 'SUPABASE_LINEAGE_BOOT=PASS'
+      - name: Verify exact DEV Realtime migration lineage and append-only Storage metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$ISOLATED_LINEAGE_DB"
+          # Pinned SHA256 digests of READ-ONLY DEV *migration metadata only*.
+          # Never query actual user, article, auth identities or backup archives.
+          verdict="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+          WITH first_storage AS (
+            SELECT id,name,hash FROM storage.migrations ORDER BY id LIMIT 74
+          ), rt AS (
+            SELECT encode(sha256(convert_to(
+              string_agg(version::text,',' ORDER BY version),'UTF8')),'hex') AS signature
+            FROM realtime.schema_migrations
+          ), st AS (
+            SELECT encode(sha256(convert_to(
+              string_agg(id::text||'|'||coalesce(name,'')||'|'||
+                         coalesce(hash::text,''),E'\n' ORDER BY id),'UTF8')),'hex') AS signature
+            FROM first_storage
+          )
+          SELECT
+          CASE WHEN (SELECT count(*) FROM auth.schema_migrations)=82
+                 THEN 'PASS' ELSE 'FAIL' END || '|' ||
+          CASE WHEN (SELECT count(*) FROM realtime.schema_migrations)=91
+                 AND (SELECT signature FROM rt)='9ceb7907da01f30b040b49f8f6e5a171e0b89b88e6df71bf3ed26d60c785bb12'
+                 THEN 'PASS' ELSE 'FAIL' END || '|' ||
+          CASE WHEN (SELECT count(*) FROM storage.migrations)=75
+                 AND (SELECT signature FROM st)='0db4842fd864acef39cf4b4efc1a59178b07f8fe10eaba3a49d4bca40338c3b5'
+                 THEN 'PASS' ELSE 'FAIL' END || '|' ||
+          CASE WHEN (SELECT count(*) FROM storage.iceberg_namespaces)=0
+                 AND (SELECT count(*) FROM storage.iceberg_tables)=0
+                 THEN 'PASS' ELSE 'FAIL' END;" \
+            2>/dev/null)" || {
+              echo 'MANAGED_SCHEMA_LINEAGE_QUERY=FAIL_REDACTED'; exit 1;
+            }
+          IFS='|' read -r auth rt storage iceberg <<< "$verdict"
+          for x in "$auth" "$rt" "$storage" "$iceberg"; do
+            [ "$x" = PASS ] || [ "$x" = FAIL ] || exit 1
+          done
+          echo "STABLE_AUTH_82_VERSIONS=$auth"
+          echo "STABLE_REALTIME_91_EXACT_VERSION_SET=$rt"
+          echo "STABLE_STORAGE_ORIGINAL_74_IMMUTABLE_PREFIX_OF_75=$storage"
+          echo "STABLE_ADDITIONAL_ICEBERG_EMPTY=$iceberg"
+          echo 'REMOTE_DEV_CHANGES=0'
+          echo 'USER_DATA_DOWNLOADED=FALSE'
+      - name: Delete all local containers and metadata
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f "$ISOLATED_LINEAGE_DB" > /dev/null 2>&1 || true
+          if [ -d "$RUNNER_TEMP/dialektik-lineage/local" ]; then
+            (cd "$RUNNER_TEMP/dialektik-lineage/local" &&
+             npx --yes supabase@2.121.0 stop --no-backup > /dev/null 2>&1) || true
+          fi
+          rm -rf -- "$RUNNER_TEMP/dialektik-lineage"
+          echo 'STABLE_LINEAGE_EPHEMERAL_CLEANUP=COMPLETE'
