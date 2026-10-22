@@ -1,0 +1,31 @@
+name: Dialektik GOVUK dual publisher beta preview safety
+on:
+  push:
+    branches: [codex/govuk-housing-live-beta-preview-20261022]
+permissions:
+  contents: read
+jobs:
+  housing-private-beta:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Build and prove private metadata provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --global npm@11.6.2
+          npm ci --no-audit --no-fund
+          npm run build
+          npx vitest run --config services/core-api/vitest.config.mts             services/core-api/test/govuk-housing-live-preview.test.ts             services/core-api/test/rights-gated-metadata-stage.test.ts
+          node --test .github/scripts/govuk-workflow-contract.test.mjs
+          echo 'AUTH_GUARD_AND_RIGHTS_BOUNDS=PASS'
+          echo 'TWO_OFFICIAL_PUBLISHERS_VERIFIED_SYNTHETICALLY=PASS'
+          echo 'DATABASE_WRITES=0'
+          echo 'AUTOMATIC_EVENTS_AND_CONTRADICTIONS=0'

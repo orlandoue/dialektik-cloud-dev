@@ -4,6 +4,7 @@ import { LiveApplicationService } from './live.service.js';
 import { LiveController } from './live.controller.js';
 import { acquireGovUkRshMetadataOnce, acquireGovUkRshPreviewBatch, type GovUkRshPreviewMetadata } from './govuk-product-acquisition.js';
 import { chileTornadoEditorialPreview } from './chile-tornado-evidence-preview.js';
+import { acquireGovUkHousingReadOnlyPreview } from './govuk-housing-live-preview.js';
 
 /**
  * The beta-only GOV.UK preview is NOT a stored Article and does not change the
@@ -67,6 +68,22 @@ export class PrivateBetaLiveController extends LiveController {
       throw new NotFoundException('Editorial occurrence preview disabled.');
     }
     return chileTornadoEditorialPreview();
+  }
+
+  /**
+   * Bounded discovery from two verified GOV.UK issuing agencies.
+   * Editorial metadata only; NOT an Event or detected contradiction.
+   */
+  @Get('preview/govuk/housing')
+  async govUkHousingReadOnlyPreview() {
+    if (process.env.DIALEKTIK_GOVUK_HOUSING_PREVIEW_ENABLED !== 'true') {
+      throw new NotFoundException('Official multi-publisher preview disabled.');
+    }
+    try {
+      return await acquireGovUkHousingReadOnlyPreview();
+    } catch {
+      throw new ServiceUnavailableException('Official multi-publisher preview temporarily unavailable.');
+    }
   }
 
   /** Explicit DEV opt-in; up to seven prequalified official source items, no SQL. */
