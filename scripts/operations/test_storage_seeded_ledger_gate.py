@@ -28,12 +28,12 @@ class StorageSeededGateTests(unittest.TestCase):
        "STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH"),
       (ROWS[:-1]+[ROWS[-1].replace("hash-74","changed")],
        "STORAGE_MIGRATION_NAME_OR_HASH_MISMATCH"),
-      (ROWS[:-1]+[ROWS[-1].replace("74\\tname","75\\tname")],
+      (ROWS[:-1]+[ROWS[-1].replace("74\tname","75\tname")],
        "STORAGE_MIGRATION_ID_SET_MISMATCH"),
       (ROWS[:-1],"STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH"),
     ):
       with self.assertRaises(StorageGateError) as exc:
-        exact_compare(SOURCE,"\\n".join(rows))
+        exact_compare(SOURCE,"\n".join(rows))
       self.assertEqual(str(exc.exception),category)
       self.assertNotIn("name-74",str(exc.exception))
       self.assertNotIn("hash-74",str(exc.exception))
