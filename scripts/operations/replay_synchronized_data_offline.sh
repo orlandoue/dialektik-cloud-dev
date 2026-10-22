@@ -283,7 +283,63 @@ THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || {
 }
 echo 'STORAGE_LOCAL_DATA_INTEGRITY=PASS'
 
-for scope in realtime vault; do
+# Realtime is a different managed schema: its seeded migration history
+# has two columns (version, inserted_at). Do not assume duplicate key means
+# the same version: prove every one of the 91 archived versions is present in
+# the target before omitting exactly that single COPY. Other Realtime rows
+# and objects remain subject to normal atomic pg_restore errors.
+realtime_shape="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+  -v ON_ERROR_STOP=1 -c "
+SELECT string_agg(column_name,',' ORDER BY ordinal_position)
+FROM information_schema.columns
+WHERE table_schema='realtime' AND table_name='schema_migrations';" 2>/dev/null)" || exit 1
+[ "$realtime_shape" = 'version,inserted_at' ] || {
+  echo 'SYNC_REALTIME_LEDGER_SHAPE=FAIL_REDACTED'; exit 1;
+}
+echo 'SYNC_REALTIME_LEDGER_SHAPE=PASS'
+docker exec "$db" pg_restore --list /tmp/dialektik_sync_replay/realtime-data.dump \
+  > "$work/derived/realtime.toc" || {
+    echo 'SYNC_REALTIME_TOC=FAIL_REDACTED'; exit 1;
+  }
+phase SELECT_REALTIME_SINGLE_MIGRATION_TOC \
+  python3 scripts/operations/realtime_seeded_ledger_gate.py select-ledger \
+    --toc "$work/derived/realtime.toc" \
+    --out "$work/derived/realtime-migrations-only.toc"
+docker cp "$work/derived/realtime-migrations-only.toc" \
+  "$db:/tmp/dialektik_sync_replay/realtime-migrations-only.toc"
+phase EXTRACT_REALTIME_ARCHIVED_VERSION_LEDGER \
+  docker exec "$db" pg_restore --data-only \
+    --use-list /tmp/dialektik_sync_replay/realtime-migrations-only.toc \
+    --file /tmp/dialektik_sync_replay/realtime-migrations.sql \
+    /tmp/dialektik_sync_replay/realtime-data.dump
+docker cp "$db:/tmp/dialektik_sync_replay/realtime-migrations.sql" \
+  "$work/derived/realtime-migrations.sql"
+if ! docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+  -c "COPY (SELECT version, inserted_at FROM realtime.schema_migrations
+       ORDER BY version) TO STDOUT;" \
+  > "$work/derived/realtime-local-migrations.private" \
+  2> "$work/derived/realtime-target-error.private"; then
+  echo 'SYNC_REALTIME_LOCAL_MIGRATIONS=FAIL_REDACTED'; exit 1
+fi
+phase CHECK_REALTIME_ALL_91_VERSIONS_EXACT \
+  python3 scripts/operations/realtime_seeded_ledger_gate.py compare \
+    --source-sql "$work/derived/realtime-migrations.sql" \
+    --target-copy "$work/derived/realtime-local-migrations.private"
+phase FILTER_ONLY_PRESEEDED_REALTIME_VERSIONS \
+  python3 scripts/operations/realtime_seeded_ledger_gate.py exclude-if-compatible \
+    --toc "$work/derived/realtime.toc" \
+    --out "$work/derived/realtime-version-ledger-excluded.toc" \
+    --versions-proved
+docker cp "$work/derived/realtime-version-ledger-excluded.toc" \
+  "$db:/tmp/dialektik_sync_replay/realtime-version-ledger-excluded.toc"
+phase RESTORE_SYNC_MANAGED_realtime \
+  docker exec "$db" pg_restore -U postgres -d postgres --data-only \
+    --no-owner --no-privileges --single-transaction --exit-on-error \
+    --use-list /tmp/dialektik_sync_replay/realtime-version-ledger-excluded.toc \
+    /tmp/dialektik_sync_replay/realtime-data.dump
+echo 'REALTIME_SOURCE_MIGRATION_TIMESTAMPS_REPLAYED=FALSE'
+
+for scope in vault; do
   phase "RESTORE_SYNC_MANAGED_$scope" \
     docker exec "$db" pg_restore -U postgres -d postgres --data-only \
       --no-owner --no-privileges --single-transaction --exit-on-error \
