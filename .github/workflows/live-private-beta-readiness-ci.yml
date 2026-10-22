@@ -1,0 +1,54 @@
+name: Deployed private-beta Core launch preflight (read-only)
+on:
+  push:
+    branches: [codex/public-beta-live-smoke-20261022]
+permissions:
+  contents: read
+jobs:
+  live-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 9
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify actual Render Core health and private routes without tokens
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-readonly-beta-smoke"
+          mkdir -p "$w"
+          trap 'rm -rf -- "$w"' EXIT
+          root='https://dialektik-core-dev.onrender.com'
+          code="$(curl -sS --max-time 120 --connect-timeout 15 \
+            --location --max-redirs 0 -o "$w/live.json" \
+            -w '%{http_code}' "$root/health/live")" || {
+              echo 'DEPLOYED_BETA_CORE_LIVE=FAIL_REDACTED'; exit 1
+          }
+          [ "$code" = 200 ] && jq -e '.status=="live"' "$w/live.json" >/dev/null || {
+            echo 'DEPLOYED_BETA_CORE_LIVE=FAIL'; exit 1
+          }
+          echo 'DEPLOYED_BETA_CORE_LIVE=PASS'
+          code="$(curl -sS --max-time 60 --connect-timeout 15 \
+            --location --max-redirs 0 -o "$w/ready.json" \
+            -w '%{http_code}' "$root/health/ready")" || {
+              echo 'DEPLOYED_BETA_CORE_READY=FAIL_REDACTED'; exit 1
+          }
+          [ "$code" = 200 ] && jq -e '.status=="ready"' "$w/ready.json" >/dev/null || {
+            echo 'DEPLOYED_BETA_CORE_READY=FAIL'; exit 1
+          }
+          echo 'DEPLOYED_BETA_CORE_READY=PASS'
+          for route in /v1/live/news /v1/live/preview/govuk /v1/live/preview/events/chile-tornado; do
+            code="$(curl -sS --max-time 30 --connect-timeout 10 \
+              --location --max-redirs 0 -o "$w/denied.json" \
+              -w '%{http_code}' "$root$route")" || {
+                echo 'DEPLOYED_PRIVATE_ROUTE_DENIAL=FAIL_REDACTED'; exit 1
+            }
+            case "$code" in
+              401|403) echo 'DEPLOYED_PRIVATE_ROUTE_DENIAL=PASS';;
+              *) echo 'DEPLOYED_PRIVATE_ROUTE_DENIAL=FAIL'; exit 1;;
+            esac
+          done
+          echo 'NO_AUTH_TOKEN_OR_PERSONAL_DATA_USED=TRUE'
+          echo 'DEPLOY_OR_REMOTE_DB_MUTATIONS=0'
