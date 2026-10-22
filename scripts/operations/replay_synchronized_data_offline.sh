@@ -50,6 +50,16 @@ phase() {
        fi
      done
    fi
+   # Preserve the strict NO_GO outcome while surfacing only one fixed,
+   # non-identifying Storage schema-forward failure category.
+   if [ "$label" = CHECK_STORAGE_ONLY_ONE_STRICT_FORWARD_MIGRATION ]; then
+     for category in STORAGE_FORWARD_COUNT_OR_COLUMNS_MISMATCH STORAGE_FORWARD_SOURCE_ID_INVALID STORAGE_FORWARD_TARGET_IDS_INVALID STORAGE_FORWARD_SOURCE_NOT_SUBSET STORAGE_FORWARD_NAME_HASH_CHANGED STORAGE_FORWARD_EXTRA_NOT_LATER; do
+       if grep -Fxq "STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=$category" "$work/derived/$label.private.log"; then
+         echo "STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=$category"
+         break
+       fi
+     done
+   fi
    exit 1
  fi
 }
