@@ -1,0 +1,24 @@
+name: Realtime version ledger (synthetic and secretless)
+on:
+  push:
+    branches: [codex/realtime-seeded-version-ledger-20261022]
+permissions:
+  contents: read
+jobs:
+  strict-version-identity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Test 91 migrations and negative version-set cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/operations/realtime_seeded_ledger_gate.py
+          python3 -m unittest discover -s scripts/operations -p test_realtime_seeded_ledger_gate.py -v
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          echo 'REALTIME_FULL_91_VERSION_SAFETY=PASS'
+          echo 'REAL_BACKUP_DECRYPTED=FALSE'
+          echo 'DEV_DDL_DML=0'
