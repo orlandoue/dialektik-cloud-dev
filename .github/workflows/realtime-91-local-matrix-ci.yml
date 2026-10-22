@@ -1,0 +1,97 @@
+name: Realtime managed migration compatibility matrix (synthetic local only)
+on:
+  push:
+    branches: [codex/realtime-91-local-compatibility-20261022]
+permissions:
+  contents: read
+jobs:
+  realtime-local-compatibility:
+    strategy:
+      fail-fast: false
+      matrix:
+        cli: ['2.120.0', '2.121.0']
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Start disposable Supabase managed PostgreSQL with pinned CLI
+        shell: bash
+        env:
+          SUPABASE_CLI_PIN: ${{ matrix.cli }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${DATABASE_URL:-}"
+          w="$RUNNER_TEMP/dialektik-realtime-version-$SUPABASE_CLI_PIN"
+          mkdir -p "$w/local" "$w/private"
+          cd "$w/local"
+          npx --yes "supabase@$SUPABASE_CLI_PIN" init > "$w/private/init.log" 2>&1
+          if ! npx --yes "supabase@$SUPABASE_CLI_PIN" db start \
+              > "$w/private/db-start.log" 2>&1; then
+            echo 'LOCAL_REALTIME_DATABASE_BOOT=FAIL_REDACTED'
+            exit 1
+          fi
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db" || exit 1
+          echo "LOCAL_REALTIME_DB=$db" >> "$GITHUB_ENV"
+          echo "LOCAL_REALTIME_WORK=$w" >> "$GITHUB_ENV"
+          echo "LOCAL_REALTIME_CLI_PIN=$SUPABASE_CLI_PIN"
+          echo 'LOCAL_REALTIME_DATABASE_BOOT=PASS'
+      - name: Inventory exact managed migration counts, table shape and image, no source rows
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$LOCAL_REALTIME_DB"
+          c="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+              -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM realtime.schema_migrations;" 2>/dev/null)" || {
+            echo 'LOCAL_REALTIME_MIGRATION_COUNT=ERROR_REDACTED'; exit 1;
+          }
+          case "$c" in
+            ''|*[!0-9]*) echo 'LOCAL_REALTIME_COUNT_FORMAT=FAIL'; exit 1;;
+          esac
+          echo "LOCAL_REALTIME_MIGRATION_COUNT=$c"
+          shape="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+            SELECT string_agg(column_name,',' ORDER BY ordinal_position)
+            FROM information_schema.columns
+            WHERE table_schema='realtime' AND table_name='schema_migrations';" 2>/dev/null)" || exit 1
+          [ "$shape" = 'version,inserted_at' ] || {
+            echo 'LOCAL_REALTIME_LEDGER_SHAPE=FAIL'; exit 1;
+          }
+          echo 'LOCAL_REALTIME_LEDGER_SHAPE=PASS'
+          auth="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "SELECT count(*) FROM auth.schema_migrations;" 2>/dev/null)" || exit 1
+          echo "LOCAL_AUTH_LEDGER_COUNT=$auth"
+          storage="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+            SELECT count(*) FROM pg_class WHERE relnamespace='storage'::regnamespace
+             AND relkind IN ('r','p');" 2>/dev/null)" || exit 1
+          echo "LOCAL_STORAGE_TABLE_COUNT=$storage"
+          # This CI has ZERO access to the authentic backup. A count match
+          # does not prove the 91 exact version identifiers or schema parity.
+          if [ "$c" = 91 ] && [ "$auth" = 82 ] && [ "$storage" = 10 ]; then
+            echo 'LOCAL_REALTIME_91_COUNT_CANDIDATE=PASS_UNVERIFIED_IDENTITIES'
+          else
+            echo 'LOCAL_REALTIME_91_COUNT_CANDIDATE=NO_MATCH'
+          fi
+          echo 'AUTHENTIC_BACKUP_DECRYPTED=FALSE'
+          echo 'REMOTE_SUPABASE_WRITES=0'
+      - name: Remove managed databases and all synthetic files
+        if: always()
+        shell: bash
+        env:
+          SUPABASE_CLI_PIN: ${{ matrix.cli }}
+        run: |
+          docker rm -f "${LOCAL_REALTIME_DB:-not_a_real_container}" > /dev/null 2>&1 || true
+          if [ -d "$RUNNER_TEMP/dialektik-realtime-version-$SUPABASE_CLI_PIN/local" ]; then
+            (cd "$RUNNER_TEMP/dialektik-realtime-version-$SUPABASE_CLI_PIN/local" &&
+             npx --yes "supabase@$SUPABASE_CLI_PIN" stop --no-backup \
+               >/dev/null 2>&1) || true
+          fi
+          rm -rf -- "$RUNNER_TEMP/dialektik-realtime-version-$SUPABASE_CLI_PIN"
+          echo 'LOCAL_REALTIME_CANDIDATE_CLEANUP=COMPLETE'

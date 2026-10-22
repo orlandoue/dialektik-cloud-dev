@@ -1,0 +1,7 @@
+# Supabase managed Realtime compatibility investigation — 22 October 2026
+
+Protected authentic synchronized restore run 39722488573 successfully restored application, Auth and Storage (including a restricted managed local schema superset) and stopped as designed at Realtime: **91 migration versions** in synchronized DEV backup vs **88** versions in the local Supabase CLI 2.120.0 target. All 91 archived values and 88 target values must remain confidential. Counts alone cannot prove identity.
+
+This **synthetic-only** CI creates independent empty local Supabase PostgreSQL instances for two pinned stable CLI releases (2.120.0 and 2.121.0), logs ONLY migration counts and schema column names, then destroys the ephemeral state. No authentic backup, remote PostgreSQL credentials, protected environment, Render deployment or user accounts are used.
+
+If any candidate has 91 versions, it is merely eligible for a protected **full exact-set comparison**, plus Auth 82 count, Storage shape, actual schema parity, isolation and rollback. Do NOT silently create missing 3 Realtime versions or skip archived Realtime rows; the backup's 91 versions might represent actual schema migrations not applied by the local target. Even if source and target counts match, exact migration version values and schema are not yet proven. Do NOT enable ingester, writer LOGIN, 043/044 or public production claims based on this CI.
