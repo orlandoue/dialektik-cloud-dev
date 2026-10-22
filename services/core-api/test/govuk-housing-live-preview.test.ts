@@ -88,6 +88,8 @@ describe('authenticated-only housing preview body and provenance rules', () => {
   it('controller requires a beta bearer guard and explicit operator opt-in', () => {
     const source = readFileSync('services/core-api/src/live/private-beta-live.controller.ts', 'utf8');
     expect(source).toContain('@UseGuards(PrivateBetaAuthGuard)');
+    const request = readFileSync('services/core-api/src/live/govuk-housing-live-preview.ts', 'utf8');
+    expect(request).toContain("'User-Agent': 'DialektikProductMetadata/1.0'");
     expect(source).toContain("@Get('preview/govuk/housing')");
     expect(source).toContain("DIALEKTIK_GOVUK_HOUSING_PREVIEW_ENABLED !== 'true'");
     expect(source).not.toContain('service_role');
