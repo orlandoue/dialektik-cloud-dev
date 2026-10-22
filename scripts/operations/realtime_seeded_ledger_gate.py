@@ -75,7 +75,13 @@ def compare(source_sql:str,target_copy:str)->None:
         b.append((cells[0],cells[1]))
     if len(b)!=EXPECTED_ROWS or len({v for v,_ in b})!=EXPECTED_ROWS:
         raise RealtimeGateError("REALTIME_TARGET_VERSION_COUNT_MISMATCH")
-    if {v for v,_ in a}!={v for v,_ in b}:
+    source_versions_set={v for v,_ in a}
+    target_versions_set={v for v,_ in b}
+    if source_versions_set != target_versions_set:
+        # Counts only, bounded by 91; no migration version or timestamp emitted.
+        print("REALTIME_VERSION_DIFF_CATEGORY=DIFFERENT_VERSION_SET",file=sys.stderr)
+        print(f"REALTIME_SOURCE_ONLY_VERSION_COUNT={len(source_versions_set-target_versions_set)}",file=sys.stderr)
+        print(f"REALTIME_TARGET_ONLY_VERSION_COUNT={len(target_versions_set-source_versions_set)}",file=sys.stderr)
         raise RealtimeGateError("REALTIME_MIGRATION_VERSION_SET_MISMATCH")
 
 def write_exclusive(dest:Path, text:str)->None:
