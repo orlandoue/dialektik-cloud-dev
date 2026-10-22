@@ -20,8 +20,17 @@ phase() {
  else
    echo "$label=FAIL_REDACTED"
    if [ "$label" = CHECK_SYNC_STORAGE_ALL_74_ROWS_EXACT ]; then
-     # Emit only a fixed classifier name, never a storage ledger value.
-     grep -E '^STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=(STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH|STORAGE_TARGET_DUPLICATE_ID|STORAGE_MIGRATION_ID_SET_MISMATCH|STORAGE_MIGRATION_NAME_OR_HASH_MISMATCH|STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH|STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT|STORAGE_COPY_SIZE_OR_TERMINATOR_INVALID)
+     # Only print fixed category strings, not any private log content.
+     for category in STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH STORAGE_TARGET_DUPLICATE_ID STORAGE_MIGRATION_ID_SET_MISMATCH STORAGE_MIGRATION_NAME_OR_HASH_MISMATCH STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH STORAGE_MIGRATIONS_NOT_BYTE_EQUIVALENT STORAGE_COPY_SIZE_OR_TERMINATOR_INVALID; do
+       if grep -Fxq "STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=$category" "$work/derived/$label.private.log"; then
+         echo "STORAGE_MIGRATION_SAFE_MISMATCH_CLASS=$category"
+         break
+       fi
+     done
+   fi
+   exit 1
+ fi
+}
 test -s "$work/old/clear/roles.sql" || exit 1
 test -s "$work/new/verified/public-full.snapshot.dump" || exit 1
 phase PREPARE_SYNC_GLOBAL_ROLES \
