@@ -1,0 +1,3 @@
+## Realtime 91-version compatibility gate
+
+The genuine synchronized recovery has PASS for public, Auth (82 migrations), data ledger and Storage; the current Supabase CLI 2.120.0 local target has 88 Realtime versions while the authentic source has 91. This synthetic workflow checks a fresh local Supabase CLI 2.121.0 install without authentic ciphertext, credentials or DEV writes. Equal counts are a necessary but insufficient prerequisite: the existing protected full 91-version set equality, managed schema contracts, Auth API, ACL/RLS and rollback gates remain mandatory. No migration versions are fabricated, inserted or skipped. No news ingestion is enabled.
