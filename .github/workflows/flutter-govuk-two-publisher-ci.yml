@@ -1,0 +1,76 @@
+name: Flutter DEV two GOVUK issuers - beta news contract
+on:
+  push:
+    branches: [codex/flutter-govuk-two-publisher-20261022]
+    paths:
+      - 'app/**'
+      - '.github/workflows/flutter-govuk-two-publisher-ci.yml'
+permissions:
+  contents: read
+jobs:
+  dart:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Validate Flutter formatting
+        run: dart format --output=none --set-exit-if-changed lib/features/live/data/govuk_preview.dart lib/features/consumer/data/public_api_client.dart lib/app/dialektik_app.dart lib/features/live/presentation/live_news_screens.dart test/live/govuk_preview_test.dart
+      - name: Analyze Dart and assert beta provenance
+        run: |
+          flutter analyze --no-pub
+          flutter test --no-pub test/live/govuk_preview_test.dart
+          dart run tool/check_design_invariants.dart
+  apk-debug:
+    needs: dart
+    if: ${{ vars.DIALEKTIK_SUPABASE_PUBLISHABLE_KEY != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: app
+    env:
+      DIALEKTIK_SUPABASE_PUBLISHABLE_KEY: ${{ vars.DIALEKTIK_SUPABASE_PUBLISHABLE_KEY }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - name: Build authorized private-beta debug Android
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$DIALEKTIK_SUPABASE_PUBLISHABLE_KEY" in sb_publishable_*) ;; *) exit 1 ;; esac
+          flutter build apk --debug --no-pub \
+            --dart-define=DIALEKTIK_ENVIRONMENT=production \
+            --dart-define=DIALEKTIK_API_BASE_URL=https://dialektik-core-dev.onrender.com \
+            --dart-define=DIALEKTIK_SUPABASE_URL=https://vclsswwfhljczxgnsciq.supabase.co \
+            --dart-define="DIALEKTIK_SUPABASE_PUBLISHABLE_KEY=$DIALEKTIK_SUPABASE_PUBLISHABLE_KEY" \
+            --dart-define=DIALEKTIK_NEWS_READER_ENABLED=true \
+            --dart-define=DIALEKTIK_GOVUK_PREVIEW_ENABLED=true \
+            --dart-define=DIALEKTIK_GOVUK_HOUSING_PREVIEW_ENABLED=true \
+            --dart-define=DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED=true \
+            --dart-define=DIALEKTIK_SEMANTIC_MODE=disabled \
+            --dart-define=DIALEKTIK_OWNERSHIP_MODE=corporate
+          sha256sum build/app/outputs/flutter-apk/app-debug.apk
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dialektik-govuk-two-publisher-beta-debug-${{ github.sha }}
+          path: app/build/app/outputs/flutter-apk/app-debug.apk
+          retention-days: 14
+          if-no-files-found: error
