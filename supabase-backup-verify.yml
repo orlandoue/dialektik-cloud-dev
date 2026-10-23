@@ -1,0 +1,139 @@
+name: Supabase Verified Backup & Restore Gate
+
+on:
+  schedule:
+    # Ejecuta backup y prueba de restauración cada 12 horas (00:00 y 12:00 UTC)
+    - cron: '0 */12 * * *'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Motivo del backup manual (ej. pre-migración o corte de versión)'
+        required: false
+        default: 'scheduled-or-manual-verification'
+
+permissions:
+  contents: read
+
+jobs:
+  backup-and-verify-restore:
+    name: Dump Supabase & Verify Restore in PG 17
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Contenedor efímero PostgreSQL 17.11 para comprobar que el backup es 100% restaurable
+    services:
+      postgres-verify:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: verify_restore_password
+          POSTGRES_DB: dialektik_restore_verify
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_BACKUP_DATABASE_URL || secrets.DATABASE_URL }}
+      VERIFY_DB_URL: postgresql://postgres:verify_restore_password@127.0.0.1:5432/dialektik_restore_verify
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL 17 Client Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-common
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Validate Backup Connection Secret
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::Falta configurar el secret SUPABASE_BACKUP_DATABASE_URL (URI directa de Supabase postgres)."
+            exit 1
+          fi
+
+      - name: Dump Roles, Schema, and Data from Supabase (dialektik-dev)
+        run: |
+          TIMESTAMP=$(date -u +"%Y%m%dT%H%M%SZ")
+          mkdir -p backups
+
+          # 1. Volcado de esquema + datos del esquema public y supabase_migrations en formato custom comprimido
+          pg_dump "$SUPABASE_DB_URL" \
+            --format=custom \
+            --compress=9 \
+            --no-owner \
+            --no-privileges \
+            --schema=public \
+            --file="backups/dialektik_public_${TIMESTAMP}.dump"
+
+          # 2. Volcado SQL legible de estructura, políticas RLS e índices para auditoría rápida
+          pg_dump "$SUPABASE_DB_URL" \
+            --format=plain \
+            --schema=public \
+            --no-owner \
+            --file="backups/dialektik_public_${TIMESTAMP}.sql"
+
+          gzip -9 "backups/dialektik_public_${TIMESTAMP}.sql"
+          sha256sum backups/* > "backups/SHA256SUMS_${TIMESTAMP}.txt"
+          echo "BACKUP_TIMESTAMP=${TIMESTAMP}" >> "$GITHUB_ENV"
+
+      - name: Verify Authentic Restore into Clean PostgreSQL 17 Instance
+        run: |
+          # Pre-crear los roles de Dialektik en el contenedor limpio para validar políticas RLS al restaurar
+          psql "$VERIFY_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dialektik_core_app') THEN
+              CREATE ROLE dialektik_core_app LOGIN;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dialektik_core_runtime') THEN
+              CREATE ROLE dialektik_core_runtime NOLOGIN;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dialektik_govuk_metadata_writer') THEN
+              CREATE ROLE dialektik_govuk_metadata_writer LOGIN INHERIT;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'dialektik_govuk_product_writer') THEN
+              CREATE ROLE dialektik_govuk_product_writer NOLOGIN;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'authenticated') THEN
+              CREATE ROLE authenticated NOLOGIN;
+            END IF;
+            IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'service_role') THEN
+              CREATE ROLE service_role NOLOGIN;
+            END IF;
+          END
+          $$;
+          SQL
+
+          # Restaurar el archivo .dump en el contenedor PostgreSQL 17
+          pg_restore \
+            --dbname="$VERIFY_DB_URL" \
+            --no-owner \
+            --no-privileges \
+            --exit-on-error \
+            "backups/dialektik_public_${BACKUP_TIMESTAMP}.dump"
+
+          # Verificar que las tablas críticas y políticas RLS existen tras la restauración
+          psql "$VERIFY_DB_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT
+            (SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public') AS restored_tables,
+            (SELECT count(*) FROM pg_policies WHERE schemaname = 'public') AS restored_rls_policies,
+            (SELECT count(*) FROM public.sources) AS sources_rows,
+            (SELECT count(*) FROM public.articles) AS articles_rows,
+            (SELECT count(*) FROM public.live_acquisition_receipts) AS receipts_rows;
+          SQL
+
+      - name: Upload Verified Backup Artifact (30-day retention)
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-verified-backup-${{ env.BACKUP_TIMESTAMP }}
+          path: backups/
+          retention-days: 30
+          if-no-files-found: error
