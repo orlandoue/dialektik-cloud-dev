@@ -48,7 +48,7 @@ export function loadCoreApiConfig(
   env: Record<string, string | undefined> = process.env,
 ): CoreApiCloudConfig {
   const nodeEnv = env.NODE_ENV || 'development';
-  const allowCloudLiveIngestion = env.ALLOW_CLOUD_LIVE_INGESTION === 'true';
+  const allowCloudLiveIngestion = env.ALLOW_CLOUD_LIVE_INGESTION === 'true'; || nodeEnv === 'production';
   const requestedMode = (env.SEMANTIC_MODE ||
     (nodeEnv === 'production' ? 'disabled' : 'fixture')) as SemanticMode;
 
