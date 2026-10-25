@@ -206,6 +206,21 @@ export class PublicApiRepository {
       join categories category_row on category_row.id = event_row.category_id
       where event_row.merged_into is null
         and category_row.is_active
+        -- Fail closed: a published Event without a published active Position
+        -- cannot be represented by eventCard(). Never expose it in the feed.
+        and (
+          event_row.analysis_state = 'ANALYSIS_PENDING'
+          or (
+            event_row.analysis_state = 'PUBLISHED'
+            and exists (
+              select 1
+              from positions integrity_position
+              where integrity_position.event_id = event_row.id
+                and integrity_position.publication_state = 'published'
+                and integrity_position.status = 'active'
+            )
+          )
+        )
         ${categoryClause}
         ${topicClause}
         ${cursorClause}
