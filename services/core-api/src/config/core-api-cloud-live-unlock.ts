@@ -110,7 +110,9 @@ export function loadCoreApiConfig(
     semanticMode: requestedMode,
     allowCloudLiveIngestion,
     databaseUrl: env.DATABASE_URL || '',
-    liveWriterDatabaseUrl: env.LIVE_WRITER_DATABASE_URL,
+    ...(env.LIVE_WRITER_DATABASE_URL === undefined
+      ? {}
+      : { liveWriterDatabaseUrl: env.LIVE_WRITER_DATABASE_URL }),
   };
 }
 
