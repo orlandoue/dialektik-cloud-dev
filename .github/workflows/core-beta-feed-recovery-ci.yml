@@ -1,0 +1,31 @@
+name: Core beta feed invariant recovery
+on:
+  push:
+    branches: [codex/fix-beta-feed-500-20261025]
+    paths:
+      - 'services/core-api/**'
+      - 'packages/database/**'
+      - 'package*.json'
+      - '.github/workflows/core-beta-feed-recovery-ci.yml'
+  pull_request:
+    paths:
+      - 'services/core-api/**'
+      - 'packages/database/**'
+      - 'package*.json'
+      - '.github/workflows/core-beta-feed-recovery-ci.yml'
+permissions:
+  contents: read
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: node --test services/core-api/test/public-feed-no-half-published.test.mjs
