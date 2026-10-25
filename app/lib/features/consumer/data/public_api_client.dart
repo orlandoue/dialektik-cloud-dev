@@ -296,6 +296,13 @@ final class PublicApiClient
     refresh: refresh,
     requestToken: null,
   );
+  /// Live official two-publisher beta preview, still without Article persistence.
+  Future<GovUkPreview> loadGovUkHousingPreview({bool refresh = false}) => _get(
+    '/live/preview/govuk/housing',
+    decoder: GovUkPreview.fromJson,
+    refresh: refresh,
+    requestToken: null,
+  );
 
   @override
   Future<LiveNewsPageDto> listLiveNews({

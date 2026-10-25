@@ -183,14 +183,23 @@ final class _DialektikAppState extends State<DialektikApp> {
                   liveRepository.loadChileTornadoEventPreview(refresh: refresh)
             : null,
         govUkPreviewLoader:
-            const bool.fromEnvironment(
+            (const bool.fromEnvironment(
                   'DIALEKTIK_GOVUK_PREVIEW_ENABLED',
                   defaultValue: false,
-                ) &&
+                ) ||
+                const bool.fromEnvironment(
+                  'DIALEKTIK_GOVUK_HOUSING_PREVIEW_ENABLED',
+                  defaultValue: false,
+                )) &&
                 widget.readOnlyNewsReaderEnabled &&
                 liveRepository is PublicApiClient
             ? ({bool refresh = false}) =>
-                  liveRepository.loadGovUkPreview(refresh: refresh)
+                  const bool.fromEnvironment(
+                        'DIALEKTIK_GOVUK_HOUSING_PREVIEW_ENABLED',
+                        defaultValue: false,
+                      )
+                  ? liveRepository.loadGovUkHousingPreview(refresh: refresh)
+                  : liveRepository.loadGovUkPreview(refresh: refresh)
             : null,
         externalLinkOpener: widget.externalLinkOpener,
         semanticRepository:

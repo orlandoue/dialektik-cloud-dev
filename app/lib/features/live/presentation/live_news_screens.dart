@@ -342,7 +342,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: <Widget>[
                                 Text(
-                                  '${items.length} publicaciones verificadas · Regulator of Social Housing',
+                                  '${items.length} publicaciones verificadas · ${snapshot.data!.multiPublisher ? '2 organismos oficiales' : 'Regulator of Social Housing'}',
                                   style: Theme.of(
                                     context,
                                   ).textTheme.labelMedium,
@@ -360,7 +360,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                                       ).textTheme.titleSmall,
                                     ),
                                     subtitle: Text(
-                                      'Publicado ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year} · Abrir fuente',
+                                      '${article.publisher} · Publicado ${article.publishedAt.toLocal().day}/${article.publishedAt.toLocal().month}/${article.publishedAt.toLocal().year} · Abrir fuente',
                                     ),
                                     trailing: const Icon(
                                       Icons.open_in_new,
