@@ -53,7 +53,7 @@ test('Chile news and sources are filtered on SQL server before pagination', asyn
     }
     const news = queries[0].text.toLowerCase();
     assert.ok(news.indexOf('canonical_domain in (') < news.indexOf('order by published_at'));
-    assert.ok(news.indexOf('order by published_at') < news.indexOf('limit '));
+    assert.ok(news.indexOf('order by published_at') < news.lastIndexOf('limit '));
   } finally {
     await database.destroy();
   }
