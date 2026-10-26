@@ -144,7 +144,9 @@ final class _MobileHeader extends StatelessWidget {
           (ConsumerNavigationAction action) => const <String>{
             'Actualidad',
             'Acontecimientos',
-            'Fuentes,' 'Contradicciones', 'Historias',,
+            'Fuentes',
+            'Contradicciones',
+            'Historias',
           }.contains(action.label),
         )
         .toList(growable: false);
