@@ -54,6 +54,12 @@ try{
  result.robotsHttpStatus=res.status;
  if(res.status===200 && res.url===result.robotsUrl) {
    const text=(await res.text()).slice(0,64000);
+   if (/^\s*<!doctype html|^\s*<html/i.test(text) ||
+       res.headers.get('content-type')?.includes('text/html')) {
+     // INE returned HTTP 200 with a rendered 404 error page at /robots.txt.
+     // Never reinterpret that document as an authorizing robots policy.
+     result.robotStatus='ROBOTS_SOFT_404_HTML';
+   } else {
    // Only print PUBLIC directive names/paths to explain parser uncertainty.
    // This does not acquire, persist, or expose article content.
    const diagnosticLines=text.split(/\r?\n/).map(x=>x.split('#')[0].trim()).filter(Boolean);
@@ -65,6 +71,7 @@ try{
       const head=await request(result.newsroomUrl,'HEAD');
       result.newsroomHttpStatus=head.status;
       result.newsroomStatus=head.status===200&&head.url===result.newsroomUrl?'HEAD_OK':'UNVERIFIED';
+   }
    }
  } else result.robotStatus='ROBOTS_NOT_FETCHED';
 }catch(e){result.robotStatus='UNAVAILABLE_OR_UNVERIFIED';result.errorName=e?.name||'unknown';}
