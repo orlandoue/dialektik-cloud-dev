@@ -1008,7 +1008,7 @@ final class LiveNewsCard extends StatelessWidget {
                 color: context.surfaceColors.muted,
               ),
             ),
-            if (article.modifiedAt != null) ...<Widget>[
+            if (article.modifiedAt != null && !article.modifiedAt!.isAtSameMomentAs(article.publishedAt)) ...<Widget>[
               const SizedBox(height: DialektikSpacing.space3),
               Text('Actualizada · ${liveLocalDate(article.modifiedAt!)}'),
             ],
