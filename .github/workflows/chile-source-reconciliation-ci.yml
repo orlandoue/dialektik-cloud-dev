@@ -1,0 +1,33 @@
+name: Chile staged source reconciliation audit (no credentials)
+on:
+  push:
+    branches: [codex/chile-source-origin-audit-20261026]
+  pull_request:
+    paths:
+      - '.github/scripts/chile-source-reconciliation*'
+      - '.github/workflows/chile-source-reconciliation-ci.yml'
+      - 'docs/operations/source-audit/**'
+permissions:
+  contents: read
+jobs:
+  audit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: node --test .github/scripts/chile-source-reconciliation.test.mjs
+      - name: Generate immutable, no-network audit report
+        run: |
+          node .github/scripts/chile-source-reconciliation.mjs
+          cat artifacts/chile-source-audit.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chile-staged-source-reconciliation
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: error
