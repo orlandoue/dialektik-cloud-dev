@@ -5,6 +5,7 @@ import { LiveController } from './live.controller.js';
 import { acquireGovUkRshMetadataOnce, acquireGovUkRshPreviewBatch, type GovUkRshPreviewMetadata } from './govuk-product-acquisition.js';
 import { chileTornadoEditorialPreview } from './chile-tornado-evidence-preview.js';
 import { acquireGovUkHousingReadOnlyPreview } from './govuk-housing-live-preview.js';
+import { latestChileUsgsObservations } from './chile-usgs-seismic-observations.js';
 
 /**
  * The beta-only GOV.UK preview is NOT a stored Article and does not change the
@@ -56,6 +57,21 @@ export function toGovUkReadOnlyPreviewItems(items: readonly GovUkRshPreviewMetad
 export class PrivateBetaLiveController extends LiveController {
   constructor(@Inject(LiveApplicationService) service: LiveApplicationService) {
     super(service);
+  }
+
+  /**
+   * Authentic, public-domain USGS numerical observations for the Chile region.
+   * Unrelated to journalistic /live/news and semantic contradiction publication.
+   * One canonical USGS id corresponds to one observed seismic occurrence.
+   * Auth required by class guard; no SQL or extra rights assertions.
+   */
+  @Get('observations/chile/seismic')
+  async chileSeismicObservations() {
+    try {
+      return await latestChileUsgsObservations();
+    } catch {
+      throw new ServiceUnavailableException('Official seismic observations temporarily unavailable.');
+    }
   }
 
   /**

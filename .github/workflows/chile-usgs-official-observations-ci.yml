@@ -1,0 +1,55 @@
+name: Chile USGS authentic observations — Core and live-source smoke
+on:
+  push:
+    branches: [codex/usgs-chile-observation-beta-20261026]
+  pull_request:
+    paths:
+      - 'services/core-api/**'
+      - '.github/workflows/chile-usgs-official-observations-ci.yml'
+permissions:
+  contents: read
+jobs:
+  core-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: node --test services/core-api/test/chile-usgs-seismic-observations.test.mjs
+  official-live-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Exercise actual official feed with no database or user token
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {fetchChileUsgsObservations} from './services/core-api/dist/live/chile-usgs-seismic-observations.js';
+          const result=await fetchChileUsgsObservations();
+          if(result.mode!=='OFFICIAL_LIVE_SEISMIC_OBSERVATIONS' ||
+             result.items.length<1 || result.items.length>30 ||
+             result.persisted || result.contradictions_generated)
+             throw Error('OFFICIAL_LIVE_OBSERVATIONS_PROOF_INVALID');
+          if(!result.items.every(e=>e.canonical_url==='https://earthquake.usgs.gov/earthquakes/eventpage/'+e.observation_id))
+             throw Error('OFFICIAL_SOURCE_SPOOFED');
+          console.log('USGS_SOURCE=OFFICIAL_LIVE_GEOJSON');
+          console.log('CHILE_OBSERVATION_COUNT='+result.items.length);
+          console.log('MOST_RECENT_OBSERVED_AT='+result.items[0].occurred_at);
+          console.log('OBSERVATION_ID='+result.items[0].observation_id);
+          console.log('SQL_WRITES=0');
+          console.log('CONTRADICTIONS_GENERATED=0');
+          NODE
