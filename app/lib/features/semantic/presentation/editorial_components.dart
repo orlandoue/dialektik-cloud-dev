@@ -628,7 +628,7 @@ final class SourceIdentity extends StatelessWidget {
     }
     return Row(
       mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.center,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         badge,
         const SizedBox(width: DialektikSpacing.space4),
