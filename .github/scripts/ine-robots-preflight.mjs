@@ -54,6 +54,11 @@ try{
  result.robotsHttpStatus=res.status;
  if(res.status===200 && res.url===result.robotsUrl) {
    const text=(await res.text()).slice(0,64000);
+   // Only print PUBLIC directive names/paths to explain parser uncertainty.
+   // This does not acquire, persist, or expose article content.
+   const diagnosticLines=text.split(/\r?\n/).map(x=>x.split('#')[0].trim()).filter(Boolean);
+   result.robotsDirectives=[...new Set(diagnosticLines.map(x=>x.split(':')[0].trim().toLowerCase()))].slice(0,30);
+   result.robotsTargetLines=diagnosticLines.filter(x=>/^(user-agent|allow|disallow|crawl-delay)\s*:/i.test(x)).slice(0,45);
    const decision=allowedByRobots(text,'/sala-de-prensa/noticias');
    result.robotStatus=decision===true?'ALLOWED_AT_PREFLIGHT':decision===false?'DISALLOWED':'REQUIRES_MANUAL_PARSER_REVIEW';
    if(decision===true){
