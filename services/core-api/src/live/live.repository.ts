@@ -1,5 +1,6 @@
 import type { Database, Ulid } from '@dialektik/database';
 import { sql, type Kysely } from 'kysely';
+import { publisherDomainsForMarket, type PublisherMarket } from './live.publisher-market.js';
 
 export interface LiveReadRow {
   id: Ulid;
@@ -42,6 +43,7 @@ export interface LiveNewsQuery {
   readonly sourceId?: Ulid;
   readonly publishedFrom?: Date;
   readonly publishedTo?: Date;
+  readonly market?: PublisherMarket;
 }
 
 export class LiveRepository {
@@ -72,6 +74,9 @@ export class LiveRepository {
   }
 
   async list(query: LiveNewsQuery): Promise<LiveReadRow[]> {
+    const domains = publisherDomainsForMarket(query.market ?? 'CL');
+    if (domains.length === 0) return [];
+    const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
     const cursor =
       query.cursor === undefined
         ? sql`true`
@@ -79,6 +84,7 @@ export class LiveRepository {
       (select published_at, id from news where id = ${query.cursor})`;
     const result = await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news
       where ${cursor}
+        and canonical_domain in (${marketFilter})
         and ${query.q === undefined ? sql`true` : sql`position(lower(${query.q}) in lower(headline || ' ' || coalesce(excerpt, ''))) > 0`}
         and ${query.sourceId === undefined ? sql`true` : sql`source_id = ${query.sourceId}`}
         and ${query.publishedFrom === undefined ? sql`true` : sql`published_at >= ${query.publishedFrom}`}
@@ -87,20 +93,28 @@ export class LiveRepository {
     return result.rows;
   }
 
-  async article(id: Ulid): Promise<LiveReadRow | undefined> {
+  async article(id: Ulid, market: PublisherMarket = 'CL'): Promise<LiveReadRow | undefined> {
+    const domains = publisherDomainsForMarket(market);
+    if (domains.length === 0) return undefined;
+    const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
     const result =
-      await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news where id = ${id}`.execute(
+      await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news
+        where id = ${id} and canonical_domain in (${marketFilter})`.execute(
         this.database,
       );
     return result.rows[0];
   }
 
-  async sources(id?: Ulid): Promise<LiveSourceReadRow[]> {
+  async sources(id?: Ulid, market: PublisherMarket = 'CL'): Promise<LiveSourceReadRow[]> {
+    const domains = publisherDomainsForMarket(market);
+    if (domains.length === 0) return [];
+    const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
     const result =
       await sql<LiveSourceReadRow>`select s.id, s.name, s.source_type, s.canonical_domain, p.policy
       from sources s join live_source_policies p on p.source_id = s.id and p.id =
         (select id from live_source_policies where source_id = s.id order by recorded_at desc, id desc limit 1)
       where s.origin = 'LIVE_REAL' and p.active = true and p.rights_class = 'LIVE_READY'
+        and s.canonical_domain in (${marketFilter})
         and ${id === undefined ? sql`true` : sql`s.id = ${id}`}
       order by s.name, s.id`.execute(this.database);
     return result.rows;
