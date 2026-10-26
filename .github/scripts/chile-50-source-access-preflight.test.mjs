@@ -47,3 +47,19 @@ test('HTML soft 404 and redirects never count as authorization',async()=>{
  assert.equal(soft.permissionGranted,false);
  assert.equal(redirect.permissionGranted,false);
 });
+
+test('same-site www redirect reads robots but still does not grant permission',async()=>{
+  const item=validateInventory(catalog)[0];
+  let calls=0;
+  const result=await probeRobots(item,async(url)=>{
+    calls++;
+    if(calls===1)return new Response(null,{status:301,
+      headers:{location:'https://www.'+item.domain+'/robots.txt'}});
+    assert.equal(url,'https://www.'+item.domain+'/robots.txt');
+    return new Response('User-agent: *\nDisallow: /restricted',{
+      status:200,headers:{'content-type':'text/plain'}});
+  });
+  assert.equal(calls,2);
+  assert.equal(result.robotsStatus,'TEXT_RULES_REQUIRE_MANUAL_REVIEW');
+  assert.equal(result.permissionGranted,false);
+});
