@@ -28,10 +28,13 @@ test('feed excludes invalid published Events before pagination and projection', 
     const sql = statements[0].replace(/\s+/g, ' ').toLowerCase();
     assert.match(sql, /event_row\.analysis_state = 'analysis_pending'/);
     assert.match(sql, /event_row\.analysis_state = 'published'/);
-    assert.match(sql, /and exists \( select 1 from positions integrity_position/);
-    assert.match(sql, /integrity_position\.publication_state = 'published'/);
-    assert.match(sql, /integrity_position\.status = 'active'/);
-    assert.ok(sql.indexOf('and exists ( select 1 from positions integrity_position') < sql.indexOf('order by'));
+    assert.match(sql, /exists \( select 1 from articles grounded_article/);
+    assert.match(sql, /grounded_article\.origin = 'live_real'/);
+    assert.match(sql, /exists \( select 1 from positions grounded_position/);
+    assert.match(sql, /not exists \( select 1 from positions invalid_position/);
+    assert.match(sql, /formed_relation\.confirmed_at is not null/);
+    assert.match(sql, /approved_evidence\.publication_state = 'published'/);
+    assert.ok(sql.indexOf('grounded_article.origin') < sql.indexOf('order by'));
     assert.ok(sql.indexOf('order by') < sql.indexOf('limit'));
   } finally {
     await database.destroy();
