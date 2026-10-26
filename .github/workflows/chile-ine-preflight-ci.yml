@@ -1,0 +1,28 @@
+name: Chile INE source access preflight (read-only, one-shot)
+on:
+  push:
+    branches: [codex/chile-source-origin-audit-20261026]
+    paths:
+      - '.github/scripts/ine-robots-preflight.mjs'
+      - '.github/workflows/chile-ine-preflight-ci.yml'
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - name: Validate INE robots before probing newsroom HEAD
+        run: |
+          node .github/scripts/ine-robots-preflight.mjs | tee "$GITHUB_STEP_SUMMARY"
+      - name: No DB activity or newsroom content copied
+        run: |
+          echo 'INE_METADATA_ACQUISITION=OFF'
+          echo 'INE_POSTGRES_WRITES=0'
+          echo 'INE_ARTICLES_PUBLISHED=0'
