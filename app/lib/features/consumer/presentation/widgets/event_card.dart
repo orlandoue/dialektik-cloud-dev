@@ -13,9 +13,14 @@ final class EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ConsumerStrings strings = ConsumerStrings.of(context);
-    final String state = event.analysisState == AnalysisState.analysisPending
-        ? strings.pendingAnalysis
-        : strings.publishedAnalysis;
+    // Never label source-less, incomplete beta Events as verified publications.
+    final bool hasGroundedPublishedAnalysis =
+        event.analysisState == AnalysisState.published &&
+        event.sourceCount > 0 &&
+        (event.positionCount ?? 0) > 0;
+    final String state = hasGroundedPublishedAnalysis
+        ? strings.publishedAnalysis
+        : strings.pendingAnalysis;
     return AccessibleAction(
       semanticLabel: strings.eventSemantics(event.titleDescriptive, state),
       onActivate: onOpen,
@@ -40,7 +45,8 @@ final class EventCard extends StatelessWidget {
               const SizedBox(height: DialektikSpacing.space2),
               Text(strings.detected(event.detectedAt)),
               Text(strings.sourceCount(event.sourceCount)),
-              if (event.positionCount case final int count)
+              if (hasGroundedPublishedAnalysis &&
+                  event.positionCount case final int count)
                 Text(strings.positionCount(count)),
             ],
           ),
