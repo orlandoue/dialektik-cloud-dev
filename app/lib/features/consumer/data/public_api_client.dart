@@ -9,6 +9,7 @@ import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/registered_source_directory.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/semantic/data/semantic_models.dart';
 import 'package:dialektik/features/semantic/data/semantic_repository.dart';
@@ -30,6 +31,7 @@ final class PublicApiClient
         ConsumerRepository,
         SemanticRepository,
         LiveNewsRepository,
+        RegisteredSourceDirectoryRepository,
         SemanticShadowRepository,
         EphemeralSemanticRepository,
         SemanticGraphRepository {
@@ -345,6 +347,16 @@ final class PublicApiClient
     refresh: refresh,
     requestToken: requestToken,
   );
+
+  @override
+  Future<RegisteredSourceDirectory> loadRegisteredSources({bool refresh = false}) =>
+      _get(
+        '/live/registered-sources',
+        query: <String, String>{'country': ?_marketQuery},
+        decoder: RegisteredSourceDirectory.fromJson,
+        refresh: refresh,
+        requestToken: null,
+      );
 
   @override
   Future<List<LiveSourceDto>> listLiveSources({
