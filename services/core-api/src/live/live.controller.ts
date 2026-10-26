@@ -3,6 +3,7 @@ import { parseUlid } from '@dialektik/database';
 import { assertExactQueryKeys, parseUlidParameter } from '../public-api/public-api.validation.js';
 import { LiveApplicationService } from './live.service.js';
 import { parseLiveTimestamp } from './live.adapter.js';
+import { parsePublisherMarket, publisherMarketsStatus } from './live.publisher-market.js';
 
 function queryDate(value: unknown): Date | undefined {
   if (value === undefined) return undefined;
@@ -25,6 +26,7 @@ export class LiveController {
       'source_id',
       'published_from',
       'published_to',
+      'country',
     ]);
     if (
       query.limit !== undefined &&
@@ -47,6 +49,7 @@ export class LiveController {
       throw new BadRequestException('Invalid date interval.');
     return this.service.list({
       limit: query.limit === undefined ? 25 : Number(query.limit),
+      market: parsePublisherMarket(query.country),
       ...(query.cursor === undefined
         ? {}
         : { cursor: parseUlid(parseUlidParameter(query.cursor)) }),
@@ -58,16 +61,24 @@ export class LiveController {
       ...(publishedTo === undefined ? {} : { publishedTo }),
     });
   }
-  @Get('news/:id') article(@Param('id') id: string) {
-    return this.service.article(parseUlid(parseUlidParameter(id)));
+  @Get('news/:id') article(@Param('id') id: string, @Query() query: Readonly<Record<string, unknown>>) {
+    assertExactQueryKeys(query, ['country']);
+    return this.service.article(parseUlid(parseUlidParameter(id)), parsePublisherMarket(query.country));
   }
-  @Get('news/:id/provenance') provenance(@Param('id') id: string) {
-    return this.service.provenance(parseUlid(parseUlidParameter(id)));
+  @Get('news/:id/provenance') provenance(@Param('id') id: string, @Query() query: Readonly<Record<string, unknown>>) {
+    assertExactQueryKeys(query, ['country']);
+    return this.service.provenance(parseUlid(parseUlidParameter(id)), parsePublisherMarket(query.country));
   }
-  @Get('sources') sources() {
-    return this.service.sources();
+  @Get('markets') markets(@Query() query: Readonly<Record<string, unknown>>) {
+    assertExactQueryKeys(query, []);
+    return publisherMarketsStatus();
   }
-  @Get('sources/:id') source(@Param('id') id: string) {
-    return this.service.source(parseUlid(parseUlidParameter(id)));
+  @Get('sources') sources(@Query() query: Readonly<Record<string, unknown>>) {
+    assertExactQueryKeys(query, ['country']);
+    return this.service.sources(parsePublisherMarket(query.country));
+  }
+  @Get('sources/:id') source(@Param('id') id: string, @Query() query: Readonly<Record<string, unknown>>) {
+    assertExactQueryKeys(query, ['country']);
+    return this.service.source(parseUlid(parseUlidParameter(id)), parsePublisherMarket(query.country));
   }
 }
