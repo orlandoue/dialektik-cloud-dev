@@ -183,7 +183,7 @@ final class _DialektikAppState extends State<DialektikApp> {
                   liveRepository.loadChileTornadoEventPreview(refresh: refresh)
             : null,
         govUkPreviewLoader:
-            (const bool.fromEnvironment(
+            false && (const bool.fromEnvironment(
                   'DIALEKTIK_GOVUK_PREVIEW_ENABLED',
                   defaultValue: false,
                 ) ||
