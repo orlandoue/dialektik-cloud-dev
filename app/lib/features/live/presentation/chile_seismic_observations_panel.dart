@@ -89,9 +89,7 @@ final class _ChileSeismicObservationsPanelState
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    data.items.length.toString() +
-                        ' registros oficiales · consultado ' +
-                        _formatLocal(data.inspectedAt),
+                    '${data.items.length} registros oficiales · consultado ${_formatLocal(data.inspectedAt)}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   const SizedBox(height: 8),
@@ -102,17 +100,12 @@ final class _ChileSeismicObservationsPanelState
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           Text(
-                            'M ' + item.magnitude.toStringAsFixed(1) +
-                                ' · ' + item.description,
+                            'M ${item.magnitude.toStringAsFixed(1)} · ${item.description}',
                             style: Theme.of(context).textTheme.titleSmall,
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            _formatLocal(item.occurredAt) +
-                                ' · USGS ' +
-                                (item.status == 'reviewed'
-                                    ? 'revisado'
-                                    : 'automático, preliminar'),
+                            '${_formatLocal(item.occurredAt)} · USGS ${item.status == 'reviewed' ? 'revisado' : 'automático, preliminar'}',
                             style: Theme.of(context).textTheme.bodySmall,
                           ),
                           LiveExternalAction(
@@ -129,8 +122,7 @@ final class _ChileSeismicObservationsPanelState
                       child: Text(
                         _expanded
                             ? 'Mostrar menos'
-                            : 'Ver ' + data.items.length.toString() +
-                                ' registros oficiales',
+                            : 'Ver ${data.items.length} registros oficiales',
                       ),
                     ),
                   const SizedBox(height: 8),
@@ -150,8 +142,6 @@ final class _ChileSeismicObservationsPanelState
   String _formatLocal(DateTime date) {
     final DateTime local = date.toLocal();
     String two(int value) => value.toString().padLeft(2, '0');
-    return two(local.day) + '/' + two(local.month) + '/' +
-        local.year.toString() + ' ' + two(local.hour) + ':' +
-        two(local.minute);
+    return '${two(local.day)}/${two(local.month)}/${local.year} ${two(local.hour)}:${two(local.minute)}';
   }
 }
