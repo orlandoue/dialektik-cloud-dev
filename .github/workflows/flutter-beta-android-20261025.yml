@@ -1,7 +1,7 @@
 name: Dialektik Android private beta 25 October 2026
 on:
   push:
-    branches: [codex/flutter-beta-android-20261025]
+    branches: [codex/flutter-latam-navigation-20261026]
     paths:
       - 'app/**'
       - '.github/workflows/flutter-beta-android-20261025.yml'
