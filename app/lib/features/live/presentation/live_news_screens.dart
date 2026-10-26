@@ -5,11 +5,13 @@ import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
 import 'package:dialektik/features/live/data/candidate_source_registry.dart';
+import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/data/registered_source_directory.dart';
+import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_vocabulary.dart';
@@ -377,7 +379,13 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               description: 'El selector está preparado, pero aún no existe un feed de este país verificado. No mostraremos noticias chilenas como si fueran locales.',
             ),
           ] else ...<Widget>[
-          const Text('Titulares con enlace al medio de origen.'),
+          if (widget.repository is SeismicObservationRepository) ...<Widget>[
+            ChileSeismicObservationsPanel(
+              repository: widget.repository as SeismicObservationRepository,
+            ),
+            const SizedBox(height: DialektikSpacing.space4),
+          ],
+          const Text('Titulares periodísticos con enlace al medio de origen.'),
           if (widget.govUkPreviewLoader != null) ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             Card(

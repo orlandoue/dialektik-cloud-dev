@@ -1,7 +1,7 @@
 name: Dialektik Android private beta 25 October 2026
 on:
   push:
-    branches: [codex/flutter-review-source-directory-20261026]
+    branches: [codex/flutter-usgs-seismic-live-20261026]
     paths:
       - 'app/**'
       - '.github/workflows/flutter-beta-android-20261025.yml'
@@ -63,6 +63,7 @@ jobs:
           flutter test --no-pub test/live/live_news_test.dart --plain-name 'Chile beta display excludes GOV.UK publisher from news and sources'
           flutter test --no-pub test/live/publisher_market_selection_test.dart
           flutter test --no-pub test/live/registered_source_directory_test.dart
+          flutter test --no-pub test/live/chile_seismic_observations_test.dart
           dart run tool/check_design_invariants.dart
   apk-debug:
     needs: [core-smoke, dart]
@@ -105,12 +106,12 @@ jobs:
             printf 'Dialektik Android private beta: 0.1.2+3\n'
             printf 'Flutter commit: %s\n' "$GITHUB_SHA"
             printf 'Core URL: https://dialektik-core-dev.onrender.com\n'
-            printf 'Core deployed market/grounding baseline: 51578bac95814c9362d9dd279c746b54dc96ab3e\n'
+            printf 'Core source feature: USGS live observation endpoint behind beta auth; semantic news engine still gated\n'
             printf 'Profile: debug APK; private beta; semantic mode disabled\n'
           } > build/build-info.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Dialektik-Android-2026-10-26-source-review-beta
+          name: Dialektik-Android-2026-10-26-USGS-live-Chile-beta
           path: |
             app/build/app/outputs/flutter-apk/app-debug.apk
             app/build/build-info.txt
