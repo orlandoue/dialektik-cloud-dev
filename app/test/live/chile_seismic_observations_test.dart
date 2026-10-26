@@ -5,7 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 Map<String, Object?> event(String id) => <String, Object?>{
   'observation_id': id,
-  'occurrence_key': 'usgs:earthquake:' + id,
+  'occurrence_key': 'usgs:earthquake:$id',
   'publisher': 'U.S. Geological Survey',
   'publisher_market': 'US',
   'location_context': 'CHILE_USGS_LABEL_AND_BOUNDS',
@@ -17,7 +17,7 @@ Map<String, Object?> event(String id) => <String, Object?>{
   'occurred_at': '2026-10-26T19:00:00.000Z',
   'revised_at': '2026-10-26T19:05:00.000Z',
   'source_status': 'reviewed',
-  'canonical_url': 'https://earthquake.usgs.gov/earthquakes/eventpage/' + id,
+  'canonical_url': 'https://earthquake.usgs.gov/earthquakes/eventpage/$id',
   'independent_publisher_count': 1,
   'contradiction_count': 0,
 };
@@ -73,8 +73,9 @@ void main() {
         throwsFormatException);
     final Map<String, Object?> poisoned =
         payload(<Map<String, Object?>>[event('us6000u4x2')]);
-    (poisoned['items'] as List<Object?>).first as Map<String, Object?>
-      ..['canonical_url'] = 'https://evil.example/story';
+    final Map<String, Object?> poisonedItem =
+        (poisoned['items'] as List<Object?>).first! as Map<String, Object?>;
+    poisonedItem['canonical_url'] = 'https://evil.example/story';
     expect(() => ChileSeismicObservations.fromJson(poisoned),
         throwsFormatException);
   });
