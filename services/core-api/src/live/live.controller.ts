@@ -73,6 +73,10 @@ export class LiveController {
     assertExactQueryKeys(query, []);
     return publisherMarketsStatus();
   }
+  @Get('registered-sources') registeredSources(@Query() query: Readonly<Record<string, unknown>>) {
+    assertExactQueryKeys(query, ['country']);
+    return this.service.registeredSources(parsePublisherMarket(query.country));
+  }
   @Get('sources') sources(@Query() query: Readonly<Record<string, unknown>>) {
     assertExactQueryKeys(query, ['country']);
     return this.service.sources(parsePublisherMarket(query.country));

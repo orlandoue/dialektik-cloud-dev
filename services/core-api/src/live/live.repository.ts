@@ -36,6 +36,15 @@ export interface LiveSourceReadRow {
   policy: Record<string, unknown>;
 }
 
+/** Directory records, never license, operational readiness or publisher approval. */
+export interface LiveRegisteredSourceRow {
+  id: Ulid;
+  name: string;
+  canonical_domain: string;
+  source_type: string;
+  staged_record_count: number;
+}
+
 export interface LiveNewsQuery {
   readonly cursor?: Ulid;
   readonly limit: number;
@@ -111,6 +120,30 @@ export class LiveRepository {
         this.database,
       );
     return result.rows[0];
+  }
+
+  /**
+   * Separate beta-only directory: the registry alone does not license,
+   * authenticate or approve any Article or Source. Never join source policies.
+   * Country scope is applied before selecting rows, and no article titles,
+   * body, hyperlinks or unreviewed rights policy are returned.
+   */
+  async registeredSources(market: PublisherMarket): Promise<LiveRegisteredSourceRow[]> {
+    const domains = publisherDomainsForMarket(market);
+    if (domains.length === 0) return [];
+    const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
+    const result = await sql<LiveRegisteredSourceRow>`
+      select s.id, s.name, s.canonical_domain, s.source_type,
+        (select count(*)::integer from articles article_row
+         where article_row.source_id = s.id
+           and article_row.origin = 'LIVE_REAL') as staged_record_count
+      from sources s
+      where s.origin = 'LIVE_REAL'
+        and s.canonical_domain in (${marketFilter})
+      order by s.name, s.id
+      limit 100
+    `.execute(this.database);
+    return result.rows;
   }
 
   async sources(id?: Ulid, market: PublisherMarket = 'CL'): Promise<LiveSourceReadRow[]> {
