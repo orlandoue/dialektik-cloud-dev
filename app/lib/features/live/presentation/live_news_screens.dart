@@ -15,6 +15,16 @@ import 'package:flutter/material.dart';
 
 // dialektik:epistemic-component
 
+// Strict beta source allowlist for Chile, not a general geolocation engine.
+const Set<String> _chileBetaPublisherDomains = <String>{
+  'bcentral.cl', 'biobiochile.cl', 'sismologia.cl',
+  'ciperchile.cl', 'cooperativa.cl', 'elmostrador.cl',
+  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl',
+};
+
+bool isChileBetaPublisher(LiveSourceDto source) =>
+    _chileBetaPublisherDomains.contains(source.canonicalDomain.toLowerCase());
+
 enum LiveDateFilter { all, today, yesterday, week }
 
 typedef LiveClock = DateTime Function();
@@ -106,7 +116,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
           .listLiveSources(requestToken: token);
       if (!mounted || token.isCancelled) return;
       setState(() {
-        _sources = List<LiveSourceDto>.of(sources)
+        _sources = List<LiveSourceDto>.of(sources.where(isChileBetaPublisher))
           ..sort(
             (LiveSourceDto a, LiveSourceDto b) =>
                 a.name.toLowerCase().compareTo(b.name.toLowerCase()),
@@ -160,11 +170,11 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
           _items = <LiveNewsItemDto>[
             ..._items,
             ...page.items.where(
-              (LiveNewsItemDto item) => existing.add(item.id),
+              (LiveNewsItemDto item) => isChileBetaPublisher(item.source) && existing.add(item.id),
             ),
           ];
         } else {
-          _items = page.items;
+          _items = page.items.where((LiveNewsItemDto item) => isChileBetaPublisher(item.source)).toList(growable: false);
         }
         _nextCursor = page.nextCursor;
         _loading = false;
@@ -729,7 +739,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
           .listLiveSources(refresh: refresh);
       if (!mounted) return;
       setState(() {
-        _sources = List<LiveSourceDto>.of(sources)
+        _sources = List<LiveSourceDto>.of(sources.where(isChileBetaPublisher))
           ..sort(
             (LiveSourceDto a, LiveSourceDto b) =>
                 a.name.toLowerCase().compareTo(b.name.toLowerCase()),
