@@ -219,16 +219,29 @@ final class LiveDetailLine extends StatelessWidget {
 String liveLocalDate(DateTime value) => editorialDate(value, includeTime: true);
 String liveExactDate(DateTime value) => editorialDate(value, exact: true);
 String liveAcquisitionChannel(String value) => switch (value) {
-  'rss_atom' => 'RSS / Atom',
+  'rss_atom' => 'RSS / Atom',   
+    'govuk_content_api' => 'API Oficial GOV.UK',
+     'rss_or_api' => 'Feed RSS / API Oficial', 
   _ => value,
 };
 String liveSourceType(String value) => switch (value) {
   'NEWS_MEDIA' => 'Medio de comunicación',
-  'news_agency' => 'Agencia de noticias',
-  'other' => 'Otra',
-  'PRIMARY_INSTITUTION' => 'Institución',
-  'PRIMARY_DOCUMENT' => 'Documento primario',
-  _ => value.replaceAll('_', ' '),
+  'news_agency' => 'Agencia de noticias',    
+    'wire_agency' => 'Agencia informativa',
+      'official_statistics' => 'Organismo y estadística oficial',
+      'radio' => 'Radio e informativo nacional',
+      'daily_newspaper' => 'Diario de circulación nacional',
+      'digital_native' => 'Medio digital e investigación',
+      'broadcaster' => 'Televisión y radiodifusión',
+      'government_agency' => 'Organismo gubernamental',
+    
+    'other' => 'Otra fuente',
+    'PRIMARY_INSTITUTION' => 'Institución oficial',
+    'PRIMARY_DOCUMENT' => 'Documento primario',
+    _ => value.replaceAll('_', ' '),      // 'other' => 'Otr fuentea',
+  // 'PRIMARY_INSTITUTION' => 'Institución',
+  // 'PRIMARY_DOCUMENT' => 'Documento primario',
+  // _ => value.replaceAll('_', ' '),
 };
 
 String liveFailureTitle(
