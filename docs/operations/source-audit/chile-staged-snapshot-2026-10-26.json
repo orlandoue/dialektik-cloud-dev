@@ -1,0 +1,138 @@
+{
+  "schema": "dialektik-source-origin-audit-input-v1",
+  "generatedAt": "2026-10-26",
+  "scope": "READ_ONLY_UNTRUSTED_STAGED_METADATA",
+  "note": "Imported from Supabase DEV for verification. These are NOT authentic or licensed until independently checked. Do not use as ingestion seeds.",
+  "records": [
+    {
+      "recordKey": "CL001",
+      "publisher": "Banco Central de Chile",
+      "domain": "bcentral.cl",
+      "canonicalUrl": "https://www.bcentral.cl/areas/politica-monetaria/informe-de-politica-monetaria",
+      "assertedHeadline": "Informe de Política Monetaria (IPoM) Septiembre 2026 - Banco Central de Chile",
+      "stagedSourceItemId": "8c0b4afe719cabfda3e4d8d55b8a7ac14242",
+      "receiptHash": "c128ad945397a5df6aca02cc2224361dbfcd1fc65705cbfe122ab4a632a66f65",
+      "discoveryUrl": "https://www.bcentral.cl/noticias"
+    },
+    {
+      "recordKey": "CL002",
+      "publisher": "BioBioChile",
+      "domain": "biobiochile.cl",
+      "canonicalUrl": "https://www.biobiochile.cl/noticias/economia/actualidad-economica/2026/10/22/gobierno-insta-a-que-los-adultos-mayores-posterguen-su-jubilacion-ante-fallida-apuesta-de-las-afp.shtml",
+      "assertedHeadline": "Gobierno insta a que los adultos mayores posterguen su jubilación ante fallida apuesta de las AFP",
+      "stagedSourceItemId": "a5d4b8704c05f107665ff467d7f04709bd98",
+      "receiptHash": "b34b07217b76a70ef3937dd1df65d34160f8db1bbdfa772ab31c4118f849ebf0",
+      "discoveryUrl": "https://www.biobiochile.cl/lista/categorias/nacional"
+    },
+    {
+      "recordKey": "CL003",
+      "publisher": "BioBioChile",
+      "domain": "biobiochile.cl",
+      "canonicalUrl": "https://www.biobiochile.cl/noticias/nacional/chile/2026/10/25/criteria-octubre-2026",
+      "assertedHeadline": "Criteria octubre 2026: desaprobación presidencial llega a 64% en medio de debate económico de cara a 2027",
+      "stagedSourceItemId": "criteria20261025biobio01",
+      "receiptHash": "c111111111111111111111111111111111111111111111111111111111111101",
+      "discoveryUrl": "https://www.biobiochile.cl/"
+    },
+    {
+      "recordKey": "CL004",
+      "publisher": "CIPER Chile",
+      "domain": "ciperchile.cl",
+      "canonicalUrl": "https://www.ciperchile.cl/2026/06/17/17-06-26/",
+      "assertedHeadline": "Banco Central redujo proyección de crecimiento para el 2026 a rango de 1,0%-1,75% en IPoM de junio",
+      "stagedSourceItemId": "b8a3a7316b6ae6ca94156d16f98802362e34",
+      "receiptHash": "f22da3fbce4be76b7b502dc66f0b2eb66058c754938a9e7a8c125529cad53ed7",
+      "discoveryUrl": "https://www.ciperchile.cl/feed/"
+    },
+    {
+      "recordKey": "CL005",
+      "publisher": "CIPER Chile",
+      "domain": "ciperchile.cl",
+      "canonicalUrl": "https://www.ciperchile.cl/2026/09/09/radar-09-09-26/",
+      "assertedHeadline": "Banco Central vuelve a bajar la proyección de crecimiento para el 2026 y deja el techo en 0,75%",
+      "stagedSourceItemId": "ae7e2bef81b7cac8fa4fd0a979f801be77ed",
+      "receiptHash": "5c459b66514b3649d42db7277fe4fe0b81d9106ae4b8455903439f8addfcbe82",
+      "discoveryUrl": "https://www.ciperchile.cl/feed/"
+    },
+    {
+      "recordKey": "CL006",
+      "publisher": "CIPER Chile",
+      "domain": "ciperchile.cl",
+      "canonicalUrl": "https://www.ciperchile.cl/2026/10/21/las-afp-no-responden-si-mantendran-en-sus-cargos-a-gerentes-responsables-de-la-multimillonaria-perdida-del-fondo-e/",
+      "assertedHeadline": "Las AFP no responden si mantendrán en sus cargos a gerentes responsables de la multimillonaria pérdida del Fondo E",
+      "stagedSourceItemId": "49727bbe7591139fa1b463bfb2d7c0a71198",
+      "receiptHash": "63284cede46c77395550ad94f5bdd680d46ac456c3a3e246169c93c6d4431b2f",
+      "discoveryUrl": "https://www.ciperchile.cl/feed/"
+    },
+    {
+      "recordKey": "CL007",
+      "publisher": "Cooperativa.cl",
+      "domain": "cooperativa.cl",
+      "canonicalUrl": "https://www.cooperativa.cl/noticias/pais/policial/robo-cobre-codelco-formalizacion-octubre-2026",
+      "assertedHeadline": "Quedan en prisión preventiva líderes de organización que sustrajo $650 millones en cobre a Codelco",
+      "stagedSourceItemId": "codelco20261025coop03",
+      "receiptHash": "c111111111111111111111111111111111111111111111111111111111111103",
+      "discoveryUrl": "https://www.cooperativa.cl/"
+    },
+    {
+      "recordKey": "CL008",
+      "publisher": "El Mostrador",
+      "domain": "elmostrador.cl",
+      "canonicalUrl": "https://www.elmostrador.cl/datos-utiles/2026/10/25/bonos-y-beneficios-de-octubre-revisa-cuales-puedes-recibir/",
+      "assertedHeadline": "Subsidio Unificado al Empleo (SUE) y bonos de octubre 2026 entran en vigor a través de SENCE y ChileAtiende",
+      "stagedSourceItemId": "bonos20261025elmostrador02",
+      "receiptHash": "c111111111111111111111111111111111111111111111111111111111111102",
+      "discoveryUrl": "https://www.elmostrador.cl/"
+    },
+    {
+      "recordKey": "CL009",
+      "publisher": "El Mostrador",
+      "domain": "elmostrador.cl",
+      "canonicalUrl": "https://www.elmostrador.cl/el-semanal/2026/10/22/afp-y-el-fondo-e-la-codicia-le-gano-a-la-responsabilidad/",
+      "assertedHeadline": "AFP y el Fondo E: la codicia le ganó a la responsabilidad",
+      "stagedSourceItemId": "2324748c80f1874357ead75190d60543559f",
+      "receiptHash": "751918f4d89ebe80464358a079d9c7a8e39cffa5611967d5d03e007e560f8a1d",
+      "discoveryUrl": "https://www.elmostrador.cl/destacado/feed/"
+    },
+    {
+      "recordKey": "CL010",
+      "publisher": "Gobierno de Chile (Prensa Oficial)",
+      "domain": "gob.cl",
+      "canonicalUrl": "https://www.gob.cl/noticias/deuda-historica-docente-pagos-octubre-2026/",
+      "assertedHeadline": "Mineduc y ChileAtiende ejecutan pagos de octubre 2026 al segundo grupo de la Deuda Histórica docente",
+      "stagedSourceItemId": "deudahistorica20261025gob04",
+      "receiptHash": "c111111111111111111111111111111111111111111111111111111111111104",
+      "discoveryUrl": "https://www.gob.cl/"
+    },
+    {
+      "recordKey": "CL011",
+      "publisher": "Gobierno de Chile (Prensa Oficial)",
+      "domain": "gob.cl",
+      "canonicalUrl": "https://www.gob.cl/noticias/enadi-2026-nueva-estrategia-permitira-anticipar-oportunidades-de/",
+      "assertedHeadline": "ENADI 2026: nueva estrategia permitirá anticipar oportunidades de empleo en cada región",
+      "stagedSourceItemId": "05c2cd5237fdbb9e741bfd5c082f10900a55",
+      "receiptHash": "4ca51c30650efd6a511db931b019921b973856e3dbd04042023b532746754f9d",
+      "discoveryUrl": "https://www.gob.cl/noticias/"
+    },
+    {
+      "recordKey": "CL012",
+      "publisher": "La Tercera",
+      "domain": "latercera.com",
+      "canonicalUrl": "https://www.latercera.com/pulso/noticia/jose-de-gregorio-me-cuesta-explicar-lo-que-esta-pasando-la-desaceleracion-es-sorprendente/",
+      "assertedHeadline": "José De Gregorio: “Me cuesta explicar lo que está pasando, la desaceleración es sorprendente”",
+      "stagedSourceItemId": "678ad539c78dff0c867f00280b3e02a2779e",
+      "receiptHash": "c13f3aa63deb58b304c0b71f5872041e697e53d9afda6c586a653ee484ea7a69",
+      "discoveryUrl": "https://www.latercera.com/arc/outboundfeeds/rss/?outputType=xml"
+    },
+    {
+      "recordKey": "CL013",
+      "publisher": "SENAPRED Chile",
+      "domain": "senapred.gob.cl",
+      "canonicalUrl": "https://www.senapred.gob.cl/regiones/",
+      "assertedHeadline": "SENAPRED coordina simulacros regionales de evacuación masiva y pruebas del sistema de alerta SAE",
+      "stagedSourceItemId": "b9c50cfd1084256319531669aa309891ea8f",
+      "receiptHash": "ee6739fcae4ea71eae7eab0a8eb3a6fc84141a786af8ebf20ce9305cb5eda256",
+      "discoveryUrl": "https://senapred.gob.cl/feed/"
+    }
+  ]
+}
