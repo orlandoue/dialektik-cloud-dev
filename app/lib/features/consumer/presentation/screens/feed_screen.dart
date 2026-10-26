@@ -228,10 +228,6 @@ final class _FeedContent extends StatelessWidget {
                       ),
                     ),
                   ],
-                  if (preview != null) ...<Widget>[
-                    const SizedBox(height: DialektikSpacing.space4),
-                    preview!,
-                  ],
                   const SizedBox(height: DialektikSpacing.space8),
                   for (
                     var index = 0;
@@ -245,7 +241,7 @@ final class _FeedContent extends StatelessWidget {
                     ),
                     if (index < controller.items.length - 1)
                       const SizedBox(height: DialektikSpacing.space6),
-                  ],
+                  ],if (preview != null) ...<Widget>[ const SizedBox(height: DialektikSpacing.space6), preview!, ],
                   if (controller.nextCursor != null) ...<Widget>[
                     const SizedBox(height: DialektikSpacing.space6),
                     FilledButton(
