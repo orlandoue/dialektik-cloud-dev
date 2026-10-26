@@ -1,0 +1,39 @@
+{
+  "schema": "dialektik-chile-ine-license-and-access-decision-v1",
+  "reviewedOn": "2026-10-26",
+  "publisher": "Instituto Nacional de Estadísticas de Chile",
+  "market": "CL",
+  "status": "PREPARATION_ONLY_NOT_APPROVED",
+  "evidence": {
+    "newsroomUrl": "https://www.ine.gob.cl/sala-de-prensa/noticias",
+    "evidenceOfPublishedArticle": "https://www.ine.gob.cl/sala-de-prensa/prensa/general/noticia/2026/10/13/%C3%ADndice-de-inventarios-del-comercio-aument%C3%B3-2-3-en-agosto-de-2026",
+    "licenseUrl": "https://www.ine.gob.cl/terminos-de-uso-y-licencia-de-datos-abiertos",
+    "license": "CC BY-SA 4.0",
+    "rightsScope": "INE site states content under CC BY-SA 4.0 including commercial reuse and share-alike with required attribution; per-item third-party exemptions must still be evaluated.",
+    "robotsUrl": "https://www.ine.gob.cl/robots.txt",
+    "robotsHttpStatus": 200,
+    "robotsContentKind": "HTML_ERROR_404",
+    "robotsDecision": "NOT_ATTESTED",
+    "alternativeAuthorizedFeedUrl": null
+  },
+  "controls": {
+    "licenseCandidateIdentified": true,
+    "robotsForRouteVerified": false,
+    "canonicalAutomatedFeedVerified": false,
+    "rateLimitsVerified": false,
+    "commercialReuseApprovedForApp": false,
+    "sourceSpecificLegalApproval": false,
+    "sourceRegisteredOperationally": false,
+    "articleAcquisitionEnabled": false,
+    "bodyAcquisitionEnabled": false,
+    "supabaseWritesEnabled": false,
+    "flutterFeedEnabled": false
+  },
+  "conditionsBeforeEnabling": [
+    "Resolve genuine official robots/access instructions or obtain direct authorization for the exact route and agent",
+    "Resolve article-level third-party scope, proper BY-SA attribution and downstream derivative/share-alike obligations",
+    "Approve an official rate-limited feed/API or consent to exact structured route and monitoring behavior",
+    "Complete Restore Gate #4 before any cloud migration/writer operations",
+    "Record policy decision with source URL evidence, independent approver and revocation route"
+  ]
+}

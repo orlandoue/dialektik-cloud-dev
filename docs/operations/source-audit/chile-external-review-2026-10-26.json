@@ -1,0 +1,112 @@
+{
+  "schema": "dialektik-independent-url-review-v1",
+  "date": "2026-10-26",
+  "reviewMethod": "Independent public browser spot-checks + database receipt pattern checks. Not a complete legal review, not an HTTP-only auth gate.",
+  "notes": "The findings are conservative and informational. Even PUBLIC_ARTICLE_LINK_MATCH entries cannot be published until authorized rights, provenance, and RESTORE-GATE are all accredited.",
+  "records": [
+    {
+      "recordKey": "CL001",
+      "reviewStatus": "NON_ARTICLE_LANDING",
+      "observation": "La URL del Banco Central es una página de índice IPoM septiembre 2026, no la noticia individual con fecha especificada.",
+      "reviewedUrl": "https://www.bcentral.cl/areas/politica-monetaria/informe-de-politica-monetaria",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL002",
+      "reviewStatus": "PUBLIC_ARTICLE_LINK_MATCH",
+      "observation": "Enlace de BioBioChile abre artículo y la cabecera coincide; no acredita permiso de reutilización.",
+      "reviewedUrl": "https://www.biobiochile.cl/noticias/economia/actualidad-economica/2026/10/22/gobierno-insta-a-que-los-adultos-mayores-posterguen-su-jubilacion-ante-fallida-apuesta-de-las-afp.shtml",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL003",
+      "reviewStatus": "SYNTHETIC_RECEIPT",
+      "observation": "Huella SHA-256 con patrón c1111...101 y sourceItemId de apariencia artificial; origen no confirmado.",
+      "reviewedUrl": "https://www.biobiochile.cl/noticias/nacional/chile/2026/10/25/criteria-octubre-2026",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL004",
+      "reviewStatus": "TITLE_MISMATCH",
+      "observation": "Página Radar CIPER alberga varias noticias; el titular DB es un extracto parcial del titular original múltiple.",
+      "reviewedUrl": "https://www.ciperchile.cl/2026/06/17/17-06-26/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL005",
+      "reviewStatus": "TITLE_MISMATCH",
+      "observation": "Página Radar CIPER alberga varias noticias; el titular DB es un extracto parcial, no corresponde a artículo individual.",
+      "reviewedUrl": "https://www.ciperchile.cl/2026/09/09/radar-09-09-26/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL006",
+      "reviewStatus": "PUBLIC_ARTICLE_LINK_MATCH",
+      "observation": "Enlace CIPER accesible con titular concordante; derechos de reutilización aún sin acreditar.",
+      "reviewedUrl": "https://www.ciperchile.cl/2026/10/21/las-afp-no-responden-si-mantendran-en-sus-cargos-a-gerentes-responsables-de-la-multimillonaria-perdida-del-fondo-e/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL007",
+      "reviewStatus": "SYNTHETIC_RECEIPT",
+      "observation": "Huella deliberadamente secuencial c1111...103, URL de apariencia no canónica.",
+      "reviewedUrl": "https://www.cooperativa.cl/noticias/pais/policial/robo-cobre-codelco-formalizacion-octubre-2026",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL008",
+      "reviewStatus": "SYNTHETIC_RECEIPT",
+      "observation": "Huella deliberadamente secuencial c1111...102 y titular DB distinto del titular del artículo abierto en El Mostrador.",
+      "reviewedUrl": "https://www.elmostrador.cl/datos-utiles/2026/10/25/bonos-y-beneficios-de-octubre-revisa-cuales-puedes-recibir/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL009",
+      "reviewStatus": "PUBLIC_ARTICLE_LINK_MATCH",
+      "observation": "Artículo El Mostrador accesible y titular concordante; no consta autorización de reutilización.",
+      "reviewedUrl": "https://www.elmostrador.cl/el-semanal/2026/10/22/afp-y-el-fondo-e-la-codicia-le-gano-a-la-responsabilidad/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL010",
+      "reviewStatus": "SYNTHETIC_RECEIPT",
+      "observation": "Huella deliberadamente secuencial c1111...104; consulta externa no pudo verificar URL original.",
+      "reviewedUrl": "https://www.gob.cl/noticias/deuda-historica-docente-pagos-octubre-2026/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL011",
+      "reviewStatus": "UNVERIFIED_RESTRICTED_ACCESS",
+      "observation": "Acceso automático a la URL no verificable (respuesta 403); no afirmar URL falsa ni válida.",
+      "reviewedUrl": "https://www.gob.cl/noticias/enadi-2026-nueva-estrategia-permitira-anticipar-oportunidades-de/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL012",
+      "reviewStatus": "PUBLIC_ARTICLE_LINK_MATCH",
+      "observation": "La Tercera mostró artículo con titular concordante; sus derechos de reutilización no están verificados.",
+      "reviewedUrl": "https://www.latercera.com/pulso/noticia/jose-de-gregorio-me-cuesta-explicar-lo-que-esta-pasando-la-desaceleracion-es-sorprendente/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    },
+    {
+      "recordKey": "CL013",
+      "reviewStatus": "NON_ARTICLE_LANDING",
+      "observation": "URL SENAPRED /regiones/ es directorio regional, no artículo sobre SAE y simulacros.",
+      "reviewedUrl": "https://www.senapred.gob.cl/regiones/",
+      "rightsStatus": "NOT_ATTESTED",
+      "releaseAuthority": false
+    }
+  ]
+}
