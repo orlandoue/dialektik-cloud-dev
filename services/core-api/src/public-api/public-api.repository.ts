@@ -576,6 +576,34 @@ export class PublicApiRepository {
         and position_a.status = 'active'
         and position_b.publication_state = 'published'
         and position_b.status = 'active'
+        -- Never publish a purported contradiction without traceable claims
+        -- and a confirmed formation relationship for BOTH positions.
+        and exists (
+          select 1 from position_formed_by formation
+          join relationships relationship_row
+            on relationship_row.id = formation.relationship_id
+          where formation.position_id = position_a.id
+        )
+        and exists (
+          select 1 from position_formed_by formation
+          join relationships relationship_row
+            on relationship_row.id = formation.relationship_id
+          where formation.position_id = position_b.id
+        )
+        and exists (
+          select 1 from assertions assertion_row
+          join claim_spans claim on claim.id = assertion_row.claim_span_id
+          where assertion_row.position_id = position_a.id
+            and assertion_row.lifecycle_state = 'active'
+            and claim.tombstone_id is null
+        )
+        and exists (
+          select 1 from assertions assertion_row
+          join claim_spans claim on claim.id = assertion_row.claim_span_id
+          where assertion_row.position_id = position_b.id
+            and assertion_row.lifecycle_state = 'active'
+            and claim.tombstone_id is null
+        )
         ${cursorClause}
       order by publication.confirmed_at desc, publication.id desc
       limit ${input.limit + 1}
