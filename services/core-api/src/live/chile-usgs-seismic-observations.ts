@@ -166,9 +166,16 @@ let expiresAt=0;
 export function latestChileUsgsObservations(now=new Date()) {
   const timestamp=now.getTime();
   if (!cache || timestamp>=expiresAt) {
-    const current=fetchChileUsgsObservations(fetch,now);
-    cache=current.catch(error=>{if(cache===current)cache=null;throw error;});
-    expiresAt=timestamp+CACHE_MS;
+    const current = fetchChileUsgsObservations(fetch, now);
+    const tracked = current.catch((error: unknown) => {
+      if (cache === tracked) {
+        cache = null;
+        expiresAt = 0;
+      }
+      throw error;
+    });
+    cache = tracked;
+    expiresAt = timestamp + CACHE_MS;
   }
   return cache;
 }
