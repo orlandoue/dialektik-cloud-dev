@@ -19,7 +19,7 @@ export function audit(snapshot, review) {
         ![row.domain, 'www.' + row.domain].includes(url.hostname))
       throw Error('SOURCE_ORIGIN_MISMATCH');
     if (!/^[0-9a-f]{64}$/.test(row.receiptHash)) throw Error('BAD_RECEIPT');
-    const synthetic = /^c11111111111111111111111111111111111111111111111111111111110[1-9]$/.test(row.receiptHash);
+    const synthetic = /^c1{61}0[1-9]$/.test(row.receiptHash);
     if (synthetic && r.reviewStatus !== 'SYNTHETIC_RECEIPT')
       throw Error('SYNTHETIC_RECEIPT_NOT_QUARANTINED');
     items.push({key:row.recordKey, publisher:row.publisher,
