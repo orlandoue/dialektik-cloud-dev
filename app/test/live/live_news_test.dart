@@ -86,6 +86,19 @@ void main() {
     },
   );
 
+  test('Chile beta display excludes GOV.UK publisher from news and sources', () {
+    const LiveSourceDto chile = LiveSourceDto(
+      id: 'chile-test', name: 'BiobioChile', sourceType: 'radio',
+      canonicalDomain: 'biobiochile.cl',
+    );
+    const LiveSourceDto uk = LiveSourceDto(
+      id: 'uk-test', name: 'GOV.UK', sourceType: 'official_statistics',
+      canonicalDomain: 'gov.uk',
+    );
+    expect(isChileBetaPublisher(chile), isTrue);
+    expect(isChileBetaPublisher(uk), isFalse);
+  });
+
   test(
     'live contracts reject fixture/UNKNOWN, prohibited semantics and unauthorized body',
     () {
