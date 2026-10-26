@@ -1,7 +1,7 @@
 name: Dialektik Android private beta 25 October 2026
 on:
   push:
-    branches: [codex/flutter-latam-navigation-20261026]
+    branches: [codex/flutter-shared-publisher-market-20261026]
     paths:
       - 'app/**'
       - '.github/workflows/flutter-beta-android-20261025.yml'
@@ -61,6 +61,7 @@ jobs:
           flutter analyze --no-pub
           flutter test --no-pub test/private_beta/private_beta_gate_test.dart test/private_beta/supabase_auth_client_test.dart test/live/govuk_preview_test.dart test/consumer/consumer_controller_test.dart
           flutter test --no-pub test/live/live_news_test.dart --plain-name 'Chile beta display excludes GOV.UK publisher from news and sources'
+          flutter test --no-pub test/live/publisher_market_selection_test.dart
           dart run tool/check_design_invariants.dart
   apk-debug:
     needs: [core-smoke, dart]
@@ -103,12 +104,12 @@ jobs:
             printf 'Dialektik Android private beta: 0.1.2+3\n'
             printf 'Flutter commit: %s\n' "$GITHUB_SHA"
             printf 'Core URL: https://dialektik-core-dev.onrender.com\n'
-            printf 'Core known live commit: c1d9c028dfc11e853e081339c07730eecf89bdb6\n'
+            printf 'Core deployed market/grounding baseline: 51578bac95814c9362d9dd279c746b54dc96ab3e\n'
             printf 'Profile: debug APK; private beta; semantic mode disabled\n'
           } > build/build-info.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Dialektik-Android-2026-10-25-beta-0.1.2-debug
+          name: Dialektik-Android-2026-10-26-shared-publisher-market-beta
           path: |
             app/build/app/outputs/flutter-apk/app-debug.apk
             app/build/build-info.txt
