@@ -106,6 +106,23 @@ export class LiveApplicationService {
     if (row === undefined) throw new NotFoundException('Live provenance not found.');
     return provenanceDto(row);
   }
+  async registeredSources(market: PublisherMarket = 'CL') {
+    const rows = await this.repository.registeredSources(market);
+    return {
+      mode: 'UNVERIFIED_SOURCE_REGISTRY' as const,
+      country_code: market,
+      license_status: 'NOT_ATTESTED' as const,
+      operational_source_count: 0,
+      items: rows.map((row) => ({
+        id: row.id,
+        name: row.name,
+        canonical_domain: row.canonical_domain,
+        source_type: row.source_type,
+        staged_record_count: Number(row.staged_record_count),
+        review_status: 'PENDING_INDEPENDENT_VERIFICATION' as const,
+      })),
+    };
+  }
   async sources(market: PublisherMarket = 'CL') {
     return { items: (await this.repository.sources(undefined, market)).map(sourceDto) };
   }
