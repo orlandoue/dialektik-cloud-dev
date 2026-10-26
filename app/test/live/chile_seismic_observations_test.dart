@@ -1,3 +1,4 @@
+import 'package:dialektik/design_system/theme/dialektik_theme.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:flutter/material.dart';
@@ -83,6 +84,7 @@ void main() {
     final data=ChileSeismicObservations.fromJson(
       payload(<Map<String, Object?>>[event('us6000u4x2')]));
     await tester.pumpWidget(MaterialApp(
+      theme: DialektikTheme.offWhite(loadInterFromDependency: false),
       home: Scaffold(
         body: SingleChildScrollView(
           child: ChileSeismicObservationsPanel(
