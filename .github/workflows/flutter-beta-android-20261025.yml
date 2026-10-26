@@ -1,7 +1,7 @@
 name: Dialektik Android private beta 25 October 2026
 on:
   push:
-    branches: [codex/flutter-usgs-seismic-live-20261026]
+    branches: [codex/flutter-compact-usgs-sources-20261026]
     paths:
       - 'app/**'
       - '.github/workflows/flutter-beta-android-20261025.yml'
@@ -111,7 +111,7 @@ jobs:
           } > build/build-info.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Dialektik-Android-2026-10-26-USGS-live-Chile-beta
+          name: Dialektik-Android-2026-10-26-compact-USGS-beta
           path: |
             app/build/app/outputs/flutter-apk/app-debug.apk
             app/build/build-info.txt

@@ -94,10 +94,15 @@ void main() {
       ),
     ));
     await tester.pumpAndSettle();
-    expect(find.text('Observaciones sísmicas · Chile'),findsOneWidget);
-    expect(find.textContaining('Valparaíso, Chile'),findsOneWidget);
-    expect(find.text('Ver observación original'),findsOneWidget);
-    expect(find.textContaining('No son artículos de prensa'),
+    expect(find.text('Actividad sísmica'), findsOneWidget);
+    expect(find.textContaining('registros oficiales · USGS'), findsOneWidget);
+    expect(find.textContaining('Valparaíso, Chile'), findsNothing);
+    expect(find.text('Ver registro original'), findsNothing);
+    await tester.tap(find.byKey(const Key('chile-usgs-expand')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Valparaíso, Chile'), findsOneWidget);
+    expect(find.text('Ver registro original'), findsOneWidget);
+    expect(find.textContaining('No son noticias ni alertas de emergencia'),
         findsOneWidget);
   });
 }

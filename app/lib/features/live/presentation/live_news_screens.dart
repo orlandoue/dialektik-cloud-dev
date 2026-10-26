@@ -947,6 +947,11 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
                 DialektikSpacing.space3,
               ),
               children: <Widget>[
+                LiveExternalAction(
+                  uri: Uri.https(candidate.domain, '/'),
+                  opener: openExternalHttpLink,
+                  label: 'Visitar sitio original del medio',
+                ),
                 LiveDetailLine('Categoría', candidate.category),
                 LiveDetailLine(
                   'Conectores posibles',

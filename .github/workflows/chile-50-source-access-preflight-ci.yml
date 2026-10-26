@@ -1,0 +1,33 @@
+name: Chile 50-media robots-only preflight
+on:
+  push:
+    branches: [codex/flutter-compact-usgs-sources-20261026]
+    paths:
+      - '.github/scripts/chile-50-source-access-preflight*'
+      - '.github/workflows/chile-50-source-access-preflight-ci.yml'
+      - 'app/assets/source-universe/candidate-registry.v1.json'
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - name: Verify 50 publisher origin and fail-closed policy contracts
+        run: node --test .github/scripts/chile-50-source-access-preflight.test.mjs
+      - name: Inspect robots.txt only (max 4 connections at a time)
+        run: |
+          node .github/scripts/chile-50-source-access-preflight.mjs
+          cat artifacts/chile-50-technical-preflight.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chile-50-media-technical-access-read-only
+          path: artifacts/
+          retention-days: 14
+          if-no-files-found: error
