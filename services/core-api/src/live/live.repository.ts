@@ -69,6 +69,14 @@ export class LiveRepository {
         (select id from live_source_policies where source_id = a.source_id
           order by recorded_at desc, id desc limit 1)
         and p.active = true and p.rights_class = 'LIVE_READY'
+        -- LIVE_READY is not proof of lawful reuse. Require an independent,
+        -- explicitly reviewed source-specific authorization record.
+        and p.policy->>'rightsReviewStatus' = 'APPROVED'
+        and nullif(p.policy->>'authorizationReference', '') is not null
+        and nullif(p.policy->>'rightsEvidenceUrl', '') is not null
+        and nullif(p.policy->>'endpoint', '') is not null
+        and p.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
+        and p.policy->>'endpoint' <> 'https://supabase.com'
       join live_exposure_exclusions e on e.id = a.live_exposure_id
       where a.origin = 'LIVE_REAL' and a.event_id is null`;
   }
@@ -114,6 +122,12 @@ export class LiveRepository {
       from sources s join live_source_policies p on p.source_id = s.id and p.id =
         (select id from live_source_policies where source_id = s.id order by recorded_at desc, id desc limit 1)
       where s.origin = 'LIVE_REAL' and p.active = true and p.rights_class = 'LIVE_READY'
+        and p.policy->>'rightsReviewStatus' = 'APPROVED'
+        and nullif(p.policy->>'authorizationReference', '') is not null
+        and nullif(p.policy->>'rightsEvidenceUrl', '') is not null
+        and nullif(p.policy->>'endpoint', '') is not null
+        and p.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
+        and p.policy->>'endpoint' <> 'https://supabase.com'
         and s.canonical_domain in (${marketFilter})
         and ${id === undefined ? sql`true` : sql`s.id = ${id}`}
       order by s.name, s.id`.execute(this.database);
