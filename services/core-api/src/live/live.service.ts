@@ -1,5 +1,6 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Ulid } from '@dialektik/database';
+import type { PublisherMarket } from './live.publisher-market.js';
 import {
   LiveRepository,
   type LiveNewsQuery,
@@ -82,8 +83,8 @@ export class LiveApplicationService {
       next_cursor: rows.length > query.limit ? (items.at(-1)?.id ?? null) : null,
     };
   }
-  async article(id: Ulid) {
-    const row = await this.repository.article(id);
+  async article(id: Ulid, market: PublisherMarket = 'CL') {
+    const row = await this.repository.article(id, market);
     if (row === undefined) throw new NotFoundException('Live Article not found.');
     return {
       ...newsDto(row),
@@ -100,16 +101,16 @@ export class LiveApplicationService {
         row.policy.storagePolicy === 'METADATA_ONLY' ? null : row.declared_upstream,
     };
   }
-  async provenance(id: Ulid) {
-    const row = await this.repository.article(id);
+  async provenance(id: Ulid, market: PublisherMarket = 'CL') {
+    const row = await this.repository.article(id, market);
     if (row === undefined) throw new NotFoundException('Live provenance not found.');
     return provenanceDto(row);
   }
-  async sources() {
-    return { items: (await this.repository.sources()).map(sourceDto) };
+  async sources(market: PublisherMarket = 'CL') {
+    return { items: (await this.repository.sources(undefined, market)).map(sourceDto) };
   }
-  async source(id: Ulid) {
-    const rows = await this.repository.sources(id);
+  async source(id: Ulid, market: PublisherMarket = 'CL') {
+    const rows = await this.repository.sources(id, market);
     const row = rows[0];
     if (row === undefined) throw new NotFoundException('Live Source not found.');
     return sourceDto(row);
