@@ -107,12 +107,15 @@ export class LiveApplicationService {
     return provenanceDto(row);
   }
   async registeredSources(market: PublisherMarket = 'CL') {
-    const rows = await this.repository.registeredSources(market);
+    const [rows, reviewed] = await Promise.all([
+      this.repository.registeredSources(market),
+      this.repository.sources(undefined, market),
+    ]);
     return {
       mode: 'UNVERIFIED_SOURCE_REGISTRY' as const,
       country_code: market,
       license_status: 'NOT_ATTESTED' as const,
-      operational_source_count: 0,
+      operational_source_count: reviewed.length,
       items: rows.map((row) => ({
         id: row.id,
         name: row.name,
