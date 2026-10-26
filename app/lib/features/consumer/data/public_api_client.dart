@@ -9,6 +9,7 @@ import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/semantic/data/semantic_models.dart';
 import 'package:dialektik/features/semantic/data/semantic_repository.dart';
 import 'package:dialektik/features/semantic_shadow/data/ephemeral_semantic_models.dart';
@@ -40,6 +41,7 @@ final class PublicApiClient
     this.onAuthorizationRejected,
     this.maxAttempts = 1,
     this.retryDelay = const Duration(milliseconds: 500),
+    this.publisherMarketSelection,
   }) : _configuration = configuration,
        _httpClient = httpClient ?? http.Client(),
        _ownsClient = httpClient == null {
@@ -60,6 +62,10 @@ final class PublicApiClient
   final AuthorizationRejectedHandler? onAuthorizationRejected;
   final int maxAttempts;
   final Duration retryDelay;
+  final PublisherMarketSelection? publisherMarketSelection;
+  bool get _otherMarket =>
+      publisherMarketSelection != null && publisherMarketSelection!.value != 'CL';
+  String? get _marketQuery => publisherMarketSelection?.value;
   final Map<String, _CacheEntry<Object>> _cache =
       <String, _CacheEntry<Object>>{};
 
@@ -72,6 +78,11 @@ final class PublicApiClient
     bool refresh = false,
     PublicRequestToken? requestToken,
   }) {
+    if (_otherMarket) {
+      return Future<PublicPage<EventCardDto>>.value(
+        const PublicPage<EventCardDto>(items: <EventCardDto>[], nextCursor: null),
+      );
+    }
     return _get<PublicPage<EventCardDto>>(
       '/v1/feed',
       query: <String, String>{
@@ -93,6 +104,11 @@ final class PublicApiClient
     bool refresh = false,
     PublicRequestToken? requestToken,
   }) {
+    if (_otherMarket) {
+      return Future<PublicPage<ContradictionDto>>.value(
+        const PublicPage<ContradictionDto>(items: <ContradictionDto>[], nextCursor: null),
+      );
+    }
     return _get<PublicPage<ContradictionDto>>(
       '/v1/contradictions',
       query: <String, String>{'cursor': ?cursor, 'limit': '$limit'},
@@ -317,6 +333,7 @@ final class PublicApiClient
   }) => _get(
     '/live/news',
     query: <String, String>{
+      'country': ?_marketQuery,
       'limit': '$limit',
       'cursor': ?cursor,
       'q': ?query,
@@ -335,6 +352,7 @@ final class PublicApiClient
     PublicRequestToken? requestToken,
   }) => _get(
     '/live/sources',
+    query: <String, String>{'country': ?_marketQuery},
     decoder: (Object? value) =>
         liveList(liveObject(value)['items'], LiveSourceDto.fromJson),
     refresh: refresh,
@@ -348,6 +366,7 @@ final class PublicApiClient
     PublicRequestToken? requestToken,
   }) => _get(
     '/live/news/${Uri.encodeComponent(id)}',
+    query: <String, String>{'country': ?_marketQuery},
     decoder: LiveNewsDetailDto.fromJson,
     refresh: refresh,
     requestToken: requestToken,
@@ -360,6 +379,7 @@ final class PublicApiClient
     PublicRequestToken? requestToken,
   }) => _get(
     '/live/sources/${Uri.encodeComponent(id)}',
+    query: <String, String>{'country': ?_marketQuery},
     decoder: LiveSourceDetailDto.fromJson,
     refresh: refresh,
     requestToken: requestToken,
@@ -372,6 +392,7 @@ final class PublicApiClient
     PublicRequestToken? requestToken,
   }) => _get(
     '/live/news/${Uri.encodeComponent(articleId)}/provenance',
+    query: <String, String>{'country': ?_marketQuery},
     decoder: LiveProvenanceDto.fromJson,
     refresh: refresh,
     requestToken: requestToken,
