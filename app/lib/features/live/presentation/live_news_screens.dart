@@ -8,6 +8,7 @@ import 'package:dialektik/features/live/data/candidate_source_registry.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/registered_source_directory.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
@@ -615,10 +616,10 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             EditorialEmptyState(
               title: _hasFilters
                   ? 'No hay noticias con estos filtros.'
-                  : 'Todavía no hay noticias guardadas.',
+                  : 'Todavía no hay noticias acreditadas para mostrar.',
               description: _hasFilters
                   ? 'Puedes ampliar la búsqueda o cambiar la fuente y la fecha.'
-                  : 'Las publicaciones aparecerán aquí cuando estén disponibles.',
+                  : 'El catálogo conserva registros históricos en revisión. Solo aparecerán noticias cuando se verifiquen su procedencia y condiciones de uso.',
               action: _hasFilters
                   ? EditorialTextButton(
                       onPressed: _clearFilters,
@@ -718,6 +719,9 @@ final class LiveSourceListScreen extends StatefulWidget {
 
 final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
   List<LiveSourceDto> _sources = <LiveSourceDto>[];
+  List<RegisteredSourceDto> _registered = <RegisteredSourceDto>[];
+  bool _registeredLoading = true;
+  Object? _registeredError;
   List<CandidateSourceInfo> _candidates = <CandidateSourceInfo>[];
   final TextEditingController _candidateSearch = TextEditingController();
   Object? _error;
@@ -729,6 +733,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
   void initState() {
     super.initState();
     unawaited(_load());
+    unawaited(_loadRegistered());
     unawaited(_loadCandidates());
   }
 
@@ -753,6 +758,33 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
       setState(() {
         _candidateError = error;
         _candidatesLoading = false;
+      });
+    }
+  }
+
+  Future<void> _loadRegistered({bool refresh = false}) async {
+    final RegisteredSourceDirectoryRepository? directory =
+        widget.repository is RegisteredSourceDirectoryRepository
+        ? widget.repository as RegisteredSourceDirectoryRepository
+        : null;
+    if (directory == null) {
+      if (mounted) setState(() => _registeredLoading = false);
+      return;
+    }
+    try {
+      final RegisteredSourceDirectory result =
+          await directory.loadRegisteredSources(refresh: refresh);
+      if (!mounted) return;
+      setState(() {
+        _registered = result.items;
+        _registeredLoading = false;
+        _registeredError = null;
+      });
+    } on Exception catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _registeredError = error;
+        _registeredLoading = false;
       });
     }
   }
@@ -835,6 +867,42 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
             const SizedBox(height: EditorialLayout.cardGap),
           ],
         ],
+        const SizedBox(height: EditorialLayout.sectionGap),
+        SectionHeading(title: 'Registradas en revisión · ${_registered.length}'),
+        const SizedBox(height: DialektikSpacing.space2),
+        const Text(
+          'Estas fuentes constan en el registro técnico, pero aún no tienen autorización ni procedencia acreditadas. No se adquieren noticias por mostrarlas aquí.',
+        ),
+        const SizedBox(height: DialektikSpacing.space3),
+        if (_registeredLoading)
+          const EditorialLoading(label: 'Cargando registro de fuentes…')
+        else if (_registeredError != null)
+          EditorialTextButton(
+            onPressed: () => unawaited(_loadRegistered(refresh: true)),
+            child: const Text('Reintentar registro'),
+          )
+        else if (_registered.isEmpty)
+          const Text('No hay fuentes registradas para este país.')
+        else
+          for (final RegisteredSourceDto source in _registered)
+            Padding(
+              padding: const EdgeInsets.only(bottom: DialektikSpacing.space3),
+              child: Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(DialektikSpacing.space4),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(source.name, style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: DialektikSpacing.space1),
+                      Text(source.canonicalDomain),
+                      const SizedBox(height: DialektikSpacing.space1),
+                      Text('${source.stagedRecordCount} registros sin verificar · Permisos pendientes'),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         const SizedBox(height: EditorialLayout.sectionGap),
         SectionHeading(title: 'Candidatas · ${_candidates.length}'),
         const SizedBox(height: DialektikSpacing.space2),
