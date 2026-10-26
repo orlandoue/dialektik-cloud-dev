@@ -57,11 +57,30 @@ export async function probeRobots(candidate, fetcher=fetch) {
     robotsStatus:'UNVERIFIED',httpStatus:null,hasUserAgentSection:false,
     permissionGranted:false,metadataAcquisitionEnabled:false,articleBodiesFetched:0};
   try {
-    const res=await fetcher(candidate.robotsUrl,{
+    const options={
       method:'GET',redirect:'manual',cache:'no-store',credentials:'omit',
       signal:AbortSignal.timeout(TIMEOUT_MS),
       headers:{Accept:'text/plain','User-Agent':AGENT},
-    });
+    };
+    let res=await fetcher(candidate.robotsUrl,options);
+    // Follow at most ONE HTTPS robots redirect, only to this same reviewed
+    // publisher domain (optionally www), never to an external aggregator.
+    if(res.status>=300 && res.status<400) {
+      const location=res.headers.get('location');
+      let next=null;
+      try {if(location)next=new URL(location,candidate.robotsUrl);}catch{}
+      const allowed=next &&
+        next.protocol==='https:' && next.port==='' &&
+        next.username==='' && next.password==='' &&
+        (next.hostname===candidate.domain ||
+         next.hostname==='www.'+candidate.domain) &&
+        next.pathname==='/robots.txt' && next.search==='' && next.hash==='' &&
+        next.href!==candidate.robotsUrl;
+      await res.body?.cancel();
+      if(!allowed)return {...base,robotsStatus:'REDIRECT_REVIEW_REQUIRED',
+        httpStatus:res.status};
+      res=await fetcher(next.href,options);
+    }
     const status=res.status;
     if(!Number.isInteger(status))throw Error('NOT_HTTP');
     base.httpStatus=status;
