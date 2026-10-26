@@ -118,7 +118,9 @@ void main() {
     await tester.tap(find.text('Acontecimientos'));
     await tester.pumpAndSettle();
     testerEnabled = false;
-    await tester.tap(find.byTooltip('Más opciones'));
+    // Contradicciones is now a primary horizontal tab, not a More-menu item.
+    // Scroll it into view before verifying revoked Core authorization.
+    await tester.ensureVisible(find.text('Contradicciones').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Contradicciones').last);
     await tester.pumpAndSettle();
