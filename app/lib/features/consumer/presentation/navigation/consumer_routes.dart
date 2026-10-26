@@ -8,6 +8,8 @@ import 'package:dialektik/features/consumer/presentation/screens/source_screen.d
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_navigation_action.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/publisher_market_selection.dart';
+import 'package:dialektik/features/live/presentation/live_components.dart';
 import 'package:dialektik/features/live/presentation/live_news_screens.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_operational.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_status.dart';
@@ -68,6 +70,7 @@ final class ConsumerRouteFactory {
     required this.externalLinkOpener,
     this.semanticRepository,
     this.liveNewsRepository,
+    this.publisherMarketSelection,
     this.govUkPreviewLoader,
     this.curatedEventPreviewLoader,
     this.semanticShadowRepository,
@@ -83,6 +86,7 @@ final class ConsumerRouteFactory {
   final ExternalLinkOpener externalLinkOpener;
   final SemanticRepository? semanticRepository;
   final LiveNewsRepository? liveNewsRepository;
+  final PublisherMarketSelection? publisherMarketSelection;
   final GovUkPreviewLoader? govUkPreviewLoader;
   final CuratedEventPreviewLoader? curatedEventPreviewLoader;
   final SemanticShadowRepository? semanticShadowRepository;
@@ -185,6 +189,47 @@ final class ConsumerRouteFactory {
       final SemanticGraphRepository? graph = semanticGraphRepository;
       final String currentSection = _sectionForPath(uri.path);
       final List<Widget> navigationActions = _navigationActions(currentSection);
+      // Every main section uses the same country selected in Actualidad.
+      // No other country is enabled until its feeds and provenance are licensed.
+      final String marketCode = publisherMarketSelection?.value ?? 'CL';
+      final bool sectionRequiresCoverage =
+          uri.path == ConsumerRoutes.feed ||
+          uri.path == ConsumerRoutes.liveSources ||
+          uri.path == ConsumerRoutes.contradictions ||
+          uri.path.startsWith('/events/') ||
+          uri.path.startsWith('/live/news/') ||
+          uri.path.startsWith('/live/sources/');
+      if (marketCode != 'CL' && sectionRequiresCoverage) {
+        return _page(
+          settings,
+          LiveReaderScaffold(
+            title: 'Cobertura pendiente',
+            location: marketCode,
+            isRoot: true,
+            navigationActions: navigationActions,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('País seleccionado: $marketCode'),
+                const SizedBox(height: 16),
+                const Text('Este país todavía no tiene cobertura habilitada. No se presentarán noticias, acontecimientos ni contradicciones de Chile como si fueran locales.'),
+                const SizedBox(height: 16),
+                TextButton(
+                  onPressed: () => _openSection(ConsumerRoutes.liveNews),
+                  child: const Text('Elegir otro país'),
+                ),
+                TextButton(
+                  onPressed: () {
+                    publisherMarketSelection?.select('CL');
+                    _openSection(ConsumerRoutes.liveNews);
+                  },
+                  child: const Text('Volver a Chile'),
+                ),
+              ],
+            ),
+          ),
+        );
+      }
       void openGraphOccurrence(String runId, String key) => _navigatorKey
           .currentState
           ?.pushNamed(ConsumerRoutes.graphNode(runId, 'occurrences', key));
@@ -368,6 +413,7 @@ final class ConsumerRouteFactory {
         settings,
         LiveNewsScreen(
           repository: live,
+          publisherMarketSelection: publisherMarketSelection,
           govUkPreviewLoader: govUkPreviewLoader,
           initialSourceId: uri.queryParameters['source_id'],
           onOpenArticle: openLiveNews,
