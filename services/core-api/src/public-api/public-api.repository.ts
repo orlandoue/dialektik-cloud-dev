@@ -136,6 +136,73 @@ export interface PositionSuccessorRow {
   readonly ordinal: number;
 }
 
+/**
+ * Publication gate for public Event list AND direct detail/position routes.
+ * A bare PUBLISHED database flag is not evidence. All visible active
+ * Positions must be formed by confirmed R01a relationships and carry at
+ * least one active, non-superseded claim with approved source-backed evidence.
+ * ANALYSIS_PENDING is permitted only with an authentic linked Article.
+ */
+const groundedEvent = sql`
+  exists (
+    select 1 from articles grounded_article
+    where grounded_article.event_id = event_row.id
+      and grounded_article.origin = 'LIVE_REAL'
+  )
+  and (
+    event_row.analysis_state = 'ANALYSIS_PENDING'
+    or (
+      event_row.analysis_state = 'PUBLISHED'
+      and exists (
+        select 1 from positions grounded_position
+        where grounded_position.event_id = event_row.id
+          and grounded_position.publication_state = 'published'
+          and grounded_position.status = 'active'
+      )
+      and not exists (
+        select 1 from positions invalid_position
+        where invalid_position.event_id = event_row.id
+          and invalid_position.publication_state = 'published'
+          and invalid_position.status = 'active'
+          and (
+            not exists (
+              select 1 from position_formed_by formation
+              join relationships formed_relation
+                on formed_relation.id = formation.relationship_id
+              where formation.position_id = invalid_position.id
+                and formed_relation.rel_type = 'R01a'
+                and formed_relation.publication_state = 'published'
+                and formed_relation.declared_by is not null
+                and formed_relation.confirmed_by is not null
+                and formed_relation.confirmed_at is not null
+            )
+            or not exists (
+              select 1 from assertions grounded_assertion
+              join claim_spans grounded_span
+                on grounded_span.id = grounded_assertion.claim_span_id
+              join articles grounded_source_article
+                on grounded_source_article.id = grounded_span.article_id
+              where grounded_assertion.position_id = invalid_position.id
+                and grounded_assertion.lifecycle_state = 'active'
+                and grounded_span.tombstone_id is null
+                and grounded_source_article.event_id = event_row.id
+                and not exists (
+                  select 1 from assertions successor
+                  where successor.supersedes_id = grounded_assertion.id
+                )
+                and exists (
+                  select 1 from evidence approved_evidence
+                  where approved_evidence.scope_assertion_id = grounded_assertion.id
+                    and approved_evidence.publication_state = 'published'
+                    and approved_evidence.approved_at is not null
+                )
+            )
+          )
+      )
+    )
+  )
+`;
+
 @Injectable()
 export class PublicApiRepository {
   public constructor(
@@ -208,19 +275,7 @@ export class PublicApiRepository {
         and category_row.is_active
         -- Fail closed: a published Event without a published active Position
         -- cannot be represented by eventCard(). Never expose it in the feed.
-        and (
-          event_row.analysis_state = 'ANALYSIS_PENDING'
-          or (
-            event_row.analysis_state = 'PUBLISHED'
-            and exists (
-              select 1
-              from positions integrity_position
-              where integrity_position.event_id = event_row.id
-                and integrity_position.publication_state = 'published'
-                and integrity_position.status = 'active'
-            )
-          )
-        )
+        and ${groundedEvent}
         ${categoryClause}
         ${topicClause}
         ${cursorClause}
@@ -275,6 +330,7 @@ export class PublicApiRepository {
       join categories category_row on category_row.id = event_row.category_id
       left join events successor on successor.id = event_row.merged_into
       where event_row.id = ${id}::dialektik_ulid
+        and ${groundedEvent}
     `.execute(this.databaseService.database);
     return result.rows[0];
   }
