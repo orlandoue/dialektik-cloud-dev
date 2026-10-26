@@ -10,9 +10,9 @@ function fakeDatabase() {
   const pool = {
     async connect() {
       return {
-        async query(command) {
+        async query(command, parameters) {
           queries.push(typeof command === 'string'
-            ? { text: command, values: [] }
+            ? { text: command, values: parameters ?? [] }
             : { text: command.text, values: command.values ?? [] });
           return { rows: [] };
         },
