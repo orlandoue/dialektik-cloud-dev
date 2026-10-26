@@ -8,6 +8,7 @@ import 'package:dialektik/features/live/data/candidate_source_registry.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_vocabulary.dart';
@@ -53,6 +54,7 @@ final class LiveNewsScreen extends StatefulWidget {
     required this.onOpenArticle,
     this.initialSourceId,
     this.govUkPreviewLoader,
+    this.publisherMarketSelection,
     this.clock = DateTime.now,
     this.navigationActions = const <Widget>[],
     super.key,
@@ -61,6 +63,7 @@ final class LiveNewsScreen extends StatefulWidget {
   final ValueChanged<String> onOpenArticle;
   final String? initialSourceId;
   final GovUkPreviewLoader? govUkPreviewLoader;
+  final PublisherMarketSelection? publisherMarketSelection;
   final LiveClock clock;
   final List<Widget> navigationActions;
   @override
@@ -93,6 +96,8 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   void initState() {
     super.initState();
     _sourceId = widget.initialSourceId;
+    _selectedCountry = widget.publisherMarketSelection?.value ?? 'CL';
+    widget.publisherMarketSelection?.addListener(_onMarketChanged);
     _govUkPreviewFuture = widget.govUkPreviewLoader?.call(refresh: true);
     unawaited(_loadSources());
     unawaited(_load());
@@ -100,11 +105,34 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
 
   @override
   void dispose() {
+    widget.publisherMarketSelection?.removeListener(_onMarketChanged);
     _newsToken?.cancel();
     _sourceToken?.cancel();
     _debounce?.cancel();
     _query.dispose();
     super.dispose();
+  }
+
+  void _onMarketChanged() {
+    if (!mounted) return;
+    final String code = widget.publisherMarketSelection?.value ?? 'CL';
+    if (_selectedCountry == code) return;
+    _debounce?.cancel();
+    _query.clear();
+    _sourceId = null;
+    _date = LiveDateFilter.all;
+    setState(() => _selectedCountry = code);
+    unawaited(_loadSources());
+    unawaited(_load(refresh: true));
+  }
+
+  void _chooseCountry(String code) {
+    final PublisherMarketSelection? selection = widget.publisherMarketSelection;
+    if (selection == null) {
+      setState(() => _selectedCountry = code);
+    } else {
+      selection.select(code);
+    }
   }
 
   Future<void> _loadSources() async {
@@ -303,7 +331,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                     key: Key('live-country-$code'),
                     label: Text(label),
                     selected: _selectedCountry == code,
-                    onSelected: (_) => setState(() => _selectedCountry = code),
+                    onSelected: (_) => _chooseCountry(code),
                   ),
                   const SizedBox(width: DialektikSpacing.space2),
                 ],
@@ -330,7 +358,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                               title: Text(name),
                               onTap: () {
                                 Navigator.pop(modalContext);
-                                setState(() => _selectedCountry = code);
+                                _chooseCountry(code);
                               },
                             ),
                         ],
