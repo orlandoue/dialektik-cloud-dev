@@ -117,6 +117,23 @@ void main() {
       },
     );
 
+    test('published positions without evidence remain unavailable, not rendered', () async {
+      final EventController controller = EventController(
+        eventId: publishedEventId,
+        repository: FakeConsumerRepository(
+          event: publishedEventDetail,
+          positionsFailure: const PublicApiFailure(
+            kind: PublicFailureKind.invalidResponse,
+          ),
+        ),
+      );
+      await controller.load();
+      expect(controller.phase, EventPhase.content);
+      expect(controller.event?.analysisState, AnalysisState.published);
+      expect(controller.analysisUnavailable, isTrue);
+      expect(controller.positions, isEmpty);
+    });
+
     test('loads Position detail only after explicit expansion', () async {
       final FakeConsumerRepository repository = FakeConsumerRepository(
         event: publishedEventDetail,

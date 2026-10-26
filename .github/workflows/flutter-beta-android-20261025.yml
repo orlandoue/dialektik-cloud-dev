@@ -1,7 +1,7 @@
 name: Dialektik Android private beta 25 October 2026
 on:
   push:
-    branches: [codex/flutter-beta-android-20261025]
+    branches: [codex/flutter-latam-navigation-20261026]
     paths:
       - 'app/**'
       - '.github/workflows/flutter-beta-android-20261025.yml'
@@ -59,7 +59,8 @@ jobs:
       - name: Analyze Dart and assert beta provenance
         run: |
           flutter analyze --no-pub
-          flutter test --no-pub test/private_beta/private_beta_gate_test.dart test/private_beta/supabase_auth_client_test.dart test/live/govuk_preview_test.dart
+          flutter test --no-pub test/private_beta/private_beta_gate_test.dart test/private_beta/supabase_auth_client_test.dart test/live/govuk_preview_test.dart test/consumer/consumer_controller_test.dart
+          flutter test --no-pub test/live/live_news_test.dart --plain-name 'Chile beta display excludes GOV.UK publisher from news and sources'
           dart run tool/check_design_invariants.dart
   apk-debug:
     needs: [core-smoke, dart]

@@ -543,8 +543,8 @@ final class ConsumerRouteFactory {
         <({String label, String route})>[
           (label: 'Actualidad', route: ConsumerRoutes.liveNews),
           (label: 'Acontecimientos', route: ConsumerRoutes.feed),
-          (label: 'Fuentes', route: ConsumerRoutes.liveSources),
           (label: 'Contradicciones', route: ConsumerRoutes.contradictions),
+          (label: 'Fuentes', route: ConsumerRoutes.liveSources),
           if (personalOwnerStatusRepository != null)
             (label: 'Administración', route: ConsumerRoutes.personalOwner),
         ];

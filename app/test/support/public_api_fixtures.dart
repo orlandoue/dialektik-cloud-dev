@@ -240,6 +240,7 @@ final class FakeConsumerRepository implements ConsumerRepository {
     this.source,
     this.feedFailure,
     this.eventFailure,
+    this.positionsFailure,
     this.delay = Duration.zero,
   }) : event = event ?? pendingEventDetail;
 
@@ -252,6 +253,7 @@ final class FakeConsumerRepository implements ConsumerRepository {
   SourceDto? source;
   PublicApiFailure? feedFailure;
   PublicApiFailure? eventFailure;
+  PublicApiFailure? positionsFailure;
   Duration delay;
   int feedCalls = 0;
   int positionDetailCalls = 0;
@@ -341,6 +343,7 @@ final class FakeConsumerRepository implements ConsumerRepository {
     PublicRequestToken? requestToken,
   }) async {
     await _wait(requestToken);
+    if (positionsFailure case final PublicApiFailure failure) throw failure;
     return positions;
   }
 

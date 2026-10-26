@@ -127,7 +127,13 @@ final class EventController extends ChangeNotifier {
           );
           analysisUnavailable = false;
         } on PublicApiFailure catch (error) {
-          if (error.kind != PublicFailureKind.analysisUnavailable) rethrow;
+          // Do not render structurally incomplete published positions as
+          // verified analysis. The event summary remains available, but its
+          // analysis is explicitly marked pending until provenance is repaired.
+          if (error.kind != PublicFailureKind.analysisUnavailable &&
+              error.kind != PublicFailureKind.invalidResponse) {
+            rethrow;
+          }
           positions = const <PositionListItemDto>[];
           analysisUnavailable = true;
         }

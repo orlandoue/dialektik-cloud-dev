@@ -15,6 +15,16 @@ import 'package:flutter/material.dart';
 
 // dialektik:epistemic-component
 
+// Strict beta source allowlist for Chile, not a general geolocation engine.
+const Set<String> _chileBetaPublisherDomains = <String>{
+  'bcentral.cl', 'biobiochile.cl', 'sismologia.cl',
+  'ciperchile.cl', 'cooperativa.cl', 'elmostrador.cl',
+  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl',
+};
+
+bool isChileBetaPublisher(LiveSourceDto source) =>
+    _chileBetaPublisherDomains.contains(source.canonicalDomain.toLowerCase());
+
 enum LiveDateFilter { all, today, yesterday, week }
 
 typedef LiveClock = DateTime Function();
@@ -72,6 +82,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   bool _addingPage = false;
   bool _sourceError = false;
   bool _filtersExpanded = false;
+  String _selectedCountry = 'CL';
   Object? _error;
   Object? _moreError;
   bool get _hasFilters =>
@@ -105,7 +116,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
           .listLiveSources(requestToken: token);
       if (!mounted || token.isCancelled) return;
       setState(() {
-        _sources = List<LiveSourceDto>.of(sources)
+        _sources = List<LiveSourceDto>.of(sources.where(isChileBetaPublisher))
           ..sort(
             (LiveSourceDto a, LiveSourceDto b) =>
                 a.name.toLowerCase().compareTo(b.name.toLowerCase()),
@@ -159,11 +170,11 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
           _items = <LiveNewsItemDto>[
             ..._items,
             ...page.items.where(
-              (LiveNewsItemDto item) => existing.add(item.id),
+              (LiveNewsItemDto item) => isChileBetaPublisher(item.source) && existing.add(item.id),
             ),
           ];
         } else {
-          _items = page.items;
+          _items = page.items.where((LiveNewsItemDto item) => isChileBetaPublisher(item.source)).toList(growable: false);
         }
         _nextCursor = page.nextCursor;
         _loading = false;
@@ -274,7 +285,70 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text('Titulares oficiales con enlace al medio de origen.'),
+          const SizedBox(height: DialektikSpacing.space4),
+          Semantics(
+            header: true,
+            child: Text('País', style: Theme.of(context).textTheme.titleMedium),
+          ),
+          const SizedBox(height: DialektikSpacing.space2),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: <Widget>[
+                for (final (String code, String label) in const <(String, String)>[
+                  ('CL', 'Chile'), ('PE', 'Perú'), ('AR', 'Argentina'),
+                  ('CO', 'Colombia'), ('MX', 'México'), ('ES', 'España'),
+                ]) ...<Widget>[
+                  ChoiceChip(
+                    key: Key('live-country-$code'),
+                    label: Text(label),
+                    selected: _selectedCountry == code,
+                    onSelected: (_) => setState(() => _selectedCountry = code),
+                  ),
+                  const SizedBox(width: DialektikSpacing.space2),
+                ],
+                ActionChip(
+                  label: const Text('Más países'),
+                  onPressed: () => showModalBottomSheet<void>(
+                    context: context,
+                    showDragHandle: true,
+                    builder: (BuildContext modalContext) => SafeArea(
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: <Widget>[
+                          const ListTile(title: Text('Explorar países')),
+                          for (final (String code, String name) in const <(String, String)>[
+                            ('BO', 'Bolivia'), ('BR', 'Brasil'), ('CR', 'Costa Rica'),
+                            ('CU', 'Cuba'), ('DO', 'República Dominicana'),
+                            ('EC', 'Ecuador'), ('GT', 'Guatemala'),
+                            ('HN', 'Honduras'), ('NI', 'Nicaragua'),
+                            ('PA', 'Panamá'), ('PY', 'Paraguay'),
+                            ('SV', 'El Salvador'), ('UY', 'Uruguay'),
+                            ('VE', 'Venezuela'),
+                          ])
+                            ListTile(
+                              title: Text(name),
+                              onTap: () {
+                                Navigator.pop(modalContext);
+                                setState(() => _selectedCountry = code);
+                              },
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (_selectedCountry != 'CL') ...<Widget>[
+            const SizedBox(height: DialektikSpacing.space4),
+            const EditorialEmptyState(
+              title: 'Cobertura de este país todavía no habilitada.',
+              description: 'El selector está preparado, pero aún no existe un feed de este país verificado. No mostraremos noticias chilenas como si fueran locales.',
+            ),
+          ] else ...<Widget>[
+          const Text('Titulares con enlace al medio de origen.'),
           if (widget.govUkPreviewLoader != null) ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             Card(
@@ -591,6 +665,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                 ),
               ),
           ],
+          ],
         ],
       ),
     );
@@ -664,7 +739,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
           .listLiveSources(refresh: refresh);
       if (!mounted) return;
       setState(() {
-        _sources = List<LiveSourceDto>.of(sources)
+        _sources = List<LiveSourceDto>.of(sources.where(isChileBetaPublisher))
           ..sort(
             (LiveSourceDto a, LiveSourceDto b) =>
                 a.name.toLowerCase().compareTo(b.name.toLowerCase()),
