@@ -16,7 +16,7 @@ export function validateInventory(json) {
     const name=entry?.identity?.publisherName;
     const endpoint=entry?.discovery?.endpointCandidate;
     if(typeof domain!=='string' ||
-      !/^[a-z0-9][a-z0-9.-]{3,120}\.[a-z]{2,}$/u.test(domain) ||
+      !/^[a-z0-9][a-z0-9.-]{1,120}\.[a-z]{2,}$/u.test(domain) ||
       domain.includes('..') || domain.startsWith('localhost') ||
       typeof name !== 'string' || name.length < 2 ||
       (endpoint!==null && endpoint!==undefined &&
