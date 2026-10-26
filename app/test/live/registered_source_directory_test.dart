@@ -21,7 +21,7 @@ void main() {
   test('cannot mislabel review directory as authorized', () {
     expect(() => RegisteredSourceDirectory.fromJson({
       'mode':'VERIFIED_SOURCES', 'license_status':'APPROVED',
-      'operational_source_count':1, 'items':[],
+      'operational_source_count':1, 'items': <Object?>[],
     }), throwsFormatException);
     expect(() => RegisteredSourceDirectory.fromJson({
       'mode':'UNVERIFIED_SOURCE_REGISTRY', 'license_status':'NOT_ATTESTED',
