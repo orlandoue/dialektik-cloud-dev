@@ -45,9 +45,8 @@ final class EventCard extends StatelessWidget {
               const SizedBox(height: DialektikSpacing.space2),
               Text(strings.detected(event.detectedAt)),
               Text(strings.sourceCount(event.sourceCount)),
-              if (hasGroundedPublishedAnalysis &&
-                  event.positionCount case final int count)
-                Text(strings.positionCount(count)),
+              if (hasGroundedPublishedAnalysis)
+                Text(strings.positionCount(event.positionCount!)),
             ],
           ),
         ),
