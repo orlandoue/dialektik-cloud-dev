@@ -7,6 +7,7 @@ import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/navigation/consumer_routes.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_operational.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_status.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_status_client.dart';
@@ -72,6 +73,7 @@ class DialektikApp extends StatefulWidget {
 }
 
 final class _DialektikAppState extends State<DialektikApp> {
+  final PublisherMarketSelection _publisherMarketSelection = PublisherMarketSelection();
   ConsumerRepository? _repository;
   PublicApiClient? _ownedClient;
   PublicApiClient? _ownedSemanticClient;
@@ -172,6 +174,7 @@ final class _DialektikAppState extends State<DialektikApp> {
               : null);
       _routes = ConsumerRouteFactory(
         repository: _repository!,
+        publisherMarketSelection: _publisherMarketSelection,
         curatedEventPreviewLoader:
             const bool.fromEnvironment(
                   'DIALEKTIK_CHILE_EVENT_PREVIEW_ENABLED',
@@ -227,10 +230,12 @@ final class _DialektikAppState extends State<DialektikApp> {
     authorizationTokenProvider: widget.apiAccessTokenProvider,
     onAuthorizationRejected: widget.onAuthorizationRejected,
     maxAttempts: widget.apiAccessTokenProvider == null ? 1 : 2,
+    publisherMarketSelection: _publisherMarketSelection,
   );
 
   @override
   void dispose() {
+    _publisherMarketSelection.dispose();
     _semanticHandle?.dispose();
     _ownedClient?.close();
     _ownedSemanticClient?.close();
