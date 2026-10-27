@@ -47,7 +47,7 @@ function instant(value,now,nullable=false){
 function verifyMinistryMetadata(data,path,now){
   if(!data||data.base_path!==path||data.schema_name!=='news_article'||data.document_type!=='press_release'||
     data.locale&&data.locale!=='en'||!Array.isArray(data.links?.organisations)||
-    !data.links.organisations.some(o=>o?.title===MINISTRY)||
+    !data.links.organisations.some(o=>o?.title===MINIS||o?.title==='Ministry of Housing, Communities & Local Government'TRY)||
     typeof data.content_id!=='string'||!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(data.content_id))deny('MULTISOURCE_MINISTRY_ORIGIN_DENIED');
   if(typeof data.title!=='string'||/[\u0000-\u0008\u000e-\u001f\u007f]/u.test(data.title))deny('MULTISOURCE_MINISTRY_TITLE_INVALID');
   const headline=data.title.replace(/\s+/gu,' ').trim().normalize('NFC');
