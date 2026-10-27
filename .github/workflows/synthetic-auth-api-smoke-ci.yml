@@ -1,0 +1,57 @@
+name: Synthetic Supabase Auth API login contract (no real user)
+on:
+  push:
+    branches: [codex/auth-api-password-smoke-20261021]
+permissions:
+  contents: read
+jobs:
+  auth-api:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Start disposable local auth + DB, never real DEV credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/dialektik-auth-api-smoke"
+          cd "$RUNNER_TEMP/dialektik-auth-api-smoke"
+          npx --yes supabase@2.120.0 init > "$RUNNER_TEMP/supabase-auth-init-private.log" 2>&1
+          if ! npx --yes supabase@2.120.0 start \
+             -x studio,imgproxy,logflare,vector,supavisor,edge-runtime \
+             > "$RUNNER_TEMP/supabase-auth-start-private.log" 2>&1; then
+            echo 'AUTH_LOCAL_STACK_START=FAIL_REDACTED'
+            exit 1
+          fi
+          echo 'AUTH_LOCAL_STACK_START=PASS'
+      - name: Identify local GoTrue image and safe configuration field names
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="$(docker ps --format '{{.Names}}' | grep '^supabase_auth_' | head -1)"
+          test -n "$auth"
+          echo "LOCAL_GOTRUE_IMAGE=$(docker inspect "$auth" --format '{{.Config.Image}}')"
+          docker inspect "$auth" --format '{{json .Config.Env}}' |
+            python3 -c 'import sys,json; es=json.load(sys.stdin); keys=sorted({e.split("=",1)[0] for e in es if e.startswith("GOTRUE_")}); print("LOCAL_GOTRUE_ENV_KEYS_ONLY="+",".join(keys))'
+      - name: Test synthetic signup, password, JWT and unauthorized request
+        shell: bash
+        env:
+          DIALEKTIK_AUTH_API_SYNTHETIC_ONLY: 'TRUE'
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/dialektik-auth-api-smoke"
+          node "$GITHUB_WORKSPACE/.github/scripts/synthetic-auth-api-smoke.mjs"
+      - name: Clear Auth user and Docker local state regardless of result
+        if: always()
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/dialektik-auth-api-smoke" 2>/dev/null &&
+            npx --yes supabase@2.120.0 stop --no-backup > "$RUNNER_TEMP/supabase-auth-stop-private.log" 2>&1 || true
+          rm -rf -- "$RUNNER_TEMP/dialektik-auth-api-smoke"
+          echo 'AUTH_LOCAL_EPHEMERAL_CLEANUP=COMPLETE'
