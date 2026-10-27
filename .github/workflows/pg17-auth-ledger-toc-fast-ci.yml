@@ -1,0 +1,104 @@
+name: PostgreSQL17 fast Auth-ledger TOC duplicate control (all synthetic)
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/pg17-auth-ledger-toc-fast-ci.yml'
+      - 'scripts/operations/filter_auth_migration_toc.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fast-toc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Prepare disposable synthetic 27 Auth-like tables and seeded versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          dir="$RUNNER_TEMP/toc-only"
+          mkdir -p "$dir"
+          python3 - <<'PY'
+          from pathlib import Path
+          import os,sys
+          sys.path.insert(0,"scripts/operations")
+          from test_filter_auth_migration_toc import NAMES
+          assert len(NAMES)==27 and len(set(NAMES))==27
+          sql=["CREATE SCHEMA auth;",
+               "CREATE TABLE auth.schema_migrations(version text PRIMARY KEY);"]
+          sql.extend(f"CREATE TABLE auth.{x} (id text PRIMARY KEY);" for x in NAMES if x!="schema_migrations")
+          sql.append("INSERT INTO auth.schema_migrations SELECT 'FAKE_ONLY_'||n::text FROM generate_series(1,82) n;")
+          (Path(os.environ["RUNNER_TEMP"])/"toc-only"/"setup.sql").write_text("\n".join(sql)+"\n")
+          print("SYNTHETIC_TABLE_COUNT=27")
+          PY
+          docker run --rm -d --name dialektik-fast-toc --network none \
+            -e POSTGRES_PASSWORD=fake_only_for_disposable_unit postgres:17.11 > /dev/null
+          for i in $(seq 1 35); do
+            docker exec dialektik-fast-toc pg_isready -U postgres -d postgres >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec dialektik-fast-toc pg_isready -U postgres -d postgres
+          docker cp "$dir/setup.sql" dialektik-fast-toc:/tmp/setup.sql
+          docker exec dialektik-fast-toc psql -X -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -f /tmp/setup.sql > "$dir/setup.private.log" 2>&1
+          docker exec dialektik-fast-toc pg_dump -U postgres -d postgres -F c -a \
+            -n auth -f /tmp/auth-synthetic.dump
+          docker exec dialektik-fast-toc pg_restore -l /tmp/auth-synthetic.dump > "$dir/auth.toc"
+      - name: Reproduce duplicate migration failure, then skip ONLY migrated TABLE DATA
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/toc-only"
+          python3 - <<'PY'
+          import os,re
+          from pathlib import Path
+          dir=Path(os.environ["RUNNER_TEMP"])/"toc-only"
+          lines=(dir/"auth.toc").read_text().splitlines(keepends=True)
+          regex=re.compile(r'^\s*\d+;\s+\d+\s+\d+\s+TABLE DATA\s+auth\s+schema_migrations\s+')
+          selected=[line if regex.match(line) else ";"+line if re.match(r'^\s*\d+;\s+\d+\s+\d+\s+TABLE DATA\s+',line) else line for line in lines]
+          assert sum(bool(regex.match(line)) for line in selected)==1
+          (dir/"migrations-only.toc").write_text("".join(selected))
+          PY
+          docker cp "$dir/migrations-only.toc" dialektik-fast-toc:/tmp/migrations-only.toc
+          if docker exec dialektik-fast-toc pg_restore -U postgres -d postgres \
+            --exit-on-error --single-transaction --data-only \
+            --use-list=/tmp/migrations-only.toc /tmp/auth-synthetic.dump \
+            > "$dir/duplicate.private.log" 2>&1; then
+            echo 'SEEDED_MIGRATION_EXPECTED_DUPLICATE_NOT_RAISED'
+            exit 1
+          fi
+          if ! grep -q 'duplicate key value violates unique constraint' "$dir/duplicate.private.log"; then
+            echo 'SEEDED_MIGRATION_UNEXPECTED_ERROR_CLASS'
+            exit 1
+          fi
+          echo 'SEEDED_MIGRATION_DUPLICATE_REPRODUCED=PASS'
+          python3 scripts/operations/filter_auth_migration_toc.py \
+            --toc-in "$dir/auth.toc" --toc-out "$dir/auth.filtered.toc" \
+            --version-sets-confirmed-identical
+          docker cp "$dir/auth.filtered.toc" dialektik-fast-toc:/tmp/auth.filtered.toc
+          docker exec dialektik-fast-toc pg_restore -U postgres -d postgres \
+            --exit-on-error --single-transaction --data-only \
+            --use-list=/tmp/auth.filtered.toc /tmp/auth-synthetic.dump \
+            > "$dir/filtered.private.log" 2>&1 || {
+              echo 'SYNTHETIC_TOC_FILTERED_REPLAY_FAILED'
+              exit 1
+            }
+          actual="$(docker exec dialektik-fast-toc psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c 'SELECT count(*) FROM auth.schema_migrations;')"
+          test "$actual" = 82
+          echo 'FILTERED_26_AUTH_TABLE_DATA_REPLAY=PASS'
+          echo 'EXISTING_82_SEEDED_VERSIONS_UNCHANGED=PASS'
+          echo 'PRODUCTION_BACKUP_DECRYPTED=FALSE'
+          echo 'PRODUCTION_DATABASE_CONTACTED=FALSE'
+      - name: Cleanup PostgreSQL container and all synthetic private logs
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f dialektik-fast-toc >/dev/null 2>&1 || true
+          rm -rf "$RUNNER_TEMP/toc-only"
+          echo 'SYNTHETIC_FAST_REPLAY_CLEANUP=PASS'

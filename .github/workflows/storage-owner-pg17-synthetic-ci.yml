@@ -1,0 +1,230 @@
+name: Storage owner PG17 restoration proof (synthetic, networkless)
+on:
+  push:
+    branches: [codex/storage-owner-sandbox-replay-20261022]
+permissions:
+  contents: read
+jobs:
+  native-storage-owner-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify protected script syntax and provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          grep -Fq 'STORAGE_EXECUTED_AT_METADATA_DIFFERENCE_ACKNOWLEDGED=TRUE' \
+            scripts/operations/replay_synchronized_data_offline.sh
+          grep -Fq 'STORAGE_LOCAL_OWNER_PREFLIGHT=PASS' \
+            scripts/operations/replay_synchronized_data_offline.sh
+          grep -Fq 'STORAGE_LOCAL_OWNER_LOGIN=PASS' \
+            scripts/operations/replay_synchronized_data_offline.sh
+          grep -Fq 'pg_restore -h 127.0.0.1 -U supabase_storage_admin' \
+            scripts/operations/replay_synchronized_data_offline.sh
+          grep -Fq 'for scope in realtime vault; do' \
+            scripts/operations/replay_synchronized_data_offline.sh
+          echo 'STATIC_STORAGE_ROLE_ONLY_CHANGE=PASS'
+          echo 'REAL_BACKUP_DECRYPTED=FALSE'
+      - name: PostgreSQL 17 native privilege-denial and owner data replay
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/storage-owner-pg17"
+          mkdir -p "$w"
+          docker run -d --rm --network none --name dialektik-storage-owner-ci \
+            -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 \
+            > "$w/container-id.private" 2> "$w/container-start.private" || {
+              echo 'SYNTHETIC_PG17_CONTAINER=FAIL_REDACTED'; exit 1;
+            }
+          trap 'docker rm -f dialektik-storage-owner-ci >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
+          ready=0
+          for i in $(seq 1 45); do
+            if docker exec dialektik-storage-owner-ci psql -XAt -U postgres \
+              -d postgres -v ON_ERROR_STOP=1 -c 'SELECT 1' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          [ "$ready" = 1 ] || { echo 'SYNTHETIC_PG17_READY=FAIL'; exit 1; }
+          [ "$(docker inspect dialektik-storage-owner-ci \
+            --format '{{.HostConfig.NetworkMode}}')" = 'none' ] || {
+              echo 'SYNTHETIC_DB_NETWORK_ISOLATION=FAIL'; exit 1;
+            }
+          names="$(docker inspect dialektik-storage-owner-ci \
+            --format '{{range $name,$_ := .NetworkSettings.Networks}}{{println $name}}{{end}}')"
+          names="$(printf '%s' "$names" | tr -d '\r\n ')"
+          [ "$names" = 'none' ] || {
+              echo 'SYNTHETIC_DB_NETWORK_ISOLATION=FAIL'; exit 1;
+            }
+          echo 'SYNTHETIC_DB_NETWORK_ISOLATION=PASS'
+          docker exec dialektik-storage-owner-ci psql -X -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+              CREATE ROLE dialektik_restore_pg LOGIN NOBYPASSRLS NOSUPERUSER;
+              CREATE ROLE supabase_storage_admin LOGIN NOBYPASSRLS NOSUPERUSER;
+              CREATE SCHEMA storage AUTHORIZATION supabase_storage_admin;
+              CREATE TABLE storage.synthetic_restore_probe(id text PRIMARY KEY);
+              ALTER TABLE storage.synthetic_restore_probe OWNER TO supabase_storage_admin;
+              ALTER TABLE storage.synthetic_restore_probe ENABLE ROW LEVEL SECURITY;
+            " > "$w/synthetic-schema.private" 2>&1 || {
+              echo 'SYNTHETIC_ROLE_SCHEMA_FIXTURE=FAIL_REDACTED'
+              # Fixture uses only generated fake objects; no authentic rows/IDs.
+              grep -E 'ERROR:|FATAL:|permission denied|already exists|must be member of' \
+                "$w/synthetic-schema.private" | head -6 || true
+              exit 1;
+            }
+          docker exec dialektik-storage-owner-ci psql -X -U supabase_storage_admin -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+              INSERT INTO storage.synthetic_restore_probe VALUES ('fake-row');
+            " > "$w/synthetic-insert.private" 2>&1
+          docker exec dialektik-storage-owner-ci pg_dump -U supabase_storage_admin -d postgres \
+            -Fc -a --no-owner --no-privileges --table=storage.synthetic_restore_probe \
+            -f /tmp/synthetic-storage.dump > "$w/synthetic-dump.private" 2>&1
+          docker exec dialektik-storage-owner-ci psql -X -U supabase_storage_admin -d postgres \
+            -v ON_ERROR_STOP=1 -c "TRUNCATE storage.synthetic_restore_probe;" \
+            > "$w/synthetic-clear.private" 2>&1
+          if docker exec dialektik-storage-owner-ci pg_restore \
+            -U dialektik_restore_pg -d postgres --data-only --no-owner --no-privileges \
+            --single-transaction --exit-on-error /tmp/synthetic-storage.dump \
+            > "$w/expected-permission-denial.private" 2>&1; then
+              echo 'SYNTHETIC_UNPRIVILEGED_RESTORE_REJECTION=FAIL'; exit 1
+          fi
+          echo 'SYNTHETIC_UNPRIVILEGED_RESTORE_REJECTION=PASS'
+          docker exec dialektik-storage-owner-ci pg_restore -U supabase_storage_admin \
+            -d postgres --data-only --no-owner --no-privileges \
+            --single-transaction --exit-on-error /tmp/synthetic-storage.dump \
+            > "$w/owner-restore.private" 2>&1 || {
+              echo 'SYNTHETIC_STORAGE_OWNER_REPLAY=FAIL_REDACTED'; exit 1
+            }
+          result="$(docker exec dialektik-storage-owner-ci psql -XAt -U postgres \
+            -d postgres -v ON_ERROR_STOP=1 -c "
+            SELECT CASE WHEN
+              (SELECT count(*) FROM storage.synthetic_restore_probe)=1
+              AND EXISTS(
+                SELECT 1 FROM pg_class c
+                WHERE c.oid='storage.synthetic_restore_probe'::regclass
+                  AND c.relrowsecurity AND NOT c.relforcerowsecurity
+                  AND pg_get_userbyid(c.relowner)='supabase_storage_admin'
+              )
+              AND EXISTS(
+                SELECT 1 FROM pg_roles
+                WHERE rolname='supabase_storage_admin' AND rolcanlogin
+                  AND NOT rolsuper AND NOT rolbypassrls
+              )
+            THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)"
+          [ "$result" = PASS ] || {
+            echo 'SYNTHETIC_STORAGE_OWNER_RLS_COUNTS=FAIL'; exit 1
+          }
+          echo 'SYNTHETIC_STORAGE_OWNER_REPLAY=PASS'
+          echo 'SYNTHETIC_STORAGE_OWNER_RLS_COUNTS=PASS'
+          echo 'REMOTE_SUPABASE_SQL_MUTATIONS=0'
+          echo 'REAL_AUTH_DATA_ACCESSED=FALSE'
+
+  supabase-managed-storage-owner-preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Boot disposable local Supabase PG17
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/storage-owner-local"
+          mkdir -p "$w/local" "$w/private"
+          cd "$w/local"
+          npx --yes supabase@2.120.0 init > "$w/private/init.log" 2>&1
+          if ! npx --yes supabase@2.120.0 db start > "$w/private/db-start.log" 2>&1; then
+            echo 'STORAGE_LOCAL_SUPABASE_BOOT=FAIL_REDACTED'; exit 1
+          fi
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db"
+          echo "STORAGE_LOCAL_DB=$db" >> "$GITHUB_ENV"
+          echo 'STORAGE_LOCAL_SUPABASE_BOOT=PASS'
+      - name: Check managed table ownership and disconnected direct owner login
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$STORAGE_LOCAL_DB"
+          # Local fixture schema metadata only; no article, Auth or user row reads.
+          docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+            SELECT relname || '|' ||
+                   CASE WHEN pg_get_userbyid(relowner)='supabase_storage_admin' THEN 'OWNED' ELSE 'OTHER_OWNER' END || '|' ||
+                   CASE WHEN has_table_privilege('supabase_storage_admin',oid,'INSERT') THEN 'CAN_INSERT' ELSE 'NO_INSERT' END || '|' ||
+                   CASE WHEN relforcerowsecurity THEN 'FORCE_RLS' ELSE 'NORMAL_RLS' END
+            FROM pg_class
+            WHERE relnamespace='storage'::regnamespace
+              AND relkind IN ('r','p') ORDER BY relname;" \
+            | sed 's/^/LOCAL_STORAGE_TABLE_METADATA=/' || exit 1
+          docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+            SELECT CASE WHEN EXISTS(
+              SELECT 1 FROM pg_roles WHERE rolname='supabase_storage_admin'
+               AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls)
+            THEN 'PASS' ELSE 'FAIL' END;" \
+            | sed 's/^/LOCAL_STORAGE_OWNER_ROLE_FLAGS=/' || exit 1
+          owner="$(docker exec "$db" psql -XAt -U postgres -d postgres \
+            -v ON_ERROR_STOP=1 -c "
+          SELECT CASE WHEN
+            EXISTS(SELECT 1 FROM pg_roles WHERE rolname='supabase_storage_admin'
+              AND rolcanlogin AND NOT rolsuper AND NOT rolbypassrls)
+            AND has_schema_privilege('supabase_storage_admin','storage','USAGE')
+            AND (SELECT count(*)=10
+              AND count(*) FILTER (WHERE relname IN
+                ('buckets','buckets_analytics','buckets_vectors','migrations',
+                 'objects','s3_multipart_uploads','s3_multipart_uploads_parts',
+                 'vector_indexes'))=8
+              AND count(*) FILTER (WHERE relname IN
+                ('iceberg_namespaces','iceberg_tables'))=2
+              AND bool_and(
+                pg_get_userbyid(relowner)='supabase_storage_admin'
+                AND NOT relforcerowsecurity
+                AND has_table_privilege('supabase_storage_admin',oid,'INSERT'))
+              FROM pg_class WHERE relnamespace='storage'::regnamespace
+                AND relkind IN ('r','p'))
+            AND (SELECT count(*) FROM storage.iceberg_namespaces)=0
+            AND (SELECT count(*) FROM storage.iceberg_tables)=0
+          THEN 'PASS' ELSE 'FAIL' END;" 2>/dev/null)" || exit 1
+          [ "$owner" = PASS ] || { echo 'STORAGE_LOCAL_MANAGED_SUPERSET=FAIL'; exit 1; }
+          echo 'STORAGE_LOCAL_MANAGED_SUPERSET=PASS'
+          for c in $(docker ps --format '{{.Names}}' | grep '^supabase_' || true); do
+            [ "$c" = "$db" ] || docker stop "$c" >/dev/null
+          done
+          while IFS= read -r net; do
+            [ -z "$net" ] || docker network disconnect --force "$net" "$db"
+          done < <(docker inspect "$db" --format '{{range $n,$_ := .NetworkSettings.Networks}}{{println $n}}{{end}}')
+          [ "$(docker inspect "$db" --format '{{json .NetworkSettings.Networks}}')" = '{}' ] || exit 1
+          echo 'STORAGE_LOCAL_ALL_EXTERNAL_NETWORKS_DETACHED=PASS'
+          # CLI local dev password is the documented synthetic "postgres".
+          # Test only disconnected container loopback, not any remote endpoint.
+          who="$(docker exec -e PGPASSWORD=postgres "$db" \
+            psql -XAt -h 127.0.0.1 -U supabase_storage_admin \
+            -d postgres -v ON_ERROR_STOP=1 -c 'SELECT current_user;' \
+            2>/dev/null)" || {
+            echo 'STORAGE_LOCAL_ADMIN_LOGIN=FAIL_REDACTED'; exit 1
+          }
+          [ "$who" = supabase_storage_admin ] || exit 1
+          echo 'STORAGE_LOCAL_ADMIN_LOGIN=PASS'
+          echo 'REMOTE_DATABASE_WRITES=0'
+      - name: Delete ephemeral managed Storage instance
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f "$STORAGE_LOCAL_DB" >/dev/null 2>&1 || true
+          if [ -d "$RUNNER_TEMP/storage-owner-local/local" ]; then
+            (cd "$RUNNER_TEMP/storage-owner-local/local" &&
+             npx --yes supabase@2.120.0 stop --no-backup >/dev/null 2>&1) || true
+          fi
+          rm -rf -- "$RUNNER_TEMP/storage-owner-local"
+          echo 'STORAGE_LOCAL_CLEANUP=COMPLETE'

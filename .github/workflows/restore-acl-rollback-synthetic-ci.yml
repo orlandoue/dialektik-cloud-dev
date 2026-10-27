@@ -1,0 +1,62 @@
+name: Dialektik restored Core ACL and rollback synthetic gate
+on:
+  push:
+    branches: [codex/restore-acl-rollback-probe-20261021]
+permissions:
+  contents: read
+jobs:
+  native-postgres17-negative-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Offline shell syntax and protected script checks
+        run: |
+          bash -n scripts/operations/verify_restored_roles_rollback.sh
+          bash -n scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq 'TARGET_CONTAINER_HAS_NETWORK_FAIL_CLOSED' scripts/operations/real_supabase_offline_replay.sh
+          echo 'REAL_BACKUP_NOT_OPENED=TRUE'
+      - name: Verify ACL checks + deliberately failed transaction on networkless PG17
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          work="$RUNNER_TEMP/acl-rollback-probe"
+          mkdir -p "$work"
+          docker run --rm -d --network none --name dialektik-acl-rollback-probe -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11 >/dev/null
+          trap 'docker rm -f dialektik-acl-rollback-probe >/dev/null 2>&1 || true; rm -rf -- "$work"' EXIT
+          for n in $(seq 1 40); do
+            docker exec dialektik-acl-rollback-probe pg_isready -U postgres >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec dialektik-acl-rollback-probe pg_isready -U postgres >/dev/null
+          cat > "$work/fixture.sql" <<'SQL'
+          CREATE SCHEMA auth;
+          CREATE ROLE dialektik_core_app LOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS;
+          CREATE ROLE dialektik_govuk_metadata_writer NOLOGIN NOINHERIT NOSUPERUSER NOBYPASSRLS;
+          CREATE TABLE auth.users (id text PRIMARY KEY);
+          CREATE TABLE public.private_beta_testers (user_id text);
+          CREATE TABLE public.categories (id text PRIMARY KEY);
+          CREATE TABLE public.sources (id text PRIMARY KEY);
+          CREATE TABLE public.articles (id text PRIMARY KEY);
+          CREATE TABLE public.events (id text PRIMARY KEY);
+          CREATE TABLE public.semantic_occurrences (id text PRIMARY KEY);
+          ALTER TABLE public.sources ENABLE ROW LEVEL SECURITY;
+          ALTER TABLE public.articles ENABLE ROW LEVEL SECURITY;
+          GRANT SELECT ON public.sources,public.articles TO dialektik_core_app;
+          INSERT INTO auth.users VALUES ('synthetic-not-a-real-user');
+          INSERT INTO public.private_beta_testers VALUES ('synthetic-not-a-real-user');
+          INSERT INTO public.categories VALUES ('synthetic-category');
+          SQL
+          docker cp "$work/fixture.sql" dialektik-acl-rollback-probe:/tmp/fixture.sql
+          if ! docker exec dialektik-acl-rollback-probe psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -f /tmp/fixture.sql > "$work/fixture-private.log" 2>&1; then
+            echo 'SYNTHETIC_FIXTURE_CREATION=FAIL'
+            grep -Ei '^psql:.*ERROR:|^ERROR:|^FATAL:' "$work/fixture-private.log" | sed -E 's/(VALUES).*/SQL_REDACTED/' || true
+            exit 1
+          fi
+          echo 'SYNTHETIC_FIXTURE_CREATION=PASS'
+          bash scripts/operations/verify_restored_roles_rollback.sh dialektik-acl-rollback-probe "$work"
+          echo 'SYNTHETIC_CORE_ACL_AND_TRANSACTION_ROLLBACK=PASS'
+          echo 'LIVE_DATABASE_WRITES=0'

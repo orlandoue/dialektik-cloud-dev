@@ -1,0 +1,67 @@
+name: Real ciphertext Supabase restore safety contracts (no secrets)
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - 'scripts/operations/test_logging_guc_sanitizer.py'
+      - 'scripts/operations/filter_auth_migration_toc.py'
+      - 'scripts/operations/test_filter_auth_migration_toc.py'
+      - 'scripts/operations/isolate_parameter_grant.py'
+      - 'scripts/operations/test_isolate_parameter_grant.py'
+      - 'scripts/operations/test_managed_backup_inventory.py'
+      - 'scripts/operations/managed_backup_inventory.py'
+      - '.github/workflows/real-backup-local-supabase-restore.yml'
+      - 'scripts/operations/real_supabase_offline_replay.sh'
+      - 'scripts/operations/check_local_restore_target.py'
+      - 'scripts/operations/classify_private_restore_error.py'
+      - 'scripts/operations/auth_data_copy_equivalence.py'
+      - 'scripts/operations/networkless_gotrue_replay_smoke.sh'
+      - '.github/scripts/networkless-auth-api-smoke.mjs'
+      - 'scripts/operations/test_auth_data_copy_equivalence.py'
+      - 'scripts/operations/test_classify_private_restore_error.py'
+      - '.github/workflows/real-supabase-restore-static-ci.yml'
+      - 'scripts/operations/inspect_role_guc_shape.py'
+      - 'scripts/operations/test_inspect_role_guc_shape.py'
+      - '.github/workflows/private-role-guc-shape.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test-and-lint-offline-restore:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Parse shell and Python scripts without real Auth input
+        run: |
+          bash -n scripts/operations/real_supabase_offline_replay.sh
+          bash -n scripts/operations/verify_restored_roles_rollback.sh
+          bash -n scripts/operations/networkless_gotrue_replay_smoke.sh
+          node --check .github/scripts/networkless-auth-api-smoke.mjs
+          grep -Fq 'networkless_gotrue_replay_smoke.sh' scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq 'verify_restored_roles_rollback.sh' scripts/operations/real_supabase_offline_replay.sh
+          python3 -m py_compile scripts/operations/managed_backup_inventory.py
+          python3 -m py_compile scripts/operations/isolate_parameter_grant.py
+          python3 -m py_compile scripts/operations/filter_auth_migration_toc.py
+          python3 -m py_compile scripts/operations/verify_real_restore_bundle.py
+          python3 -m py_compile scripts/operations/check_local_restore_target.py
+          python3 -m py_compile scripts/operations/auth_data_copy_equivalence.py
+          python3 -m unittest discover -s scripts/operations -p test_managed_backup_inventory.py -v
+          python3 -m unittest discover -s scripts/operations -p test_logging_guc_sanitizer.py -v
+          python3 -m unittest discover -s scripts/operations -p test_filter_auth_migration_toc.py -v
+          python3 -m unittest discover -s scripts/operations -p test_isolate_parameter_grant.py -v
+          python3 -m unittest discover -s scripts/operations -p test_verify_real_restore_bundle.py -v
+          python3 -m unittest discover -s scripts/operations -p test_classify_private_restore_error.py -v
+          python3 -m unittest discover -s scripts/operations -p test_auth_data_copy_equivalence.py -v
+          python3 -m unittest discover -s scripts/operations -p test_inspect_role_guc_shape.py -v
+          echo 'ALL_REPLAY_CONTRACT_SCRIPTS_PARSE=PASS'
+      - name: Ensure protected flow does not access remote DEV or upload source data
+        shell: bash
+        run: |
+          ! grep -E '(DEV_URL|DATABASE_URL|SUPABASE_ACCESS_TOKEN|DEV_CA_PEM)' .github/workflows/real-backup-local-supabase-restore.yml
+          ! grep -E '(curl |wget |scp |supabase db push|CREATE ROLE .*LOGIN)' scripts/operations/real_supabase_offline_replay.sh
+          echo 'NO_REMOTE_DEV_DATABASE_CREDENTIALS=PASS'
+          echo 'NO_MANAGED_AUTH_SOURCE_DATA=USED'
+          echo 'PRODUCTION_RESTORE_GATE=NOT_COMPLETED'

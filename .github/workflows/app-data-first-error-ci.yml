@@ -1,0 +1,47 @@
+name: Dialektik application data failure classifier - synthetic PG17 (no secrets)
+on:
+  push:
+    branches: [codex/app-data-first-sql-error-gate-20261021]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  first-error-and-atomicity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Parse protected script and test fixed-code-only classifier
+        run: |
+          bash -n scripts/operations/real_supabase_offline_replay.sh
+          python3 -m unittest discover -s scripts/operations -p test_classify_private_restore_error.py -v
+          test "$(grep -c -- '--single-transaction' scripts/operations/real_supabase_offline_replay.sh)" -ge 3
+          echo 'PROTECTED_REPLAY_ONLY_NO_REAL_DATA=PASS'
+      - name: Native PostgreSQL17 rollback after a deliberately duplicated test row
+        shell: bash
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/app-data-failure-synthetic"
+          umask 077
+          mkdir -p "$work"
+          docker run --rm -d --network none --name dialektik-appdata-fake -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11
+          trap 'docker rm -f dialektik-appdata-fake >/dev/null 2>&1 || true; rm -rf -- "$work"' EXIT
+          for i in $(seq 1 40); do
+            if docker exec dialektik-appdata-fake pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec dialektik-appdata-fake psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'create table synthetic_restore_target(id integer primary key)' >/dev/null
+          printf 'insert into synthetic_restore_target(id) values (1);\ninsert into synthetic_restore_target(id) values (1);\n' > "$work/fake.sql"
+          docker cp "$work/fake.sql" dialektik-appdata-fake:/tmp/fake.sql
+          if docker exec dialektik-appdata-fake psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 --single-transaction -f /tmp/fake.sql > "$work/private-sql-error.log" 2>&1; then
+            echo 'EXPECTED_SYNTHETIC_FAILURE_MISSING'; exit 1
+          fi
+          test "$(docker exec dialektik-appdata-fake psql -XAt -U postgres -d postgres -c 'select count(*) from synthetic_restore_target')" = 0
+          python3 scripts/operations/classify_private_restore_error.py --private-log "$work/private-sql-error.log" --first-error-only > "$work/safe-code.txt"
+          grep -qx 'REDACTED_FIRST_SQL_ERROR_CATEGORY=AUTH_DATA_DUPLICATE_KEY' "$work/safe-code.txt"
+          ! grep -E '(synthetic_restore_target|/tmp/fake.sql|Key.*id)' "$work/safe-code.txt"
+          echo 'POSTGRES17_APPLICATION_RESTORE_ATOMIC_ROLLBACK=PASS'
+          echo 'SAFE_FIRST_SQL_ERROR_CATEGORY=PASS'
+          echo 'REAL_AUTH_OR_APPLICATION_DATA_ACCESSED=FALSE'

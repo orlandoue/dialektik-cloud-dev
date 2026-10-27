@@ -1,0 +1,63 @@
+name: Dialektik auth archive 82-version equality gate (synthetic networkless PG17)
+on:
+  push:
+    branches: [codex/auth-archive-ledger-gate-20261021]
+    paths:
+      - 'scripts/operations/auth_archive_ledger_gate.py'
+      - 'scripts/operations/test_auth_archive_ledger_gate.py'
+      - 'scripts/operations/real_supabase_offline_replay.sh'
+      - '.github/workflows/auth-archive-ledger-equality-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-archive-gate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify protected runner contract remains opt-in and runner script parses
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq "AUTH_ARCHIVE_VERSION_EQUALITY" scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq -- '--version-sets-confirmed-identical' scripts/operations/real_supabase_offline_replay.sh
+          grep -Fq "APPROVE_REAL_SUPABASE_OFFLINE_RESTORE_20261020" .github/workflows/real-backup-local-supabase-restore.yml
+          echo 'REAL_RESTORE_TRIGGER_REMAINS_OWNER_GATED=PASS'
+      - name: Python archive gate negative tests
+        run: python3 -m unittest discover -s scripts/operations -p test_auth_archive_ledger_gate.py -v
+      - name: Synthetic native PostgreSQL 17 custom archive and extracted COPY comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/auth-archive-synthetic"; mkdir -p "$w"
+          docker run --rm -d --network none --name dialektik-auth-archive-synthetic -e POSTGRES_HOST_AUTH_METHOD=trust postgres:17.11
+          trap 'docker rm -f dialektik-auth-archive-synthetic >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
+          for i in $(seq 1 40); do
+            if docker exec dialektik-auth-archive-synthetic pg_isready -U postgres >/dev/null 2>&1; then break; fi
+            sleep 1
+          done
+          docker exec -i dialektik-auth-archive-synthetic psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          CREATE SCHEMA auth;
+          CREATE TABLE auth.schema_migrations (version varchar(255) PRIMARY KEY);
+          DO $fixture$ BEGIN
+            FOR i IN 1..26 LOOP
+              EXECUTE format('CREATE TABLE auth.table_%s(id integer PRIMARY KEY)', i);
+            END LOOP;
+          END $fixture$;
+          INSERT INTO auth.schema_migrations(version) SELECT lpad(i::text,14,'0') FROM generate_series(1,82) i;
+          SQL
+          docker exec dialektik-auth-archive-synthetic pg_dump -U postgres -d postgres -Fc --data-only --schema auth --file /tmp/auth-fake.dump
+          docker exec dialektik-auth-archive-synthetic pg_restore --list /tmp/auth-fake.dump > "$w/source.toc"
+          python3 scripts/operations/auth_archive_ledger_gate.py prepare --toc-in "$w/source.toc" --toc-out "$w/only-versions.toc"
+          docker cp "$w/only-versions.toc" dialektik-auth-archive-synthetic:/tmp/only-versions.toc
+          docker exec dialektik-auth-archive-synthetic pg_restore -a -L /tmp/only-versions.toc -f /tmp/versions.sql /tmp/auth-fake.dump
+          docker cp dialektik-auth-archive-synthetic:/tmp/versions.sql "$w/versions.sql"
+          docker exec dialektik-auth-archive-synthetic psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 -c 'select version from auth.schema_migrations order by version' > "$w/target.txt"
+          python3 scripts/operations/auth_archive_ledger_gate.py compare --archive-sql "$w/versions.sql" --target-versions "$w/target.txt"
+          echo 'REAL_PG_RESTORE_COPY_PARSER=PASS'
+          echo 'REAL_AUTH_DATA_USED=FALSE; REAL_BACKUP_DECRYPTION=FALSE; DEV_SQL_WRITES=0'

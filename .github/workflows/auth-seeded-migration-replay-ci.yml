@@ -1,0 +1,108 @@
+name: Dialektik Auth seeded migration duplicate and TOC repair — synthetic only
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/auth-seeded-migration-replay-ci.yml'
+      - 'scripts/operations/filter_auth_migration_toc.py'
+      - 'scripts/operations/test_filter_auth_migration_toc.py'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  reproduce-and-reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Read-only checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Unit tests for exact 27-table TOC allowlist
+        run: python3 -m unittest discover -s scripts/operations -p test_filter_auth_migration_toc.py -v
+      - name: Bootstrap independent empty Supabase with seeded internal Auth migrations
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/dialektik-synthetic-82"
+          cd "$RUNNER_TEMP/dialektik-synthetic-82"
+          npx --yes supabase@2.120.0 init > "$RUNNER_TEMP/synthetic-init.log" 2>&1
+          npx --yes supabase@2.120.0 start > "$RUNNER_TEMP/synthetic-start.log" 2>&1 || {
+            echo 'LOCAL_AUTH_BOOTSTRAP=FAIL_REDACTED'
+            exit 1
+          }
+          echo 'LOCAL_AUTH_BOOTSTRAP=PASS'
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db" || exit 1
+          echo "DISPOSABLE_AUTH_DATABASE=$db" >> "$GITHUB_ENV"
+          count="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c 'SELECT count(*) FROM auth.schema_migrations;')"
+          if [ "$count" != 82 ]; then
+            echo 'LOCAL_AUTH_MIGRATION_BASELINE_DIFFERS_FROM_82_ABORT'
+            exit 1
+          fi
+          echo 'LOCAL_SEEDED_AUTH_MIGRATIONS=82'
+      - name: Reproduce same-source Auth migration duplicate with rollback
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          db="$DISPOSABLE_AUTH_DATABASE"
+          docker exec "$db" pg_dump -U postgres -d postgres --format=custom --data-only \
+            --schema=auth --no-owner --no-privileges --file=/tmp/dialektik-synthetic-auth.dump \
+            > "$RUNNER_TEMP/synthetic-dump.log" 2>&1 || {
+              echo 'SYNTHETIC_AUTH_DATA_DUMP_FAIL'
+              exit 1
+            }
+          docker exec "$db" pg_restore --list /tmp/dialektik-synthetic-auth.dump > "$RUNNER_TEMP/auth.toc"
+          test -s "$RUNNER_TEMP/auth.toc"
+          # Archive was created from THIS same disposable DB immediately above.
+          # The 82 source and target migration values are necessarily identical.
+          python3 scripts/operations/filter_auth_migration_toc.py \
+            --toc-in "$RUNNER_TEMP/auth.toc" \
+            --toc-out "$RUNNER_TEMP/auth.filtered.toc" \
+            --version-sets-confirmed-identical
+          # Full copy in place MUST fail because the 82 seeded versions exist already.
+          if docker exec "$db" pg_restore -U postgres -d postgres --single-transaction \
+            --exit-on-error --data-only --schema=auth --table=schema_migrations \
+            /tmp/dialektik-synthetic-auth.dump \
+            > "$RUNNER_TEMP/duplicate.private.log" 2>&1; then
+            echo 'AUTH_SEEDED_MIGRATION_DUPLICATE_NOT_REPRODUCED_ABORT'
+            exit 1
+          fi
+          if ! grep -q 'duplicate key value violates unique constraint' \
+            "$RUNNER_TEMP/duplicate.private.log"; then
+            echo 'AUTH_DUPLICATE_REPLAY_FAILED_FOR_UNKNOWN_REASON_ABORT'
+            exit 1
+          fi
+          echo 'SEEDED_MIGRATION_DUPLICATE_REPRODUCED=PASS'
+          # No PRIVATE source data; only a local seeded empty Auth database.
+          docker cp "$RUNNER_TEMP/auth.filtered.toc" "$db:/tmp/dialektik-synthetic-auth-filtered.toc"
+          docker exec "$db" pg_restore -U postgres -d postgres --single-transaction \
+            --exit-on-error --data-only \
+            --use-list=/tmp/dialektik-synthetic-auth-filtered.toc \
+            /tmp/dialektik-synthetic-auth.dump \
+            > "$RUNNER_TEMP/replay.private.log" 2>&1 || {
+              echo 'SYNTHETIC_TOC_REPLAY_FAIL_REDACTED'
+              exit 1
+            }
+          replayed="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c 'SELECT (SELECT count(*) FROM auth.schema_migrations), (SELECT count(*) FROM auth.users), (SELECT count(*) FROM auth.identities);')"
+          test "$replayed" = '82|0|0' || {
+            echo 'FILTERED_REPLAY_MUTATED_SEEDED_AUTH_STATE_ABORT'
+            exit 1
+          }
+          echo 'AUTH_FILTERED_26_TABLE_DATA_REPLAY=PASS'
+          echo 'EXISTING_82_MIGRATION_VERSIONS_PRESERVED=PASS'
+          echo 'SOURCE_AUTH_USER_DATA=NONE'
+          echo 'REMOTE_SUPABASE_SQL_WRITES=0'
+      - name: Destroy temporary seeded Auth data and logs
+        if: always()
+        shell: bash
+        run: |
+          (cd "$RUNNER_TEMP/dialektik-synthetic-82" &&
+            npx --yes supabase@2.120.0 stop --no-backup > "$RUNNER_TEMP/synthetic-stop.log" 2>&1) || true
+          rm -rf "$RUNNER_TEMP/dialektik-synthetic-82" \
+            "$RUNNER_TEMP/auth.toc" "$RUNNER_TEMP/auth.filtered.toc" \
+            "$RUNNER_TEMP/duplicate.private.log" "$RUNNER_TEMP/replay.private.log"
+          echo 'SYNTHETIC_AUTH_EPHEMERAL_CLEANUP=COMPLETE'

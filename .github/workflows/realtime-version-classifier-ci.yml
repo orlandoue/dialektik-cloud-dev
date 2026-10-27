@@ -1,0 +1,27 @@
+name: Realtime migration version-set gap safety classifier
+on:
+  push:
+    branches: [codex/realtime-version-gap-classifier-20261022]
+permissions:
+  contents: read
+jobs:
+  safe-gap-output:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify bounded diagnostic and strict exclusion gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/operations/realtime_seeded_ledger_gate.py
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          python3 -m unittest discover -s scripts/operations -p test_realtime_seeded_ledger_gate.py -v
+          grep -Fq 'CHECK_REALTIME_ALL_91_VERSIONS_EXACT' scripts/operations/replay_synchronized_data_offline.sh
+          grep -Fq 'REALTIME_SOURCE_ONLY_VERSION_COUNT=' scripts/operations/realtime_seeded_ledger_gate.py
+          grep -Fq 'REALTIME_TARGET_ONLY_VERSION_COUNT=' scripts/operations/realtime_seeded_ledger_gate.py
+          echo 'REALTIME_GAP_COUNTS_CLASSIFIER=PASS'
+          echo 'REMOTE_SQL_CHANGES=0'
+          echo 'REAL_DATA_DOWNLOADS=0'

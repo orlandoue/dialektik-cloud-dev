@@ -1,0 +1,25 @@
+name: Realtime safe pre-comparison failure classifier
+on:
+  push:
+    branches: [codex/realtime-ledger-failure-categories-20261022]
+permissions:
+  contents: read
+jobs:
+  fail-closed-diagnostics:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Validate Realtime early-rejection classifier on synthetic copies
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n scripts/operations/replay_synchronized_data_offline.sh
+          python3 -m py_compile scripts/operations/realtime_seeded_ledger_gate.py
+          python3 -m unittest discover -s scripts/operations -p test_realtime_seeded_ledger_gate.py -v
+          grep -Fq 'REALTIME_SAFE_FAILURE_CLASS=' scripts/operations/realtime_seeded_ledger_gate.py
+          grep -Fq 'REALTIME_TARGET_MIGRATION_COUNT=' scripts/operations/realtime_seeded_ledger_gate.py
+          echo 'REALTIME_PRECOMPARISON_REDACTION=PASS'
+          echo 'REAL_CIPHERTEXT_OPENED=FALSE'

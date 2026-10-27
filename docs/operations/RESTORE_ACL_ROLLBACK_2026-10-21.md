@@ -1,0 +1,8 @@
+# Dialektik recovery — isolated ACL and transaction rollback (2026-10-21)
+
+This branch checks two unresolved sub-gates *after* an authenticated, fully recovered DEV backup was proven by protected run [39651747003](https://github.com/orlandoue/dialektik-cloud-dev/actions/runs/39651747003). It does not treat PostgreSQL success as complete Auth API readiness.
+
+1. Replay the **observed live DEV Core + writer privilege/RLS matrix** against the offline restored database. Core role LOGIN but NOINHERIT/NOBYPASSRLS and can SELECT Articles/Sources but cannot INSERT Articles; disabled GOV.UK writer NOLOGIN/NOBYPASSRLS and no INSERT/UPDATE/DELETE Articles, no INSERT Events or semantic occurrences; Articles and Sources use RLS. Probe emits only fixed PASS/FAIL.
+2. Deliberately create and insert into a **synthetic one-off table** in the offline database with psql ON_ERROR_STOP and --single-transaction, then raise a known error; verify table is absent and aggregate counts for restored Auth, beta testers, categories, sources, articles and events remain unchanged. Rollback proves failure atomicity **of this synthetic transaction**, NOT a crash-consistent backup of all Supabase managed services or an end-to-end recovery under power failure.
+
+CI exercises the exact script on networkless native PostgreSQL 17.11 using *fabricated* roles and rows. The protected path may call this script only after app-data and relational integrity PASS, while plaintext remains in the networkless disposable container and all logs remain private. User identity and SQL content never leave the runner. Historical migrations 001–042 are unchanged; DEV online remains read-only, the writer remains NOLOGIN, and Auth API login/role credential cutover remain outside this proof.

@@ -1,0 +1,98 @@
+import unittest
+from scripts.operations.storage_seeded_ledger_gate import source_toc, exact_compare, semantic_migration_compare, forward_one_migration_compare, StorageGateError, extract_source_rows
+SAMPLE_TOC=(
+  "; Archive header\n"
+  "3652; 0 0 TABLE DATA storage migrations storage_admin\n"
+  "3653; 0 0 TABLE DATA storage buckets storage_admin\n"
+  "3654; 0 0 TABLE DATA storage objects storage_admin\n"
+)
+ROWS=[f"{i}\tname-{i}\thash-{i}\t2026-10-21 10:00:00" for i in range(1,75)]
+SOURCE="-- synthetic only\nCOPY storage.migrations (id, name, hash, executed_at) FROM stdin;\n"+"\n".join(ROWS)+"\n\\.\n"
+class StorageSeededGateTests(unittest.TestCase):
+  def test_only_single_target_entry_enabled(self):
+    a=source_toc(SAMPLE_TOC,exclude=False)
+    self.assertIn("3652; 0 0 TABLE DATA storage migrations",a)
+    self.assertIn(";3653; 0 0 TABLE DATA storage buckets",a)
+    b=source_toc(SAMPLE_TOC,exclude=True)
+    self.assertIn(";3652; 0 0 TABLE DATA storage migrations",b)
+    self.assertIn("3653; 0 0 TABLE DATA storage buckets",b)
+  def test_all_four_fields_must_match_not_only_version(self):
+    exact_compare(SOURCE,"\n".join(reversed(ROWS))+"\n")
+    with self.assertRaises(StorageGateError):
+      exact_compare(SOURCE,"\n".join(ROWS[:-1]+[ROWS[-1].replace("hash-74","DIFFERENT")]))
+    with self.assertRaises(StorageGateError):
+      exact_compare(SOURCE,"\n".join(ROWS[:-1]+[ROWS[-1].replace("10:00:00","10:00:01")]))
+  def test_safe_categories_cannot_reveal_data(self):
+    for rows,category in (
+      (ROWS[:-1]+[ROWS[-1].replace("10:00:00","10:00:01")],
+       "STORAGE_MIGRATION_TIMESTAMP_ONLY_MISMATCH"),
+      (ROWS[:-1]+[ROWS[-1].replace("hash-74","changed")],
+       "STORAGE_MIGRATION_NAME_OR_HASH_MISMATCH"),
+      (ROWS[:-1]+[ROWS[-1].replace("74\tname","75\tname")],
+       "STORAGE_MIGRATION_ID_SET_MISMATCH"),
+      (ROWS[:-1],"STORAGE_TARGET_ROW_COUNT_OR_COLUMNS_MISMATCH"),
+    ):
+      with self.assertRaises(StorageGateError) as exc:
+        exact_compare(SOURCE,"\n".join(rows))
+      self.assertEqual(str(exc.exception),category)
+      self.assertNotIn("name-74",str(exc.exception))
+      self.assertNotIn("hash-74",str(exc.exception))
+  def test_only_timestamp_difference_is_semantically_compatible(self):
+    semantic_migration_compare(SOURCE,"\n".join(ROWS))
+    semantic_migration_compare(SOURCE,"\n".join(
+       ROWS[:-1]+[ROWS[-1].replace("10:00:00","10:00:01")]))
+    for changed in (
+      ROWS[:-1]+[ROWS[-1].replace("hash-74","other-hash")],
+      ROWS[:-1]+[ROWS[-1].replace("name-74","other-name")],
+      ROWS[:-1],
+    ):
+      with self.assertRaises(StorageGateError):
+        semantic_migration_compare(SOURCE,"\n".join(changed))
+  def test_single_later_managed_migration_allowed_if_original_74_immutable(self):
+    extra="75\tlocal-new-only\tnew-hash\t2026-10-22 13:00:00"
+    forward_one_migration_compare(SOURCE,"\n".join(
+      [x.replace("10:00:00","12:00:00") for x in ROWS]+[extra]))
+    for target in (
+      ROWS+[extra.replace("75\t","20\t")],
+      ROWS+[extra.replace("75\t","70\t")],
+      ROWS+[extra, "76\tother\thash\t2026-10-22 13:00:00"],
+      ROWS[:-1]+[ROWS[-1].replace("hash-74","changed-hash"),extra],
+      ROWS[:-1]+[extra],
+    ):
+      with self.assertRaises(StorageGateError):
+        forward_one_migration_compare(SOURCE,"\n".join(target))
+  def test_forward_failure_categories_are_redacted_and_fail_closed(self):
+    from scripts.operations.storage_seeded_ledger_gate import SAFE_DIFFERENCES
+    extra="75\tlocal-only\tnew-hash\t2026-10-22 13:00:00"
+    cases=(
+      (SOURCE,ROWS,"STORAGE_FORWARD_COUNT_OR_COLUMNS_MISMATCH"),
+      (SOURCE.replace("74\tname-74","invalid-id\tname-74"),ROWS+[extra],
+       "STORAGE_FORWARD_SOURCE_ID_INVALID"),
+      (SOURCE,ROWS+["invalid-id\tlocal-only\tnew-hash\t2026-10-22 13:00:00"],
+       "STORAGE_FORWARD_TARGET_IDS_INVALID"),
+      (SOURCE,ROWS[:-1]+[extra,"76\tnewer\tother\t2026-10-22 13:00:00"],
+       "STORAGE_FORWARD_SOURCE_NOT_SUBSET"),
+      (SOURCE,ROWS[:-1]+[ROWS[-1].replace("hash-74","SECRET_SENTINEL"),extra],
+       "STORAGE_FORWARD_NAME_HASH_CHANGED"),
+      (SOURCE,ROWS+["0\tlocal-only\tnew-hash\t2026-10-22 13:00:00"],
+       "STORAGE_FORWARD_EXTRA_NOT_LATER"),
+    )
+    for source,target,expected in cases:
+      with self.subTest(category=expected):
+        with self.assertRaises(StorageGateError) as outcome:
+          forward_one_migration_compare(source,"\n".join(target))
+        self.assertEqual(str(outcome.exception),expected)
+        self.assertIn(expected,SAFE_DIFFERENCES)
+        for sensitive in ("name-74","hash-74","SECRET_SENTINEL","local-only"):
+          self.assertNotIn(sensitive,str(outcome.exception))
+  def test_mismatched_target_count_or_duplicate_id_fails(self):
+
+    with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]))
+    with self.assertRaises(StorageGateError): exact_compare(SOURCE,"\n".join(ROWS[:-1]+[ROWS[0]]))
+  def test_malformed_source_and_unexpected_schema_table_fails(self):
+    with self.assertRaises(StorageGateError): extract_source_rows(SOURCE.replace("\\.\n",""))
+    with self.assertRaises(StorageGateError):
+      extract_source_rows(SOURCE.replace("storage.migrations","storage.buckets"))
+    with self.assertRaises(StorageGateError):
+      source_toc(SAMPLE_TOC+SAMPLE_TOC,exclude=False)
+if __name__=="__main__": unittest.main()

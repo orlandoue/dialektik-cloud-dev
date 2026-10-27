@@ -1,0 +1,42 @@
+name: Synchronized DEV backup capture contracts (no secrets)
+on:
+  push:
+    branches: [codex/synchronized-dev-encrypted-capture-20261021]
+permissions:
+  contents: read
+jobs:
+  no-secrets-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Capture source validation and live backup trigger contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/operations/capture_synchronized_dev_data.py
+          python3 - <<'PY'
+          import importlib.util
+          from pathlib import Path
+          source=Path("scripts/operations/capture_synchronized_dev_data.py")
+          spec=importlib.util.spec_from_file_location("capture",source)
+          m=importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(m)
+          m.verify_target("postgresql://postgres.vclsswwfhljczxgnsciq:fictionalpassword123@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=verify-full")
+          for bad in ["postgresql://postgres:incorrect@other.test:5432/postgres?sslmode=verify-full",
+                      "postgresql://postgres.vclsswwfhljczxgnsciq:fictionalpassword123@aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=disable"]:
+              try: m.verify_target(bad)
+              except m.GateError: continue
+              raise Exception("unsafe target accepted")
+          try: m.verify_ca("not-a-real-CA")
+          except m.GateError: pass
+          else: raise Exception("unverified CA accepted")
+          assert len(m.DUMPS)==6
+          print("EXACT_SOURCE_TLS_AND_SCHEMA_ALLOWLIST_UNIT=PASS")
+          PY
+          grep -Fq "EXECUTE_SYNCHRONIZED_DEV_DATA_CAPTURE_20261021" .github/workflows/synchronized-dev-encrypted-capture.yml
+          grep -Fq "environment: dialektik-dev-backup" .github/workflows/synchronized-dev-encrypted-capture.yml
+          grep -Fq -- "--snapshot=" scripts/operations/capture_synchronized_dev_data.py
+          echo 'REAL_BACKUP_CAPTURE_EXECUTED=FALSE'

@@ -1,0 +1,49 @@
+name: Synchronized encrypted archive verifier contracts (synthetic only)
+on:
+  push:
+    branches: [codex/synchronized-ciphertext-offline-audit-20261021]
+permissions:
+  contents: read
+jobs:
+  no-secret-fixtures:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Verify archive allowlist, hashes and rejection of corrupted metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile scripts/operations/verify_synchronized_archive.py
+          python3 - <<'PY'
+          import hashlib,json,io,tarfile,tempfile
+          from pathlib import Path
+          from scripts.operations.verify_synchronized_archive import ARCHIVES,HASHED,validate_tar
+          with tempfile.TemporaryDirectory() as t:
+            root=Path(t)
+            files={k:b"SYNTHETIC_ARCHIVE_ONLY" for k in HASHED}
+            scope={"format":"dialektik-db-row-snapshot-synchronized-v1",
+              "identical_exported_mvcc_snapshot_for_all_scopes":True,
+              "source_verified_by_cert_pin":True,
+              "captured_schemas":["public","auth","supabase_migrations","storage","realtime","vault"],
+              "global_role_settings_captured":False,"full_operational_restore_verified":False}
+            files["SCOPE.json"]=json.dumps(scope).encode()
+            files["SHA256SUMS"]="".join(
+              hashlib.sha256(files[k]).hexdigest()+"  "+k+"\n" for k in HASHED).encode()
+            path=root/"fake.tar"
+            with tarfile.open(path,'w') as tar:
+              for name,data in files.items():
+                info=tarfile.TarInfo(name); info.size=len(data)
+                tar.addfile(info,io.BytesIO(data))
+            validate_tar(path,root/"valid")
+            data=bytearray(path.read_bytes());data[1536]^=1
+            (root/"corrupt.tar").write_bytes(data)
+            try: validate_tar(root/"corrupt.tar",root/"invalid")
+            except Exception: pass
+            else: raise Exception("corrupt archive was accepted")
+            print("ARCHIVE_ALLOWLIST_HASH_CORRUPTION_SYNTHETIC=PASS")
+          PY
+          grep -Fq 'VERIFY_SYNCHRONIZED_DEV_DATA_ARCHIVE_20261021' .github/workflows/verify-synchronized-ciphertext-protected.yml
+          echo 'REAL_BACKUP_OPENED=FALSE'

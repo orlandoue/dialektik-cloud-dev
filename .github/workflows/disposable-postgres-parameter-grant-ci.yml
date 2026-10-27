@@ -1,0 +1,74 @@
+name: PostgreSQL 17 parameter GRANT authority on disposable Supabase only
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/disposable-postgres-parameter-grant-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prove-disposable-grant-authority:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 17
+    steps:
+      - name: Bootstrap official local Supabase, no production connection
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/synthetic-grant"
+          cd "$RUNNER_TEMP/synthetic-grant"
+          npx --yes supabase@2.120.0 init > "$RUNNER_TEMP/synthetic-supabase-init.log" 2>&1
+          npx --yes supabase@2.120.0 start > "$RUNNER_TEMP/synthetic-supabase-start.log" 2>&1 || {
+            echo "LOCAL_SUPABASE_INIT=FAIL_REDACTED"; exit 1;
+          }
+          db="$(docker ps --format '{{.Names}}' | grep '^supabase_db_' | head -1)"
+          test -n "$db"
+          echo "LOCAL_GRANT_DB=$db" >> "$GITHUB_ENV"
+          echo 'LOCAL_SUPABASE_INIT=PASS'
+      - name: Compare built-in roles, execute only synthetic grant and verify privileges
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$LOCAL_GRANT_DB"
+          real_admin="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "SELECT coalesce((SELECT rolsuper::text FROM pg_roles WHERE rolname='supabase_admin'),'missing')")"
+          echo "LOCAL_SUPABASE_ADMIN_SUPERUSER=$real_admin"
+          pg_role="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "SELECT coalesce((SELECT rolsuper::text FROM pg_roles WHERE rolname='postgres'),'missing')")"
+          echo "LOCAL_POSTGRES_SUPERUSER=$pg_role"
+          docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c 'CREATE ROLE dialektik_synthetic_no_login NOLOGIN' > "$RUNNER_TEMP/create-synthetic-role.log" 2>&1
+          if docker exec "$db" psql -X -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c 'GRANT SET ON PARAMETER "log_min_messages" TO dialektik_synthetic_no_login' \
+            > "$RUNNER_TEMP/postgres-grant.log" 2>&1; then
+            echo 'SYNTHETIC_GRANT_AS_POSTGRES=PASS'
+          else
+            echo 'SYNTHETIC_GRANT_AS_POSTGRES=DENIED'
+            if docker exec "$db" psql -X -U supabase_admin -d postgres -v ON_ERROR_STOP=1 \
+              -c 'GRANT SET ON PARAMETER "log_min_messages" TO dialektik_synthetic_no_login' \
+              > "$RUNNER_TEMP/admin-grant.log" 2>&1; then
+              echo 'SYNTHETIC_GRANT_AS_SUPABASE_ADMIN=PASS'
+            else
+              echo 'SYNTHETIC_GRANT_AS_SUPABASE_ADMIN=DENIED'
+              exit 1
+            fi
+          fi
+          verified="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "SELECT has_parameter_privilege('dialektik_synthetic_no_login','log_min_messages','SET')::text")"
+          test "$verified" = true
+          login="$(docker exec "$db" psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "SELECT rolcanlogin::text FROM pg_roles WHERE rolname='dialektik_synthetic_no_login'")"
+          test "$login" = false
+          echo 'DISPOSABLE_PRIVILEGE_PRESERVED=PASS'
+          echo 'SYNTHETIC_TARGET_REMAINS_NOLOGIN=PASS'
+          echo 'REAL_ROLE_IDENTIFIERS_ACCESSED=FALSE'
+      - name: Tear down disposable local project
+        if: always()
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/synthetic-grant" 2>/dev/null && \
+            npx --yes supabase@2.120.0 stop --no-backup > "$RUNNER_TEMP/synthetic-stop.log" 2>&1 || true
+          rm -rf "$RUNNER_TEMP/synthetic-grant"
+          echo 'REMOTE_SUPABASE_SQL_MUTATIONS=0'
+          echo 'REAL_BACKUP_DECRYPTED=FALSE'

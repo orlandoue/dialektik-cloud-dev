@@ -1,0 +1,43 @@
+name: Supabase 17.11 isolated restore target readiness (NO USER DATA)
+on:
+  push:
+    branches: [codex/restore-gate-managed-recovery-20261020]
+    paths:
+      - '.github/workflows/supabase-17-offline-target-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify-disposable-target:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Probe official matching Supabase PostgreSQL image with no network and no secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          image="supabase/postgres@sha256:d6844e71062a3c8e2f8021d644802850760ef970a45ac163ec8c9f0171075bda"
+          docker pull "$image" >/dev/null
+          docker run --detach --name dialektik-supabase17-probe --network none \
+            -e POSTGRES_PASSWORD=synthetic_offline_never_prod "$image" >/dev/null
+          trap 'docker rm -f dialektik-supabase17-probe >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for i in $(seq 1 60); do
+            if docker exec dialektik-supabase17-probe pg_isready -U postgres -d postgres >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" != 1 ]; then
+            echo "MATCHING_IMAGE_ISOLATED_DATABASE_READINESS=FAIL"
+            exit 1
+          fi
+          echo "MATCHING_IMAGE_ISOLATED_DATABASE_READINESS=PASS"
+          check="$(docker exec dialektik-supabase17-probe psql -XAt -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "SELECT (to_regclass('auth.users') IS NOT NULL)::integer, (to_regclass('auth.identities') IS NOT NULL)::integer, (to_regclass('auth.sessions') IS NOT NULL)::integer, (to_regclass('auth.refresh_tokens') IS NOT NULL)::integer, (to_regclass('supabase_migrations.schema_migrations') IS NOT NULL)::integer;")"
+          # Only inspect synthetic/empty-image table existence, never any live user data.
+          echo "EMPTY_OFFICIAL_TARGET_MANAGED_TABLES_PRESENT=$check"
+          echo "LIVE_SOURCE_CONTACTS=0"
+          echo "SOURCE_BACKUP_DECRYPTED=FALSE"
+          echo "RESTORE_GATE=NOT_ASSESSED"
