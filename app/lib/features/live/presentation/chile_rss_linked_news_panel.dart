@@ -65,7 +65,7 @@ final class _ChileRssLinkedNewsPanelState extends State<ChileRssLinkedNewsPanel>
                 return const Text('El canal RSS no tiene titulares recientes verificables.');
               }
               final Iterable<ChileRssLink> displayed=_showAll?
-                data.items:data.items.take(6);
+                data.items:data.items.take(3);
               return Column(
                 crossAxisAlignment:CrossAxisAlignment.start,
                 children:<Widget>[
