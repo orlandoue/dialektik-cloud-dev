@@ -1,0 +1,84 @@
+name: Dialektik Android DEV pilot release-truth and unauthenticated safety gate
+on:
+  push:
+    branches: [codex/public-launch-readiness-20261020]
+    paths:
+      - '.github/workflows/pilot-launch-readiness.yml'
+      - 'scripts/operations/pilot-release-readiness.mjs'
+      - 'scripts/operations/pilot-release-readiness.test.mjs'
+      - 'docs/release/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  contracts:
+    name: Verify source-backed pilot contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout without persisted GitHub token
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Set up pinned Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Use repository npm version
+        run: npm install --global npm@11.6.2
+      - name: Install from reviewed lock file
+        run: npm ci --no-audit --no-fund
+      - name: Compile deployed Core and database code
+        run: npm run build
+      - name: Verify fail-closed release reporting and forbidden accidental exposure
+        run: node --test scripts/operations/pilot-release-readiness.test.mjs
+      - name: Verify actual private-beta source and curated preview contracts
+        run: |
+          npx vitest run --config services/core-api/vitest.config.mts \
+            services/core-api/test/chile-tornado-evidence-preview.test.ts \
+            services/core-api/test/govuk-private-beta-preview.test.ts \
+            services/core-api/test/govuk-product-acquisition.test.ts
+      - name: Verify published pilot labels are explicitly editorial
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {chileTornadoEditorialPreview} from './services/core-api/dist/live/chile-tornado-evidence-preview.js';
+          const occurrence=chileTornadoEditorialPreview();
+          if(occurrence.persisted!==false ||
+             occurrence.semantic_engine_executed!==false ||
+             occurrence.grouping_method!=='HUMAN_REVIEWED_FIXED_OCCURRENCE' ||
+             occurrence.independent_newsroom_count!==4 ||
+             occurrence.source_count!==5 ||
+             occurrence.publications.length!==5 ||
+             !occurrence.warning.includes('No es un Event almacenado')) {
+            throw new Error('PRIVATE_PILOT_EDITORIAL_TRUTH_CONTRACT_BROKEN');
+          }
+          console.log('EDITORIAL_PREVIEW_NO_FAKE_AUTONOMOUS_EVENT=PASS');
+          console.log('PERSISTENCE=FALSE');
+          console.log('CONTRADICTION_CLAIMS=NOT_VERIFIED');
+          NODE
+  runtime-smoke:
+    name: Public endpoint safety and DEV runtime health (read-only)
+    needs: contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Run unauthenticated GET-only endpoint tests against exact Render DEV origin
+        env:
+          DIALEKTIK_LAUNCH_REPORT_PATH: ${{ runner.temp }}/dialektik-readiness/readiness.json
+        run: node scripts/operations/pilot-release-readiness.mjs --runtime
+      - name: Retain only an non-sensitive seven-day release truth manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: dialektik-private-beta-launch-truth
+          path: ${{ runner.temp }}/dialektik-readiness/readiness.json
+          retention-days: 7
+          if-no-files-found: warn
