@@ -1,4 +1,4 @@
-name: Dialektik Android private beta 25 October 2026
+name: Dialektik Android  private beta 25 October 2026
 
 on:
   workflow_dispatch:
