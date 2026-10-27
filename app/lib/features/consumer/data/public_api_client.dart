@@ -7,6 +7,7 @@ import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/chile_rss_linked_news.dart';
+import 'package:dialektik/features/live/data/chile_rss_links.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
@@ -34,6 +35,7 @@ final class PublicApiClient
         SemanticRepository,
         LiveNewsRepository,
         ChileRssLinkedNewsRepository,
+        ChileRssLinksRepository,
         SeismicObservationRepository,
         RegisteredSourceDirectoryRepository,
         SemanticShadowRepository,
@@ -318,6 +320,17 @@ final class PublicApiClient
   }) => _get(
     '/live/observations/chile/seismic',
     decoder: ChileSeismicObservations.fromJson,
+    refresh: refresh,
+    requestToken: null,
+  );
+
+  /// Authenticated second publisher original RSS links; no stored articles.
+  @override
+  Future<ChileRssLinksPreview> loadChileRssLinks({
+    bool refresh = false,
+  }) => _get(
+    '/live/preview/rss/chile/cooperativa',
+    decoder: ChileRssLinksPreview.fromJson,
     refresh: refresh,
     requestToken: null,
   );
