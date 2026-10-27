@@ -44,8 +44,9 @@ void main(){
   });
   test('spoofed URL, fake license or inference flag fails closed',(){
     final d=response();
-    (d['items'] as List<Object?>).first as Map<String,Object?>
-      ..['original_url']='https://attacker.example/article';
+    final Map<String,Object?> poisonedItem =
+        (d['items'] as List<Object?>).first! as Map<String,Object?>;
+    poisonedItem['original_url']='https://attacker.example/article';
     expect(()=>ChileRssLinkedNews.fromJson(d),throwsFormatException);
     final f=response()..['events_detected']=true;
     expect(()=>ChileRssLinkedNews.fromJson(f),throwsFormatException);
