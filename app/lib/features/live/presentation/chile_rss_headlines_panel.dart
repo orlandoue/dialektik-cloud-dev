@@ -98,7 +98,7 @@ final class _ChileRssHeadlinesPanelState extends State<ChileRssHeadlinesPanel>{
                         ],
                       ),
                     ),
-                  if(data.items.length>4)
+                  if(data.items.length>3)
                     TextButton(
                       onPressed:()=>setState(()=>_showAll=!_showAll),
                       child:Text(_showAll
