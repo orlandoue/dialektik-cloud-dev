@@ -11,7 +11,7 @@ const xml='<?xml version="1.0" encoding="utf-8"?>'+
 '</link><pubDate>Mon, 26 Oct 2026 19:00:00 GMT</pubDate><description>Never expose full text.</description></item>'+
 '<item><title>Otro titular de ejemplo</title><link>https://evil.example/attack</link>'+
 '<pubDate>Mon, 26 Oct 2026 19:00:00 GMT</pubDate></item></channel></rss>';
-const source='https://www.cooperativa.cl/noticias/google_news_rss.xml';
+const source='https://www.cooperativa.cl/noticias/site/tax/port/all/rss____1.xml';
 const robotsUrl='https://www.cooperativa.cl/robots.txt';
 function fetcher({rules=robots,feed=xml}={}){
  const calls=[];
