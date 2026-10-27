@@ -401,7 +401,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             ),
             const SizedBox(height: DialektikSpacing.space4),
           ],
-          const Text('Titulares periodísticos con enlace al medio de origen.'),
+          const Text('Artículos incorporados al motor de Dialektik'),
           if (widget.govUkPreviewLoader != null) ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             Card(
