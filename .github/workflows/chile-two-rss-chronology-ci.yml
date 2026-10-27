@@ -1,0 +1,54 @@
+name: Chile two-RSS chronology contracts and real origin smoke
+on:
+  push:
+    branches: [codex/chile-rss-merged-chronological-preview-20261027]
+  pull_request:
+    paths:
+      - 'services/core-api/**'
+      - '.github/workflows/chile-two-rss-chronology-ci.yml'
+permissions:
+  contents: read
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: node --test services/core-api/test/chile-rss-chronology.test.mjs services/core-api/test/chile-rss-linked-headlines.test.mjs services/core-api/test/chile-rss-link-preview.test.mjs
+  live-publishers:
+    needs: contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Official publisher RSS read-only chronology
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {fetchChileRssChronology} from './services/core-api/dist/live/chile-rss-chronology.js';
+          const data=await fetchChileRssChronology();
+          if(data.mode!=='CHILE_MULTI_PUBLISHER_RSS_LINK_TIMELINE'||
+             data.publisher_count<1||data.items.length<1||
+             data.persisted||data.semantic_grouping_performed||
+             data.contradictions_generated||data.full_articles_downloaded){
+             throw Error('LIVE_RSS_CHRONOLOGY_INTEGRITY_FAILURE');
+          }
+          console.log('RSS_LIVE_ORIGINS='+data.sources.map(s=>s.id+':'+s.status).join(','));
+          console.log('RSS_LINKED_HEADLINES='+data.items.length);
+          console.log('NEWEST_PUBLICATION='+data.items[0].published_at);
+          console.log('ARTICLE_BODY_DOWNLOADS=0 SQL_WRITES=0 AI_EVENT_GROUPS=0');
+          NODE

@@ -8,6 +8,7 @@ import { acquireGovUkHousingReadOnlyPreview } from './govuk-housing-live-preview
 import { latestChileUsgsObservations } from './chile-usgs-seismic-observations.js';
 import { latestChileRssLinkedHeadlines } from './chile-publisher-rss-preview.js';
 import { latestChileRssLinkPreview } from './chile-rss-link-preview.js';
+import { fetchChileRssChronology } from './chile-rss-chronology.js';
 
 /**
  * The beta-only GOV.UK preview is NOT a stored Article and does not change the
@@ -59,6 +60,19 @@ export function toGovUkReadOnlyPreviewItems(items: readonly GovUkRshPreviewMetad
 export class PrivateBetaLiveController extends LiveController {
   constructor(@Inject(LiveApplicationService) service: LiveApplicationService) {
     super(service);
+  }
+
+  /**
+   * Two publisher originals, sorted by publication date.
+   * Read-only navigation titles; never SQL Articles or AI Events.
+   */
+  @Get('preview/rss/chile/chronology')
+  async chileRssChronology() {
+    try {
+      return await fetchChileRssChronology();
+    } catch {
+      throw new ServiceUnavailableException('Chilean RSS chronology temporarily unavailable.');
+    }
   }
 
   /**
