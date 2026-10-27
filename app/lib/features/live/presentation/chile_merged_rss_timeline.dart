@@ -211,7 +211,7 @@ final class _ChileMergedRssTimelineState extends State<ChileMergedRssTimeline> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    '${data.items.length} titulares · ${data.workingSources} medios disponibles',
+                    '${data.items.length} titulares · ${data.workingSources == 1 ? '1 medio disponible' : '${data.workingSources} medios disponibles'}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                   if (data.failedSources > 0)
