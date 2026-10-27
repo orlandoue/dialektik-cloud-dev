@@ -90,7 +90,7 @@ final class _ChileRssLinkedNewsPanelState extends State<ChileRssLinkedNewsPanel>
                         ],
                       ),
                     ),
-                  if(data.items.length>6)
+                  if(data.items.length>3)
                     TextButton(
                       onPressed:()=>setState(()=>_showAll=!_showAll),
                       child:Text(_showAll?'Mostrar menos':'Ver todos los titulares RSS'),
