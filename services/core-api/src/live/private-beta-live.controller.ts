@@ -7,6 +7,7 @@ import { chileTornadoEditorialPreview } from './chile-tornado-evidence-preview.j
 import { acquireGovUkHousingReadOnlyPreview } from './govuk-housing-live-preview.js';
 import { latestChileUsgsObservations } from './chile-usgs-seismic-observations.js';
 import { latestChileRssLinkedHeadlines } from './chile-publisher-rss-preview.js';
+import { latestChileRssLinkPreview } from './chile-rss-link-preview.js';
 
 /**
  * The beta-only GOV.UK preview is NOT a stored Article and does not change the
@@ -58,6 +59,19 @@ export function toGovUkReadOnlyPreviewItems(items: readonly GovUkRshPreviewMetad
 export class PrivateBetaLiveController extends LiveController {
   constructor(@Inject(LiveApplicationService) service: LiveApplicationService) {
     super(service);
+  }
+
+  /**
+   * Cooperativa: separate private beta RSS original links, not published Articles.
+   * Source access rechecks robots, does not fetch bodies, and never writes SQL.
+   */
+  @Get('preview/rss/chile/cooperativa')
+  async chileCooperativaRssLinks() {
+    try {
+      return await latestChileRssLinkPreview();
+    } catch {
+      throw new ServiceUnavailableException('Cooperativa RSS temporarily unavailable.');
+    }
   }
 
   /**
