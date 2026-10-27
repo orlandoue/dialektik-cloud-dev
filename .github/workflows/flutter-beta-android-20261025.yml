@@ -1,7 +1,7 @@
 name: Dialektik Android private beta 25 October 2026
 on:
   push:
-    branches: [codex/flutter-two-chile-rss-sources-20261026]
+    branches: [codex/flutter-merged-chronological-rss-20261027]
     paths:
       - 'app/**'
       - '.github/workflows/flutter-beta-android-20261025.yml'
@@ -66,6 +66,7 @@ jobs:
           flutter test --no-pub test/live/chile_seismic_observations_test.dart
           flutter test --no-pub test/live/chile_rss_linked_news_test.dart
           flutter test --no-pub test/live/chile_rss_links_test.dart
+          flutter test --no-pub test/live/chile_rss_chronology_test.dart
           dart run tool/check_design_invariants.dart
   apk-debug:
     needs: [core-smoke, dart]
@@ -113,7 +114,7 @@ jobs:
           } > build/build-info.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Dialektik-Android-2026-10-26-Chile-RSS-real-links-beta
+          name: Dialektik-Android-2026-10-27-merged-Chile-RSS-beta
           path: |
             app/build/app/outputs/flutter-apk/app-debug.apk
             app/build/build-info.txt
