@@ -6,6 +6,7 @@ import { acquireGovUkRshMetadataOnce, acquireGovUkRshPreviewBatch, type GovUkRsh
 import { chileTornadoEditorialPreview } from './chile-tornado-evidence-preview.js';
 import { acquireGovUkHousingReadOnlyPreview } from './govuk-housing-live-preview.js';
 import { latestChileUsgsObservations } from './chile-usgs-seismic-observations.js';
+import { latestChileRssLinkedHeadlines } from './chile-publisher-rss-preview.js';
 
 /**
  * The beta-only GOV.UK preview is NOT a stored Article and does not change the
@@ -57,6 +58,19 @@ export function toGovUkReadOnlyPreviewItems(items: readonly GovUkRshPreviewMetad
 export class PrivateBetaLiveController extends LiveController {
   constructor(@Inject(LiveApplicationService) service: LiveApplicationService) {
     super(service);
+  }
+
+  /**
+   * Source-published Chile RSS metadata preview. Only original title, date
+   * and publisher URL; no article fetch, SQL storage, semantic publication.
+   */
+  @Get('preview/rss/chile')
+  async chilePublisherRssLinkPreview() {
+    try {
+      return await latestChileRssLinkedHeadlines();
+    } catch {
+      throw new ServiceUnavailableException('Chilean source RSS feed is temporarily unavailable.');
+    }
   }
 
   /**
