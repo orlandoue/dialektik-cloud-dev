@@ -73,7 +73,7 @@ final class _ChileRssHeadlinesPanelState extends State<ChileRssHeadlinesPanel>{
               }
               final ChileRssLinksPreview data=snapshot.data!;
               final Iterable<ChileRssLink> shown=_showAll
-                  ?data.items:data.items.take(4);
+                  ?data.items:data.items.take(3);
               return Column(
                 crossAxisAlignment:CrossAxisAlignment.start,
                 children:<Widget>[
