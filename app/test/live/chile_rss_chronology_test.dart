@@ -56,7 +56,6 @@ void main(){
     first['original_url']='https://evil.example/noticia';
     expect(()=>ChileRssChronology.fromJson(forged),throwsFormatException);
     final Map<String,Object?> unsorted=payload();
-    (unsorted['items']! as List<Object?>).reverse;
     unsorted['items']=(unsorted['items']! as List<Object?>).reversed.toList();
     expect(()=>ChileRssChronology.fromJson(unsorted),throwsFormatException);
     final Map<String,Object?> claim=payload();
