@@ -1,0 +1,37 @@
+name: Core credential cutover drill (synthetic, isolated only)
+on:
+  push:
+    branches: [codex/core-role-cutover-synthetic-20261021]
+permissions:
+  contents: read
+jobs:
+  synthetic-dual-credential-rotation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Parse cutover plan
+        run: |
+          bash -n scripts/operations/core_role_cutover_synthetic.sh
+          echo 'REAL_ROLE_PASSWORDS_NOT_USED=TRUE'
+      - name: PostgreSQL 17 SCRAM synthetic login and rollback under no Docker network
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          w="$RUNNER_TEMP/dialektik-core-cutover"
+          mkdir -p "$w"
+          docker run --rm -d --network none --name dialektik-core-cutover \
+            -e POSTGRES_PASSWORD=dummy-root-scram-20261021 \
+            -e POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256 \
+            postgres:17.11 >/dev/null
+          trap 'docker rm -f dialektik-core-cutover >/dev/null 2>&1 || true; rm -rf -- "$w"' EXIT
+          for n in $(seq 1 45); do
+            docker exec dialektik-core-cutover pg_isready -U postgres >/dev/null 2>&1 && break
+            sleep 1
+          done
+          docker exec dialektik-core-cutover pg_isready -U postgres >/dev/null
+          bash scripts/operations/core_role_cutover_synthetic.sh dialektik-core-cutover "$w"
+          echo 'SCRAM_PASSWORD_ENFORCEMENT_AND_CUTOVER=PASS'
