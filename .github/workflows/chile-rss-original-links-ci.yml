@@ -1,0 +1,57 @@
+name: Core Chile RSS live original links
+on:
+  push:
+    branches: [codex/chile-rss-live-links-20261026]
+  pull_request:
+    paths:
+      - 'services/core-api/**'
+      - '.github/workflows/chile-rss-original-links-ci.yml'
+permissions:
+  contents: read
+jobs:
+  contracts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: node --test services/core-api/test/chile-rss-link-preview.test.mjs
+  real-publisher-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Fetch one public original RSS feed safely without any SQL writes
+        run: |
+          node --input-type=module <<'NODE'
+          import {fetchChileRssLinkPreview} from './services/core-api/dist/live/chile-rss-link-preview.js';
+          const result=await fetchChileRssLinkPreview();
+          if(result.items.length<1 || result.items.length>18 ||
+             result.persisted||result.content_republication_authorized||
+             result.semantic_events_published||result.contradictions_generated)
+             throw Error('RSS_REAL_SOURCE_FAIL_CLOSED');
+          for(const item of result.items){
+            if(!item.canonical_url.startsWith('https://www.cooperativa.cl/noticias/') ||
+               !item.headline || !item.published_at || Object.hasOwn(item,'body'))
+               throw Error('RSS_LINK_ORIGIN_INVALID');
+          }
+          console.log('REAL_PUBLISHER='+result.publisher);
+          console.log('RECENT_VALID_LINK_COUNT='+result.items.length);
+          console.log('MOST_RECENT='+result.items[0].published_at);
+          console.log('SOURCE_URL='+result.source_feed_url);
+          console.log('ARTICLE_BODIES_DOWNLOADED=0');
+          console.log('SQL_WRITES=0');
+          NODE
