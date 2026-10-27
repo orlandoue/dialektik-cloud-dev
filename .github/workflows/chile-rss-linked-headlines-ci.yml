@@ -1,0 +1,54 @@
+name: Chile RSS real original-link pilot
+on:
+  push:
+    branches: [codex/chile-rss-direct-linked-beta-20261026]
+  pull_request:
+    paths:
+      - 'services/core-api/**'
+      - '.github/workflows/chile-rss-linked-headlines-ci.yml'
+permissions:
+  contents: read
+jobs:
+  rss-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: node --test services/core-api/test/chile-rss-linked-headlines.test.mjs
+  publisher-real-smoke:
+    needs: rss-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Probe actual official RSS without database credentials or article pages
+        run: |
+          node --input-type=module <<'NODE'
+          import {fetchChileRssLinkedHeadlines} from './services/core-api/dist/live/chile-publisher-rss-preview.js';
+          const data=await fetchChileRssLinkedHeadlines();
+          if(data.mode!=='LIVE_RSS_ORIGINAL_LINK_PREVIEW'||data.items.length<1||
+            data.items.length>20||data.persisted||data.bodies_downloaded)
+            throw Error('CHILE_RSS_NOT_PROVEN');
+          if(!data.items.every(x=>x.original_url.startsWith('https://www.diarioeldia.cl/') ||
+              x.original_url.startsWith('https://diarioeldia.cl/')))
+            throw Error('CHILE_RSS_ORIGIN_SPOOFED');
+          console.log('ORIGINAL_PUBLISHER=Diario El Dia');
+          console.log('CURRENT_VERIFIED_RSS_LINK_COUNT='+data.items.length);
+          console.log('LATEST_ORIGINAL_PUBLICATION='+data.items[0].published_at);
+          console.log('ORIGINAL_LINK='+data.items[0].original_url);
+          console.log('SQL_WRITES=0 FULL_ARTICLE_FETCHES=0');
+          NODE
