@@ -18,7 +18,9 @@ final class ChileRssLinkedNews {
     }
     final Uri evidence=liveHttpUri(d,'rights_evidence_url');
     if(evidence.scheme!='https' || evidence.host!='www.diarioeldia.cl' ||
-       evidence.path!='/rss')throw const FormatException('Unverified RSS rights origin');
+       evidence.path!='/rss') {
+      throw const FormatException('Unverified RSS rights origin');
+    }
     final List<ChileRssLink> rows=liveList(d['items'],ChileRssLink.fromJson);
     if(rows.length>20 || rows.map((e)=>e.originalUrl).toSet().length!=rows.length) {
       throw const FormatException('Duplicate or oversized RSS feed.');
