@@ -38,7 +38,7 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import { XMLParser } from 'fast-xml-parser';
-          const url='https://www.cooperativa.cl/noticias/google_news_rss.xml';
+          const url='https://www.cooperativa.cl/noticias/site/tax/port/all/rss____1.xml';
           const res=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(12000)});
           if(res.status!==200)throw Error('RSS_HTTP_'+res.status);
           const xml=await res.text();
