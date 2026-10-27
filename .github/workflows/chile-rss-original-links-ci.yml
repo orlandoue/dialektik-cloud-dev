@@ -34,6 +34,28 @@ jobs:
           node-version: '26'
       - run: npm ci --no-audit --no-fund
       - run: npm run build
+      - name: Diagnose RSS structure without logging headlines or copying articles
+        run: |
+          node --input-type=module <<'NODE'
+          import { XMLParser } from 'fast-xml-parser';
+          const url='https://www.cooperativa.cl/noticias/google_news_rss.xml';
+          const res=await fetch(url,{redirect:'error',signal:AbortSignal.timeout(12000)});
+          if(res.status!==200)throw Error('RSS_HTTP_'+res.status);
+          const xml=await res.text();
+          if(xml.length>1000000)throw Error('RSS_OVERSIZED');
+          const root=new XMLParser({ignoreAttributes:true,parseTagValue:false}).parse(xml);
+          const channel=root.rss?.channel;
+          const entries=Array.isArray(channel?.item)?channel.item:channel?.item?[channel.item]:[];
+          console.log('ROOT_KEYS='+Object.keys(root).slice(0,5).join(','));
+          console.log('CHANNEL_TITLE_MATCH='+/Cooperativa/i.test(String(channel?.title??'')));
+          console.log('ITEM_COUNT='+entries.length);
+          console.log('FIELD_KEYS='+Object.keys(entries[0]??{}).slice(0,15).join(','));
+          for(const row of entries.slice(0,3)){
+            let host;
+            try {host=new URL(row.link).host;} catch {host='invalid';}
+            console.log('ORIGIN_HOST='+host+' PUBLISHED_AT='+String(row.pubDate??row.date??'<absent>').slice(0,48));
+          }
+          NODE
       - name: Fetch one public original RSS feed safely without any SQL writes
         run: |
           node --input-type=module <<'NODE'
