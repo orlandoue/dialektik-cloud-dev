@@ -10,7 +10,7 @@ const SOURCE = Object.freeze({
   id:'cl_cooperativa_rss',
   publisher:'Cooperativa.cl',
   domain:'www.cooperativa.cl',
-  rssUrl:'https://www.cooperativa.cl/noticias/google_news_rss.xml',
+  rssUrl:'https://www.cooperativa.cl/noticias/site/tax/port/all/rss____1.xml',
   robotsUrl:'https://www.cooperativa.cl/robots.txt',
 });
 const RSS_LIMIT=18;
