@@ -1,7 +1,7 @@
 name: Dialektik Android private beta 25 October 2026
 on:
   push:
-    branches: [codex/flutter-compact-usgs-sources-20261026]
+    branches: [codex/flutter-chile-rss-linked-preview-20261026]
     paths:
       - 'app/**'
       - '.github/workflows/flutter-beta-android-20261025.yml'
@@ -64,6 +64,7 @@ jobs:
           flutter test --no-pub test/live/publisher_market_selection_test.dart
           flutter test --no-pub test/live/registered_source_directory_test.dart
           flutter test --no-pub test/live/chile_seismic_observations_test.dart
+          flutter test --no-pub test/live/chile_rss_linked_news_test.dart
           dart run tool/check_design_invariants.dart
   apk-debug:
     needs: [core-smoke, dart]
@@ -106,12 +107,12 @@ jobs:
             printf 'Dialektik Android private beta: 0.1.2+3\n'
             printf 'Flutter commit: %s\n' "$GITHUB_SHA"
             printf 'Core URL: https://dialektik-core-dev.onrender.com\n'
-            printf 'Core source feature: USGS live observation endpoint behind beta auth; semantic news engine still gated\n'
+            printf 'Core source feature: official Chile publisher RSS headline-link pilot + USGS, semantic news engine still gated\n'
             printf 'Profile: debug APK; private beta; semantic mode disabled\n'
           } > build/build-info.txt
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: Dialektik-Android-2026-10-26-compact-USGS-beta
+          name: Dialektik-Android-2026-10-26-Chile-RSS-real-links-beta
           path: |
             app/build/app/outputs/flutter-apk/app-debug.apk
             app/build/build-info.txt
