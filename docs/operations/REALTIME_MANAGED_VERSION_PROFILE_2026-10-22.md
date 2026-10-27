@@ -1,0 +1,7 @@
+# Investigate Realtime managed migrations lineage (22 October 2026)
+
+Protected offline recovery [39722488573](https://github.com/orlandoue/dialektik-cloud-dev/actions/runs/39722488573) fully replayed application public/Auth and Storage and stopped in Realtime preflight. Real source has 91 Ecto migration versions, while the previously pinned Supabase CLI 2.120.0 isolated target has exactly **88**. These three missing entries are only a *count difference*: exact version-set lineage is not yet verified and no automatic omission is permitted.
+
+Two currently published candidate CLI builds are investigated **synthetically**, without credentials or archives: Supabase CLI 2.121.0 (stable) and 2.122.0-beta.12. Both bootstrap a fresh local PostgreSQL with managed schema and report only counts of Auth, Storage and Realtime migration history and whether their two Iceberg tables are empty. A preliminarily compatible count (82/74/91) is a necessary but **not sufficient** criterion for operational snapshot replay. Before protected authentic re-execution, pin the exact chosen CLI and PostgreSQL image, compare the full 91 Realtime version ID set (not timestamps), and ensure roles/Auth/Storage/full rollback still pass. If neither profile matches, research compatible managed images; never TRUNCATE, rewrite, or skip Realtime migration history.
+
+No remote DEV SQL, Core/Render changes, application migrations 043/044 or writer LOGIN.
