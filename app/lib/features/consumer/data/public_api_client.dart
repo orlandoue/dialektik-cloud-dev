@@ -6,6 +6,7 @@ import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/live/data/chile_rss_linked_news.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
@@ -32,6 +33,7 @@ final class PublicApiClient
         ConsumerRepository,
         SemanticRepository,
         LiveNewsRepository,
+        ChileRssLinkedNewsRepository,
         SeismicObservationRepository,
         RegisteredSourceDirectoryRepository,
         SemanticShadowRepository,
@@ -319,6 +321,15 @@ final class PublicApiClient
     refresh: refresh,
     requestToken: null,
   );
+
+  @override
+  Future<ChileRssLinkedNews> loadChileRssLinkedNews({bool refresh = false}) =>
+      _get(
+        '/live/preview/rss/chile',
+        decoder: ChileRssLinkedNews.fromJson,
+        refresh: refresh,
+        requestToken: null,
+      );
 
   /// Opt-in, beta-only preview. Never included in live/news or local Article cache.
   Future<GovUkPreview> loadGovUkPreview({bool refresh = false}) => _get(
