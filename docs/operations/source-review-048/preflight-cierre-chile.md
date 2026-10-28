@@ -22,7 +22,10 @@ sin modificar restricciones, triggers, políticas RLS ni registros históricos.
 - El Core desplegado responde a `country=CL` y otros códigos ya definidos,
   pero no admite `country=UK`. El cambio preparado para el Core admite UK y
   limita sus consultas a los IDs de RSH y MHCLG; no habilita LATAM. Ese cambio
-  no altera por sí mismo las políticas ni publica artículos.
+  no altera por sí mismo las políticas ni publica artículos. Se comprobó en
+  PostgreSQL aislado con tres fuentes sintéticas `gov.uk`: solo las dos con
+  los IDs permitidos aparecieron en la consulta británica y ninguna apareció
+  en la consulta chilena.
 
 ## Endpoints propuestos
 
@@ -126,3 +129,12 @@ explícita de mantener los controles activos.
 El usuario editorial y su vínculo con la cuenta beta ya existen usando el rol
 `editor`, que es el rol disponible en el esquema. El esquema de `public.users`
 no contiene los campos de nombre, alias y correo ni el rol `chief_editor`.
+
+La revisión anterior también identificó dos diferencias preexistentes respecto
+al esquema original: la restricción `articles_live_origin_exclusion` no está
+instalada en esta base y la función `dialektik_validate_position_formation`
+utilizada por triggers existentes es una implementación vacía. Se conserva la
+restricción adicional validada `articles_live_exposure_presence_check`. No se
+ha modificado ninguna de ellas en este preflight; restaurar la función original
+requiere reconciliar previamente las posiciones históricas que no tienen
+formación, como se explica en [revision_048.md](revision_048.md).
