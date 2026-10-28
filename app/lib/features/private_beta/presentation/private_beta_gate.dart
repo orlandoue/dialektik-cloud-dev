@@ -152,12 +152,14 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
   }
 
   Future<void> _signOut() async {
-    await _auth?.signOut();
-    if (!mounted) return;
-    setState(() {
-      _signedIn = false;
-      _notice = null;
-    });
+    final Future<void>? remoteSignOut = _auth?.signOut();
+    if (mounted) {
+      setState(() {
+        _signedIn = false;
+        _notice = null;
+      });
+    }
+    await remoteSignOut;
   }
 
   @override

@@ -184,6 +184,8 @@ final class ConsumerRouteFactory {
           _navigatorKey.currentState?.pushNamed(ConsumerRoutes.liveArticle(id));
       void openLiveSource(String id) =>
           _navigatorKey.currentState?.pushNamed(ConsumerRoutes.liveSource(id));
+      void openPublicSource(String id) =>
+          _navigatorKey.currentState?.pushNamed(ConsumerRoutes.source(id));
       void openLiveProvenance(String id) => _navigatorKey.currentState
           ?.pushNamed(ConsumerRoutes.liveProvenance(id));
       final SemanticGraphRepository? graph = semanticGraphRepository;
@@ -197,6 +199,7 @@ final class ConsumerRouteFactory {
           uri.path == ConsumerRoutes.liveSources ||
           uri.path == ConsumerRoutes.contradictions ||
           uri.path.startsWith('/events/') ||
+          uri.path.startsWith('/sources/') ||
           uri.path.startsWith('/live/news/') ||
           uri.path.startsWith('/live/sources/');
       if (marketCode != 'CL' && sectionRequiresCoverage) {
@@ -212,7 +215,9 @@ final class ConsumerRouteFactory {
               children: <Widget>[
                 Text('País seleccionado: $marketCode'),
                 const SizedBox(height: 16),
-                const Text('Este país todavía no tiene cobertura habilitada. No se presentarán noticias, acontecimientos ni contradicciones de Chile como si fueran locales.'),
+                const Text(
+                  'Este país todavía no tiene cobertura habilitada. No se presentarán noticias, acontecimientos ni contradicciones de Chile como si fueran locales.',
+                ),
                 const SizedBox(height: 16),
                 TextButton(
                   onPressed: () => _openSection(ConsumerRoutes.liveNews),
@@ -349,7 +354,17 @@ final class ConsumerRouteFactory {
             navigationActions: navigationActions,
             onOpenEvent: (String id) => _navigatorKey.currentState
                 ?.pushReplacementNamed(ConsumerRoutes.event(id)),
-            onOpenSource: openLiveSource,
+            onOpenSource: openPublicSource,
+          ),
+        );
+      }
+      if (segments.length == 2 && segments.first == 'sources') {
+        return _page(
+          settings,
+          SourceScreen(
+            sourceId: Uri.decodeComponent(segments[1]),
+            repository: repository,
+            navigationActions: navigationActions,
           ),
         );
       }
@@ -612,6 +627,7 @@ final class ConsumerRouteFactory {
       return 'Acontecimientos';
     }
     if (path == ConsumerRoutes.liveSources ||
+        path.startsWith('/sources/') ||
         path.startsWith('/live/sources/')) {
       return 'Fuentes';
     }

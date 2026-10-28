@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
@@ -34,6 +35,63 @@ void main() {
     expect(find.text('Contradicciones'), findsNothing);
     expect(authRequests, 0);
     expect(coreRequests, 0);
+  });
+
+  for (final double width in <double>[390, 1200]) {
+    testWidgets('sign out remains available at ${width.toInt()}px', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final List<http.Request> authRequests = <http.Request>[];
+      await tester.pumpWidget(
+        _gate(
+          authClient: MockClient((http.Request request) async {
+            authRequests.add(request);
+            if (request.url.path == '/auth/v1/logout') {
+              return http.Response('', 204);
+            }
+            return _sessionResponse('valid-access', 'valid-refresh', 3600);
+          }),
+          apiClient: MockClient((_) async => _emptyPage()),
+        ),
+      );
+      await _signIn(tester);
+      final Finder signOut = find.byTooltip('Cerrar sesión');
+      expect(signOut, findsOneWidget);
+      await tester.tap(signOut);
+      await tester.pumpAndSettle();
+      expect(find.text('Beta privada'), findsOneWidget);
+      expect(find.byTooltip('Cerrar sesión'), findsNothing);
+      expect(authRequests.last.url.path, '/auth/v1/logout');
+      expect(authRequests.last.headers['authorization'], 'Bearer valid-access');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('sign out returns to login while remote logout is pending', (
+    WidgetTester tester,
+  ) async {
+    final Completer<http.Response> logout = Completer<http.Response>();
+    await tester.pumpWidget(
+      _gate(
+        authClient: MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/logout') return logout.future;
+          return _sessionResponse('valid-access', 'valid-refresh', 3600);
+        }),
+        apiClient: MockClient((_) async => _emptyPage()),
+      ),
+    );
+    await _signIn(tester);
+    await tester.tap(find.byTooltip('Cerrar sesión'));
+    await tester.pump();
+    expect(find.text('Beta privada'), findsOneWidget);
+    expect(find.byTooltip('Cerrar sesión'), findsNothing);
+    logout.complete(http.Response('', 204));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets(

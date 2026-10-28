@@ -26,7 +26,7 @@ import 'package:flutter/material.dart';
 // Strict beta source allowlist for Chile, not a general geolocation engine.
 const Set<String> _chileBetaPublisherDomains = <String>{
   'bcentral.cl', 'biobiochile.cl', 'sismologia.cl',
-  'ciperchile.cl', 'cooperativa.cl', 'elmostrador.cl',
+  'ciperchile.cl', 'cooperativa.cl', 'diarioeldia.cl', 'www.diarioeldia.cl', 'elmostrador.cl',
   'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl',
 };
 
@@ -889,7 +889,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
         SectionHeading(title: 'Registradas en revisión · ${_registered.length}'),
         const SizedBox(height: DialektikSpacing.space2),
         const Text(
-          'Estas fuentes constan en el registro técnico, pero aún no tienen autorización ni procedencia acreditadas. No se adquieren noticias por mostrarlas aquí.',
+          'Este registro técnico no verifica autorizaciones ni procedencia. Las fuentes operativas se muestran en la sección anterior.',
         ),
         const SizedBox(height: DialektikSpacing.space3),
         if (_registeredLoading)
@@ -915,7 +915,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
                       const SizedBox(height: DialektikSpacing.space1),
                       Text(source.canonicalDomain),
                       const SizedBox(height: DialektikSpacing.space1),
-                      Text('${source.stagedRecordCount} registros sin verificar · Permisos pendientes'),
+                      Text('${source.stagedRecordCount} registros · Verificación independiente pendiente'),
                     ],
                   ),
                 ),
@@ -925,7 +925,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
         SectionHeading(title: 'Candidatas · ${_candidates.length}'),
         const SizedBox(height: DialektikSpacing.space2),
         const Text(
-          'Este catálogo conserva los 50 medios revisados. Son propuestas de conexión: no se consultan ni se adquieren noticias y sus permisos siguen sin acreditar.',
+          'Este catálogo conserva la revisión histórica de 50 medios. Sus datos no reflejan necesariamente el estado actual de las fuentes operativas y no activan la adquisición de noticias.',
         ),
         const SizedBox(height: DialektikSpacing.space4),
         TextField(
@@ -974,7 +974,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
                   candidate.technicalState,
                 ),
                 LiveDetailLine(
-                  'Revalidación técnica actual',
+                  'Revalidación técnica registrada',
                   candidate.currentTechnicalState == 'NOT_RECHECKED'
                       ? 'Pendiente'
                       : candidate.currentTechnicalState,

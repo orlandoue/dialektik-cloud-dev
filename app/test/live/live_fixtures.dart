@@ -18,7 +18,9 @@ Map<String, Object?> liveTestSource({bool longText = false}) =>
             ).join(' ')
           : 'Editorial de pruebas · sintético',
       'source_type': 'other',
-      'canonical_domain': 'news.dialektik.invalid',
+      // The source market is allowed by the Chile beta. All URLs and article
+      // content below remain synthetic and are handled by an HTTP mock.
+      'canonical_domain': 'diarioeldia.cl',
       'publisher_family': null,
       'category': null,
       'origin': 'LIVE_REAL',

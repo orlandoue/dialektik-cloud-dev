@@ -5,6 +5,8 @@ import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/screens/feed_screen.dart';
 import 'package:dialektik/features/consumer/presentation/screens/source_screen.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/consumer_navigation_action.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/consumer_responsive_shell.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
@@ -128,7 +130,17 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
     final _RecordingRepository repository = _RecordingRepository();
-    await tester.pumpWidget(_app(_feed(repository, onOpenThreads: () {})));
+    var openedThreads = false;
+    await tester.pumpWidget(
+      _app(
+        _feed(
+          repository,
+          onOpenThreads: () {
+            openedThreads = true;
+          },
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
     final Finder economy = find.widgetWithText(ChoiceChip, 'Economía');
@@ -144,11 +156,11 @@ void main() {
       closeTo(categoryViewport.center.dx, 4),
     );
     expect(tester.getSize(economy).height, greaterThanOrEqualTo(44));
-    final Finder more = find.byTooltip('Más opciones');
-    await tester.ensureVisible(more);
-    await tester.tap(more);
+    final Finder histories = find.text('Historias');
+    await tester.ensureVisible(histories);
+    await tester.tap(histories);
     await tester.pumpAndSettle();
-    expect(find.text('Historias'), findsOneWidget);
+    expect(openedThreads, isTrue);
     expect(find.text('Threads'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -247,15 +259,49 @@ void main() {
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(_app(_feed(_RecordingRepository())));
+    var openedAdministration = false;
+    await tester.pumpWidget(
+      _app(
+        ConsumerResponsiveShell(
+          title: 'Actualidad',
+          body: const SizedBox.shrink(),
+          navigationActions: <Widget>[
+            for (final String label in <String>[
+              'Actualidad',
+              'Acontecimientos',
+              'Contradicciones',
+              'Fuentes',
+            ])
+              ConsumerNavigationAction(
+                label: label,
+                selected: false,
+                onPressed: () {},
+              ),
+            ConsumerNavigationAction(
+              label: 'Administración',
+              selected: false,
+              onPressed: () => openedAdministration = true,
+            ),
+          ],
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
 
+    final Finder moreEntry = find.text('Más');
+    await tester.ensureVisible(moreEntry);
+    await tester.pumpAndSettle();
     final Rect viewport = tester.getRect(
       find.byKey(const Key('consumer-primary-navigation-scroll')),
     );
-    final Rect more = tester.getRect(find.text('Más'));
+    final Rect more = tester.getRect(moreEntry);
     expect(more.left, greaterThanOrEqualTo(viewport.left));
     expect(more.right, lessThanOrEqualTo(viewport.right));
+    await tester.tap(moreEntry);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Administración'));
+    await tester.pumpAndSettle();
+    expect(openedAdministration, isTrue);
     expect(tester.takeException(), isNull);
   });
 
