@@ -6,6 +6,8 @@ import 'package:dialektik/core/infrastructure/app_environment.dart';
 import 'package:dialektik/design_system/theme/dialektik_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_client.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
+import 'package:dialektik/features/editorial/data/editorial_api.dart';
+import 'package:dialektik/features/editorial/presentation/editorial_review_screen.dart';
 import 'package:dialektik/features/private_beta/data/supabase_auth_client.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -45,6 +47,9 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
   bool _signedIn = false;
   bool _busy = false;
   String? _notice;
+  final ValueNotifier<EditorialSession?> _editorialSession =
+      ValueNotifier<EditorialSession?>(null);
+  int _sessionGeneration = 0;
 
   @override
   void initState() {
@@ -64,12 +69,14 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
   @override
   void dispose() {
     _auth?.close();
+    _editorialSession.dispose();
     super.dispose();
   }
 
   Future<void> _signIn(String email, String password) async {
     final SupabaseAuthClient? auth = _auth;
     if (auth == null) return;
+    final int generation = ++_sessionGeneration;
     setState(() {
       _busy = true;
       _notice = null;
@@ -106,6 +113,7 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
         _signedIn = true;
         _busy = false;
       });
+      unawaited(_loadEditorialSession(auth, generation));
     } on SupabaseAuthNetworkFailure {
       if (!mounted) return;
       setState(() {
@@ -120,6 +128,25 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
         _notice =
             'No se pudo iniciar sesión. Revisa la cuenta invitada y la conexión.';
       });
+    }
+  }
+
+  Future<void> _loadEditorialSession(
+    SupabaseAuthClient auth,
+    int generation,
+  ) async {
+    final EditorialApi api = EditorialApi(
+      configuration: widget.apiConfiguration,
+      tokenProvider: () => _accessToken(auth),
+      httpClient: widget.apiHttpClient,
+    );
+    try {
+      final EditorialSession? session = await api.session();
+      if (mounted && _signedIn && generation == _sessionGeneration) {
+        _editorialSession.value = session;
+      }
+    } finally {
+      api.close();
     }
   }
 
@@ -141,8 +168,10 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
   );
 
   void _authorizationRejected() {
-    _auth?.clearSession();
     if (!mounted) return;
+    _auth?.clearSession();
+    _sessionGeneration += 1;
+    _editorialSession.value = null;
     setState(() {
       _signedIn = false;
       _busy = false;
@@ -152,6 +181,8 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
   }
 
   Future<void> _signOut() async {
+    _sessionGeneration += 1;
+    _editorialSession.value = null;
     final Future<void>? remoteSignOut = _auth?.signOut();
     if (mounted) {
       setState(() {
@@ -174,6 +205,31 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
         apiAccessTokenProvider: () => _accessToken(_auth!),
         onAuthorizationRejected: _authorizationRejected,
         betaNavigationActions: <Widget>[
+          ValueListenableBuilder<EditorialSession?>(
+            valueListenable: _editorialSession,
+            builder: (context, session, _) {
+              if (session == null) return const SizedBox.shrink();
+              return IconButton(
+                tooltip: 'Revisión editorial',
+                icon: const Icon(Icons.fact_check_outlined),
+                onPressed: () {
+                  final SupabaseAuthClient? auth = _auth;
+                  if (auth == null) return;
+                  final EditorialApi api = EditorialApi(
+                    configuration: widget.apiConfiguration,
+                    tokenProvider: () => _accessToken(auth),
+                    httpClient: widget.apiHttpClient,
+                  );
+                  Navigator.of(context).push<void>(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          EditorialQueueScreen(api: api, session: session),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
           IconButton(
             tooltip: 'Cerrar sesión',
             onPressed: () => unawaited(_signOut()),
