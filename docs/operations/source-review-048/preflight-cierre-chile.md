@@ -59,12 +59,12 @@ citas breves bajo sus condiciones y exige fuente, título y autor. La referencia
 al artículo 38 no debe registrarse como fundamento vigente sin una fuente
 posterior que lo acredite.
 
-El expediente actual propone CC BY-NC-SA 4.0 para CIPER; el anterior proponía
-CC BY-SA 4.0. La portada consultada indica derechos reservados y no se ha
-encontrado una declaración oficial de una u otra licencia para esas obras. Se
-solicitó al propietario la referencia aplicable o una revisión documentada del
-uso concreto. La elección de no exigir un contrato bilateral no determina por
-sí sola el alcance de una licencia ni de una excepción legal.
+El propietario descartó las etiquetas CC propuestas anteriormente y decidió
+tratar CIPER como fuente RSS de metadatos, sin contrato bilateral. Identificó
+su feed oficial y el artículo 71 B como fundamento de su decisión editorial
+sobre citas. Esta decisión no es una licencia Creative Commons ni documenta
+por sí sola autorización para transmitir fragmentos a un proveedor de IA.
+La referencia al artículo 38 no se usa como norma vigente.
 
 ## Fechas británicas y evidencia editorial
 

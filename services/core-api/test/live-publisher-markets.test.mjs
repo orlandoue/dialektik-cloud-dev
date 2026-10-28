@@ -56,6 +56,12 @@ test('Chile news and sources are filtered on SQL server before pagination', asyn
       assert.ok(!values.includes('gov.uk'), 'no UK domain may appear in Chile scope');
     }
     const news = queries[0].text.toLowerCase();
+    assert.match(news, /select a\.id, a\.event_id,/);
+    assert.doesNotMatch(news, /a\.event_id\s+is\s+null/);
+    assert.match(news, /a\.origin\s*=\s*'live_real'/);
+    assert.match(news, /jsonb_typeof\(q\.policy->'quarantinedarticleids'\)\s*=\s*'array'/);
+    assert.match(news, /not \(q\.policy->'quarantinedarticleids' @> jsonb_build_array\(a\.id::text\)\)/);
+    assert.match(news, /order by q\.recorded_at desc, q\.id desc limit 1/);
     assert.ok(news.indexOf('canonical_domain in (') < news.indexOf('order by published_at'));
     assert.ok(news.indexOf('order by published_at') < news.lastIndexOf('limit '));
   } finally {

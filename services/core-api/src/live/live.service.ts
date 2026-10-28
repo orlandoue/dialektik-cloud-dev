@@ -45,7 +45,7 @@ function newsDto(row: LiveReadRow) {
       policy: row.policy,
     }),
     origin: 'LIVE_REAL' as const,
-    semantic_assignment: 'UNASSIGNED' as const,
+    semantic_assignment: row.event_id === null ? ('UNASSIGNED' as const) : ('EVENT_LINKED' as const),
     version_count: row.version_count,
   };
 }
@@ -78,7 +78,9 @@ export class LiveApplicationService {
     const items = rows.slice(0, query.limit).map(newsDto);
     return {
       origin: 'LIVE_REAL' as const,
-      semantic_mode: 'unassigned' as const,
+      semantic_mode: items.some((item) => item.semantic_assignment === 'EVENT_LINKED')
+        ? ('mixed' as const)
+        : ('unassigned' as const),
       items,
       next_cursor: rows.length > query.limit ? (items.at(-1)?.id ?? null) : null,
     };
