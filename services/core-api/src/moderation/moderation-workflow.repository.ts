@@ -24,9 +24,13 @@ import type { Database, ModerationCommandType } from '@dialektik/database';
 type CommandResponse = Readonly<Record<string, JsonValue>>;
 type CommandAuditMetadata = Readonly<Record<string, JsonValue>>;
 
-interface CurrentActor {
+interface AuthenticatedActor {
   readonly userId: Ulid;
   readonly role: UserRole;
+}
+
+interface CurrentActor extends AuthenticatedActor {
+  readonly singleEditorAuthorizationId: Ulid | null;
 }
 
 interface CommandDefinition {
@@ -242,7 +246,7 @@ export class ModerationWorkflowRepository {
         void hash;
         const proposal = await this.lockSubmittedProposal(transaction, taskId, proposalId);
         const detail = await this.requireCurrentReview(transaction, taskId);
-        if (proposal.proposer_id === actor.userId) {
+        if (!this.canDecideProposal(actor, proposal)) {
           throw new ModerationHttpError(403, 'MOD_FORBIDDEN');
         }
         const members = await transaction
@@ -261,6 +265,9 @@ export class ModerationWorkflowRepository {
           outcome: proposal.outcome,
           proposal_id: proposalId,
           proposer_user_id: proposal.proposer_id,
+          review_mode:
+            proposal.single_editor_authorization_id === null ? 'dual_control' : 'single_editor',
+          single_editor_authorization_id: proposal.single_editor_authorization_id,
           resulting_task_state: resultingTaskState,
         });
         await transaction
@@ -436,7 +443,7 @@ export class ModerationWorkflowRepository {
         void hash;
         const proposal = await this.lockSubmittedProposal(transaction, taskId, proposalId);
         const detail = await this.requireCurrentReview(transaction, taskId);
-        if (proposal.proposer_id === actor.userId) {
+        if (!this.canDecideProposal(actor, proposal)) {
           throw new ModerationHttpError(403, 'MOD_FORBIDDEN');
         }
         await setTransactionAuditMetadata(transaction, {
@@ -445,6 +452,9 @@ export class ModerationWorkflowRepository {
           outcome: proposal.outcome,
           proposal_id: proposalId,
           proposer_user_id: proposal.proposer_id,
+          review_mode:
+            proposal.single_editor_authorization_id === null ? 'dual_control' : 'single_editor',
+          single_editor_authorization_id: proposal.single_editor_authorization_id,
           refusing_editor_user_id: actor.userId,
           resulting_task_state: detail.taskState,
         });
@@ -516,6 +526,8 @@ export class ModerationWorkflowRepository {
           outcome: proposal.outcome,
           proposal_id: proposalId,
           proposer_user_id: actor.userId,
+          review_mode: actor.role === 'editor' ? 'single_editor' : 'dual_control',
+          single_editor_authorization_id: actor.singleEditorAuthorizationId,
           resulting_task_state: detail.taskState,
         });
         await transaction
@@ -539,6 +551,7 @@ export class ModerationWorkflowRepository {
             outcome: proposal.outcome,
             payload_hash: hash,
             proposer_id: actor.userId,
+            single_editor_authorization_id: actor.singleEditorAuthorizationId,
             state: 'submitted',
             submitted_at: now,
             task_id: taskId,
@@ -574,8 +587,22 @@ export class ModerationWorkflowRepository {
               )
             )
           `.execute(transaction);
-          const actor = await this.resolveCurrentActor(transaction, identity);
-          this.authorization.assertAuthorized(actor.role, definition.capability);
+          const authenticatedActor = await this.resolveCurrentActor(transaction, identity);
+          const authorization = authenticatedActor.role === 'editor'
+            ? await sql<{ readonly id: Ulid }>`
+                select id from public.editorial_single_editor_authorizations
+                where editor_user_id = ${authenticatedActor.userId} and revoked_at is null
+              `.execute(transaction)
+            : null;
+          const actor: CurrentActor = {
+            ...authenticatedActor,
+            singleEditorAuthorizationId: authorization?.rows[0]?.id ?? null,
+          };
+          this.authorization.assertAuthorized(
+            actor.role,
+            definition.capability,
+            actor.singleEditorAuthorizationId !== null,
+          );
           const receipt = await transaction
             .selectFrom('moderation_command_receipts')
             .select(['command_type', 'payload_hash', 'response_payload'])
@@ -666,11 +693,11 @@ export class ModerationWorkflowRepository {
   private async resolveCurrentActor(
     transaction: Transaction<Database>,
     identity: ModerationIdentity,
-  ): Promise<CurrentActor> {
+  ): Promise<AuthenticatedActor> {
     if (identity.kind === 'beta') {
       // Recheck the binding, beta access, role and JWT expiry within the same
       // transaction that applies the editorial command.
-      const result = await sql<CurrentActor>`
+      const result = await sql<AuthenticatedActor>`
         select u.id as "userId", u.role
         from public.editorial_beta_identities binding
         join public.users u on u.id = binding.editorial_user_id
@@ -728,7 +755,7 @@ export class ModerationWorkflowRepository {
   ) {
     const proposal = await transaction
       .selectFrom('moderation_review_proposals')
-      .select(['id', 'outcome', 'proposer_id'])
+      .select(['id', 'outcome', 'proposer_id', 'single_editor_authorization_id'])
       .where('id', '=', proposalId)
       .where('task_id', '=', taskId)
       .where('state', '=', 'submitted')
@@ -736,5 +763,16 @@ export class ModerationWorkflowRepository {
       .executeTakeFirst();
     if (proposal === undefined) throw moderationConflict('MOD_PROPOSAL_CONFLICT');
     return proposal;
+  }
+
+  private canDecideProposal(
+    actor: CurrentActor,
+    proposal: { readonly proposer_id: Ulid; readonly single_editor_authorization_id: Ulid | null },
+  ): boolean {
+    if (proposal.single_editor_authorization_id === null) {
+      return proposal.proposer_id !== actor.userId;
+    }
+    return proposal.proposer_id === actor.userId &&
+      proposal.single_editor_authorization_id === actor.singleEditorAuthorizationId;
   }
 }

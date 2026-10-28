@@ -4,6 +4,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { ModerationAuthService, type ModerationIdentity } from './moderation-auth.service.js';
 import { EquivalenceReviewRepository } from './equivalence-review.repository.js';
+import { ModerationDatabaseService } from './moderation-database.service.js';
 import { ModerationHttpError } from './moderation-http.error.js';
 import { ModerationWorkflowRepository } from './moderation-workflow.repository.js';
 import { Od12AuthorizationError, Od12AuthorizationGate } from './od12-authorization.gate.js';
@@ -43,14 +44,13 @@ function requireUlidArray(value: unknown): readonly Ulid[] {
 @Injectable()
 export class ModerationWorkflowService {
   private readonly authorization = new Od12AuthorizationGate();
-  private readonly repository: ModerationWorkflowRepository;
+  private repository: ModerationWorkflowRepository | undefined;
 
   public constructor(
     @Inject(CoreDatabaseService) private readonly databaseService: CoreDatabaseService,
     @Inject(ModerationAuthService) private readonly auth: ModerationAuthService,
-  ) {
-    this.repository = new ModerationWorkflowRepository(this.databaseService.database);
-  }
+    @Inject(ModerationDatabaseService) private readonly moderationDatabase: ModerationDatabaseService,
+  ) {}
 
   public async list(authorization: string | undefined) {
     const identity = await this.authorize(authorization, 'inspect_queue');
@@ -82,7 +82,7 @@ export class ModerationWorkflowService {
   ) {
     requireExactKeys(body ?? {}, []);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.claim(
+    return this.writeRepository().claim(
       identity,
       requireUlid(taskIdValue),
       this.requireCommandId(commandIdValue),
@@ -97,7 +97,7 @@ export class ModerationWorkflowService {
   ) {
     requireExactKeys(body ?? {}, []);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.release(
+    return this.writeRepository().release(
       identity,
       requireUlid(taskIdValue),
       this.requireCommandId(commandIdValue),
@@ -112,7 +112,7 @@ export class ModerationWorkflowService {
   ) {
     const payload = requireExactKeys(body, ['moderatorId']);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.reassign(
+    return this.writeRepository().reassign(
       identity,
       requireUlid(taskIdValue),
       this.requireCommandId(commandIdValue),
@@ -128,7 +128,7 @@ export class ModerationWorkflowService {
   ) {
     requireExactKeys(body ?? {}, []);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.escalate(
+    return this.writeRepository().escalate(
       identity,
       requireUlid(taskIdValue),
       this.requireCommandId(commandIdValue),
@@ -151,7 +151,7 @@ export class ModerationWorkflowService {
       const payload = requireExactKeys(body, ['assertionIds', 'outcome']);
       const assertionIds = requireUlidArray(payload.assertionIds);
       if (assertionIds.length < 2) throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
-      return this.repository.submitAcceptSubset(identity, taskId, commandId, assertionIds);
+      return this.writeRepository().submitAcceptSubset(identity, taskId, commandId, assertionIds);
     }
     const payload = requireExactKeys(body, ['outcome', 'partitions']);
     if (!Array.isArray(payload.partitions) || payload.partitions.length < 2) {
@@ -161,7 +161,7 @@ export class ModerationWorkflowService {
     if (partitions.some((partition) => partition.length === 0)) {
       throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
     }
-    return this.repository.submitSplit(identity, taskId, commandId, partitions);
+    return this.writeRepository().submitSplit(identity, taskId, commandId, partitions);
   }
 
   public async confirm(
@@ -173,7 +173,7 @@ export class ModerationWorkflowService {
   ) {
     requireExactKeys(body ?? {}, []);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.confirm(
+    return this.writeRepository().confirm(
       identity,
       requireUlid(taskIdValue),
       requireUlid(proposalIdValue),
@@ -197,7 +197,7 @@ export class ModerationWorkflowService {
       throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
     }
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.refuse(
+    return this.writeRepository().refuse(
       identity,
       requireUlid(taskIdValue),
       requireUlid(proposalIdValue),
@@ -209,6 +209,11 @@ export class ModerationWorkflowService {
   private requireCommandId(value: string | undefined): Ulid {
     if (value === undefined) throw new ModerationHttpError(400, 'MOD_IDEMPOTENCY_REQUIRED');
     return requireUlid(value);
+  }
+
+  private writeRepository(): ModerationWorkflowRepository {
+    this.repository ??= new ModerationWorkflowRepository(this.moderationDatabase.database);
+    return this.repository;
   }
 
   private async authorize(

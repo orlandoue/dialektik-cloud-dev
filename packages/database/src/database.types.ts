@@ -676,6 +676,7 @@ export interface ModerationReviewProposalTable {
   candidate_class_id: Ulid;
   outcome: ModerationReviewOutcome;
   proposer_id: Ulid;
+  single_editor_authorization_id: ColumnType<Ulid | null, Ulid | null | undefined, Ulid | null>;
   payload_hash: string;
   state: ModerationReviewProposalState;
   submitted_at: Timestamp;

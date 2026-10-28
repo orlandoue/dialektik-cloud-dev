@@ -42,6 +42,9 @@ import { privateBetaAccessMigration } from './039_private_beta_access';
 import { liveCoreColumnReadMigration } from './040_live_core_column_read';
 import { govUkProductMetadataWriterMigration } from './041_govuk_product_metadata_writer';
 import { editorialBetaIdentityMigration } from './044_editorial_beta_identity';
+import { singleEditorAuthorityMigration } from './045_single_editor_authority';
+import { moderationWriterScopeMigration } from './046_moderation_writer_scope';
+import { editorialEventSplitsMigration } from './047_editorial_event_splits';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -65,6 +68,9 @@ const migrations: Readonly<Record<string, Migration>> = {
   '040_live_core_column_read': liveCoreColumnReadMigration,
   '041_govuk_product_metadata_writer': govUkProductMetadataWriterMigration,
   '044_editorial_beta_identity': editorialBetaIdentityMigration,
+  '045_single_editor_authority': singleEditorAuthorityMigration,
+  '046_moderation_writer_scope': moderationWriterScopeMigration,
+  '047_editorial_event_splits': editorialEventSplitsMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,

@@ -27,7 +27,11 @@ export class Od12AuthorizationError extends Error {
 }
 
 export class Od12AuthorizationGate {
-  public assertAuthorized(role: UserRole, capability: ModerationCapability): void {
+  public assertAuthorized(
+    role: UserRole,
+    capability: ModerationCapability,
+    singleEditorAuthorized = false,
+  ): void {
     const moderatorCapabilities: readonly ModerationCapability[] = [
       'inspect_queue',
       'inspect_candidate',
@@ -46,7 +50,10 @@ export class Od12AuthorizationGate {
     ];
     const allowed =
       (role === 'moderator' && moderatorCapabilities.includes(capability)) ||
-      (role === 'editor' && editorCapabilities.includes(capability));
+      (role === 'editor' &&
+        (editorCapabilities.includes(capability) ||
+          (singleEditorAuthorized &&
+            (capability === 'claim_task' || capability === 'propose_decision'))));
     if (!allowed) throw new Od12AuthorizationError(role, capability);
   }
 }

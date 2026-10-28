@@ -10,7 +10,7 @@ La cuenta de prueba indicada por el usuario existe en Supabase Auth, tiene el co
 
 Se verificó en PostgreSQL temporal que una identidad vinculada y habilitada puede autenticarse y que se rechazan tokens alterados, vencidos, cuentas sin vínculo y accesos revocados; las sesiones opacas existentes siguen funcionando. También se verificó la firma de un JWT real de la cuenta beta y su resolución al editor con el código nuevo y una base temporal. El actor se vuelve a consultar durante cada transacción editorial. La versión desplegada aún responde 401 en moderación para el JWT de la cuenta beta.
 
-El flujo de moderación actual separa la propuesta de un moderador y su confirmación por un editor distinto. Además, el Core desplegado tiene permisos de lectura y no dispone de un rol de escritura editorial operativo. La interfaz de moderación existente es un componente interno de escritorio y no está conectado a la navegación de la beta. La asociación no equivale todavía a una aprobación publicada ni habilita por sí sola esas escrituras.
+El propietario eligió que Orlando sea el único editor. Las estructuras de las migraciones 045 y 046 y una autorización revocable para ese editor se instalaron en Supabase; la propuesta y la confirmación quedan previstas como comandos auditados por separado. El código del Core y la conexión de escritura específica están preparados en el PR; véase [single-editor-rollout.md](../single-editor-rollout.md). El Core desplegado conserva la regla anterior de dos personas y la conexión editorial separada aún no está configurada. La interfaz de moderación existente es un componente interno de escritorio y no está conectado a la navegación de la beta. La asociación no equivale todavía a una aprobación publicada ni habilita por sí sola esas escrituras.
 
 ## Doce fragmentos y offsets
 
@@ -20,7 +20,9 @@ La comparación de solo lectura confirmó que **los 12 fragmentos** suministrado
 
 El SQL recibido incorpora ocho fragmentos en su bloque de datos, no los cuatro apoyos adicionales presentes en el mensaje. Los doce artículos tienen `event_id IS NULL`, y las nueve fuentes involucradas carecen de un registro `content_access_policies` que establezca permisos para retener fragmentos o derivados. Las políticas de esos artículos figuran como `METADATA_ONLY`. La ausencia de acuerdo bilateral informada por el usuario no impone que se obtenga uno; debe registrarse una base de uso y sus alcances antes de persistir citas como evidencia.
 
-El fragmento aportado para la postura B del Fondo E describe cuestionamientos a una toma de riesgo, mientras el título de esa postura atribuye a las administradoras una defensa de la cobertura. Esa cita, tal como está presentada, no demuestra esa defensa. Para ENADI y SAE aún falta explicar qué proposiciones contrapuestas versan sobre el mismo asunto.
+El fragmento aportado para la postura B del Fondo E describe cuestionamientos a una toma de riesgo, mientras el título de esa postura atribuye a las administradoras una defensa de la cobertura. Esa cita, tal como está presentada, no demuestra esa defensa. El propietario eligió separar los temas ENADI y SAE, en vez de tratarlos como una contradicción.
+
+El propietario decidió separar ENADI y SAE y aportó el fundamento de derecho de cita. La revisión de las referencias y los datos de atribución faltantes se registra en [decision-citas-y-separacion.md](decision-citas-y-separacion.md).
 
 ## Estado del SQL
 

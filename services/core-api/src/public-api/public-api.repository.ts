@@ -144,7 +144,11 @@ export interface PositionSuccessorRow {
  * ANALYSIS_PENDING is permitted only with an authentic linked Article.
  */
 const groundedEvent = sql`
-  exists (
+  not exists (
+    select 1 from public.editorial_event_splits editorial_split
+    where editorial_split.original_event_id = event_row.id
+  )
+  and exists (
     select 1 from articles grounded_article
     where grounded_article.event_id = event_row.id
       and grounded_article.origin = 'LIVE_REAL'
