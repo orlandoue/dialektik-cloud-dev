@@ -56,9 +56,18 @@ evidencias, posturas ni contradicciones y no aprueban contenidos automáticament
    de la cuenta beta. Las credenciales y el rol de escritura solo son adecuados
    para el servidor: sus funciones de auditoría confían en el contexto fijado
    por el servidor al autenticar y autorizar cada solicitud.
-6. Conectar una interfaz editorial apropiada y revisar cada fuente, cita y
-   relación antes de confirmar. El componente de moderación existente no está
-   conectado a la navegación de la beta y está diseñado para escritorio.
+6. Desplegar la interfaz editorial móvil del PR de Flutter y revisar cada
+   fuente, cita y relación antes de confirmar. La pantalla requiere el Core
+   de este PR; sin él, la beta de lectura sigue funcionando y la acción
+   editorial permanece oculta. La interfaz y el Core todavía no están
+   desplegados en Render ni incluidos en un APK publicado.
+
+La lectura editorial devuelve un fragmento solo cuando tiene entre 140 y 300
+caracteres y su artículo tiene título, autor, fecha, fuente y una URL HTTPS
+registrados. La pantalla muestra esa atribución junto al fragmento. La
+presencia de esos campos no verifica por sí sola la fidelidad de la cita, la
+especificidad del enlace ni la autorización de uso; el editor debe revisarlas
+en el origen. Los artículos existentes sin autor no muestran el fragmento.
 
 La revocación se hace por el administrador mediante `revoked_at`; no elimina
 decisiones anteriores. Una propuesta de editor único que quede pendiente al

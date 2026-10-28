@@ -40,12 +40,32 @@ todos los demás flujos de adquisición.
 
 La comprobación de los doce fragmentos contra `articles.text_original` dio
 coincidencia exacta de texto y offsets. Eso no confirma que el contenido
-almacenado sea una transcripción del artículo original. Las doce versiones
-consultadas tienen titular y fecha, pero su campo `author` está vacío. La URL
-del Banco Central apunta a una sección de informes y la de SENAPRED a una
-sección de regiones: requieren un enlace al recurso preciso o una referencia
-equivalente verificable. En un caso el fragmento coincide con el 100 % del
-texto almacenado; no se ha comprobado qué proporción representa del original.
+almacenado sea una transcripción del artículo original. El propietario aportó
+autores, títulos y enlaces en un CSV el 28 de octubre. El archivo original
+contiene comas sin entrecomillar en cinco filas; los valores reconstruidos se
+registran como propuestas en [atribuciones_propuestas_12.csv](atribuciones_propuestas_12.csv),
+sin duplicar las citas. Cada fragmento coincide con el hash y los offsets que
+se cotejaron en Supabase. Los doce títulos propuestos y once enlaces coinciden
+con los registros consultados; las doce versiones tienen el campo `author`
+vacío. El enlace propuesto para SENAPRED difiere del registrado en la base.
+
+Los autores aportados aún no se han verificado contra las publicaciones. La
+URL del Banco Central apunta a una sección de informes y las aportadas para
+SENAPRED apuntan a páginas temáticas: se necesita identificar el recurso
+preciso o una referencia equivalente verificable. Una respuesta HTTP 200 a
+una solicitud HEAD no acredita que una página contenga una cita o autoría.
+La búsqueda oficial de GOV.UK confirmó los cuatro títulos y enlaces británicos
+y sus organizaciones publicadoras. Esa consulta de metadatos no confirmó los
+equipos de autoría propuestos ni el texto literal de las citas.
+La API de metadatos de CIPER devuelve para el artículo de AFP un título que
+difiere en la mayúscula de «fondo», y para la página Radar un título general
+distinto al propuesto en el expediente. Ambos títulos devueltos se conservan
+en el CSV de revisión; la API consultada no proporcionó el nombre de autor.
+En particular, `https://senapred.cl/sistema-alerta-de-emergencia/` devolvió
+el mismo ETag y tamaño que una ruta inexistente elegida para comparación;
+ese 200 no permite confirmar que el enlace corresponda a una página de SAE.
+En un caso el fragmento coincide con el 100 % del texto almacenado; no se ha
+comprobado qué proporción representa del original.
 Además, el contrato actual de `ClaimSpan.article` devuelve URL, fecha y medio,
 pero no devuelve el título ni el autor de la obra. El cliente Flutter exige un
 conjunto exacto de campos; agregar esos datos requiere actualizar y desplegar

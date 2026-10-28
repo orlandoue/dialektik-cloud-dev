@@ -1,5 +1,6 @@
 import { isUlid, parseUlid, type Ulid } from '@dialektik/database';
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { ModerationAuthService, type ModerationIdentity } from './moderation-auth.service.js';
@@ -10,6 +11,25 @@ import { ModerationWorkflowRepository } from './moderation-workflow.repository.j
 import { Od12AuthorizationError, Od12AuthorizationGate } from './od12-authorization.gate.js';
 
 type JsonObject = Readonly<Record<string, unknown>>;
+
+function hasAttribution(assertion: {
+  readonly articleUrl: string;
+  readonly articleTitle: string | null;
+  readonly articleAuthor: string | null;
+  readonly articlePublishedAt: Date | null;
+  readonly sourceName: string;
+}): boolean {
+  try {
+    const url = new URL(assertion.articleUrl);
+    return url.protocol === 'https:' && url.hostname.length > 0 &&
+      url.username.length === 0 && url.password.length === 0 && url.pathname !== '/' &&
+      Boolean(assertion.articleTitle?.trim()) && Boolean(assertion.articleAuthor?.trim()) &&
+      Boolean(assertion.sourceName.trim()) && assertion.articlePublishedAt instanceof Date &&
+      Number.isFinite(assertion.articlePublishedAt.getTime());
+  } catch {
+    return false;
+  }
+}
 
 function isObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -52,6 +72,23 @@ export class ModerationWorkflowService {
     @Inject(ModerationDatabaseService) private readonly moderationDatabase: ModerationDatabaseService,
   ) {}
 
+  public async session(authorization: string | undefined) {
+    const identity = await this.authorize(authorization, 'inspect_queue');
+    const result = identity.role === 'editor'
+      ? await sql<{ readonly enabled: boolean }>`
+          select exists (
+            select 1 from public.editorial_single_editor_authorizations
+            where editor_user_id = ${identity.userId} and revoked_at is null
+          ) as enabled
+        `.execute(this.databaseService.database)
+      : undefined;
+    return Object.freeze({
+      userId: identity.userId,
+      role: identity.role,
+      singleEditorEnabled: result?.rows[0]?.enabled ?? false,
+    });
+  }
+
   public async list(authorization: string | undefined) {
     const identity = await this.authorize(authorization, 'inspect_queue');
     void identity;
@@ -65,9 +102,21 @@ export class ModerationWorkflowService {
       requireUlid(taskIdValue),
     );
     if (detail === null) throw new ModerationHttpError(404, 'MOD_NOT_FOUND');
-    if (identity.role === 'editor' || detail.assignedTo === identity.userId) return detail;
-    return Object.freeze({
+    const boundedDetail = Object.freeze({
       ...detail,
+      assertions: Object.freeze(detail.assertions.map((assertion) => {
+        const length = Array.from(assertion.quotedText).length;
+        return Object.freeze({
+          ...assertion,
+          quotedText: length >= 140 && length <= 300 && hasAttribution(assertion)
+            ? assertion.quotedText
+            : null,
+        });
+      })),
+    });
+    if (identity.role === 'editor' || detail.assignedTo === identity.userId) return boundedDetail;
+    return Object.freeze({
+      ...boundedDetail,
       proposals: Object.freeze(
         detail.proposals.filter(({ proposerId }) => proposerId === identity.userId),
       ),
