@@ -27,7 +27,7 @@ import 'package:flutter/material.dart';
 const Set<String> _chileBetaPublisherDomains = <String>{
   'bcentral.cl', 'biobiochile.cl', 'sismologia.cl',
   'ciperchile.cl', 'cooperativa.cl', 'diarioeldia.cl', 'www.diarioeldia.cl', 'elmostrador.cl',
-  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl',
+  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl', 'senapred.cl',
 };
 
 bool isChileBetaPublisher(LiveSourceDto source) =>
