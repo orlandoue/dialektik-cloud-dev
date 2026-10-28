@@ -50,10 +50,19 @@ con los registros consultados; las doce versiones tienen el campo `author`
 vacío. El enlace propuesto para SENAPRED difiere del registrado en la base.
 
 Los autores aportados aún no se han verificado contra las publicaciones. La
-URL del Banco Central apunta a una sección de informes y las aportadas para
-SENAPRED apuntan a páginas temáticas: se necesita identificar el recurso
-preciso o una referencia equivalente verificable. Una respuesta HTTP 200 a
-una solicitud HEAD no acredita que una página contenga una cita o autoría.
+página de informes indicada por el propietario enlaza el
+[IPoM de septiembre de 2026 en PDF](https://www.bcentral.cl/documents/33528/8619822/IPoM%20Septiembre%202026.pdf/a20e38ef-756a-3eb3-cd3a-a0bd8383e20b)
+y su [resumen oficial](https://www.bcentral.cl/resumen-ipom/-/detalle/resumen-ipom-septiembre-2026).
+Ambas direcciones respondieron a solicitudes HEAD, sin descargar el cuerpo del
+informe; resta cotejar el fragmento y la autoría con el recurso específico.
+Las direcciones aportadas para SENAPRED apuntan a páginas temáticas: se necesita
+identificar el recurso preciso o una referencia equivalente verificable. La
+página de simulacros enlaza ejercicios regionales individuales, por ejemplo
+[Los Lagos, 27 de octubre](https://senapred.cl/simulacros_t/sev-los-lagos-2026/)
+y [Atacama, 8 de octubre](https://senapred.cl/simulacros_t/sbc-atacama-2026/),
+pero no se ha establecido que sean el origen del fragmento aportado. Una
+respuesta HTTP 200 a una solicitud HEAD no acredita que una página contenga
+una cita o autoría.
 La búsqueda oficial de GOV.UK confirmó los cuatro títulos y enlaces británicos
 y sus organizaciones publicadoras. Esa consulta de metadatos no confirmó los
 equipos de autoría propuestos ni el texto literal de las citas.
