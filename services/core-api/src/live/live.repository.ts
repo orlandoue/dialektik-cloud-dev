@@ -59,7 +59,9 @@ export class LiveRepository {
   constructor(private readonly database: Kysely<Database>) {}
 
   private newsProjection() {
-    return sql`select a.id, v.headline, v.excerpt, v.author, v.published_at, v.modified_at,
+    return sql`select a.id, v.headline,
+      case when p.storage_policy = 'METADATA_AND_FEED_EXCERPT' then v.excerpt else null end as excerpt,
+      v.author, v.published_at, v.modified_at,
       coalesce(r.canonical_url, a.url_canonical) as canonical_url, v.declared_upstream,
       v.version_number as version_count, s.id as source_id, s.name as source_name,
       s.source_type, s.canonical_domain, p.policy,
