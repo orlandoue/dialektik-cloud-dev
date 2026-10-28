@@ -7,6 +7,13 @@ análisis, atribución y enlace al origen. Indicó también un límite operativo
 El límite es una regla interna; por sí solo no acredita que una cita cumpla
 todos los requisitos de la norma o reproduzca fielmente la fuente.
 
+El agregador RSS consulta los feeds y devuelve titulares, enlaces y
+`persisted: false`, sin solicitar las páginas de los artículos. La cadena
+`ARTICLE_BODY_DOWNLOADS=0` figura como salida informativa de un workflow; no
+se encontró como variable de configuración en el Core ni en el servicio de
+Render consultado. Por tanto, no debe tratarse como un interruptor global para
+todos los demás flujos de adquisición.
+
 ## Referencias consultadas
 
 - La [Ley 17.336, artículo 71 B, texto XML de la BCN](https://www.bcn.cl/leychile/consulta/obtxml?opt=7&idNorma=28933)
