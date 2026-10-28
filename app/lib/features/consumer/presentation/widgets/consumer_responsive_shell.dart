@@ -209,8 +209,7 @@ final class _MobileHeader extends StatelessWidget {
                         excludeSemantics: true,
                         child: Text(
                           location!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                          softWrap: true,
                           style: Theme.of(context).textTheme.bodySmall
                               ?.copyWith(
                                 color: DialektikColors.correctedCoolGray,
@@ -260,22 +259,21 @@ final class _MobilePrimaryNavigation extends StatelessWidget {
   final List<ConsumerNavigationAction> secondary;
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
+  Widget build(BuildContext context) => Wrap(
     key: const Key('consumer-primary-navigation-scroll'),
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      children: <Widget>[
-        for (final ConsumerNavigationAction action in primary)
-          _PrimaryTab(action: action),
-        if (secondary.isNotEmpty)
-          _MoreTab(
+    children: <Widget>[
+      for (final ConsumerNavigationAction action in primary)
+        IntrinsicWidth(child: _PrimaryTab(action: action)),
+      if (secondary.isNotEmpty)
+        IntrinsicWidth(
+          child: _MoreTab(
             actions: secondary,
             selected: secondary.any(
               (ConsumerNavigationAction action) => action.selected,
             ),
           ),
-      ],
-    ),
+        ),
+    ],
   );
 }
 
@@ -309,8 +307,8 @@ final class _PrimaryTab extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           action.label,
-          maxLines: 1,
-          softWrap: false,
+          softWrap: true,
+          textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: DialektikColors.inkBlack,
             fontWeight: action.selected ? FontWeight.w500 : FontWeight.w400,
