@@ -61,6 +61,8 @@ y la [página técnica de pruebas SAE](https://senapred.cl/pruebas-sae/); ambos
 respondieron HTTP 200 a solicitudes HEAD. El comunicado se refiere a una
 fecha anterior a la del registro de noticia existente: la relación concreta
 con el borrador SAE, la cita y la autoría aún requieren cotejo editorial.
+El catálogo de mercado de Chile contempla `senapred.cl` además del dominio
+histórico registrado; esa incorporación no crea una fuente ni aprueba su uso.
 La página general de simulacros enlaza ejercicios regionales, por ejemplo
 [Los Lagos, 27 de octubre](https://senapred.cl/simulacros_t/sev-los-lagos-2026/)
 y [Atacama, 8 de octubre](https://senapred.cl/simulacros_t/sbc-atacama-2026/),

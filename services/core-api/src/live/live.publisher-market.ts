@@ -17,7 +17,7 @@ export type PublisherMarket = typeof PUBLISHER_MARKET_CODES[number];
 export const CHILE_PUBLISHER_DOMAINS = [
   'bcentral.cl', 'biobiochile.cl', 'sismologia.cl',
   'ciperchile.cl', 'cooperativa.cl', 'diarioeldia.cl', 'www.diarioeldia.cl', 'elmostrador.cl',
-  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl',
+  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl', 'senapred.cl',
 ] as const;
 
 export function parsePublisherMarket(value: unknown): PublisherMarket {
