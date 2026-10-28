@@ -43,7 +43,12 @@ final class LiveNewsItemDto {
   factory LiveNewsItemDto.fromJson(Object? value) {
     final Map<String, Object?> data = liveObject(value);
     liveRequire(data, 'origin', 'LIVE_REAL');
-    liveRequire(data, 'semantic_assignment', 'UNASSIGNED');
+    if (!const <String>[
+      'UNASSIGNED',
+      'EVENT_LINKED',
+    ].contains(data['semantic_assignment'])) {
+      throw const FormatException('Unsupported semantic_assignment.');
+    }
     final int versionCount = liveInt(data, 'version_count');
     if (versionCount < 1) {
       throw const FormatException('Article version count is invalid.');
@@ -76,7 +81,12 @@ final class LiveNewsPageDto {
   factory LiveNewsPageDto.fromJson(Object? value) {
     final Map<String, Object?> data = liveObject(value);
     liveRequire(data, 'origin', 'LIVE_REAL');
-    liveRequire(data, 'semantic_mode', 'unassigned');
+    if (!const <String>[
+      'unassigned',
+      'mixed',
+    ].contains(data['semantic_mode'])) {
+      throw const FormatException('Unsupported semantic_mode.');
+    }
     return LiveNewsPageDto(
       items: liveList(data['items'], LiveNewsItemDto.fromJson),
       nextCursor: liveOptionalString(data, 'next_cursor'),

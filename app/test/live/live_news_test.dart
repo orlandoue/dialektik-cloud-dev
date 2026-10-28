@@ -133,6 +133,27 @@ void main() {
       final Map<String, Object?> article = liveTestArticle();
       expect(LiveNewsItemDto.fromJson(article).headline, article['headline']);
       expect(
+        LiveNewsItemDto.fromJson(<String, Object?>{
+          ...article,
+          'semantic_assignment': 'EVENT_LINKED',
+        }).headline,
+        article['headline'],
+      );
+      expect(
+        LiveNewsPageDto.fromJson(<String, Object?>{
+          ...liveTestPage(),
+          'semantic_mode': 'mixed',
+          'items': <Object?>[
+            article,
+            <String, Object?>{
+              ...article,
+              'semantic_assignment': 'EVENT_LINKED',
+            },
+          ],
+        }).items,
+        hasLength(2),
+      );
+      expect(
         () => LiveNewsItemDto.fromJson(<String, Object?>{
           ...article,
           'origin': 'FIXTURE',
