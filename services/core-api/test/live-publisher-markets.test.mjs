@@ -28,11 +28,13 @@ test('market selection is strictly validated and defaults to Chile', () => {
   assert.equal(parsePublisherMarket(undefined), 'CL');
   assert.equal(parsePublisherMarket('PE'), 'PE');
   assert.equal(parsePublisherMarket('ES'), 'ES');
-  for (const malformed of ['UK', 'ZZ', 'cl', 'CL,PE', '', null, ['PE'], {}]) {
+  assert.equal(parsePublisherMarket('UK'), 'UK');
+  for (const malformed of ['ZZ', 'cl', 'CL,PE', '', null, ['PE'], {}]) {
     assert.throws(() => parsePublisherMarket(malformed));
   }
   assert.deepEqual(publisherDomainsForMarket('PE'), []);
   assert.equal(publisherDomainsForMarket('CL').includes('gov.uk'), false);
+  assert.deepEqual(publisherDomainsForMarket('UK'), ['gov.uk']);
   const status = publisherMarketsStatus();
   assert.equal(status.default_country, 'CL');
   assert.equal(status.markets.find((item) => item.country_code === 'PE').coverage_state, 'NOT_AVAILABLE');
@@ -69,6 +71,26 @@ test('unlicensed new markets are empty without touching PostgreSQL', async () =>
     assert.deepEqual(await repo.sources(undefined, 'ES'), []);
     assert.equal(await repo.article('01M4YDQK00WS344WW8RCPCEQHE', 'PE'), undefined);
     assert.equal(queries.length, 0);
+  } finally {
+    await database.destroy();
+  }
+});
+
+test('UK preview scopes every query to the two selected GOV.UK sources', async () => {
+  const { database, queries } = fakeDatabase();
+  try {
+    const repo = new LiveRepository(database);
+    await repo.list({ limit: 25, market: 'UK' });
+    await repo.article('01M4YDQK00WS344WW8RCPCEQHE', 'UK');
+    await repo.sources(undefined, 'UK');
+    await repo.registeredSources('UK');
+    assert.equal(queries.length, 4);
+    for (const { text, values } of queries) {
+      assert.ok(values.includes('gov.uk'));
+      assert.ok(values.includes('01M4YDQK00WS344WW8RCPCEQHE'));
+      assert.ok(values.includes('01M4YDQK00WS344WW8RCPCEQHF'));
+      assert.match(text, /(?:"source_id"|"s"\."id") in \(/);
+    }
   } finally {
     await database.destroy();
   }

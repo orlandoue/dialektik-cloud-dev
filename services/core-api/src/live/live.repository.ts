@@ -1,6 +1,12 @@
 import type { Database, Ulid } from '@dialektik/database';
 import { sql, type Kysely } from 'kysely';
-import { publisherDomainsForMarket, type PublisherMarket } from './live.publisher-market.js';
+import { publisherDomainsForMarket, UK_BETA_SOURCE_IDS, type PublisherMarket } from './live.publisher-market.js';
+
+function publisherIdentityFilter(market: PublisherMarket, sourceColumn: string) {
+  return market === 'UK'
+    ? sql`${sql.ref(sourceColumn)} in (${sql.join(UK_BETA_SOURCE_IDS.map((id) => sql`${id}`))})`
+    : sql`true`;
+}
 
 export interface LiveReadRow {
   id: Ulid;
@@ -93,7 +99,8 @@ export class LiveRepository {
   }
 
   async list(query: LiveNewsQuery): Promise<LiveReadRow[]> {
-    const domains = publisherDomainsForMarket(query.market ?? 'CL');
+    const market = query.market ?? 'CL';
+    const domains = publisherDomainsForMarket(market);
     if (domains.length === 0) return [];
     const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
     const cursor =
@@ -104,6 +111,7 @@ export class LiveRepository {
     const result = await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news
       where ${cursor}
         and canonical_domain in (${marketFilter})
+        and ${publisherIdentityFilter(market, 'source_id')}
         and ${query.q === undefined ? sql`true` : sql`position(lower(${query.q}) in lower(headline || ' ' || coalesce(excerpt, ''))) > 0`}
         and ${query.sourceId === undefined ? sql`true` : sql`source_id = ${query.sourceId}`}
         and ${query.publishedFrom === undefined ? sql`true` : sql`published_at >= ${query.publishedFrom}`}
@@ -118,7 +126,8 @@ export class LiveRepository {
     const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
     const result =
       await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news
-        where id = ${id} and canonical_domain in (${marketFilter})`.execute(
+        where id = ${id} and canonical_domain in (${marketFilter})
+          and ${publisherIdentityFilter(market, 'source_id')}`.execute(
         this.database,
       );
     return result.rows[0];
@@ -142,6 +151,7 @@ export class LiveRepository {
       from sources s
       where s.origin = 'LIVE_REAL'
         and s.canonical_domain in (${marketFilter})
+        and ${publisherIdentityFilter(market, 's.id')}
       order by s.name, s.id
       limit 100
     `.execute(this.database);
@@ -164,6 +174,7 @@ export class LiveRepository {
         and p.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
         and p.policy->>'endpoint' <> 'https://supabase.com'
         and s.canonical_domain in (${marketFilter})
+        and ${publisherIdentityFilter(market, 's.id')}
         and ${id === undefined ? sql`true` : sql`s.id = ${id}`}
       order by s.name, s.id`.execute(this.database);
     return result.rows;
