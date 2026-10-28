@@ -34,6 +34,22 @@ HTML; no se descargaron cuerpos de artículos para el análisis semántico.
   política emitida y respetar su revocación; cambiar solo el endpoint o el modo
   de ejecución no basta.
 
+## Diagnóstico del RSS sin persistencia
+
+Se consultaron los feeds después de comprobar sus instrucciones `robots.txt` y
+se pasaron por el adaptador Core con `METADATA_ONLY`, sin almacenar artículos
+ni extractos. Los resultados de esta muestra fueron: CIPER 16 titulares,
+Cooperativa 15, Diario El Día 200 y La Tercera 100. No son artículos nuevos
+guardados ni ejecuciones del motor semántico.
+
+El feed de La Tercera exponía un fallo en el control de profundidad XML: el
+contador interpretaba como etiquetas XML los fragmentos HTML incluidos en
+CDATA. Se corrigió el escaneo para ignorar CDATA, comentarios, instrucciones
+de procesamiento y signos `>` dentro de atributos. Se mantiene el límite de
+32 niveles reales y el rechazo de declaraciones DTD y entidades. La muestra
+del mismo feed pasó el adaptador después de la corrección, con 100 titulares
+y cero extractos retenidos.
+
 ## Archivo de nueve publicaciones
 
 Las nueve URL son distintas entre sí y ninguna coincide exactamente con las
