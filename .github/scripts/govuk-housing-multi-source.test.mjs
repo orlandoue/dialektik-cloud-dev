@@ -46,6 +46,11 @@ test('reject claimed second publisher when official Content API identity differs
   const {fetcher}=fixture({ministryName:'Unrelated Publisher'});
   await assert.rejects(discoverGovUkHousingPublishers({fetcher,at}),/MULTISOURCE_MINISTRY_ORIGIN_DENIED/);
 });
+test('accept the official ministry title with an ampersand',async()=>{
+  const {fetcher}=fixture({ministryName:'Ministry of Housing, Communities & Local Government'});
+  const result=await discoverGovUkHousingPublishers({fetcher,at});
+  assert.equal(result.publisherCount,2);
+});
 test('reject same GOV.UK canonical article as evidence for two independent publishers',async()=>{
   const {fetcher}=fixture({shared:true});
   await assert.rejects(discoverGovUkHousingPublishers({fetcher,at}),/MULTISOURCE_NO_INDEPENDENT_MINISTRY_ITEMS/);

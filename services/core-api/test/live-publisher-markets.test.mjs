@@ -49,6 +49,8 @@ test('Chile news and sources are filtered on SQL server before pagination', asyn
       assert.match(text.toLowerCase(), /canonical_domain in \(/);
       assert.ok(values.includes('biobiochile.cl'));
       assert.ok(values.includes('gob.cl'));
+      assert.ok(values.includes('diarioeldia.cl'));
+      assert.ok(values.includes('www.diarioeldia.cl'));
       assert.ok(!values.includes('gov.uk'), 'no UK domain may appear in Chile scope');
     }
     const news = queries[0].text.toLowerCase();

@@ -32,6 +32,9 @@ test('feed AND direct Event details require linked real Articles and approved ev
       const sql = text.replace(/\s+/g, ' ').toLowerCase();
       assert.match(sql, /grounded_article\.origin = 'live_real'/);
       assert.match(sql, /not exists \( select 1 from positions invalid_position/);
+      assert.match(sql, /invalid_position\.neutral_rank is null/);
+      assert.match(sql, /invalid_position\.published_at is null/);
+      assert.match(sql, /invalid_position\.published_by is null/);
       assert.match(sql, /formed_relation\.rel_type = 'r01a'/);
       assert.match(sql, /formed_relation\.publication_state = 'published'/);
       assert.match(sql, /formed_relation\.confirmed_at is not null/);

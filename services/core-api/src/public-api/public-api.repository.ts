@@ -165,7 +165,10 @@ const groundedEvent = sql`
           and invalid_position.publication_state = 'published'
           and invalid_position.status = 'active'
           and (
-            not exists (
+            invalid_position.neutral_rank is null
+            or invalid_position.published_at is null
+            or invalid_position.published_by is null
+            or not exists (
               select 1 from position_formed_by formation
               join relationships formed_relation
                 on formed_relation.id = formation.relationship_id
@@ -625,9 +628,16 @@ export class PublicApiRepository {
       from contradiction_publications publication
       join events event_row on event_row.id = publication.event_id
       join positions position_a on position_a.id = publication.position_a_id
+        and position_a.event_id = event_row.id
       join positions position_b on position_b.id = publication.position_b_id
+        and position_b.event_id = event_row.id
       where publication.publication_state in ('published', 'requires_review')
         and event_row.merged_into is null
+        and event_row.analysis_state = 'PUBLISHED'
+        and publication.confirmed_by is not null
+        and publication.confirmed_at is not null
+        and position_a.id <> position_b.id
+        and ${groundedEvent}
         and position_a.publication_state = 'published'
         and position_a.status = 'active'
         and position_b.publication_state = 'published'
