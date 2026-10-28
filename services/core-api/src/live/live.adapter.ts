@@ -241,6 +241,43 @@ export interface ParsedLiveFeedBatches {
   readonly batches: Iterable<readonly LiveDiscoveredItem[]>;
 }
 
+/** Count XML elements, not HTML or apparent tags inside CDATA, comments or attributes. */
+function assertBoundedFeedNesting(payload: string): void {
+  let depth = 0;
+  let cursor = 0;
+  while (cursor < payload.length) {
+    const start = payload.indexOf('<', cursor);
+    if (start === -1) return;
+    const special = payload.startsWith('<![CDATA[', start)
+      ? { end: ']]>', offset: 9 }
+      : payload.startsWith('<!--', start)
+        ? { end: '-->', offset: 4 }
+        : payload.startsWith('<?', start)
+          ? { end: '?>', offset: 2 }
+          : null;
+    if (special !== null) {
+      const end = payload.indexOf(special.end, start + special.offset);
+      if (end === -1) throw new Error('INVALID_FEED_XML');
+      cursor = end + special.end.length;
+      continue;
+    }
+    let quote: string | null = null;
+    let end = start + 1;
+    for (; end < payload.length; end++) {
+      const character = payload[end];
+      if (quote !== null) {
+        if (character === quote) quote = null;
+      } else if (character === '"' || character === "'") quote = character;
+      else if (character === '>') break;
+    }
+    if (end >= payload.length) throw new Error('INVALID_FEED_XML');
+    if (payload[start + 1] === '/') depth--;
+    else if (!payload.slice(start + 1, end).trimEnd().endsWith('/')) depth++;
+    if (depth > 32) throw new Error('FEED_NESTING_TOO_DEEP');
+    cursor = end + 1;
+  }
+}
+
 export function parseLiveFeedBatches(
   payload: string,
   policy: LiveSourcePolicy,
@@ -253,13 +290,8 @@ export function parseLiveFeedBatches(
   } catch {
     throw new Error('INVALID_FEED_XML');
   }
-  // Bound nesting before allocating parser output; feeds need only a small XML tree.
-  let depth = 0;
-  for (const match of payload.matchAll(/<\/?[a-zA-Z][^>]*>/g)) {
-    if (match[0].startsWith('</')) depth--;
-    else if (!match[0].endsWith('/>')) depth++;
-    if (depth > 32) throw new Error('FEED_NESTING_TOO_DEEP');
-  }
+  // Bound actual XML nesting before allocating parser output.
+  assertBoundedFeedNesting(payload);
   const parser = new XMLParser({
     ignoreAttributes: false,
     parseTagValue: false,

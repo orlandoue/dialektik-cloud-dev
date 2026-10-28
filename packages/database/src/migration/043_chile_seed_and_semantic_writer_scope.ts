@@ -5,11 +5,21 @@ const CORE_APP_ROLE = 'dialektik_core_app';
 const CORE_RUNTIME_ROLE = 'dialektik_core_runtime';
 const LIVE_WRITER_ROLE = 'dialektik_govuk_metadata_writer';
 
+// This draft is deliberately not registered with the migration provider. It
+// grants semantic writes to reader/metadata roles, creates unrestricted RLS
+// policies, and seeds source-rights decisions without independent evidence.
+// Keep both directions inert until the authorization and provenance design has
+// been replaced and reviewed; the prior draft remains below for reference.
+function blockUnsafeDraft(): void {
+  throw new Error('MIGRATION_043_UNSAFE_DRAFT_DISABLED');
+}
+
 /**
  * Migration 043: Pack Semilla de Fuentes (GOV.UK Dual Publisher + 10 Fuentes Chilenas)
  * y Permisos RLS de Escritura para el Motor Semántico (Acontecimientos, Historia y Contradicciones).
  */
 export async function up(db: Kysely<unknown>): Promise<void> {
+  blockUnsafeDraft();
   await sql.raw(`
     DO $$
     BEGIN
@@ -142,6 +152,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
 }
 
 export async function down(db: Kysely<unknown>): Promise<void> {
+  blockUnsafeDraft();
   await sql.raw(`
     DELETE FROM public.live_source_policies
     WHERE registry_key LIKE 'chile-%' OR registry_key = 'product-govuk-mhclg-content-api-v1';

@@ -32,7 +32,7 @@ const providers: Provider[] = [
 ];
 
 @Module({
-  exports: [PrivateBetaAuthGuard, PrivateBetaAuthorizationService],
+  exports: [PrivateBetaAuthGuard, PrivateBetaAuthorizationService, SupabaseJwtVerifier],
   imports: [CoreDatabaseModule],
   providers,
 })

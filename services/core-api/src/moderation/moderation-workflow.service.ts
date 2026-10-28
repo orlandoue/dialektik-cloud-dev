@@ -1,14 +1,35 @@
 import { isUlid, parseUlid, type Ulid } from '@dialektik/database';
 import { Inject, Injectable } from '@nestjs/common';
+import { sql } from 'kysely';
 
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { ModerationAuthService, type ModerationIdentity } from './moderation-auth.service.js';
 import { EquivalenceReviewRepository } from './equivalence-review.repository.js';
+import { ModerationDatabaseService } from './moderation-database.service.js';
 import { ModerationHttpError } from './moderation-http.error.js';
 import { ModerationWorkflowRepository } from './moderation-workflow.repository.js';
 import { Od12AuthorizationError, Od12AuthorizationGate } from './od12-authorization.gate.js';
 
 type JsonObject = Readonly<Record<string, unknown>>;
+
+function hasAttribution(assertion: {
+  readonly articleUrl: string;
+  readonly articleTitle: string | null;
+  readonly articleAuthor: string | null;
+  readonly articlePublishedAt: Date | null;
+  readonly sourceName: string;
+}): boolean {
+  try {
+    const url = new URL(assertion.articleUrl);
+    return url.protocol === 'https:' && url.hostname.length > 0 &&
+      url.username.length === 0 && url.password.length === 0 && url.pathname !== '/' &&
+      Boolean(assertion.articleTitle?.trim()) && Boolean(assertion.articleAuthor?.trim()) &&
+      Boolean(assertion.sourceName.trim()) && assertion.articlePublishedAt instanceof Date &&
+      Number.isFinite(assertion.articlePublishedAt.getTime());
+  } catch {
+    return false;
+  }
+}
 
 function isObject(value: unknown): value is JsonObject {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -43,13 +64,29 @@ function requireUlidArray(value: unknown): readonly Ulid[] {
 @Injectable()
 export class ModerationWorkflowService {
   private readonly authorization = new Od12AuthorizationGate();
-  private readonly repository: ModerationWorkflowRepository;
+  private repository: ModerationWorkflowRepository | undefined;
 
   public constructor(
     @Inject(CoreDatabaseService) private readonly databaseService: CoreDatabaseService,
     @Inject(ModerationAuthService) private readonly auth: ModerationAuthService,
-  ) {
-    this.repository = new ModerationWorkflowRepository(this.databaseService.database);
+    @Inject(ModerationDatabaseService) private readonly moderationDatabase: ModerationDatabaseService,
+  ) {}
+
+  public async session(authorization: string | undefined) {
+    const identity = await this.authorize(authorization, 'inspect_queue');
+    const result = identity.role === 'editor'
+      ? await sql<{ readonly enabled: boolean }>`
+          select exists (
+            select 1 from public.editorial_single_editor_authorizations
+            where editor_user_id = ${identity.userId} and revoked_at is null
+          ) as enabled
+        `.execute(this.databaseService.database)
+      : undefined;
+    return Object.freeze({
+      userId: identity.userId,
+      role: identity.role,
+      singleEditorEnabled: result?.rows[0]?.enabled ?? false,
+    });
   }
 
   public async list(authorization: string | undefined) {
@@ -65,9 +102,21 @@ export class ModerationWorkflowService {
       requireUlid(taskIdValue),
     );
     if (detail === null) throw new ModerationHttpError(404, 'MOD_NOT_FOUND');
-    if (identity.role === 'editor' || detail.assignedTo === identity.userId) return detail;
-    return Object.freeze({
+    const boundedDetail = Object.freeze({
       ...detail,
+      assertions: Object.freeze(detail.assertions.map((assertion) => {
+        const length = Array.from(assertion.quotedText).length;
+        return Object.freeze({
+          ...assertion,
+          quotedText: length >= 140 && length <= 300 && hasAttribution(assertion)
+            ? assertion.quotedText
+            : null,
+        });
+      })),
+    });
+    if (identity.role === 'editor' || detail.assignedTo === identity.userId) return boundedDetail;
+    return Object.freeze({
+      ...boundedDetail,
       proposals: Object.freeze(
         detail.proposals.filter(({ proposerId }) => proposerId === identity.userId),
       ),
@@ -82,7 +131,7 @@ export class ModerationWorkflowService {
   ) {
     requireExactKeys(body ?? {}, []);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.claim(
+    return this.writeRepository().claim(
       identity,
       requireUlid(taskIdValue),
       this.requireCommandId(commandIdValue),
@@ -97,7 +146,7 @@ export class ModerationWorkflowService {
   ) {
     requireExactKeys(body ?? {}, []);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.release(
+    return this.writeRepository().release(
       identity,
       requireUlid(taskIdValue),
       this.requireCommandId(commandIdValue),
@@ -112,7 +161,7 @@ export class ModerationWorkflowService {
   ) {
     const payload = requireExactKeys(body, ['moderatorId']);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.reassign(
+    return this.writeRepository().reassign(
       identity,
       requireUlid(taskIdValue),
       this.requireCommandId(commandIdValue),
@@ -128,7 +177,7 @@ export class ModerationWorkflowService {
   ) {
     requireExactKeys(body ?? {}, []);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.escalate(
+    return this.writeRepository().escalate(
       identity,
       requireUlid(taskIdValue),
       this.requireCommandId(commandIdValue),
@@ -151,7 +200,7 @@ export class ModerationWorkflowService {
       const payload = requireExactKeys(body, ['assertionIds', 'outcome']);
       const assertionIds = requireUlidArray(payload.assertionIds);
       if (assertionIds.length < 2) throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
-      return this.repository.submitAcceptSubset(identity, taskId, commandId, assertionIds);
+      return this.writeRepository().submitAcceptSubset(identity, taskId, commandId, assertionIds);
     }
     const payload = requireExactKeys(body, ['outcome', 'partitions']);
     if (!Array.isArray(payload.partitions) || payload.partitions.length < 2) {
@@ -161,7 +210,7 @@ export class ModerationWorkflowService {
     if (partitions.some((partition) => partition.length === 0)) {
       throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
     }
-    return this.repository.submitSplit(identity, taskId, commandId, partitions);
+    return this.writeRepository().submitSplit(identity, taskId, commandId, partitions);
   }
 
   public async confirm(
@@ -173,7 +222,7 @@ export class ModerationWorkflowService {
   ) {
     requireExactKeys(body ?? {}, []);
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.confirm(
+    return this.writeRepository().confirm(
       identity,
       requireUlid(taskIdValue),
       requireUlid(proposalIdValue),
@@ -197,7 +246,7 @@ export class ModerationWorkflowService {
       throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
     }
     const identity = await this.auth.authenticate(authorization);
-    return this.repository.refuse(
+    return this.writeRepository().refuse(
       identity,
       requireUlid(taskIdValue),
       requireUlid(proposalIdValue),
@@ -209,6 +258,11 @@ export class ModerationWorkflowService {
   private requireCommandId(value: string | undefined): Ulid {
     if (value === undefined) throw new ModerationHttpError(400, 'MOD_IDEMPOTENCY_REQUIRED');
     return requireUlid(value);
+  }
+
+  private writeRepository(): ModerationWorkflowRepository {
+    this.repository ??= new ModerationWorkflowRepository(this.moderationDatabase.database);
+    return this.repository;
   }
 
   private async authorize(

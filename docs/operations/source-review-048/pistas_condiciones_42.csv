@@ -1,0 +1,43 @@
+﻿mercado_propuesto;fuente;dominio;portada_http;pagina_condiciones_localizada;pagina_condiciones_http;estado
+UK;Regulator of Social Housing (GOV.UK);gov.uk;200;https://www.gov.uk/help/terms-conditions;200;PENDIENTE DE REVISION
+UK;Ministry of Housing, Communities & Local Government (GOV.UK);gov.uk;200;https://www.gov.uk/help/terms-conditions;200;PENDIENTE DE REVISION
+CL;SENAPRED Chile;senapred.gob.cl;503;;;PENDIENTE DE REVISION
+CL;Centro Sismológico Nacional (U. de Chile);sismologia.cl;200;;;PENDIENTE DE REVISION
+CL;Banco Central de Chile;bcentral.cl;URLError;;;PENDIENTE DE REVISION
+CL;Gobierno de Chile (Prensa Oficial);gob.cl;503;;;PENDIENTE DE REVISION
+CL;CIPER Chile;ciperchile.cl;200;;;PENDIENTE DE REVISION
+CL;BioBioChile;biobiochile.cl;200;;;PENDIENTE DE REVISION
+CL;Cooperativa.cl;cooperativa.cl;200;;;PENDIENTE DE REVISION
+CL;Diario El Día;diarioeldia.cl;200;https://www.diarioeldia.cl/paginas/p2-terminos-y-condiciones;200;PENDIENTE DE REVISION
+CL;La Tercera;latercera.com;200;https://www.latercera.com/terminos-y-condiciones/;200;PENDIENTE DE REVISION
+CL;El Mostrador;elmostrador.cl;200;;;PENDIENTE DE REVISION
+CL;Emol;emol.com;200;https://www.emol.com/Terminos/DerechosdeAutor.aspx;200;PENDIENTE DE REVISION
+AR;INDEC Argentina;indec.gob.ar;500;;;PENDIENTE DE REVISION
+AR;Banco Central de la República Argentina (BCRA);bcra.gob.ar;200;;;PENDIENTE DE REVISION
+AR;Chequeado (Argentina);chequeado.com;200;;;PENDIENTE DE REVISION
+AR;La Nación (Argentina);lanacion.com.ar;200;https://www.contacto.lanacion.com.ar/tyc;200;PENDIENTE DE REVISION
+AR;Clarín (Argentina);clarin.com;200;https://www.clarin.com/ayuda/terminos-condiciones.html;200;PENDIENTE DE REVISION
+AR;Infobae;infobae.com;200;https://www.infobae.com/terminos-y-condiciones/;200;PENDIENTE DE REVISION
+MX;INEGI México;inegi.org.mx;200;;;PENDIENTE DE REVISION
+MX;Banco de México (Banxico);banxico.org.mx;URLError;;;PENDIENTE DE REVISION
+MX;Animal Político (Grupo Animal);grupoanimal.mx;200;;;PENDIENTE DE REVISION
+MX;El Universal (México);eluniversal.com.mx;200;https://www.eluniversal.com.mx/terminos-y-condiciones/;200;PENDIENTE DE REVISION
+CO;DANE Colombia;dane.gov.co;URLError;;;PENDIENTE DE REVISION
+CO;Banco de la República (Colombia);banrep.gov.co;200;https://www.banrep.gov.co/es/aviso-legal#autor;502;PENDIENTE DE REVISION
+CO;La Silla Vacía;lasillavacia.com;200;;;PENDIENTE DE REVISION
+CO;El Tiempo (Colombia);eltiempo.com;200;https://www.eltiempo.com/terminos-condiciones;200;PENDIENTE DE REVISION
+CO;El Espectador (Colombia);elespectador.com;200;https://www.elespectador.com/terminos/terminos-y-condiciones/;200;PENDIENTE DE REVISION
+PE;INEI Perú;gob.pe;URLError;;;PENDIENTE DE REVISION
+PE;Banco Central de Reserva del Perú (BCRP);bcrp.gob.pe;URLError;;;PENDIENTE DE REVISION
+PE;OjoPúblico (Perú);ojo-publico.com;200;;;PENDIENTE DE REVISION
+PE;La República (Perú);larepublica.pe;200;https://larepublica.pe/terminos-de-uso;200;PENDIENTE DE REVISION
+PE;RPP Noticias (Perú);rpp.pe;200;https://rpp.pe/legal;200;PENDIENTE DE REVISION
+BR;IBGE Brasil (Agência de Notícias);agenciadenoticias.ibge.gov.br;200;;;PENDIENTE DE REVISION
+BR;Banco Central do Brasil (BCB);bcb.gov.br;200;;;PENDIENTE DE REVISION
+BR;Agência Brasil (EBC);agenciabrasil.ebc.com.br;200;;;PENDIENTE DE REVISION
+BR;g1 (Globo Brasil);g1.globo.com;200;;;PENDIENTE DE REVISION
+BR;Folha de S.Paulo;folha.uol.com.br;200;;;PENDIENTE DE REVISION
+UY;Catálogo de Datos Abiertos (AGESIC Uruguay);catalogodatos.gub.uy;TimeoutError;;;PENDIENTE DE REVISION
+UY;Banco Central del Uruguay (BCU);bcu.gub.uy;503;;;PENDIENTE DE REVISION
+UY;la diaria (Uruguay);ladiaria.com.uy;200;;;PENDIENTE DE REVISION
+UY;El País (Uruguay);elpais.com.uy;200;;;PENDIENTE DE REVISION

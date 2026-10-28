@@ -44,6 +44,9 @@ export interface EquivalenceReviewAssertion {
   readonly attributionChain: readonly string[];
   readonly articleId: Ulid;
   readonly articleUrl: string;
+  readonly articleTitle: string | null;
+  readonly articleAuthor: string | null;
+  readonly articlePublishedAt: Date | null;
   readonly sourceId: Ulid;
   readonly sourceName: string;
   readonly sourceType: SourceType;
@@ -111,6 +114,9 @@ interface MemberRow {
   readonly articleId: Ulid;
   readonly articleEventId: Ulid | null;
   readonly articleUrl: string;
+  readonly articleTitle: string | null;
+  readonly articleAuthor: string | null;
+  readonly articlePublishedAt: Date | null;
   readonly sourceId: Ulid;
   readonly sourceName: string;
   readonly sourceType: SourceType;
@@ -263,6 +269,9 @@ export class EquivalenceReviewRepository {
           Object.freeze({
             articleId: member.articleId,
             articleUrl: member.articleUrl,
+            articleTitle: member.articleTitle,
+            articleAuthor: member.articleAuthor,
+            articlePublishedAt: member.articlePublishedAt,
             assertionId: member.assertionId,
             assertionType: member.assertionType,
             attributionChain: Object.freeze(attributionBySpan.get(member.spanId) ?? []),
@@ -404,6 +413,17 @@ export class EquivalenceReviewRepository {
         'article.id as articleId',
         'article.event_id as articleEventId',
         'article.url_canonical as articleUrl',
+        'article.published_at as articlePublishedAt',
+        sql<string | null>`(
+          select version.headline from live_article_versions version
+          where version.article_id = article.id
+          order by version.version_number desc limit 1
+        )`.as('articleTitle'),
+        sql<string | null>`(
+          select version.author from live_article_versions version
+          where version.article_id = article.id
+          order by version.version_number desc limit 1
+        )`.as('articleAuthor'),
         'source.id as sourceId',
         'source.name as sourceName',
         'source.source_type as sourceType',

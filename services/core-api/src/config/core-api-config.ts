@@ -12,6 +12,7 @@ export interface CoreApiConfig {
   readonly databasePoolMax: number;
   readonly databaseUrl: string;
   readonly databaseCaCertificate?: string;
+  readonly moderationDatabaseUrl?: string;
   readonly host: string;
   readonly logLevel: CoreApiLogLevel;
   readonly nodeEnvironment: NodeEnvironment;
@@ -101,6 +102,24 @@ function readDatabaseUrl(source: NodeJS.ProcessEnv): string {
     throw new Error('DATABASE_URL must identify a host and database');
   }
 
+  return raw;
+}
+
+function readModerationDatabaseUrl(source: NodeJS.ProcessEnv): string | undefined {
+  const raw = source.MODERATION_DATABASE_URL?.trim();
+  if (raw === undefined || raw.length === 0) return undefined;
+  let parsed: URL;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    throw new Error('MODERATION_DATABASE_URL must be a valid PostgreSQL URL');
+  }
+  if (
+    (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') ||
+    parsed.hostname.length === 0 || parsed.pathname.length <= 1
+  ) {
+    throw new Error('MODERATION_DATABASE_URL must identify a PostgreSQL host and database');
+  }
   return raw;
 }
 
@@ -199,11 +218,13 @@ export function loadCoreApiConfig(
   }
 
   const databaseCaCertificate = readDatabaseCaCertificate(source);
+  const moderationDatabaseUrl = readModerationDatabaseUrl(source);
 
   return Object.freeze({
     databasePoolMax: readInteger(source, 'DATABASE_POOL_MAX', DEFAULT_POOL_MAX, 1, 50),
     databaseUrl: readDatabaseUrl(source),
     ...(databaseCaCertificate === undefined ? {} : { databaseCaCertificate }),
+    ...(moderationDatabaseUrl === undefined ? {} : { moderationDatabaseUrl }),
     host,
     logLevel: readEnum(source, 'CORE_API_LOG_LEVEL', logLevels, defaultLogLevel),
     nodeEnvironment,

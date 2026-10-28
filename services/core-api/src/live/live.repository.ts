@@ -1,9 +1,16 @@
 import type { Database, Ulid } from '@dialektik/database';
 import { sql, type Kysely } from 'kysely';
-import { publisherDomainsForMarket, type PublisherMarket } from './live.publisher-market.js';
+import { publisherDomainsForMarket, UK_BETA_SOURCE_IDS, type PublisherMarket } from './live.publisher-market.js';
+
+function publisherIdentityFilter(market: PublisherMarket, sourceColumn: string) {
+  return market === 'UK'
+    ? sql`${sql.ref(sourceColumn)} in (${sql.join(UK_BETA_SOURCE_IDS.map((id) => sql`${id}`))})`
+    : sql`true`;
+}
 
 export interface LiveReadRow {
   id: Ulid;
+  event_id: Ulid | null;
   headline: string;
   excerpt: string | null;
   author: string | null;
@@ -59,7 +66,9 @@ export class LiveRepository {
   constructor(private readonly database: Kysely<Database>) {}
 
   private newsProjection() {
-    return sql`select a.id, v.headline, v.excerpt, v.author, v.published_at, v.modified_at,
+    return sql`select a.id, a.event_id, v.headline,
+      case when p.storage_policy = 'METADATA_AND_FEED_EXCERPT' then v.excerpt else null end as excerpt,
+      v.author, v.published_at, v.modified_at,
       coalesce(r.canonical_url, a.url_canonical) as canonical_url, v.declared_upstream,
       v.version_number as version_count, s.id as source_id, s.name as source_name,
       s.source_type, s.canonical_domain, p.policy,
@@ -87,11 +96,21 @@ export class LiveRepository {
         and p.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
         and p.policy->>'endpoint' <> 'https://supabase.com'
       join live_exposure_exclusions e on e.id = a.live_exposure_id
-      where a.origin = 'LIVE_REAL' and a.event_id is null`;
+      where a.origin = 'LIVE_REAL'
+        -- Use the latest explicit quarantine decision. Later source policy
+        -- versions that omit this field do not accidentally reverse a review.
+        and coalesce((select case
+          when jsonb_typeof(q.policy->'quarantinedArticleIds') = 'array'
+          then not (q.policy->'quarantinedArticleIds' @> jsonb_build_array(a.id::text))
+          else false end
+          from live_source_policies q where q.source_id = a.source_id
+            and q.policy ? 'quarantinedArticleIds'
+          order by q.recorded_at desc, q.id desc limit 1), true)`;
   }
 
   async list(query: LiveNewsQuery): Promise<LiveReadRow[]> {
-    const domains = publisherDomainsForMarket(query.market ?? 'CL');
+    const market = query.market ?? 'CL';
+    const domains = publisherDomainsForMarket(market);
     if (domains.length === 0) return [];
     const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
     const cursor =
@@ -102,6 +121,7 @@ export class LiveRepository {
     const result = await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news
       where ${cursor}
         and canonical_domain in (${marketFilter})
+        and ${publisherIdentityFilter(market, 'source_id')}
         and ${query.q === undefined ? sql`true` : sql`position(lower(${query.q}) in lower(headline || ' ' || coalesce(excerpt, ''))) > 0`}
         and ${query.sourceId === undefined ? sql`true` : sql`source_id = ${query.sourceId}`}
         and ${query.publishedFrom === undefined ? sql`true` : sql`published_at >= ${query.publishedFrom}`}
@@ -116,7 +136,8 @@ export class LiveRepository {
     const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
     const result =
       await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news
-        where id = ${id} and canonical_domain in (${marketFilter})`.execute(
+        where id = ${id} and canonical_domain in (${marketFilter})
+          and ${publisherIdentityFilter(market, 'source_id')}`.execute(
         this.database,
       );
     return result.rows[0];
@@ -140,6 +161,7 @@ export class LiveRepository {
       from sources s
       where s.origin = 'LIVE_REAL'
         and s.canonical_domain in (${marketFilter})
+        and ${publisherIdentityFilter(market, 's.id')}
       order by s.name, s.id
       limit 100
     `.execute(this.database);
@@ -162,6 +184,7 @@ export class LiveRepository {
         and p.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
         and p.policy->>'endpoint' <> 'https://supabase.com'
         and s.canonical_domain in (${marketFilter})
+        and ${publisherIdentityFilter(market, 's.id')}
         and ${id === undefined ? sql`true` : sql`s.id = ${id}`}
       order by s.name, s.id`.execute(this.database);
     return result.rows;
