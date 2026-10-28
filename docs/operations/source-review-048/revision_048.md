@@ -37,6 +37,8 @@ Además se restauraron 19 restricciones independientes de integridad del flujo p
 
 Se compararon las restricciones públicas con una base PostgreSQL temporal creada mediante las 41 migraciones registradas en el proveedor del repositorio. Esa comparación permitió restaurar también la regla de retractación de contradicciones con [`restore-contradiction-retraction-check.sql`](../restore-contradiction-retraction-check.sql). De las reglas de referencia, permanece sin restaurar la de artículo y acontecimiento; tres están presentes como `NOT VALID`, incluidas las dos del párrafo anterior y la de metadatos de publicación de posiciones. El entorno temporal no contenía datos de usuarios y se eliminó después de la comparación.
 
+Para proteger la parte independiente del vínculo entre origen y exclusión, se añadió la restricción validada [`articles_live_exposure_presence_check`](../restore-live-article-exposure-check.sql). Exige una exclusión para cada artículo `LIVE_REAL` y la impide para otros orígenes, sin imponer `event_id IS NULL`. Esta protección adicional no cambia la regla original que puedan conservar otras bases; la solución de arquitectura debe coordinarse entre entornos.
+
 El Core preparado para el PR limita la proyección y búsqueda de extractos a las políticas cuya columna `storage_policy` lo permite. Esto no borra los textos ya guardados y requiere desplegar el cambio para surtir efecto en Render.
 
 ## Comprobaciones técnicas de los endpoints
