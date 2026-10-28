@@ -31,6 +31,8 @@ Se observaron 21 funciones de disparadores sustituidas por implementaciones que 
 
 Sigue pendiente `dialektik_validate_position_formation`, utilizado por ocho disparadores. La función de comprobación original falla sobre las ocho posiciones ya existentes; activarla sin resolver esos datos bloquearía operaciones posteriores del grafo editorial. La recuperación debe preservar la autoría y evitar inventar evidencia. La aplicación de las funciones no elimina ni modifica los artículos o las publicaciones anteriores.
 
+Además se restauraron 19 restricciones independientes de integridad del flujo persistido mediante [`restore-live-integrity-checks.sql`](../restore-live-integrity-checks.sql). Diecisiete se validaron contra los datos existentes. Las otras dos protegen nuevas escrituras con `NOT VALID`: 19 exclusiones históricas tienen IDs que no son hashes SHA-256 y cuatro recibos históricos usan un canal distinto de `rss_atom` y `official_api`. Estos registros requieren conciliación y siguen intactos. Se mantiene aparte la restricción de artículo y acontecimiento por la discrepancia de arquitectura descrita arriba.
+
 El Core preparado para el PR limita la proyección y búsqueda de extractos a las políticas cuya columna `storage_policy` lo permite. Esto no borra los textos ya guardados y requiere desplegar el cambio para surtir efecto en Render.
 
 ## Comprobaciones técnicas de los endpoints
