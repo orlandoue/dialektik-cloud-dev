@@ -26,6 +26,8 @@ La revisión complementaria de páginas oficiales para Diario El Día, La Tercer
 
 La consulta de Supabase del 28 de octubre encontró 13 fuentes `LIVE_REAL`, 19 artículos y 19 versiones. Las 19 versiones tienen extracto pese a que su política indica `METADATA_ONLY`; los textos y extractos existentes no se han borrado ni alterado. Doce políticas aún tenían `https://supabase.com` como endpoint. No había artículos con los cuatro IDs ancla, afirmaciones, fragmentos, evidencias ni vínculos de formación; las ocho posiciones existentes carecían de formación y las cuatro contradicciones de confirmación completa.
 
+Una consulta de solo lectura que reproduce las uniones, la última versión y recibo y el filtro de derechos del Core encontró **cero noticias** para los dominios de Chile del commit desplegado `a611fca`, y **una noticia** con la lista del PR que incorpora Diario El Día. La política de esa fuente también necesita la revisión de derechos documentada arriba. Esta es una reproducción SQL, no una prueba HTTP de una sesión beta autenticada; el panel RSS sin persistencia sigue su propio recorrido.
+
 Se observaron 21 funciones de disparadores sustituidas por implementaciones que solo devolvían `NEW`. Se restauraron 20 a partir de las migraciones oficiales en dos transacciones con precondiciones y comprobaciones con reversión:
 
 - [`restore-live-provenance-guards.sql`](../restore-live-provenance-guards.sql): ocho funciones de procedencia, identidad, retención futura y protección de derechos, y una fila técnica faltante de la barrera de derechos.
