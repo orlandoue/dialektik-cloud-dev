@@ -4,7 +4,7 @@ Actualizado: 28 de octubre de 2026 UTC. SHA-256 del segundo SQL recibido: `a32c0
 
 El usuario confirmó conservar las **42 propuestas**. El CSV contiene las 13 fuentes existentes de Chile y Reino Unido y las 29 adicionales (Argentina 6, México 4, Colombia 5, Perú 5, Brasil 5 y Uruguay 4). Las 13 primeras ya figuran en Supabase; las 29 adicionales no se han activado. El CSV recoge los identificadores, enlaces y referencias de la versión corregida; las autorizaciones de uso siguen sin verificarse.
 
-La revisión complementaria de páginas oficiales para Diario El Día, La Tercera, CIPER y Radio Cooperativa está en [condiciones_chile.md](condiciones_chile.md).
+La revisión complementaria de páginas oficiales está en [condiciones_chile.md](condiciones_chile.md) y [condiciones_regionales.md](condiciones_regionales.md); las pistas para las 42 fuentes están en [pistas_condiciones_42.csv](pistas_condiciones_42.csv).
 
 ## Qué mejora la segunda versión
 
