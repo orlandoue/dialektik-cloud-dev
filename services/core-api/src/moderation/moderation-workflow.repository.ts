@@ -667,6 +667,26 @@ export class ModerationWorkflowRepository {
     transaction: Transaction<Database>,
     identity: ModerationIdentity,
   ): Promise<CurrentActor> {
+    if (identity.kind === 'beta') {
+      // Recheck the binding, beta access, role and JWT expiry within the same
+      // transaction that applies the editorial command.
+      const result = await sql<CurrentActor>`
+        select u.id as "userId", u.role
+        from public.editorial_beta_identities binding
+        join public.users u on u.id = binding.editorial_user_id
+        join public.private_beta_testers beta on beta.user_id = binding.auth_user_id
+        where binding.auth_user_id = ${identity.authUserId}::uuid
+          and binding.editorial_user_id = ${identity.userId}
+          and binding.enabled is true and binding.revoked_at is null
+          and beta.enabled is true and beta.revoked_at is null
+          and u.role in ('editor', 'moderator')
+          and to_timestamp(${identity.tokenExpiresAt}) > clock_timestamp()
+      `.execute(transaction);
+      const actor = result.rows[0];
+      if (actor === undefined) throw new ModerationHttpError(401, 'MOD_AUTH_INVALID');
+      return actor;
+    }
+
     const actor = await transaction
       .selectFrom('moderation_auth_sessions as session')
       .innerJoin('users as user', 'user.id', 'session.user_id')

@@ -6,7 +6,7 @@ El usuario confirmó conservar las **42 propuestas**. El CSV contiene las 13 fue
 
 La revisión complementaria de páginas oficiales está en [condiciones_chile.md](condiciones_chile.md) y [condiciones_regionales.md](condiciones_regionales.md); las pistas para las 42 fuentes están en [pistas_condiciones_42.csv](pistas_condiciones_42.csv).
 
-La revisión del tercer expediente y la correspondencia provisional con los artículos, posturas y contradicciones existentes están en [expediente_048_3.md](expediente_048_3.md).
+La revisión del tercer expediente y la correspondencia provisional con los artículos, posturas y contradicciones existentes están en [expediente_048_3.md](expediente_048_3.md). La comprobación de los doce fragmentos y el registro editorial posterior están en [expediente_048_4.md](expediente_048_4.md).
 
 ## Qué mejora la segunda versión
 
