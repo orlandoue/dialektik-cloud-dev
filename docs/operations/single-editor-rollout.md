@@ -50,17 +50,18 @@ evidencias, posturas ni contradicciones y no aprueban contenidos automáticament
    La contraseña y URL se configuran de forma segura en Render mediante
    `MODERATION_DATABASE_URL`; no se guardan en el repositorio ni se envían al
    cliente. La conexión usa el mismo certificado CA de PostgreSQL que el Core.
-5. Desplegar el Core correspondiente solo después de instalar las migraciones,
-   asignar la autorización y configurar la conexión separada. Hasta entonces el
-   Core desplegado conserva la regla anterior y no acepta el acceso editorial
-   de la cuenta beta. Las credenciales y el rol de escritura solo son adecuados
-   para el servidor: sus funciones de auditoría confían en el contexto fijado
-   por el servidor al autenticar y autorizar cada solicitud.
-6. Desplegar la interfaz editorial móvil del PR de Flutter y revisar cada
-   fuente, cita y relación antes de confirmar. La pantalla requiere el Core
-   de este PR; sin él, la beta de lectura sigue funcionando y la acción
-   editorial permanece oculta. La interfaz y el Core todavía no están
-   desplegados en Render ni incluidos en un APK publicado.
+5. El Core del commit `847f6de` se desplegó en Render el 28 de octubre de
+   2026, después de instalar las estructuras y asignar la autorización. La
+   cuenta beta del editor recibe HTTP 200 en `/v1/mod/session`. La conexión
+   separada todavía no está configurada, por lo que los comandos editoriales
+   de escritura siguen devolviendo HTTP 503. Las credenciales y el rol de
+   escritura solo son adecuados para el servidor: sus funciones de auditoría
+   confían en el contexto fijado al autenticar y autorizar cada solicitud.
+   Render conserva el despliegue automático de la rama base; una actualización
+   posterior de esa rama puede reemplazar el commit desplegado manualmente.
+6. La interfaz editorial móvil se incorporó a la APK de prueba del PR de
+   Flutter. Revisar cada fuente, cita y relación antes de confirmar; la
+   conexión de escritura y los datos de evidencia siguen pendientes.
 
 La lectura editorial devuelve un fragmento solo cuando tiene entre 140 y 300
 caracteres y su artículo tiene título, autor, fecha, fuente y una URL HTTPS

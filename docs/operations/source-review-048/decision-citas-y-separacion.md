@@ -55,9 +55,13 @@ página de informes indicada por el propietario enlaza el
 y su [resumen oficial](https://www.bcentral.cl/resumen-ipom/-/detalle/resumen-ipom-septiembre-2026).
 Ambas direcciones respondieron a solicitudes HEAD, sin descargar el cuerpo del
 informe; resta cotejar el fragmento y la autoría con el recurso específico.
-Las direcciones aportadas para SENAPRED apuntan a páginas temáticas: se necesita
-identificar el recurso preciso o una referencia equivalente verificable. La
-página de simulacros enlaza ejercicios regionales individuales, por ejemplo
+El propietario aportó después el [comunicado de evacuación por el simulacro
+de Magallanes del 16 de abril de 2026](https://senapred.cl/2026/04/16/masiva-evacuacion-en-comunas-costeras-de-la-region-de-magallanes-tras-simulacro-de-sismo-y-tsunami/)
+y la [página técnica de pruebas SAE](https://senapred.cl/pruebas-sae/); ambos
+respondieron HTTP 200 a solicitudes HEAD. El comunicado se refiere a una
+fecha anterior a la del registro de noticia existente: la relación concreta
+con el borrador SAE, la cita y la autoría aún requieren cotejo editorial.
+La página general de simulacros enlaza ejercicios regionales, por ejemplo
 [Los Lagos, 27 de octubre](https://senapred.cl/simulacros_t/sev-los-lagos-2026/)
 y [Atacama, 8 de octubre](https://senapred.cl/simulacros_t/sbc-atacama-2026/),
 pero no se ha establecido que sean el origen del fragmento aportado. Una
@@ -68,8 +72,11 @@ y sus organizaciones publicadoras. Esa consulta de metadatos no confirmó los
 equipos de autoría propuestos ni el texto literal de las citas.
 La API de metadatos de CIPER devuelve para el artículo de AFP un título que
 difiere en la mayúscula de «fondo», y para la página Radar un título general
-distinto al propuesto en el expediente. Ambos títulos devueltos se conservan
-en el CSV de revisión; la API consultada no proporcionó el nombre de autor.
+distinto al propuesto en el expediente. El propietario identifica esa entrega
+como «Radar: 09/09/26», con autoría de «Equipo Radar CIPER». Los títulos
+devueltos por la API se conservan en el CSV de revisión; la API consultada no
+proporcionó el nombre de autor. El propietario identifica la autoría del IPoM
+como «Consejo del Banco Central de Chile».
 En particular, `https://senapred.cl/sistema-alerta-de-emergencia/` devolvió
 el mismo ETag y tamaño que una ruta inexistente elegida para comparación;
 ese 200 no permite confirmar que el enlace corresponda a una página de SAE.
@@ -110,7 +117,7 @@ Ambos son borradores sin artículos asociados ni posturas aprobadas; sus fechas
 iniciales proceden de los registros de artículos existentes y no acreditan por
 sí solas la fecha de los hechos. Se conservaron el acontecimiento histórico y
 sus registros anteriores. Las 19 noticias `LIVE_REAL` siguen con `event_id`
-nulo. El Core de este PR excluye de sus lecturas el acontecimiento combinado
-cuando existe una decisión de separación; ese cambio aún requiere despliegue.
+nulo. El Core desplegado desde este PR excluye de sus lecturas el acontecimiento
+combinado cuando existe una decisión de separación.
 Cada borrador necesita fuentes concretas y revisión editorial propia antes de
 mostrarse en la app.
