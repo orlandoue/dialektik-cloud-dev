@@ -167,6 +167,40 @@ test('does not treat an ordinary quantity as an external identifier', async () =
   assert.deepEqual(result.extraction.facts, []);
 });
 
+test('reports insufficient evidence when the title cannot support a bounded occurrence', async () => {
+  const h = harness({
+    status: 'OBSERVATION_AVAILABLE',
+    boundedOccurrence: true,
+    boundedThread: false,
+    facts: [fact('f1', 'action', 'inventado'), fact('f2', 'date', '2026-10-28')],
+  });
+  const result = await analyzeHeadlineForReview(
+    { ...input, headline: 'Autoridades anuncian medidas regionales' },
+    h.transport,
+    h.hooks,
+    new AbortController().signal,
+  );
+  assert.equal(result.extraction.status, 'INSUFFICIENT_EVIDENCE');
+  assert.deepEqual(result.extraction.facts, []);
+});
+
+test('accepts a literal numbered law as an explicit identifier', async () => {
+  const h = harness({
+    status: 'OBSERVATION_AVAILABLE',
+    boundedOccurrence: true,
+    boundedThread: false,
+    facts: [fact('f1', 'action', 'aprobó'), fact('f2', 'external_id', '1234')],
+  });
+  const result = await analyzeHeadlineForReview(
+    { ...input, headline: 'El consejo aprobó la ley 1234' },
+    h.transport,
+    h.hooks,
+    new AbortController().signal,
+  );
+  assert.equal(result.extraction.status, 'OBSERVATION_AVAILABLE');
+  assert.equal(result.extraction.facts.length, 2);
+});
+
 test('rejects repeated substrings and non-ISO dates rather than guessing evidence positions', async () => {
   const repeated = harness({
     ...complete,
@@ -174,7 +208,7 @@ test('rejects repeated substrings and non-ISO dates rather than guessing evidenc
   });
   await assert.rejects(
     analyzeHeadlineForReview(
-      { ...input, headline: 'aprobó el 123 y el 123' },
+      { ...input, headline: 'aprobó el 123 y el 123 el 2026-10-28' },
       repeated.transport,
       repeated.hooks,
       new AbortController().signal,
@@ -187,7 +221,7 @@ test('rejects repeated substrings and non-ISO dates rather than guessing evidenc
   });
   await assert.rejects(
     analyzeHeadlineForReview(
-      { ...input, headline: 'aprobó la medida ayer' },
+      { ...input, headline: 'aprobó la ley 1234 ayer' },
       ambiguousDate.transport,
       ambiguousDate.hooks,
       new AbortController().signal,

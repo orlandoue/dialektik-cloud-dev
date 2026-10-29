@@ -12,7 +12,7 @@ const input = {
   policyId: 'a'.repeat(64),
   canonicalDomain: 'ciperchile.cl',
   canonicalUrl: 'https://www.ciperchile.cl/news/story/',
-  headline: 'Titular sintético para prueba',
+  headline: 'Titular sintético para prueba 2026-10-28',
 };
 const grant = {
   sourceId: input.sourceId,

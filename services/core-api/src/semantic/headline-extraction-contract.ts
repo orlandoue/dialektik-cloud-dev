@@ -13,6 +13,22 @@ const object = (properties: Readonly<Record<string, unknown>>) => ({
   properties,
   required: Object.keys(properties),
 });
+const EXPLICIT_IDENTIFIER =
+  /\b(?:ley|proyecto|bolet[ií]n|expediente|resoluci[oó]n|decreto|sentencia|bill|law|case|docket)\s*(?:(?:de\s+ley|n(?:[úu]m(?:ero)?|[°ºo])\.?)\s*)?[#:]?\s*[A-Za-z0-9./-]*\d[A-Za-z0-9./-]*/iu;
+const EXPLICIT_IDENTIFIER_AT_END = new RegExp(`${EXPLICIT_IDENTIFIER.source}$`, 'iu');
+
+function isIsoDate(value: string): boolean {
+  return (
+    /^\d{4}-\d{2}-\d{2}$/u.test(value) &&
+    Number.isFinite(Date.parse(value)) &&
+    new Date(value).toISOString().slice(0, 10) === value
+  );
+}
+
+function hasHeadlineAnchor(title: string): boolean {
+  const dates = title.match(/\d{4}-\d{2}-\d{2}/gu) ?? [];
+  return dates.some(isIsoDate) || EXPLICIT_IDENTIFIER.test(title);
+}
 
 /** The model proposes text; offsets and hashes are always calculated by the Core. */
 export const HEADLINE_EXTRACTION_SCHEMA = object({
@@ -40,21 +56,37 @@ export function headlineConfigHash(providerConfigHash: string): string {
       providerConfigHash,
       prompt: HEADLINE_EXTRACTION_PROMPT,
       schema: HEADLINE_EXTRACTION_SCHEMA,
-      grounding: 'unique-title-unicode-explicit-id-v2',
+      grounding: 'unique-title-unicode-explicit-id-v3',
     }),
   );
 }
 
 export function groundHeadlineExtraction(raw: unknown, title: string): VerifiedExtraction {
   const result = exactObject(raw, ['status', 'boundedOccurrence', 'boundedThread', 'facts']);
-  if (!Array.isArray(result.facts) || result.facts.length > 12)
+  if (
+    !Array.isArray(result.facts) ||
+    result.facts.length > 12 ||
+    typeof result.boundedOccurrence !== 'boolean' ||
+    typeof result.boundedThread !== 'boolean'
+  )
     throw new Error('LLM_SCHEMA_INVALID');
   if (result.status !== 'OBSERVATION_AVAILABLE') {
     // Conservative responses cannot authorize facts even if the model appended them.
-    if (typeof result.boundedOccurrence !== 'boolean' || typeof result.boundedThread !== 'boolean')
-      throw new Error('LLM_SCHEMA_INVALID');
     return verifyExtraction(
       { status: result.status, boundedOccurrence: false, boundedThread: false, facts: [] },
+      { title, body: '' },
+    );
+  }
+  if (!hasHeadlineAnchor(title)) {
+    // Publication time is not an occurrence date. Without an explicit anchor in the title,
+    // no model-proposed occurrence can pass the current bounded-occurrence rule.
+    return verifyExtraction(
+      {
+        status: 'INSUFFICIENT_EVIDENCE',
+        boundedOccurrence: false,
+        boundedThread: false,
+        facts: [],
+      },
       { title, body: '' },
     );
   }
@@ -69,17 +101,11 @@ export function groundHeadlineExtraction(raw: unknown, title: string): VerifiedE
       throw new Error('LLM_EVIDENCE_INVALID');
     if (fact.role === 'external_id') {
       const context = title.slice(Math.max(0, utf16Start - 80), utf16Start) + fact.value;
-      const explicitId =
-        /\b(?:ley|proyecto|bolet[ií]n|expediente|resoluci[oó]n|decreto|sentencia|bill|law|case|docket)\s*(?:(?:de\s+ley|n(?:[úu]m(?:ero)?|[°ºo])\.?)\s*)?[#:]?\s*[A-Za-z0-9./-]*\d[A-Za-z0-9./-]*$/iu;
-      if (!/\d/u.test(fact.value) || !explicitId.test(context)) unsupportedIdentifier = true;
+      if (!/\d/u.test(fact.value) || !EXPLICIT_IDENTIFIER_AT_END.test(context))
+        unsupportedIdentifier = true;
     }
     if (fact.role === 'date' || fact.role === 'end_date') {
-      if (
-        !/^\d{4}-\d{2}-\d{2}$/u.test(fact.value) ||
-        !Number.isFinite(Date.parse(fact.value)) ||
-        new Date(fact.value).toISOString().slice(0, 10) !== fact.value
-      )
-        throw new Error('LLM_EVIDENCE_INVALID');
+      if (!isIsoDate(fact.value)) throw new Error('LLM_EVIDENCE_INVALID');
     }
     const start = Array.from(title.slice(0, utf16Start)).length;
     return {
