@@ -963,6 +963,7 @@ export interface LiveAcquisitionReceiptTable {
   policy_id: string;
   exclusion_id: string;
   discovery_channel: string;
+  discovery_channel_detail: string | null;
   discovery_url: string;
   discovered_url: string | null;
   canonical_url: string | null;

@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
 import { SyntaxValidator } from 'fast-xml-validator';
 import type { LiveSourcePolicy } from './live.registry.js';
+import { decodeCommonHtmlEntities } from './html-entities.js';
 
 export const LIVE_ADAPTER_VERSION = 'product-live-rss-atom-v1';
 export const MAX_LIVE_FEED_BYTES = 2_000_000;
@@ -65,7 +66,7 @@ const entities: Readonly<Record<string, string>> = {
 
 export function cleanLiveText(input: string | null): string | null {
   if (input === null) return null;
-  const clean = input
+  const clean = decodeCommonHtmlEntities(input)
     .replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (whole: string, name: string) => {
       if (name.startsWith('#')) {
         const code = name.toLowerCase().startsWith('#x')
@@ -236,6 +237,51 @@ function itemFromEntry(
   };
 }
 
+const SITEMAP_NAMESPACE = 'http://www.sitemaps.org/schemas/sitemap/0.9';
+const NEWS_SITEMAP_NAMESPACE = 'http://www.google.com/schemas/sitemap-news/0.9';
+
+function namespacedValue(value: Record<string, unknown>, localName: string): unknown {
+  const key = Object.keys(value).find((candidate) =>
+    candidate === localName || candidate.endsWith(`:${localName}`),
+  );
+  return key === undefined ? undefined : value[key];
+}
+
+function newsSitemapEntries(parsed: unknown, policy: LiveSourcePolicy): unknown[] {
+  const root = record(parsed);
+  const sitemap = record(root.urlset);
+  if (root.urlset === undefined) throw new Error('UNSUPPORTED_NEWS_SITEMAP_FORMAT');
+  const sitemapNamespace = sitemap['@_xmlns'];
+  const newsNamespace = Object.entries(sitemap).find(
+    ([key, value]) => key.startsWith('@_xmlns:') && value === NEWS_SITEMAP_NAMESPACE,
+  );
+  if (
+    (sitemapNamespace !== undefined && sitemapNamespace !== SITEMAP_NAMESPACE) ||
+    newsNamespace === undefined
+  ) {
+    throw new Error('NEWS_SITEMAP_NAMESPACE_INVALID');
+  }
+  const urls = array(sitemap.url);
+  if (urls.length > MAX_LIVE_FEED_ITEMS) throw new Error('FEED_ITEM_LIMIT_EXCEEDED');
+  return urls.map((rawEntry) => {
+    const entry = record(rawEntry);
+    const news = record(namespacedValue(entry, 'news'));
+    const publication = record(namespacedValue(news, 'publication'));
+    const publicationName = cleanLiveText(textValue(namespacedValue(publication, 'name')));
+    const language = cleanLiveText(textValue(namespacedValue(publication, 'language')));
+    if (publicationName !== policy.publisherName || language !== policy.language) {
+      throw new Error('NEWS_SITEMAP_PUBLICATION_IDENTITY_MISMATCH');
+    }
+    return {
+      guid: entry.loc,
+      link: entry.loc,
+      title: namespacedValue(news, 'title'),
+      pubDate: namespacedValue(news, 'publication_date'),
+      'dc:language': language,
+    };
+  });
+}
+
 export interface ParsedLiveFeedBatches {
   readonly itemCount: number;
   readonly batches: Iterable<readonly LiveDiscoveredItem[]>;
@@ -307,10 +353,16 @@ export function parseLiveFeedBatches(
   }
   const root = record(parsed);
   const atom = root.feed !== undefined;
+  const sitemap = policy.discoveryChannel === 'news_sitemap';
   const channel = atom ? record(root.feed) : record(record(root.rss).channel);
-  const entries = atom ? array(channel.entry) : array(channel.item);
+  const entries = sitemap
+    ? newsSitemapEntries(parsed, policy)
+    : atom
+      ? array(channel.entry)
+      : array(channel.item);
   const feedRights = textValue(channel.rights ?? channel.copyright ?? channel['dc:rights']);
-  if (root.feed === undefined && root.rss === undefined) throw new Error('UNSUPPORTED_FEED_FORMAT');
+  if (!sitemap && root.feed === undefined && root.rss === undefined)
+    throw new Error('UNSUPPORTED_FEED_FORMAT');
   if (entries.length > MAX_LIVE_FEED_ITEMS) throw new Error('FEED_ITEM_LIMIT_EXCEEDED');
   const hash = liveHash(payload);
   return {

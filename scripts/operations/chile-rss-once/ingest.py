@@ -27,7 +27,10 @@ PROJECT = 'vclsswwfhljczxgnsciq'
 SOURCE_IDS = [
     '01M4YDQK00CH1000C1PERCH11E', '01M4YDQK00CH100C00PERAT1VA',
     '01M4YDQK00CH100D1AR10E1D1A', '01M4YDQK00CH100001ATERCERA',
+    '01M4YDQK00CH1000B10B10CH11', '01M4YDQK00CH100E1M0STRAD0R',
 ]
+BIOBIO_ID = '01M4YDQK00CH1000B10B10CH11'
+BIOBIO_FEED = 'https://www.biobiochile.cl/static/feed-rss'
 AGENT = 'DialektikRSSMetadata/1.0'
 
 
@@ -88,7 +91,9 @@ def query(sql, read_only=False):
 def sources():
     ids = ','.join("'" + value + "'" for value in SOURCE_IDS)
     return query(f"""select s.id,s.name,s.canonical_domain,p.id policy_id,p.registry_key,
-      p.policy->>'endpoint' endpoint from sources s
+      p.policy->>'endpoint' endpoint,
+      coalesce(p.policy->>'discoveryChannel','rss_atom') discovery_channel,
+      coalesce(p.policy->>'language','es') language from sources s
       join lateral (select * from live_source_policies where source_id=s.id
         order by recorded_at desc,id desc limit 1) p on true
       where s.id in ({ids}) and s.origin='LIVE_REAL' and p.active
@@ -126,11 +131,18 @@ def get(source):
         final = urllib.parse.urlsplit(response.geturl())
         if final.scheme != 'https' or final.hostname not in allowed_hosts:
             raise ValueError('FEED_REDIRECT_INVALID')
-        if not any(part in response.headers.get('Content-Type', '').lower() for part in ('xml', 'rss')):
-            raise ValueError('FEED_CONTENT_TYPE_INVALID')
         raw = response.read(2_000_001)
         if len(raw) > 2_000_000:
             raise ValueError('FEED_TOO_LARGE')
+        content_type = response.headers.get('Content-Type', '').lower()
+        xml_mime = any(part in content_type for part in ('xml', 'rss'))
+        biofeed_octet_stream = (
+            source['id'] == BIOBIO_ID and endpoint == BIOBIO_FEED
+            and 'application/octet-stream' in content_type
+            and re.match(rb'^\s*(?:<\?xml\b[^>]*\?>\s*)?<rss\b', raw, re.I) is not None
+        )
+        if not xml_mime and not biofeed_octet_stream:
+            raise ValueError('FEED_CONTENT_TYPE_INVALID')
     input_json = json.dumps({'source': source, 'xml': raw.decode('utf-8', 'strict')}, ensure_ascii=False)
     result = subprocess.run(['node', str(HERE / 'prepare.mjs')], input=input_json, text=True,
                             capture_output=True, timeout=30, check=True)
@@ -141,7 +153,7 @@ def prepare():
     records = sources()
     if {row['id'] for row in records} != set(SOURCE_IDS):
         raise RuntimeError('REVIEWED_SOURCE_SET_INCOMPLETE')
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCE_IDS)) as pool:
         results = list(pool.map(get, records))
     if any(not result['items'] for result in results):
         raise RuntimeError('SOURCE_HAS_NO_ELIGIBLE_RECENT_ITEMS')
@@ -192,7 +204,8 @@ begin
           and nullif(p.policy->>'rightsEvidenceUrl','') is not null
           and p.policy->>'rightsEvidenceUrl'<>'https://supabase.com'
           and p.policy->>'endpoint'<>'https://supabase.com'
-          and p.policy->>'endpoint'=entry->>'discoveryUrl') then
+          and p.policy->>'endpoint'=entry->>'discoveryUrl'
+          and coalesce(p.policy->>'discoveryChannel','rss_atom')=entry->>'discoveryChannel') then
       raise exception 'SOURCE_REVIEW_CHANGED_OR_NOT_AUTHORIZED';
     end if;
     if exists(select 1 from articles where url_canonical=entry->>'canonicalUrl')
@@ -213,10 +226,12 @@ begin
        (entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,entry->>'discoveryUrl',
        'live_feed_source_item_identity',entry->>'contentHash',entry->>'signature')
     on conflict (id) do nothing;
-    insert into live_acquisition_receipts(id,source_id,policy_id,exclusion_id,discovery_channel,discovery_url,
+    insert into live_acquisition_receipts(id,source_id,policy_id,exclusion_id,discovery_channel,discovery_channel_detail,discovery_url,
       discovered_url,canonical_url,source_item_id,published_at,modified_at,original_published_at,
       original_modified_at,seen_at,raw_payload_hash,adapter_version,disposition,error_code)
-    values (entry->>'receiptId',entry->>'sourceId',entry->>'policyId',entry->>'exclusionId','rss_atom',entry->>'discoveryUrl',
+    values (entry->>'receiptId',entry->>'sourceId',entry->>'policyId',entry->>'exclusionId',
+      case when entry->>'discoveryChannel'='news_sitemap' then 'rss_atom' else entry->>'discoveryChannel' end,
+      entry->>'discoveryChannel',entry->>'discoveryUrl',
       entry->>'discoveredUrl',entry->>'canonicalUrl',entry->>'sourceItemId',
       (entry->>'publishedAt')::timestamptz,(entry->>'modifiedAt')::timestamptz,entry->>'originalPublishedAt',
       entry->>'originalModifiedAt',(entry->>'capturedAt')::timestamptz,entry->>'rawPayloadHash',
@@ -247,7 +262,7 @@ def write(dry_run):
     items = prepared['items']
     created = dt.datetime.fromisoformat(prepared['createdAt'])
     age = dt.datetime.now(dt.timezone.utc) - created
-    if not 1 <= len(items) <= 48 or age > dt.timedelta(minutes=15) or age < dt.timedelta(minutes=-5):
+    if not 1 <= len(items) <= 72 or age > dt.timedelta(minutes=15) or age < dt.timedelta(minutes=-5):
         raise RuntimeError('PREPARED_BATCH_MISSING_OR_EXPIRED')
     if {item.get('sourceId') for item in items} != set(SOURCE_IDS):
         raise RuntimeError('PREPARED_SOURCE_SET_INVALID')

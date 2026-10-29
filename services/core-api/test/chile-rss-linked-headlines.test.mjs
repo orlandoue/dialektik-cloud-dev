@@ -48,3 +48,8 @@ test('reject entities, DTD, HTML and stale results',()=>{
 test('wrong content-type cannot pass',async()=>{
  await assert.rejects(fetchChileRssLinkedHeadlines(mocked(xml(entry()),'text/html'),now));
 });
+test('decodes common HTML entities in source RSS headlines',()=>{
+ const title='Natalia Valdebenito: &amp;#34;El sueldo debiera ser más alto&amp;#34; &amp; entrevista &ndash; hoy';
+ const result=decodeChileRss(xml(entry(validLink,title)),now);
+ assert.equal(result[0].headline,'Natalia Valdebenito: "El sueldo debiera ser más alto" & entrevista – hoy');
+});

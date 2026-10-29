@@ -7,8 +7,12 @@ const input = JSON.parse(readFileSync(0, 'utf8'));
 const now = new Date();
 const source = input.source;
 const policy = {
+  sourceId: source.id,
+  registryKey: source.registry_key,
   publisherName: source.name,
   canonicalDomain: source.canonical_domain,
+  discoveryChannel: source.discovery_channel,
+  language: source.language,
   allowedArticleDomains: [source.canonical_domain, `www.${source.canonical_domain}`],
   storagePolicy: 'METADATA_ONLY',
 };
@@ -38,6 +42,7 @@ for (const item of items) {
   output.push({
     sourceId: source.id, policyId: source.policy_id, publisher: source.name,
     domain: source.canonical_domain, registryKey: source.registry_key,
+    discoveryChannel: source.discovery_channel,
     discoveryUrl: source.endpoint, capturedAt: now.toISOString(),
     articleId: id(), receiptId: id(), versionId: id(),
     exclusionId: liveHash(`${source.registry_key}\n${item.canonicalUrl}`),

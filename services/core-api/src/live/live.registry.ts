@@ -17,7 +17,7 @@ export interface LiveSourcePolicy {
   readonly sourceType: SourceType;
   readonly publisherFamily: string | null;
   readonly category: string | null;
-  readonly discoveryChannel: 'rss_atom';
+  readonly discoveryChannel: 'rss_atom' | 'news_sitemap';
   readonly endpoint: string;
   readonly rightsClass: LiveRightsClass;
   readonly storagePolicy: LiveStoragePolicy;

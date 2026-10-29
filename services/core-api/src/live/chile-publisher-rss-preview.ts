@@ -10,6 +10,7 @@
  * inactive candidate registry.
  */
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { decodeCommonHtmlEntities } from './html-entities.js';
 
 const FEED = 'https://www.diarioeldia.cl/rss/noticias/';
 const RIGHTS = 'https://www.diarioeldia.cl/rss';
@@ -38,7 +39,7 @@ function sourceUrl(raw: unknown): string {
 }
 function title(raw: unknown): string {
   if(typeof raw!=='string') throw Error('RSS_TITLE_INVALID');
-  const s=raw.replace(/\s+/gu,' ').trim();
+  const s=decodeCommonHtmlEntities(raw).replace(/\s+/gu,' ').trim();
   if(s.length<8 || s.length>260 || /[\u0000-\u001f\u007f]/u.test(s))
     throw Error('RSS_TITLE_INVALID');
   return s;
