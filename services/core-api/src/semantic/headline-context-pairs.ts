@@ -17,6 +17,7 @@ export type ContextRelation =
 
 export interface VerifiedContextRelation {
   readonly relation: ContextRelation;
+  readonly modelRelation: ContextRelation;
   readonly anchor: null | Readonly<{
     leftStart: number;
     leftEnd: number;
@@ -59,7 +60,7 @@ export function contextPairConfigHash(providerConfigHash: string): string {
       prompt: HEADLINE_CONTEXT_PAIR_PROMPT,
       schema: HEADLINE_CONTEXT_PAIR_SCHEMA,
       retrieval: 'distinct-source-shared-terms-72h-v1',
-      grounding: 'server-selected-shared-token-unicode-v2',
+      grounding: 'server-selected-event-signals-unicode-v3',
     }),
   );
 }
@@ -73,6 +74,27 @@ function terms(title: string): Set<string> {
         .match(/[\p{L}\p{N}]{4,}/gu) ?? []
     ).filter((term) => !STOP.has(term)),
   );
+}
+
+function lowercaseTerms(title: string): Set<string> {
+  return new Set(
+    (title.match(/[\p{L}]{4,}/gu) ?? [])
+      .filter((token) => token === token.toLocaleLowerCase('es'))
+      .map((token) => token.normalize('NFC'))
+      .filter((token) => !STOP.has(token)),
+  );
+}
+
+/** Names and teams alone cannot substantiate a provisional same-event label. */
+export function calibrateContextRelation(
+  relation: ContextRelation,
+  leftTitle: string,
+  rightTitle: string,
+): ContextRelation {
+  if (relation !== 'POSSIBLY_SAME_EVENT') return relation;
+  const left = lowercaseTerms(leftTitle),
+    right = lowercaseTerms(rightTitle);
+  return [...left].filter((term) => right.has(term)).length >= 2 ? relation : 'UNCERTAIN';
 }
 
 /** Candidates are provisional, bounded by publication proximity and distinct sources. */
@@ -132,8 +154,10 @@ export function verifyContextRelation(
   const result = exactObject(raw, ['relation']);
   if (typeof result.relation !== 'string' || !LABELS.includes(result.relation as ContextRelation))
     throw new Error('CONTEXT_SCHEMA_INVALID');
-  const relation = result.relation as ContextRelation;
-  if (relation === 'UNRELATED' || relation === 'UNCERTAIN') return { relation, anchor: null };
+  const modelRelation = result.relation as ContextRelation;
+  const relation = calibrateContextRelation(modelRelation, leftTitle, rightTitle);
+  if (relation === 'UNRELATED' || relation === 'UNCERTAIN')
+    return { relation, modelRelation, anchor: null };
   try {
     assertUnicodeScalars(leftTitle);
     assertUnicodeScalars(rightTitle);
@@ -166,6 +190,7 @@ export function verifyContextRelation(
   const rightStart = Array.from(rightTitle.slice(0, right)).length;
   return Object.freeze({
     relation,
+    modelRelation,
     anchor: Object.freeze({
       leftStart,
       leftEnd: leftStart + length,

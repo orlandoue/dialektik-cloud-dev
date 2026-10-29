@@ -18,6 +18,10 @@ si `DIALEKTIK_CONTEXT_PAIR_ENABLED` no es `true`.
    relacionado, sin relación o incierto. Para una relación posible, el Core
    identifica una palabra literal, única y no genérica presente en ambos
    titulares. Esta coincidencia es una pista, no prueba la relación propuesta.
+   Para mantener la etiqueta de posible acontecimiento común se exigen además
+   dos términos compartidos en minúsculas; si solo coinciden nombres o equipos,
+   la propuesta se presenta como incierta. La respuesta original del modelo y
+   la sugerencia conservadora se registran por separado para auditoría.
 4. La base y el Core verifican las autorizaciones, las versiones y los offsets.
    Se registran los intentos antes de enviarlos, sin guardar respuestas textuales
    del modelo. Hay un límite de 30 comparaciones por 24 horas y no se reintenta
@@ -29,5 +33,6 @@ si `DIALEKTIK_CONTEXT_PAIR_ENABLED` no es `true`.
 
 La búsqueda por términos puede omitir relaciones expresadas con palabras
 distintas y puede proponer coincidencias que solo compartan nombres o temas.
-El resultado del modelo puede ser incorrecto. Las fuentes originales siguen
+Esta regla también puede omitir relaciones reales y no demuestra que dos
+titulares se refieran al mismo hecho. El resultado del modelo puede ser incorrecto. Las fuentes originales siguen
 siendo necesarias para verificar la relación y cualquier contradicción.

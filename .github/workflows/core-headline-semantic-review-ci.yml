@@ -12,6 +12,7 @@ on:
       - 'packages/database/src/migration/048_headline_semantic_review.ts'
       - 'packages/database/src/migration/049_headline_rejection_diagnostics.ts'
       - 'packages/database/src/migration/050_headline_context_pair_review.ts'
+      - 'packages/database/src/migration/051_headline_context_model_relation.ts'
       - 'package-lock.json'
       - '.github/workflows/core-headline-semantic-review-ci.yml'
 

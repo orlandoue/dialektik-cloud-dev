@@ -162,11 +162,10 @@ export class HeadlineContextRepository {
       finishAttempt: async (id, outcome, relation) => {
         const anchor = relation?.anchor;
         await sql`insert into public.headline_context_pair_outcomes
-          (attempt_id,outcome,relation,left_start,left_end,right_start,right_end,recorded_at)
+          (attempt_id,outcome,relation,left_start,left_end,right_start,right_end,recorded_at,model_relation)
           values (${id},${outcome},${relation?.relation ?? null},${anchor?.leftStart ?? null},${anchor?.leftEnd ?? null},
-            ${anchor?.rightStart ?? null},${anchor?.rightEnd ?? null},date_trunc('milliseconds',clock_timestamp()))`.execute(
-          connection(),
-        );
+            ${anchor?.rightStart ?? null},${anchor?.rightEnd ?? null},date_trunc('milliseconds',clock_timestamp()),
+            ${relation?.modelRelation ?? null})`.execute(connection());
       },
     };
   }

@@ -65,6 +65,7 @@ export class HeadlineContextAnalysisService {
         status: 'ANALYZED' as const,
         attemptId: result.attemptId,
         relation: result.relation.relation,
+        modelRelation: result.relation.modelRelation,
       };
     } catch (error) {
       if (error instanceof ContextPairRejectedError)

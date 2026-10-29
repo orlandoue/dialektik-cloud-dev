@@ -62,6 +62,9 @@ test('isolated PostgreSQL verifies both source grants, shared title evidence and
         receipt_id dialektik_ulid,version_number int,headline text,published_at timestamptz);`);
     await db.exec(migration('048_headline_semantic_review.ts', 'HEADLINE_REVIEW_SQL'));
     await db.exec(migration('050_headline_context_pair_review.ts', 'HEADLINE_CONTEXT_PAIR_SQL'));
+    await db.exec(
+      migration('051_headline_context_model_relation.ts', 'HEADLINE_CONTEXT_MODEL_RELATION_SQL'),
+    );
     await db.exec(`grant select on sources,live_source_policies,users,moderation_auth_sessions,editorial_single_editor_authorizations,articles,
       live_acquisition_receipts,live_article_versions to dialektik_core_app;
       create role test_moderator; create role test_ai;
@@ -175,6 +178,16 @@ test('isolated PostgreSQL verifies both source grants, shared title evidence and
       new AbortController().signal,
     );
     assert.equal(generated.relation.relation, 'POSSIBLY_SAME_THREAD');
+    assert.equal(generated.relation.modelRelation, 'POSSIBLY_SAME_THREAD');
+    assert.equal(
+      (
+        await db.query(
+          'select model_relation from headline_context_pair_outcomes where attempt_id=$1',
+          [generated.attemptId],
+        )
+      ).rows[0].model_relation,
+      'POSSIBLY_SAME_THREAD',
+    );
     assert.equal(await repository.nextPair(), null);
     process.env.DIALEKTIK_HEADLINE_REVIEW_ENABLED = 'true';
     process.env.DIALEKTIK_CONTEXT_PAIR_ENABLED = 'true';
@@ -216,7 +229,32 @@ test('isolated PostgreSQL verifies both source grants, shared title evidence and
     const analyzed = await analysis.analyzeNext('Bearer fixture', {});
     assert.equal(analyzed.status, 'ANALYZED');
     assert.equal(analyzed.relation, 'POSSIBLY_SAME_THREAD');
+    assert.equal(analyzed.modelRelation, 'POSSIBLY_SAME_THREAD');
     assert.deepEqual(await analysis.analyzeNext('Bearer fixture', {}), { status: 'NO_CANDIDATE' });
+    await db.exec('reset role; set role test_moderator');
+    const initialList = await editorial.listContextPairs('Bearer fixture');
+    assert.equal(
+      initialList.some((row) => row.attemptId === generated.attemptId),
+      false,
+    );
+    assert.equal(
+      initialList.some((row) => row.attemptId === analyzed.attemptId),
+      true,
+    );
+    const decisionId = '01M4YDQK00EVART00000000015';
+    const decision = await editorial.decideContextPair(
+      'Bearer fixture',
+      analyzed.attemptId,
+      decisionId,
+      { decision: 'KEEP_FOR_REVIEW' },
+    );
+    assert.deepEqual(
+      await editorial.decideContextPair('Bearer fixture', analyzed.attemptId, decisionId, {
+        decision: 'KEEP_FOR_REVIEW',
+      }),
+      decision,
+    );
+    await db.exec('reset role; set role test_ai');
     const insertAttempt = (id, rightGrant = ids.rightGrant) =>
       db.query(
         `insert into headline_context_pair_attempts
@@ -253,35 +291,31 @@ test('isolated PostgreSQL verifies both source grants, shared title evidence and
       `insert into headline_context_pair_outcomes values($1,'VALIDATED','UNCERTAIN',null,null,null,null,now())`,
       [badAttempt],
     );
+    const legacyAttempt = '01M4YDQK00EVART00000000017';
+    await insertAttempt(legacyAttempt);
+    await db.query(
+      `insert into headline_context_pair_outcomes values($1,'VALIDATED','POSSIBLY_SAME_EVENT',2,8,0,6,now())`,
+      [legacyAttempt],
+    );
     await assert.rejects(
       db.query(`update headline_context_pair_attempts set model='other' where id=$1`, [
         ids.attempt,
       ]),
     );
     await db.exec('reset role; set role test_moderator');
-    assert.ok(
-      (await editorial.listContextPairs('Bearer fixture')).some(
-        (row) => row.attemptId === generated.attemptId,
-      ),
+    const reviewList = await editorial.listContextPairs('Bearer fixture');
+    assert.equal(
+      reviewList.find((row) => row.attemptId === analyzed.attemptId).reviewDecision,
+      'KEEP_FOR_REVIEW',
     );
-    const decisionId = '01M4YDQK00EVART00000000015';
-    const decision = await editorial.decideContextPair(
-      'Bearer fixture',
-      generated.attemptId,
-      decisionId,
-      { decision: 'KEEP_FOR_REVIEW' },
-    );
-    assert.deepEqual(
-      await editorial.decideContextPair('Bearer fixture', generated.attemptId, decisionId, {
+    const legacy = reviewList.find((row) => row.attemptId === legacyAttempt);
+    assert.equal(legacy.relation, 'UNCERTAIN');
+    assert.equal(legacy.modelRelation, 'POSSIBLY_SAME_EVENT');
+    await assert.rejects(
+      editorial.decideContextPair('Bearer fixture', legacyAttempt, '01M4YDQK00EVART00000000018', {
         decision: 'KEEP_FOR_REVIEW',
       }),
-      decision,
-    );
-    assert.equal(
-      (await editorial.listContextPairs('Bearer fixture')).find(
-        (row) => row.attemptId === generated.attemptId,
-      ).reviewDecision,
-      'KEEP_FOR_REVIEW',
+      (error) => error.status === 409,
     );
     await db.exec(
       `select set_config('dialektik.actor_id','${ids.editor}',false); select set_config('dialektik.actor_type','editor',false)`,

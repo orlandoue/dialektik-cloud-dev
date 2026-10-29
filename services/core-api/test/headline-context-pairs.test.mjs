@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  calibrateContextRelation,
   rankContextPairs,
   verifyContextRelation,
 } from '../dist/semantic/headline-context-pairs.js';
@@ -55,7 +56,7 @@ test('refuses missing, repeated or generic shared anchors', () => {
     ['Torres visita Torres', 'Torres responde'],
   ]) {
     assert.throws(
-      () => verifyContextRelation({ relation: 'POSSIBLY_SAME_EVENT' }, titleA, titleB),
+      () => verifyContextRelation({ relation: 'POSSIBLY_SAME_THREAD' }, titleA, titleB),
       /CONTEXT_ANCHOR_INVALID/,
     );
   }
@@ -76,6 +77,29 @@ test('does not accept a model-provided invented anchor', () => {
 test('uncertain results retain no proposed anchor', () => {
   assert.deepEqual(
     verifyContextRelation({ relation: 'UNCERTAIN' }, left.headline, right.headline),
-    { relation: 'UNCERTAIN', anchor: null },
+    { relation: 'UNCERTAIN', modelRelation: 'UNCERTAIN', anchor: null },
   );
+});
+
+test('retains the model label while downgrading shared names without shared actions', () => {
+  const coach = 'Entrenador de Montreal explica la situación de Alexis Sánchez';
+  const match = 'Alexis Sánchez sumó minutos en dura goleada que sufrió CF Montreal';
+  assert.deepEqual(verifyContextRelation({ relation: 'POSSIBLY_SAME_EVENT' }, coach, match), {
+    relation: 'UNCERTAIN',
+    modelRelation: 'POSSIBLY_SAME_EVENT',
+    anchor: null,
+  });
+  assert.equal(
+    calibrateContextRelation('POSSIBLY_SAME_THREAD', coach, match),
+    'POSSIBLY_SAME_THREAD',
+  );
+});
+
+test('allows a provisional same-event suggestion with two shared specific lowercase terms', () => {
+  const first = 'Alexis Sánchez suma minutos en otra goleada de Montreal';
+  const second = 'Alexis Sánchez sumó minutos en dura goleada que sufrió Montreal';
+  const result = verifyContextRelation({ relation: 'POSSIBLY_SAME_EVENT' }, first, second);
+  assert.equal(result.relation, 'POSSIBLY_SAME_EVENT');
+  assert.equal(result.modelRelation, 'POSSIBLY_SAME_EVENT');
+  assert.notEqual(result.anchor, null);
 });
