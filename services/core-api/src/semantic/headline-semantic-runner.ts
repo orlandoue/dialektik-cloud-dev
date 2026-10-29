@@ -1,7 +1,10 @@
 import type { StructuredLLMTransport, VerifiedExtraction } from '../llm-shadow/llm.contracts.js';
-import { verifyExtraction } from '../llm-shadow/llm.grounding.js';
-import { EXTRACTION_SCHEMA, sha256 } from '../llm-shadow/llm.schema.js';
+import { sha256 } from '../llm-shadow/llm.schema.js';
 import { assertUnicodeScalars } from '../ephemeral/ephemeral.normalization.js';
+import {
+  groundHeadlineExtraction,
+  HEADLINE_EXTRACTION_SCHEMA,
+} from './headline-extraction-contract.js';
 
 export interface HeadlineSemanticInput {
   readonly articleId: string;
@@ -152,11 +155,8 @@ export async function analyzeHeadlineForReview(
         {
           title: input.headline,
           body: '',
-          titleHash,
-          bodyHash: sha256(''),
-          offsetConvention: 'unicode_code_point_v1',
         },
-        EXTRACTION_SCHEMA,
+        HEADLINE_EXTRACTION_SCHEMA,
         signal,
       );
       if (signal.aborted) throw new Error('HEADLINE_ABORTED');
@@ -169,10 +169,7 @@ export async function analyzeHeadlineForReview(
       }
       let extraction: VerifiedExtraction;
       try {
-        extraction = verifyExtraction(response.output, {
-          title: input.headline,
-          body: '',
-        });
+        extraction = groundHeadlineExtraction(response.output, input.headline);
       } catch {
         await hooks.finishAttempt(attemptId, 'REJECTED');
         recorded = true;

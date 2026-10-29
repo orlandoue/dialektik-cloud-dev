@@ -30,18 +30,7 @@ const grant = {
 const hash = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
 const usage = { inputTokens: 1, outputTokens: 1, totalTokens: 2, cost: null };
 function fact(id, role, value) {
-  const start = Array.from(input.headline.slice(0, input.headline.indexOf(value))).length;
-  return {
-    id,
-    role,
-    value,
-    evidence: {
-      field: 'title',
-      start,
-      end: start + Array.from(value).length,
-      inputHash: hash(input.headline),
-    },
-  };
+  return { id, role, value };
 }
 function harness(result) {
   const events = [];
@@ -100,13 +89,12 @@ test('reserves an attempt and sends only the verified title under a source grant
     new AbortController().signal,
   );
   assert.deepEqual(h.events.slice(0, 4), ['lease', 'grant', 'reserve', 'provider']);
-  assert.deepEqual(
-    Object.keys(h.providerInputs[0]).sort(),
-    ['body', 'bodyHash', 'offsetConvention', 'title', 'titleHash'].sort(),
-  );
+  assert.deepEqual(Object.keys(h.providerInputs[0]).sort(), ['body', 'title'].sort());
   assert.equal(h.providerInputs[0].body, '');
   assert.equal(h.providerInputs[0].title, input.headline);
   assert.equal(result.extraction.status, 'OBSERVATION_AVAILABLE');
+  assert.equal(result.extraction.facts[0].evidence.start, 13);
+  assert.equal(result.extraction.facts[0].evidence.sourceSha256, hash(input.headline));
   assert.equal(result.attemptId, '01M4YDQK00EVART00000000003');
   assert.equal(h.events.at(-1).outcome, 'VALIDATED');
   assert.ok(!JSON.stringify(result).includes(input.headline));
@@ -140,6 +128,73 @@ test('rejects invented evidence and records no validated proposal', async () => 
   );
   assert.equal(h.events.at(-1).outcome, 'REJECTED');
   assert.equal(h.events.at(-1).extraction, undefined);
+});
+
+test('discards all facts when the model reports insufficient evidence', async () => {
+  const h = harness({
+    status: 'INSUFFICIENT_EVIDENCE',
+    boundedOccurrence: true,
+    boundedThread: false,
+    facts: [fact('f1', 'action', 'inventado')],
+  });
+  const result = await analyzeHeadlineForReview(
+    input,
+    h.transport,
+    h.hooks,
+    new AbortController().signal,
+  );
+  assert.equal(result.extraction.status, 'INSUFFICIENT_EVIDENCE');
+  assert.equal(result.extraction.boundedOccurrence, false);
+  assert.deepEqual(result.extraction.facts, []);
+  assert.equal(h.events.at(-1).outcome, 'VALIDATED');
+});
+
+test('does not treat an ordinary quantity as an external identifier', async () => {
+  const h = harness({
+    status: 'OBSERVATION_AVAILABLE',
+    boundedOccurrence: true,
+    boundedThread: false,
+    facts: [fact('f1', 'action', 'promete'), fact('f2', 'external_id', '30')],
+  });
+  const result = await analyzeHeadlineForReview(
+    { ...input, headline: 'Gobierno promete construir 30 viviendas' },
+    h.transport,
+    h.hooks,
+    new AbortController().signal,
+  );
+  assert.equal(result.extraction.status, 'INSUFFICIENT_EVIDENCE');
+  assert.deepEqual(result.extraction.facts, []);
+});
+
+test('rejects repeated substrings and non-ISO dates rather than guessing evidence positions', async () => {
+  const repeated = harness({
+    ...complete,
+    facts: [fact('f1', 'action', 'aprobó'), fact('f2', 'external_id', '123')],
+  });
+  await assert.rejects(
+    analyzeHeadlineForReview(
+      { ...input, headline: 'aprobó el 123 y el 123' },
+      repeated.transport,
+      repeated.hooks,
+      new AbortController().signal,
+    ),
+    /HEADLINE_MODEL_OUTPUT_REJECTED/,
+  );
+  const ambiguousDate = harness({
+    ...complete,
+    facts: [fact('f1', 'action', 'aprobó'), fact('f2', 'date', 'ayer')],
+  });
+  await assert.rejects(
+    analyzeHeadlineForReview(
+      { ...input, headline: 'aprobó la medida ayer' },
+      ambiguousDate.transport,
+      ambiguousDate.hooks,
+      new AbortController().signal,
+    ),
+    /HEADLINE_MODEL_OUTPUT_REJECTED/,
+  );
+  assert.equal(repeated.events.at(-1).outcome, 'REJECTED');
+  assert.equal(ambiguousDate.events.at(-1).outcome, 'REJECTED');
 });
 
 test('does not persist an output when the source grant is revoked during the call', async () => {

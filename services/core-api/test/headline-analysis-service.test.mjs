@@ -128,6 +128,8 @@ test('selects server-side metadata and records a validated result without sendin
         h.queries.some((query) => query.text.includes('insert into public.headline_ai_attempts')),
       );
       const payload = JSON.parse(options.body);
+      assert.equal(Object.hasOwn(payload, 'tools'), false);
+      assert.equal(typeof payload.max_tokens, 'number');
       const data = JSON.parse(payload.messages[1].content);
       assert.equal(data.title, input.headline);
       assert.equal(data.body, '');

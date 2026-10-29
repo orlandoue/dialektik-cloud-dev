@@ -84,7 +84,7 @@ export function createCloudflareProfile(
       outputMode,
       store: false,
       stream: false,
-      tools: [],
+      tools: outputMode === 'workers-json-schema-v1' ? 'omitted' : [],
     }),
   );
   return Object.freeze({

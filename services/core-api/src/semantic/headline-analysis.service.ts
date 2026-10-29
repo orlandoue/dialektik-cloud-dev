@@ -9,6 +9,7 @@ import { ModerationHttpError } from '../moderation/moderation-http.error.js';
 import { HeadlineSemanticDatabaseService } from './headline-semantic-database.service.js';
 import { HeadlineSemanticRepository } from './headline-semantic-repository.js';
 import { analyzeHeadlineForReview } from './headline-semantic-runner.js';
+import { HEADLINE_EXTRACTION_PROMPT, headlineConfigHash } from './headline-extraction-contract.js';
 
 /** One explicitly requested, rights-gated title analysis; no autonomous publication. */
 @Injectable()
@@ -38,7 +39,12 @@ export class HeadlineAnalysisService {
     });
     let transport: CloudflareWorkersAITransport;
     try {
-      transport = new CloudflareWorkersAITransport(profile);
+      transport = new CloudflareWorkersAITransport(
+        profile,
+        undefined,
+        process.env,
+        HEADLINE_EXTRACTION_PROMPT,
+      );
     } catch {
       throw new ServiceUnavailableException('Headline analysis is not configured.');
     }
@@ -47,7 +53,7 @@ export class HeadlineAnalysisService {
         this.writer.database,
         identity.userId,
         profile.config.model,
-        profile.config.configHash,
+        headlineConfigHash(profile.config.configHash),
       );
       const input = (await repository.eligible(1))[0];
       if (!input) return { status: 'NO_ELIGIBLE' as const };
