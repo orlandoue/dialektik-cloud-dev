@@ -72,3 +72,11 @@ test('old or future headlines fail source as a unit',()=>{
  assert.equal(data.sources[0].status,'UNAVAILABLE');
  assert.equal(data.items.length,1);
 });
+test('decodes common HTML entities before composing the RSS timeline',()=>{
+ const encoded=dayItem('entities');
+ encoded.headline='Natalia Valdebenito: &amp;#34;El sueldo debiera ser más alto&amp;#34; &amp; entrevista &ndash; hoy';
+ const data=composeChileRssChronology(
+   ok(dia([encoded])),ok(coop([coopItem('other')])),now);
+ assert.equal(data.items.find(x=>x.source_id==='cl_diario_eldia_rss').title,
+   'Natalia Valdebenito: "El sueldo debiera ser más alto" & entrevista – hoy');
+});

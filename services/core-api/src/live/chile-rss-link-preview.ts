@@ -1,5 +1,6 @@
 import {createHash} from 'node:crypto';
 import {XMLParser, XMLValidator} from 'fast-xml-parser';
+import {decodeCommonHtmlEntities} from './html-entities.js';
 
 /**
  * First genuine RSS navigation pilot in private beta.
@@ -28,7 +29,7 @@ function record(value:unknown):UnknownRecord{
 function stringField(input:unknown,max=280):string {
   if(typeof input!=='string'||input.trim().length<3||input.trim().length>max ||
      /[\u0000-\u001f\u007f]/u.test(input))throw Error('RSS_INVALID_STRING');
-  return input.trim().replace(/\s+/gu,' ');
+  return decodeCommonHtmlEntities(input).trim().replace(/\s+/gu,' ');
 }
 function allowedLink(raw:unknown):string{
   const url=new URL(stringField(raw,1500));

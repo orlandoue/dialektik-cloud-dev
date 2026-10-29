@@ -7,6 +7,7 @@
  */
 import { fetchChileRssLinkedHeadlines, latestChileRssLinkedHeadlines } from './chile-publisher-rss-preview.js';
 import { fetchChileRssLinkPreview, latestChileRssLinkPreview } from './chile-rss-link-preview.js';
+import { decodeCommonHtmlEntities } from './html-entities.js';
 
 type ElDia = Awaited<ReturnType<typeof fetchChileRssLinkedHeadlines>>;
 type Cooperativa = Awaited<ReturnType<typeof fetchChileRssLinkPreview>>;
@@ -46,7 +47,7 @@ function validDate(text:string,now:Date) {
 function title(raw:string) {
   if(typeof raw!=='string' || raw.length<3 || raw.length>280 ||
      /[\u0000-\u001f\u007f]/u.test(raw))throw Error('AGG_RSS_TITLE_INVALID');
-  return raw;
+  return decodeCommonHtmlEntities(raw);
 }
 export function composeChileRssChronology(
   day:Outcome<ElDia>,cooperativa:Outcome<Cooperativa>,now=new Date(),
