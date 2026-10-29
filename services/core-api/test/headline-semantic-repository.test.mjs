@@ -127,6 +127,10 @@ test('the provider is called between a durable reservation and outcome under the
     assert.equal(result.extraction.status, 'INSUFFICIENT_EVIDENCE');
     assert.deepEqual(order, ['provider']);
     const texts = queries.map(({ text }) => text);
+    for (const table of ['headline_ai_attempts', 'headline_ai_attempt_outcomes']) {
+      const insert = texts.find((text) => text.includes(`insert into public.${table}`));
+      assert.ok(insert.includes("date_trunc('milliseconds',clock_timestamp())"), table);
+    }
     assert.ok(
       texts.findIndex((q) => q.includes('pg_advisory_lock')) <
         texts.findIndex((q) => q.includes('headline_ai_attempts')),

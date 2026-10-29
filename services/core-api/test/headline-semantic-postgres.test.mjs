@@ -22,6 +22,11 @@ test('title grants, provenance, evidence, review and least-privilege roles in is
   const db = new PGlite();
   let kysely;
   try {
+    const precision = await db.query(`select
+      sample::timestamptz(3)>sample as rounded_later,
+      date_trunc('milliseconds',sample)>sample as truncated_later
+      from (select timestamptz '2026-10-29 12:00:00.000600+00' as sample) t`);
+    assert.deepEqual(precision.rows[0], { rounded_later: true, truncated_later: false });
     await db.exec(`create domain dialektik_ulid as text check (value ~ '^[0-7][0-9A-HJKMNP-TV-Z]{25}$');
     create role anon; create role authenticated; create role dialektik_core_app; create role dialektik_moderation_writer;
     create table sources(id dialektik_ulid primary key,origin text,name text,canonical_domain text);

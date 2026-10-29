@@ -71,6 +71,10 @@ test('failure diagnostics retain only fixed codes and never the message or model
     headlineFailureResponseCode(headlineFailureDiagnostic(new Error('private content'))),
     'MOD_HEADLINE_INTERNAL_FAILURE',
   );
+  assert.equal(
+    headlineFailureResponseCode(headlineFailureDiagnostic({ code: 'P0001' })),
+    'MOD_HEADLINE_DATABASE_TRIGGER_REJECTED',
+  );
 });
 function fixture({ allowed = true, eligible = true, role = 'editor' } = {}) {
   const queries = [];

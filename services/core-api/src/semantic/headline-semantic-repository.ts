@@ -136,7 +136,7 @@ export class HeadlineSemanticRepository {
         await sql`insert into public.headline_ai_attempts
           (id,grant_id,source_id,source_policy_id,article_id,article_version_id,requested_by,title_sha256,model,config_sha256,created_at)
           values (${id},${grant.rows[0].id},${input.sourceId},${input.policyId},${input.articleId},${input.versionId},
-            ${this.editorId},${titleHash},${this.model},${this.configHash},clock_timestamp())`.execute(
+            ${this.editorId},${titleHash},${this.model},${this.configHash},date_trunc('milliseconds',clock_timestamp()))`.execute(
           connection(),
         );
         return id;
@@ -144,7 +144,7 @@ export class HeadlineSemanticRepository {
       finishAttempt: async (id, outcome, extraction, rejectionCode) => {
         const payload = extraction === undefined ? null : JSON.stringify(extraction);
         await sql`insert into public.headline_ai_attempt_outcomes(attempt_id,outcome,extraction,recorded_at,rejection_code)
-          values (${id},${outcome},${payload}::jsonb,clock_timestamp(),${rejectionCode ?? null})`.execute(
+          values (${id},${outcome},${payload}::jsonb,date_trunc('milliseconds',clock_timestamp()),${rejectionCode ?? null})`.execute(
           connection(),
         );
       },

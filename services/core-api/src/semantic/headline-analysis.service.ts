@@ -59,6 +59,9 @@ export function headlineFailureResponseCode(
   if (diagnostic.code === 'LLM_RESPONSE_INVALID' && diagnostic.category !== 'NONE')
     return `MOD_HEADLINE_RESPONSE_${diagnostic.category}`;
   if (diagnostic.code !== 'INTERNAL') return `MOD_HEADLINE_${diagnostic.code.slice(4)}`;
+  if (diagnostic.databaseCode === 'P0001') return 'MOD_HEADLINE_DATABASE_TRIGGER_REJECTED';
+  if (diagnostic.databaseCode === '23514') return 'MOD_HEADLINE_DATABASE_CHECK_REJECTED';
+  if (diagnostic.databaseCode === '23503') return 'MOD_HEADLINE_DATABASE_REFERENCE_REJECTED';
   if (diagnostic.databaseCode !== 'NONE') return 'MOD_HEADLINE_DATABASE_FAILURE';
   return 'MOD_HEADLINE_INTERNAL_FAILURE';
 }
