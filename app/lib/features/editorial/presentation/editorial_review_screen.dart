@@ -19,8 +19,13 @@ final class EditorialQueueScreen extends StatefulWidget {
 
 final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
   List<Map<String, Object?>> _tasks = const <Map<String, Object?>>[];
+  List<Map<String, Object?>>? _headlines;
+  List<Map<String, Object?>> _headlineSources = const <Map<String, Object?>>[];
   bool _loading = true;
+  bool _busyHeadline = false;
   String? _error;
+  String? _headlineError;
+  String? _headlineNotice;
 
   @override
   void initState() {
@@ -41,9 +46,26 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
     });
     try {
       final List<Map<String, Object?>> tasks = await widget.api.tasks();
+      List<Map<String, Object?>>? headlines;
+      List<Map<String, Object?>> headlineSources =
+          const <Map<String, Object?>>[];
+      String? headlineError;
+      if (widget.session.canConfirm && widget.session.singleEditorEnabled) {
+        try {
+          headlines = await widget.api.headlineReviews();
+          if (headlines != null) {
+            headlineSources = await widget.api.headlineSources();
+          }
+        } on EditorialFailure catch (failure) {
+          headlineError = failure.message;
+        }
+      }
       if (!mounted) return;
       setState(() {
         _tasks = tasks;
+        _headlines = headlines;
+        _headlineSources = headlineSources;
+        _headlineError = headlineError;
         _loading = false;
       });
     } on EditorialFailure catch (failure) {
@@ -52,6 +74,87 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
         _error = failure.message;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _analyzeHeadline() async {
+    if (_busyHeadline) return;
+    setState(() {
+      _busyHeadline = true;
+      _headlineNotice = null;
+      _headlineError = null;
+    });
+    try {
+      final Map<String, Object?> result = await widget.api.analyzeHeadline();
+      if (!mounted) return;
+      setState(
+        () => _headlineNotice = result['status'] == 'NO_ELIGIBLE'
+            ? 'No hay titulares pendientes de fuentes autorizadas.'
+            : 'Análisis listo para revisión.',
+      );
+      await _load();
+    } on EditorialFailure catch (failure) {
+      if (mounted) setState(() => _headlineError = failure.message);
+    } finally {
+      if (mounted) setState(() => _busyHeadline = false);
+    }
+  }
+
+  Future<void> _decideHeadline(String attemptId, String decision) async {
+    if (_busyHeadline) return;
+    setState(() {
+      _busyHeadline = true;
+      _headlineError = null;
+      _headlineNotice = null;
+    });
+    try {
+      await widget.api.decideHeadline(attemptId, decision);
+      if (mounted) await _load();
+    } on EditorialFailure catch (failure) {
+      if (mounted) setState(() => _headlineError = failure.message);
+    } finally {
+      if (mounted) setState(() => _busyHeadline = false);
+    }
+  }
+
+  Future<void> _setHeadlineSource(Map<String, Object?> source) async {
+    final Object? rawId = source['sourceId'];
+    if (_busyHeadline || rawId is! String) return;
+    final bool enable = source['grantId'] == null;
+    if (enable) {
+      final bool? confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Habilitar análisis de titulares'),
+          content: Text(
+            'Para ${_text(source['sourceName'], 'esta fuente')}, se enviarán titulares a Cloudflare para revisión editorial. No se enviarán cuerpos de artículos ni se publicarán contradicciones automáticamente.',
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Habilitar'),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+    }
+    setState(() {
+      _busyHeadline = true;
+      _headlineError = null;
+      _headlineNotice = null;
+    });
+    try {
+      await widget.api.setHeadlineSource(rawId, enabled: enable);
+      if (mounted) await _load();
+    } on EditorialFailure catch (failure) {
+      if (mounted) setState(() => _headlineError = failure.message);
+    } finally {
+      if (mounted) setState(() => _busyHeadline = false);
     }
   }
 
@@ -77,36 +180,213 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
         ? const Center(child: CircularProgressIndicator())
         : _error != null
         ? _EditorialMessage(message: _error!, onRetry: _load)
-        : _tasks.isEmpty
-        ? _EditorialMessage(
-            message: 'No hay revisiones pendientes.',
-            onRetry: _load,
-          )
         : RefreshIndicator(
             onRefresh: _load,
-            child: ListView.builder(
+            child: ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
               padding: const EdgeInsets.all(16),
-              itemCount: _tasks.length,
-              itemBuilder: (context, index) {
-                final Map<String, Object?> task = _tasks[index];
-                final String title = _text(
-                  task['eventTitle'],
-                  'Acontecimiento',
-                );
-                final bool current = task['isCurrentSnapshot'] == true;
-                return Card(
-                  child: ListTile(
-                    title: Text(title),
-                    subtitle: Text(
-                      current
-                          ? 'Revisión de afirmaciones'
-                          : 'Requiere actualización',
-                    ),
-                    trailing: const Icon(Icons.chevron_right),
-                    onTap: () => _open(task),
+              children: <Widget>[
+                if (_headlines != null) ...<Widget>[
+                  Text(
+                    'Titulares para revisar',
+                    style: Theme.of(context).textTheme.titleLarge,
                   ),
-                );
-              },
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Revisa la fuente antes de permitir comparaciones. Esta decisión no publica acontecimientos ni contradicciones.',
+                  ),
+                  const SizedBox(height: 8),
+                  ExpansionTile(
+                    title: const Text('Fuentes para análisis de titulares'),
+                    subtitle: const Text(
+                      'Habilita o retira cada fuente por separado.',
+                    ),
+                    children: <Widget>[
+                      if (_headlineSources.isEmpty)
+                        const ListTile(
+                          title: Text(
+                            'No hay fuentes disponibles para revisión.',
+                          ),
+                        ),
+                      ..._headlineSources.map((source) {
+                        final bool active = source['current'] == true;
+                        final bool hasGrant = source['grantId'] is String;
+                        final Object? rawEvidence = source['rightsEvidenceUrl'];
+                        final Uri? evidence = rawEvidence is String
+                            ? Uri.tryParse(rawEvidence)
+                            : null;
+                        return ListTile(
+                          title: Text(_text(source['sourceName'], 'Fuente')),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Text(
+                                active
+                                    ? 'Habilitada'
+                                    : hasGrant
+                                    ? 'Necesita actualizar su autorización'
+                                    : 'Sin habilitar',
+                              ),
+                              Text(
+                                'Referencia: ${_text(source['authorizationReference'], 'No disponible')}',
+                              ),
+                              if (evidence != null &&
+                                  evidence.scheme == 'https' &&
+                                  evidence.hasAuthority &&
+                                  evidence.userInfo.isEmpty)
+                                TextButton(
+                                  onPressed: () =>
+                                      openExternalHttpLink(evidence),
+                                  child: const Text('Revisar fundamento'),
+                                ),
+                            ],
+                          ),
+                          trailing: TextButton(
+                            onPressed: _busyHeadline
+                                ? null
+                                : () => _setHeadlineSource(source),
+                            child: Text(hasGrant ? 'Retirar' : 'Habilitar'),
+                          ),
+                        );
+                      }),
+                    ],
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _busyHeadline ? null : _analyzeHeadline,
+                    icon: const Icon(Icons.manage_search),
+                    label: Text(
+                      _busyHeadline
+                          ? 'Procesando…'
+                          : 'Analizar siguiente titular',
+                    ),
+                  ),
+                  if (_headlineNotice != null) Text(_headlineNotice!),
+                  if (_headlineError != null)
+                    Text(
+                      _headlineError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  if (_headlines!.isEmpty)
+                    const Text('No hay análisis de titulares pendientes.'),
+                  ..._headlines!.map((item) {
+                    final Object? rawId = item['attemptId'];
+                    final String? attemptId = rawId is String ? rawId : null;
+                    final Map<String, Object?> extraction =
+                        item['extraction'] is Map<String, Object?>
+                        ? item['extraction']! as Map<String, Object?>
+                        : const <String, Object?>{};
+                    final bool comparable =
+                        extraction['status'] == 'OBSERVATION_AVAILABLE';
+                    final Object? rawUrl = item['canonicalUrl'];
+                    final Uri? url = rawUrl is String
+                        ? Uri.tryParse(rawUrl)
+                        : null;
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              _text(item['headline'], 'Sin título'),
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            Text(
+                              '${_text(item['sourceName'], 'Fuente')} · ${_date(item['publishedAt'])}',
+                            ),
+                            Text(
+                              comparable
+                                  ? 'Puede evaluarse para comparación.'
+                                  : 'Necesita más evidencia.',
+                            ),
+                            if (url != null &&
+                                url.scheme == 'https' &&
+                                url.hasAuthority &&
+                                url.userInfo.isEmpty)
+                              TextButton.icon(
+                                onPressed: () => openExternalHttpLink(url),
+                                icon: const Icon(Icons.open_in_new),
+                                label: const Text('Abrir fuente original'),
+                              ),
+                            Wrap(
+                              spacing: 8,
+                              children: <Widget>[
+                                if (comparable)
+                                  OutlinedButton(
+                                    onPressed:
+                                        _busyHeadline || attemptId == null
+                                        ? null
+                                        : () => _decideHeadline(
+                                            attemptId,
+                                            'ACCEPT_FOR_GROUPING',
+                                          ),
+                                    child: const Text('Permitir comparar'),
+                                  ),
+                                OutlinedButton(
+                                  onPressed: _busyHeadline || attemptId == null
+                                      ? null
+                                      : () => _decideHeadline(
+                                          attemptId,
+                                          'NEEDS_EVIDENCE',
+                                        ),
+                                  child: const Text('Necesita evidencia'),
+                                ),
+                                TextButton(
+                                  onPressed: _busyHeadline || attemptId == null
+                                      ? null
+                                      : () => _decideHeadline(
+                                          attemptId,
+                                          'REJECT',
+                                        ),
+                                  child: const Text('Descartar'),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Revisiones de afirmaciones',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
+                if (_headlines == null && _headlineError != null)
+                  Text(
+                    _headlineError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                if (_tasks.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No hay revisiones pendientes.'),
+                  ),
+                ..._tasks.map((task) {
+                  final String title = _text(
+                    task['eventTitle'],
+                    'Acontecimiento',
+                  );
+                  final bool current = task['isCurrentSnapshot'] == true;
+                  return Card(
+                    child: ListTile(
+                      title: Text(title),
+                      subtitle: Text(
+                        current
+                            ? 'Revisión de afirmaciones'
+                            : 'Requiere actualización',
+                      ),
+                      trailing: const Icon(Icons.chevron_right),
+                      onTap: () => _open(task),
+                    ),
+                  );
+                }),
+              ],
             ),
           ),
   );

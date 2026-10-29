@@ -74,6 +74,68 @@ final class EditorialApi {
     return value.map(_object).toList(growable: false);
   }
 
+  /// Returns null while the server has not enabled title analysis yet.
+  Future<List<Map<String, Object?>>?> headlineReviews() async {
+    final Object? value = await _request(
+      'GET',
+      '/v1/mod/headline-reviews',
+      allowNotFound: true,
+    );
+    if (value == null) return null;
+    if (value is! List) {
+      throw const EditorialFailure('No se pudo leer la revisión de titulares.');
+    }
+    return value.map(_object).toList(growable: false);
+  }
+
+  Future<Map<String, Object?>> analyzeHeadline() async => _object(
+    await _request(
+      'POST',
+      '/v1/mod/headline-reviews/analyze',
+      body: const <String, Object?>{},
+      timeout: const Duration(seconds: 70),
+    ),
+  );
+
+  Future<List<Map<String, Object?>>> headlineSources() async {
+    final Object? value = await _request(
+      'GET',
+      '/v1/mod/headline-reviews/sources',
+    );
+    if (value is! List) {
+      throw const EditorialFailure('No se pudo leer la lista de fuentes.');
+    }
+    return value.map(_object).toList(growable: false);
+  }
+
+  Future<void> setHeadlineSource(
+    String sourceId, {
+    required bool enabled,
+  }) async {
+    _requireUlid(sourceId);
+    await _request(
+      'POST',
+      '/v1/mod/headline-reviews/sources/$sourceId/grant',
+      body: <String, Object?>{'action': enabled ? 'ENABLE' : 'REVOKE'},
+    );
+  }
+
+  Future<void> decideHeadline(String attemptId, String decision) async {
+    _requireUlid(attemptId);
+    if (!const <String>{
+      'ACCEPT_FOR_GROUPING',
+      'NEEDS_EVIDENCE',
+      'REJECT',
+    }.contains(decision)) {
+      throw const EditorialFailure('La decisión editorial no es válida.');
+    }
+    await _request(
+      'POST',
+      '/v1/mod/headline-reviews/$attemptId/decision',
+      body: <String, Object?>{'decision': decision},
+    );
+  }
+
   Future<Map<String, Object?>> task(String taskId) async {
     _requireUlid(taskId);
     return _object(await _request('GET', '/v1/mod/tasks/$taskId'));
@@ -126,6 +188,8 @@ final class EditorialApi {
     String method,
     String path, {
     Map<String, Object?>? body,
+    bool allowNotFound = false,
+    Duration timeout = const Duration(seconds: 15),
   }) async {
     try {
       final String? token = await tokenProvider();
@@ -147,7 +211,8 @@ final class EditorialApi {
                       headers: headers,
                       body: jsonEncode(body),
                     ))
-              .timeout(const Duration(seconds: 15));
+              .timeout(timeout);
+      if (response.statusCode == 404 && allowNotFound) return null;
       if (response.statusCode == 401 || response.statusCode == 403) {
         throw const EditorialFailure(
           'Esta cuenta ya no tiene acceso a la revisión editorial.',
