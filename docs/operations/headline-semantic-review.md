@@ -9,9 +9,10 @@ aportado con el mismo número en el expediente del usuario.
 La ruta nueva se desplegó en Render y la interfaz de titulares sigue en
 borrador. La conexión de base del procesador y el token de Workers AI quedaron
 configurados y se verificaron desde el servicio. Se habilitó CIPER con la
-cuenta editorial elegida: los dos primeros intentos reales fueron rechazados
-por el verificador, sin publicar resultados. La migración 049 añade categorías
-de diagnóstico sin guardar las respuestas del modelo.
+cuenta editorial elegida: de los cuatro primeros intentos reales, uno quedó
+en revisión como evidencia insuficiente y tres fueron rechazados, sin publicar
+resultados. La migración 049 añade categorías de diagnóstico sin guardar las
+respuestas del modelo.
 
 ## Alcance
 
@@ -33,6 +34,11 @@ número ordinario no se admite como identificador sin un contexto explícito.
 Los intentos son únicos por versión,
 autorización y configuración; los fallos inciertos no se reintentan en silencio.
 Existe además un límite global de 100 intentos por 24 horas.
+
+Cuando un titular no contiene una fecha ISO válida ni un identificador de
+expediente reconocible, el Core conserva el resultado como evidencia
+insuficiente y descarta los hechos propuestos. La fecha de publicación no se
+interpreta como la fecha del acontecimiento.
 
 En una prueba sintética con Workers AI, el modelo generó observaciones
 verificables en dos de tres titulares con fecha explícita; el tercero quedó
