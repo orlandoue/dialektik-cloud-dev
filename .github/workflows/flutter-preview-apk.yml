@@ -40,14 +40,14 @@ jobs:
           gradle = Path('android/app/build.gradle.kts')
           contents = gradle.read_text()
           original = 'applicationId = "com.dialektik.dialektik"'
-          replacement = 'applicationId = "com.dialektik.dialektik.preview3"'
+          replacement = 'applicationId = "com.dialektik.dialektik.preview4"'
           assert contents.count(original) == 1
           gradle.write_text(contents.replace(original, replacement, 1))
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           contents = manifest.read_text()
           original = 'android:label="dialektik"'
           assert contents.count(original) == 1
-          manifest.write_text(contents.replace(original, 'android:label="Dialektik Prueba 3"', 1))
+          manifest.write_text(contents.replace(original, 'android:label="Dialektik Prueba 4"', 1))
           PY
       - name: Build the private-beta preview
         shell: bash
