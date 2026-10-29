@@ -116,7 +116,9 @@ export function verifyExtraction(
   const coverage = new Set<number>();
   for (const f of facts.filter((f) => f.evidence.field === 'body'))
     for (let n = f.evidence.start; n < f.evidence.end; n++) coverage.add(n);
-  if (coverage.size === Array.from(input.body).length)
+  // An absent body is not a fully reproduced body. Title-only callers still
+  // need their own rights and execution authorization before reaching here.
+  if (input.body.length > 0 && coverage.size === Array.from(input.body).length)
     throw new Error('LLM_COMPLETE_BODY_EVIDENCE_FORBIDDEN');
   if (start && end && start > end) throw new Error('LLM_CHRONOLOGY_INVALID');
   return Object.freeze({

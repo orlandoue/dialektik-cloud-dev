@@ -50,18 +50,19 @@ evidencias, posturas ni contradicciones y no aprueban contenidos automáticament
    La contraseña y URL se configuran de forma segura en Render mediante
    `MODERATION_DATABASE_URL`; no se guardan en el repositorio ni se envían al
    cliente. La conexión usa el mismo certificado CA de PostgreSQL que el Core.
-5. El Core del commit `847f6de` se desplegó en Render el 28 de octubre de
-   2026, después de instalar las estructuras y asignar la autorización. La
-   cuenta beta del editor recibe HTTP 200 en `/v1/mod/session`. La conexión
-   separada todavía no está configurada, por lo que los comandos editoriales
-   de escritura siguen devolviendo HTTP 503. Las credenciales y el rol de
-   escritura solo son adecuados para el servidor: sus funciones de auditoría
-   confían en el contexto fijado al autenticar y autorizar cada solicitud.
+5. El Core del commit `2a9a81f` se desplegó en Render el 29 de octubre de
+   2026 con la conexión editorial separada. La cuenta beta del editor recibe
+   HTTP 200 en `/v1/mod/session`; un intento de tomar una tarea inexistente
+   devolvió HTTP 404, en lugar del HTTP 503 anterior. Esto comprueba la
+   conexión y la autorización, pero no una escritura sobre una tarea real:
+   la bandeja aún no tiene tareas. Las credenciales y el rol de escritura
+   solo son adecuados para el servidor: sus funciones de auditoría confían
+   en el contexto fijado al autenticar y autorizar cada solicitud.
    Render conserva el despliegue automático de la rama base; una actualización
    posterior de esa rama puede reemplazar el commit desplegado manualmente.
 6. La interfaz editorial móvil se incorporó a la APK de prueba del PR de
-   Flutter. Revisar cada fuente, cita y relación antes de confirmar; la
-   conexión de escritura y los datos de evidencia siguen pendientes.
+   Flutter. Revisar cada fuente, cita y relación antes de confirmar; los
+   datos de evidencia siguen pendientes.
 
 La lectura editorial devuelve un fragmento solo cuando tiene entre 140 y 300
 caracteres y su artículo tiene título, autor, fecha, fuente y una URL HTTPS
