@@ -62,6 +62,10 @@ void main() {
             return _json(<Object?>[]);
           }
           if (request.method == 'GET' &&
+              request.url.path == '/v1/mod/headline-context-pairs') {
+            return _json(<Object?>[]);
+          }
+          if (request.method == 'GET' &&
               request.url.path == '/v1/mod/headline-reviews') {
             return _json(<Object?>[
               if (!decided)
@@ -208,5 +212,88 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('Análisis listo para revisión.'), findsNothing);
+  });
+
+  testWidgets(
+    'a cross-source suggestion remains visible after editorial review',
+    (tester) async {
+      final List<http.Request> commands = <http.Request>[];
+      bool kept = false;
+      await tester.pumpWidget(
+        _screen(
+          MockClient((request) async {
+            if (request.method == 'POST') {
+              commands.add(request);
+              kept = true;
+              return _json(<String, Object?>{});
+            }
+            if (request.url.path == '/v1/mod/headline-context-pairs') {
+              return _json(<Object?>[
+                <String, Object?>{
+                  'attemptId': _attempt,
+                  'relation': 'POSSIBLY_SAME_THREAD',
+                  'reviewDecision': kept ? 'KEEP_FOR_REVIEW' : null,
+                  'left': <String, Object?>{
+                    'title': 'Primera noticia',
+                    'sourceName': 'Medio A',
+                    'url': 'https://a.example.test/noticia',
+                    'publishedAt': '2026-10-28T00:00:00Z',
+                  },
+                  'right': <String, Object?>{
+                    'title': 'Segunda noticia',
+                    'sourceName': 'Medio B',
+                    'url': 'https://b.example.test/noticia',
+                    'publishedAt': '2026-10-29T00:00:00Z',
+                  },
+                },
+              ]);
+            }
+            return _json(<Object?>[]);
+          }),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Guardar para revisión'));
+      await tester.pumpAndSettle();
+      expect(find.text('Posible tema relacionado'), findsOneWidget);
+      expect(find.text('Primera noticia'), findsOneWidget);
+      expect(find.text('Segunda noticia'), findsOneWidget);
+      await tester.tap(find.text('Guardar para revisión'));
+      await tester.pumpAndSettle();
+      expect(
+        commands.single.url.path,
+        '/v1/mod/headline-context-pairs/$_attempt/decision',
+      );
+      expect(jsonDecode(commands.single.body), <String, Object?>{
+        'decision': 'KEEP_FOR_REVIEW',
+      });
+      expect(find.text('Guardado para revisión posterior.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('comparison requests use server-selected headlines', (
+    tester,
+  ) async {
+    final List<http.Request> commands = <http.Request>[];
+    await tester.pumpWidget(
+      _screen(
+        MockClient((request) async {
+          if (request.method == 'GET') return _json(<Object?>[]);
+          commands.add(request);
+          return _json(<String, Object?>{'status': 'NO_CANDIDATE'});
+        }),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Comparar siguientes titulares'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Comparar siguientes titulares'));
+    await tester.pumpAndSettle();
+    expect(commands.single.url.path, '/v1/mod/headline-context-pairs/analyze');
+    expect(jsonDecode(commands.single.body), isEmpty);
+    expect(
+      find.text('No hay titulares de distintas fuentes para comparar.'),
+      findsOneWidget,
+    );
   });
 }

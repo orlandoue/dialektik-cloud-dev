@@ -20,12 +20,16 @@ final class EditorialQueueScreen extends StatefulWidget {
 final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
   List<Map<String, Object?>> _tasks = const <Map<String, Object?>>[];
   List<Map<String, Object?>>? _headlines;
+  List<Map<String, Object?>>? _contextPairs;
   List<Map<String, Object?>> _headlineSources = const <Map<String, Object?>>[];
   bool _loading = true;
   bool _busyHeadline = false;
+  bool _busyContext = false;
   String? _error;
   String? _headlineError;
   String? _headlineNotice;
+  String? _contextError;
+  String? _contextNotice;
 
   @override
   void initState() {
@@ -47,9 +51,11 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
     try {
       final List<Map<String, Object?>> tasks = await widget.api.tasks();
       List<Map<String, Object?>>? headlines;
+      List<Map<String, Object?>>? contextPairs;
       List<Map<String, Object?>> headlineSources =
           const <Map<String, Object?>>[];
       String? headlineError;
+      String? contextError;
       if (widget.session.canConfirm && widget.session.singleEditorEnabled) {
         try {
           headlines = await widget.api.headlineReviews();
@@ -59,13 +65,22 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
         } on EditorialFailure catch (failure) {
           headlineError = failure.message;
         }
+        if (headlines != null) {
+          try {
+            contextPairs = await widget.api.contextPairs();
+          } on EditorialFailure catch (failure) {
+            contextError = failure.message;
+          }
+        }
       }
       if (!mounted) return;
       setState(() {
         _tasks = tasks;
         _headlines = headlines;
+        _contextPairs = contextPairs;
         _headlineSources = headlineSources;
         _headlineError = headlineError;
+        _contextError = contextError;
         _loading = false;
       });
     } on EditorialFailure catch (failure) {
@@ -74,6 +89,50 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
         _error = failure.message;
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _analyzeContextPair() async {
+    if (_busyContext) return;
+    setState(() {
+      _busyContext = true;
+      _contextNotice = null;
+      _contextError = null;
+    });
+    try {
+      final Map<String, Object?> result = await widget.api.analyzeContextPair();
+      if (!mounted) return;
+      setState(
+        () => _contextNotice = switch (result['status']) {
+          'NO_CANDIDATE' =>
+            'No hay titulares de distintas fuentes para comparar.',
+          'ANALYZED' => 'Comparación terminada.',
+          'REJECTED' => 'La comparación no pudo verificarse.',
+          _ => 'No se pudo confirmar la comparación.',
+        },
+      );
+      await _load();
+    } on EditorialFailure catch (failure) {
+      if (mounted) setState(() => _contextError = failure.message);
+    } finally {
+      if (mounted) setState(() => _busyContext = false);
+    }
+  }
+
+  Future<void> _decideContextPair(String attemptId, String decision) async {
+    if (_busyContext) return;
+    setState(() {
+      _busyContext = true;
+      _contextError = null;
+      _contextNotice = null;
+    });
+    try {
+      await widget.api.decideContextPair(attemptId, decision);
+      if (mounted) await _load();
+    } on EditorialFailure catch (failure) {
+      if (mounted) setState(() => _contextError = failure.message);
+    } finally {
+      if (mounted) setState(() => _busyContext = false);
     }
   }
 
@@ -353,11 +412,6 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
                       ),
                     );
                   }),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Revisiones de afirmaciones',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
                 ],
                 if (_headlines == null && _headlineError != null)
                   Text(
@@ -366,6 +420,153 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
                       color: Theme.of(context).colorScheme.error,
                     ),
                   ),
+                if (_contextPairs != null) ...<Widget>[
+                  const SizedBox(height: 20),
+                  Text(
+                    'Posibles relaciones entre medios',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                  const Text(
+                    'Las fechas son de publicación. Estas propuestas no publican acontecimientos ni contradicciones.',
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _busyContext ? null : _analyzeContextPair,
+                    icon: const Icon(Icons.compare_arrows),
+                    label: Text(
+                      _busyContext
+                          ? 'Comparando…'
+                          : 'Comparar siguientes titulares',
+                    ),
+                  ),
+                  if (_contextNotice != null) Text(_contextNotice!),
+                  if (_contextError != null)
+                    Text(
+                      _contextError!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                  if (_contextPairs!.isEmpty)
+                    const Text('No hay comparaciones para revisar.'),
+                  ..._contextPairs!.map((pair) {
+                    final Object? rawId = pair['attemptId'];
+                    final String? attemptId = rawId is String ? rawId : null;
+                    final bool possible =
+                        pair['relation'] == 'POSSIBLY_SAME_EVENT' ||
+                        pair['relation'] == 'POSSIBLY_SAME_THREAD';
+                    final String label = switch (pair['relation']) {
+                      'POSSIBLY_SAME_EVENT' =>
+                        'Posible acontecimiento compartido',
+                      'POSSIBLY_SAME_THREAD' => 'Posible tema relacionado',
+                      _ => 'Relación sin confirmar',
+                    };
+                    final Object? decision = pair['reviewDecision'];
+                    return Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              label,
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                            ...<String>['left', 'right'].map((side) {
+                              final Object? value = pair[side];
+                              final Map<String, Object?> item =
+                                  value is Map<String, Object?>
+                                  ? value
+                                  : const <String, Object?>{};
+                              final Object? rawUrl = item['url'];
+                              final Uri? url = rawUrl is String
+                                  ? Uri.tryParse(rawUrl)
+                                  : null;
+                              return Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(_text(item['title'], 'Sin título')),
+                                    Text(
+                                      '${_text(item['sourceName'], 'Fuente')} · ${_date(item['publishedAt'])}',
+                                    ),
+                                    if (url != null &&
+                                        url.scheme == 'https' &&
+                                        url.hasAuthority &&
+                                        url.userInfo.isEmpty)
+                                      TextButton.icon(
+                                        onPressed: () =>
+                                            openExternalHttpLink(url),
+                                        icon: const Icon(Icons.open_in_new),
+                                        label: const Text(
+                                          'Abrir fuente original',
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              );
+                            }),
+                            if (decision == 'KEEP_FOR_REVIEW')
+                              const Text('Guardado para revisión posterior.'),
+                            if (decision == 'NEEDS_EVIDENCE')
+                              const Text('Pendiente de más evidencia.'),
+                            if (decision == null)
+                              Wrap(
+                                spacing: 8,
+                                children: <Widget>[
+                                  if (possible)
+                                    OutlinedButton(
+                                      onPressed:
+                                          _busyContext || attemptId == null
+                                          ? null
+                                          : () => _decideContextPair(
+                                              attemptId,
+                                              'KEEP_FOR_REVIEW',
+                                            ),
+                                      child: const Text(
+                                        'Guardar para revisión',
+                                      ),
+                                    ),
+                                  OutlinedButton(
+                                    onPressed: _busyContext || attemptId == null
+                                        ? null
+                                        : () => _decideContextPair(
+                                            attemptId,
+                                            'NEEDS_EVIDENCE',
+                                          ),
+                                    child: const Text('Necesita evidencia'),
+                                  ),
+                                  TextButton(
+                                    onPressed: _busyContext || attemptId == null
+                                        ? null
+                                        : () => _decideContextPair(
+                                            attemptId,
+                                            'DISMISS',
+                                          ),
+                                    child: const Text('Descartar'),
+                                  ),
+                                ],
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                ],
+                if (_contextPairs == null && _contextError != null)
+                  Text(
+                    _contextError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                if (_headlines != null || _contextPairs != null) ...<Widget>[
+                  const SizedBox(height: 20),
+                  Text(
+                    'Revisiones de afirmaciones',
+                    style: Theme.of(context).textTheme.titleLarge,
+                  ),
+                ],
                 if (_tasks.isEmpty)
                   const Padding(
                     padding: EdgeInsets.symmetric(vertical: 16),

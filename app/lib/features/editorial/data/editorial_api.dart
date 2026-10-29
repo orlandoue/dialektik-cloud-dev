@@ -97,6 +97,46 @@ final class EditorialApi {
     ),
   );
 
+  Future<List<Map<String, Object?>>?> contextPairs() async {
+    final Object? value = await _request(
+      'GET',
+      '/v1/mod/headline-context-pairs',
+      allowNotFound: true,
+    );
+    if (value == null) return null;
+    if (value is! List) {
+      throw const EditorialFailure(
+        'No se pudo leer la comparación entre fuentes.',
+      );
+    }
+    return value.map(_object).toList(growable: false);
+  }
+
+  Future<Map<String, Object?>> analyzeContextPair() async => _object(
+    await _request(
+      'POST',
+      '/v1/mod/headline-context-pairs/analyze',
+      body: const <String, Object?>{},
+      timeout: const Duration(seconds: 70),
+    ),
+  );
+
+  Future<void> decideContextPair(String attemptId, String decision) async {
+    _requireUlid(attemptId);
+    if (!const <String>{
+      'KEEP_FOR_REVIEW',
+      'NEEDS_EVIDENCE',
+      'DISMISS',
+    }.contains(decision)) {
+      throw const EditorialFailure('La decisión editorial no es válida.');
+    }
+    await _request(
+      'POST',
+      '/v1/mod/headline-context-pairs/$attemptId/decision',
+      body: <String, Object?>{'decision': decision},
+    );
+  }
+
   Future<List<Map<String, Object?>>> headlineSources() async {
     final Object? value = await _request(
       'GET',
