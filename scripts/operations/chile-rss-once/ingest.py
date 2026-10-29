@@ -22,6 +22,7 @@ HERE = Path(__file__).resolve().parent
 RUN_DIR = Path(os.environ.get('DIALEKTIK_RSS_RUN_DIR', '/tmp/dialektik-rss-metadata-once'))
 PREPARED = RUN_DIR / 'prepared.json'
 DRY_RUN = RUN_DIR / 'dry-run.json'
+BATCH_KEY = RUN_DIR / 'batch-key.bin'
 PROJECT = 'vclsswwfhljczxgnsciq'
 SOURCE_IDS = [
     '01M4YDQK00CH1000C1PERCH11E', '01M4YDQK00CH100C00PERAT1VA',
@@ -35,7 +36,26 @@ def serialized(value):
 
 
 def signature(value):
-    return hmac.new(os.environ['SUPABASE_ACCESS_TOKEN'].encode('utf-8'), serialized(value), hashlib.sha256).hexdigest()
+    try:
+        key = BATCH_KEY.read_bytes()
+    except OSError as error:
+        raise RuntimeError('PREPARED_BATCH_KEY_MISSING') from error
+    if len(key) != 32:
+        raise RuntimeError('PREPARED_BATCH_KEY_INVALID')
+    return hmac.new(key, serialized(value), hashlib.sha256).hexdigest()
+
+
+def create_batch_key():
+    RUN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile(mode='wb', dir=RUN_DIR, delete=False)
+    try:
+        with handle:
+            handle.write(secrets.token_bytes(32))
+        os.chmod(handle.name, 0o600)
+        os.replace(handle.name, BATCH_KEY)
+    finally:
+        if os.path.exists(handle.name):
+            os.unlink(handle.name)
 
 
 def write_private_json(path, value):
@@ -129,6 +149,7 @@ def prepare():
     all_urls = [item['canonicalUrl'] for item in items]
     if not items or len(set(all_urls)) != len(all_urls):
         raise RuntimeError('EMPTY_OR_CROSS_SOURCE_DUPLICATE_BATCH')
+    create_batch_key()
     prepared = {'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(), 'items': items}
     prepared['signature'] = signature(prepared)
     write_private_json(PREPARED, prepared)

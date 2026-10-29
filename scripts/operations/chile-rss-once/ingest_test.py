@@ -25,6 +25,9 @@ class IngestionOperationTests(unittest.TestCase):
             module.RUN_DIR = Path(directory)
             module.PREPARED = module.RUN_DIR / 'prepared.json'
             module.DRY_RUN = module.RUN_DIR / 'dry-run.json'
+            module.BATCH_KEY = module.RUN_DIR / 'batch-key.bin'
+            module.create_batch_key()
+            self.assertEqual(module.BATCH_KEY.stat().st_mode & 0o777, 0o600)
             items = []
             for index, source in enumerate(module.SOURCE_IDS):
                 items.append({'sourceId': source, 'canonicalUrl': f'https://fixture.invalid/{index}',
@@ -45,6 +48,18 @@ class IngestionOperationTests(unittest.TestCase):
             module.write_private_json(module.PREPARED, modified)
             with self.assertRaisesRegex(RuntimeError, 'PREPARED_BATCH_SIGNATURE_INVALID'):
                 module.write(True)
+
+    def test_local_signature_does_not_use_the_proxy_credential(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module.RUN_DIR = Path(directory)
+            module.BATCH_KEY = module.RUN_DIR / 'batch-key.bin'
+            module.create_batch_key()
+            with patch.dict('os.environ', {'SUPABASE_ACCESS_TOKEN': 'first-proxy-marker'}):
+                first = module.signature({'items': ['example']})
+            with patch.dict('os.environ', {'SUPABASE_ACCESS_TOKEN': 'second-proxy-marker'}):
+                self.assertEqual(first, module.signature({'items': ['example']}))
+            module.create_batch_key()
+            self.assertNotEqual(first, module.signature({'items': ['example']}))
 
 
 if __name__ == '__main__':

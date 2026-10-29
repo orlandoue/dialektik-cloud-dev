@@ -32,7 +32,10 @@ python3 scripts/operations/chile-rss-once/ingest.py apply
 La preparación crea un manifiesto de metadatos privado en
 `/tmp/dialektik-rss-metadata-once`; puede cambiarse el directorio mediante
 `DIALEKTIK_RSS_RUN_DIR`. El manifiesto caduca a los 15 minutos y queda firmado
-con el token del operador. La aplicación exige que el mismo manifiesto haya
+con una clave aleatoria local, guardada con permisos privados para ese lote;
+no utiliza el marcador de la credencial del proxy como clave. La firma permite
+detectar cambios accidentales en el lote; el directorio sigue siendo accesible
+al usuario local que ejecuta el proceso. La aplicación exige que el mismo manifiesto haya
 pasado la simulación. Una ejecución posterior vuelve a leer los RSS; no se
 reutiliza el manifiesto anterior ni se fabrican recibos para entradas que ya
 existen.
