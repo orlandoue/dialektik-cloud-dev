@@ -88,9 +88,13 @@ final class _EditorialQueueScreenState extends State<EditorialQueueScreen> {
       final Map<String, Object?> result = await widget.api.analyzeHeadline();
       if (!mounted) return;
       setState(
-        () => _headlineNotice = result['status'] == 'NO_ELIGIBLE'
-            ? 'No hay titulares pendientes de fuentes autorizadas.'
-            : 'Análisis listo para revisión.',
+        () => _headlineNotice = switch (result['status']) {
+          'NO_ELIGIBLE' =>
+            'No hay titulares pendientes de fuentes autorizadas.',
+          'ANALYZED' => 'Análisis listo para revisión.',
+          'REJECTED' => 'La respuesta del análisis no pudo verificarse.',
+          _ => 'No se pudo confirmar el resultado del análisis.',
+        },
       );
       await _load();
     } on EditorialFailure catch (failure) {

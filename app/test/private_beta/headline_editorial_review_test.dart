@@ -185,4 +185,28 @@ void main() {
     });
     expect(find.text('Habilitada'), findsOneWidget);
   });
+
+  testWidgets('a rejected result is not presented as ready for review', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      _screen(
+        MockClient((request) async {
+          if (request.method == 'GET') return _json(<Object?>[]);
+          return _json(<String, Object?>{
+            'status': 'REJECTED',
+            'reason': 'MODEL_EVIDENCE',
+          });
+        }),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Analizar siguiente titular'));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('La respuesta del análisis no pudo verificarse.'),
+      findsOneWidget,
+    );
+    expect(find.text('Análisis listo para revisión.'), findsNothing);
+  });
 }
