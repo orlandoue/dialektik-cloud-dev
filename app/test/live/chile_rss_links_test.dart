@@ -21,7 +21,7 @@ Map<String, Object?> sample(){
     'items': <Object?>[
       <String,Object?>{
         'content_id':'a'*64,
-        'headline':'Titular RSS real de prueba',
+        'headline':'Natalia Valdebenito: &quot;El sueldo debiera ser más alto&quot; &amp; entrevista &#39;especial&#39; &ndash; hoy',
         'publisher':'Cooperativa.cl',
         'canonical_url':url,
         'published_at':'2026-10-26T20:00:00.000Z',
@@ -41,6 +41,8 @@ void main(){
     final ChileRssLinksPreview parsed=ChileRssLinksPreview.fromJson(sample());
     expect(parsed.items.single.canonicalUrl.host,'www.cooperativa.cl');
     expect(parsed.items.single.publishedAt.year,2026);
+    expect(parsed.items.single.headline,
+        'Natalia Valdebenito: "El sueldo debiera ser más alto" & entrevista \'especial\' – hoy');
     final Map<String,Object?> spoof=sample()..['persisted']=true;
     expect(()=>ChileRssLinksPreview.fromJson(spoof),throwsFormatException);
     final Map<String,Object?> poison=sample();
@@ -58,7 +60,7 @@ void main(){
     ));
     await tester.pumpAndSettle();
     expect(find.text('Titulares RSS en vivo'),findsOneWidget);
-    expect(find.text('Titular RSS real de prueba'),findsOneWidget);
+    expect(find.text('Natalia Valdebenito: "El sueldo debiera ser más alto" & entrevista \'especial\' – hoy'),findsOneWidget);
     expect(find.text('Leer en Cooperativa'),findsOneWidget);
     expect(find.textContaining('No se almacena el artículo'),findsOneWidget);
   });

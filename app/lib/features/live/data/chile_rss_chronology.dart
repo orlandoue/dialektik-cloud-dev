@@ -1,3 +1,4 @@
+import 'package:dialektik/features/live/data/html_entities.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 
 abstract interface class ChileRssChronologyRepository {
@@ -143,7 +144,7 @@ final class ChileRssChronologyItem {
         liveString(d, 'item_key') != '$expectedHost:$url') {
       throw const FormatException('Forged RSS article link.');
     }
-    final String title = liveString(d, 'title');
+    final String title = decodeHeadlineHtmlEntities(liveString(d, 'title'));
     if (title.length < 3 || title.length > 280) {
       throw const FormatException('Invalid RSS headline.');
     }

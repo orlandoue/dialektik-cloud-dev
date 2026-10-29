@@ -1,3 +1,4 @@
+import 'package:dialektik/features/live/data/html_entities.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 
 abstract interface class ChileRssLinkedNewsRepository {
@@ -43,7 +44,7 @@ final class ChileRssLink {
        liveString(d,'id')!=url.toString() || url.hasFragment) {
       throw const FormatException('Forged RSS headline origin.');
     }
-    final String headline=liveString(d,'headline');
+    final String headline=decodeHeadlineHtmlEntities(liveString(d,'headline'));
     if(headline.length<8 || headline.length>260)throw const FormatException('Bad RSS title');
     return ChileRssLink(headline:headline,originalUrl:url,
       publisher:'Diario El Día',publishedAt:liveDate(d,'published_at'));
