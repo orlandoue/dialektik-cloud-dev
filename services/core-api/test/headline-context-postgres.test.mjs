@@ -164,7 +164,7 @@ test('isolated PostgreSQL verifies both source grants, shared title evidence and
       name: 'fixture',
       async generate(_stage, payload) {
         assert.deepEqual(Object.keys(payload.left).sort(), ['publishedAt', 'title']);
-        return { output: { relation: 'POSSIBLY_SAME_THREAD', sharedAnchor: 'Torres' } };
+        return { output: { relation: 'POSSIBLY_SAME_THREAD' } };
       },
     };
     const generated = await analyzeContextPair(
@@ -206,7 +206,6 @@ test('isolated PostgreSQL verifies both source grants, shared title evidence and
           result: {
             response: {
               relation: 'POSSIBLY_SAME_THREAD',
-              sharedAnchor: 'Torres',
             },
           },
         }),

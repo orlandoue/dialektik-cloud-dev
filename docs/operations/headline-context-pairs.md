@@ -15,8 +15,9 @@ si `DIALEKTIK_CONTEXT_PAIR_ENABLED` no es `true`.
    interpreta como la fecha del acontecimiento.
 3. Cloudflare recibe únicamente los dos titulares y sus fechas de publicación.
    El modelo devuelve una sugerencia provisional de mismo acontecimiento, tema
-   relacionado, sin relación o incierto. Para una relación posible debe aportar
-   un fragmento literal, único y no genérico que figure en ambos titulares.
+   relacionado, sin relación o incierto. Para una relación posible, el Core
+   identifica una palabra literal, única y no genérica presente en ambos
+   titulares. Esta coincidencia es una pista, no prueba la relación propuesta.
 4. La base y el Core verifican las autorizaciones, las versiones y los offsets.
    Se registran los intentos antes de enviarlos, sin guardar respuestas textuales
    del modelo. Hay un límite de 30 comparaciones por 24 horas y no se reintenta

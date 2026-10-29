@@ -39,7 +39,7 @@ test('ranks shared non-generic terms only across sources within the publication 
 
 test('grounds a proposed shared anchor in both titles using Unicode offsets', () => {
   const result = verifyContextRelation(
-    { relation: 'POSSIBLY_SAME_THREAD', sharedAnchor: 'Torres' },
+    { relation: 'POSSIBLY_SAME_THREAD' },
     left.headline,
     right.headline,
   );
@@ -48,29 +48,34 @@ test('grounds a proposed shared anchor in both titles using Unicode offsets', ()
   assert.ok(!JSON.stringify(result).includes('Torres'));
 });
 
-test('refuses fabricated, repeated or generic shared anchors', () => {
-  for (const anchor of ['NoExiste', 'Gobierno', 'Torres']) {
-    const titleA = anchor === 'Gobierno' ? 'Gobierno cambia norma' : 'Torres visita Torres';
-    const titleB = anchor === 'Gobierno' ? 'Gobierno anuncia medida' : 'Torres responde';
+test('refuses missing, repeated or generic shared anchors', () => {
+  for (const [titleA, titleB] of [
+    ['Una alerta', 'Otra medida diferente'],
+    ['Gobierno cambia norma', 'Gobierno anuncia medida'],
+    ['Torres visita Torres', 'Torres responde'],
+  ]) {
     assert.throws(
-      () =>
-        verifyContextRelation(
-          { relation: 'POSSIBLY_SAME_EVENT', sharedAnchor: anchor },
-          titleA,
-          titleB,
-        ),
+      () => verifyContextRelation({ relation: 'POSSIBLY_SAME_EVENT' }, titleA, titleB),
       /CONTEXT_ANCHOR_INVALID/,
     );
   }
 });
 
+test('does not accept a model-provided invented anchor', () => {
+  assert.throws(
+    () =>
+      verifyContextRelation(
+        { relation: 'POSSIBLY_SAME_EVENT', sharedAnchor: 'inventado' },
+        left.headline,
+        right.headline,
+      ),
+    /LLM_SCHEMA_INVALID/,
+  );
+});
+
 test('uncertain results retain no proposed anchor', () => {
   assert.deepEqual(
-    verifyContextRelation(
-      { relation: 'UNCERTAIN', sharedAnchor: 'inventado' },
-      left.headline,
-      right.headline,
-    ),
+    verifyContextRelation({ relation: 'UNCERTAIN' }, left.headline, right.headline),
     { relation: 'UNCERTAIN', anchor: null },
   );
 });

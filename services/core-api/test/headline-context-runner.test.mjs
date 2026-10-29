@@ -80,7 +80,7 @@ function harness(output) {
 }
 
 test('records a provisional two-source comparison without bodies or automatic publication', async () => {
-  const h = harness({ relation: 'POSSIBLY_SAME_THREAD', sharedAnchor: 'Torres' });
+  const h = harness({ relation: 'POSSIBLY_SAME_THREAD' });
   const result = await analyzeContextPair(
     left,
     right,
@@ -95,7 +95,7 @@ test('records a provisional two-source comparison without bodies or automatic pu
 });
 
 test('requires distinct current source grants and a bounded publication window', async () => {
-  const h = harness({ relation: 'UNCERTAIN', sharedAnchor: '' });
+  const h = harness({ relation: 'UNCERTAIN' });
   await assert.rejects(
     analyzeContextPair(
       left,
@@ -124,7 +124,7 @@ test('requires distinct current source grants and a bounded publication window',
   assert.ok(!h.calls.includes('provider'));
 });
 
-test('rejects a fabricated shared anchor and does not retain a model response', async () => {
+test('rejects an unexpected model-provided anchor and does not retain a model response', async () => {
   const h = harness({ relation: 'POSSIBLY_SAME_EVENT', sharedAnchor: 'inventado' });
   await assert.rejects(
     analyzeContextPair(left, right, h.transport, h.hooks, new AbortController().signal),
@@ -135,10 +135,10 @@ test('rejects a fabricated shared anchor and does not retain a model response', 
 });
 
 test('discards a result when either source is revoked during inference', async () => {
-  const h = harness({ relation: 'POSSIBLY_SAME_THREAD', sharedAnchor: 'Torres' });
+  const h = harness({ relation: 'POSSIBLY_SAME_THREAD' });
   h.transport.generate = async () => {
     h.revoke();
-    return { output: { relation: 'POSSIBLY_SAME_THREAD', sharedAnchor: 'Torres' } };
+    return { output: { relation: 'POSSIBLY_SAME_THREAD' } };
   };
   await assert.rejects(
     analyzeContextPair(left, right, h.transport, h.hooks, new AbortController().signal),
