@@ -6,11 +6,12 @@ las cuatro tablas y la separación de permisos entre lectura, procesamiento y
 moderación. Las tablas empezaron vacías. Esta migración no es el archivo SQL
 aportado con el mismo número en el expediente del usuario.
 
-La ruta nueva y la interfaz de titulares siguen en borrador y no están
-habilitadas en producción. Se creó el usuario restringido del procesador y se
-configuró su conexión en Render; falta verificarla desde el propio servicio.
-Una inferencia sintética confirmó Workers AI en la cuenta indicada desde el
-entorno de desarrollo, pero el token aún debe configurarse en Render.
+La ruta nueva se desplegó en Render y la interfaz de titulares sigue en
+borrador. La conexión de base del procesador y el token de Workers AI quedaron
+configurados y se verificaron desde el servicio. Se habilitó CIPER con la
+cuenta editorial elegida: los dos primeros intentos reales fueron rechazados
+por el verificador, sin publicar resultados. La migración 049 añade categorías
+de diagnóstico sin guardar las respuestas del modelo.
 
 ## Alcance
 
@@ -53,18 +54,15 @@ un titular no basta por sí solo para sostener una contradicción.
    ejecutar el migrador general y no volver a aplicar esta estructura.
 2. La cuenta dedicada de base carece de privilegios administrativos y hereda
    los roles de lectura Core y `dialektik_headline_ai_writer`. Su conexión se
-   configuró como `HEADLINE_AI_DATABASE_URL` en el servidor; falta verificarla
-   desde Render. No compartirla con clientes ni mezclarla con la conexión
-   editorial existente.
-3. El identificador `CLOUDFLARE_ACCOUNT_ID` se configuró en Render; falta
-   `CLOUDFLARE_API_TOKEN`. No incluir credenciales en el APK ni en el
-   repositorio. Probar una inferencia desde el servicio: el éxito desde el
-   entorno de desarrollo no demuestra el acceso desde Render.
-4. Desplegar el Core y la aplicación, mantener
-   `DIALEKTIK_HEADLINE_REVIEW_ENABLED` apagado hasta comprobar las conexiones y
-   los permisos, y habilitarlo solo tras la instalación y validación. El editor
-   revisa el fundamento de cada fuente y la habilita expresamente en la app.
-5. Probar una noticia real desde una fuente habilitada, comprobar el recibo,
-   la revisión y las respuestas públicas, y registrar los resultados reales.
+   configuró y verificó en Render. No compartirla con clientes ni mezclarla con
+   la conexión editorial existente.
+3. `CLOUDFLARE_ACCOUNT_ID` y `CLOUDFLARE_API_TOKEN` están configurados en
+   Render; nunca deben incluirse en el APK ni en el repositorio.
+4. El Core se desplegó con `DIALEKTIK_HEADLINE_REVIEW_ENABLED` habilitado. El
+   editor revisa el fundamento de cada fuente antes de habilitarla. El servicio
+   mantiene el despliegue automático de la rama base, que puede reemplazar una
+   versión desplegada desde otra rama en una actualización posterior.
+5. Continuar las pruebas con noticias reales, comprobar los recibos, la revisión
+   y las respuestas públicas, y registrar los resultados reales.
    Si no se dispone de evidencia suficiente, no crear citas ni contradicciones
    artificiales para llenar la interfaz.

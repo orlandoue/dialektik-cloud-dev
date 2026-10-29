@@ -49,8 +49,8 @@ function harness(result) {
       events.push('reserve');
       return '01M4YDQK00EVART00000000003';
     },
-    finishAttempt: async (_id, outcome, extraction) => {
-      events.push({ outcome, extraction });
+    finishAttempt: async (_id, outcome, extraction, rejectionCode) => {
+      events.push({ outcome, extraction, rejectionCode });
     },
   };
   const transport = {
@@ -128,6 +128,7 @@ test('rejects invented evidence and records no validated proposal', async () => 
   );
   assert.equal(h.events.at(-1).outcome, 'REJECTED');
   assert.equal(h.events.at(-1).extraction, undefined);
+  assert.equal(h.events.at(-1).rejectionCode, 'MODEL_EVIDENCE');
 });
 
 test('discards all facts when the model reports insufficient evidence', async () => {

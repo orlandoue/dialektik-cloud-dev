@@ -47,7 +47,39 @@ export interface HeadlineSemanticHooks {
     attemptId: string,
     outcome: 'VALIDATED' | 'REJECTED' | 'UNKNOWN_SENT' | 'RIGHTS_REVOKED',
     extraction?: VerifiedExtraction,
+    rejectionCode?: HeadlineRejectionCode,
   ): Promise<void>;
+}
+
+export type HeadlineRejectionCode =
+  | 'MODEL_SCHEMA'
+  | 'MODEL_EVIDENCE'
+  | 'MODEL_UNBOUNDED'
+  | 'MODEL_CHRONOLOGY'
+  | 'MODEL_VALIDATION';
+
+export class HeadlineModelOutputRejectedError extends Error {
+  constructor(
+    readonly attemptId: string,
+    readonly rejectionCode: HeadlineRejectionCode,
+  ) {
+    super('HEADLINE_MODEL_OUTPUT_REJECTED');
+    this.name = 'HeadlineModelOutputRejectedError';
+  }
+}
+
+function rejectionCode(error: unknown): HeadlineRejectionCode {
+  const message = error instanceof Error ? error.message : '';
+  if (message === 'LLM_SCHEMA_INVALID') return 'MODEL_SCHEMA';
+  if (message === 'LLM_EVIDENCE_INVALID') return 'MODEL_EVIDENCE';
+  if (
+    message === 'LLM_UNBOUNDED_OBSERVATION' ||
+    message === 'LLM_UNBOUNDED_THREAD' ||
+    message === 'LLM_UNSUPPORTED_FACT'
+  )
+    return 'MODEL_UNBOUNDED';
+  if (message === 'LLM_CHRONOLOGY_INVALID') return 'MODEL_CHRONOLOGY';
+  return 'MODEL_VALIDATION';
 }
 
 export interface HeadlineSemanticResult {
@@ -170,10 +202,11 @@ export async function analyzeHeadlineForReview(
       let extraction: VerifiedExtraction;
       try {
         extraction = groundHeadlineExtraction(response.output, input.headline);
-      } catch {
-        await hooks.finishAttempt(attemptId, 'REJECTED');
+      } catch (error) {
+        const code = rejectionCode(error);
+        await hooks.finishAttempt(attemptId, 'REJECTED', undefined, code);
         recorded = true;
-        throw new Error('HEADLINE_MODEL_OUTPUT_REJECTED');
+        throw new HeadlineModelOutputRejectedError(attemptId, code);
       }
       await hooks.finishAttempt(attemptId, 'VALIDATED', extraction);
       recorded = true;

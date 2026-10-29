@@ -141,10 +141,12 @@ export class HeadlineSemanticRepository {
         );
         return id;
       },
-      finishAttempt: async (id, outcome, extraction) => {
+      finishAttempt: async (id, outcome, extraction, rejectionCode) => {
         const payload = extraction === undefined ? null : JSON.stringify(extraction);
-        await sql`insert into public.headline_ai_attempt_outcomes(attempt_id,outcome,extraction,recorded_at)
-          values (${id},${outcome},${payload}::jsonb,clock_timestamp())`.execute(connection());
+        await sql`insert into public.headline_ai_attempt_outcomes(attempt_id,outcome,extraction,recorded_at,rejection_code)
+          values (${id},${outcome},${payload}::jsonb,clock_timestamp(),${rejectionCode ?? null})`.execute(
+          connection(),
+        );
       },
     };
   }

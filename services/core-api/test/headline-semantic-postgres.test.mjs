@@ -48,6 +48,18 @@ test('title grants, provenance, evidence, review and least-privilege roles in is
     const ddl = /const HEADLINE_REVIEW_SQL = String\.raw`([\s\S]*?)`;/.exec(text)?.[1];
     assert.ok(ddl, 'migration SQL available');
     await db.exec(ddl);
+    const diagnosticText = readFileSync(
+      new URL(
+        '../../../packages/database/src/migration/049_headline_rejection_diagnostics.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const diagnosticDdl = /const HEADLINE_DIAGNOSTIC_SQL = String\.raw`([\s\S]*?)`;/.exec(
+      diagnosticText,
+    )?.[1];
+    assert.ok(diagnosticDdl, 'diagnostic migration SQL available');
+    await db.exec(diagnosticDdl);
     await db.exec(
       `grant select on sources,live_source_policies,users,moderation_auth_sessions,editorial_single_editor_authorizations,articles,live_acquisition_receipts,live_article_versions to dialektik_core_app; create role test_moderator; create role test_ai; grant dialektik_core_app,dialektik_moderation_writer to test_moderator; grant dialektik_core_app,dialektik_headline_ai_writer to test_ai`,
     );
@@ -173,6 +185,39 @@ test('title grants, provenance, evidence, review and least-privilege roles in is
       assert.equal(result.extraction.status, 'INSUFFICIENT_EVIDENCE');
       const insufficientAttemptId = result.attemptId;
       assert.equal((await repository.eligible(1)).length, 0);
+      const rejectedRepository = new HeadlineSemanticRepository(
+        kysely,
+        user,
+        'fixture-model',
+        hash('rejected-config'),
+      );
+      const rejectedCandidate = (await rejectedRepository.eligible(1))[0];
+      const rejectedTransport = {
+        ...transport,
+        async generate() {
+          return {
+            output: {
+              status: 'OBSERVATION_AVAILABLE',
+              boundedOccurrence: true,
+              boundedThread: false,
+              facts: [{ id: 'f1', role: 'action', value: 'not in this headline' }],
+            },
+          };
+        },
+      };
+      await assert.rejects(
+        analyzeHeadlineForReview(
+          rejectedCandidate,
+          rejectedTransport,
+          rejectedRepository.hooks(),
+          new AbortController().signal,
+        ),
+        (error) => error.rejectionCode === 'MODEL_EVIDENCE',
+      );
+      const diagnostic = await db.query(
+        `select rejection_code,extraction from headline_ai_attempt_outcomes where outcome='REJECTED'`,
+      );
+      assert.deepEqual(diagnostic.rows, [{ rejection_code: 'MODEL_EVIDENCE', extraction: null }]);
       const attempt = (id) =>
         db.query(
           `insert into headline_ai_attempts values($1,$2,$3,$4,$5,$6,$7,$8,'fixture',$9,now())`,

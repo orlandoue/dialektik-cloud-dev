@@ -117,6 +117,12 @@ test('selects server-side metadata and records a validated result without sendin
   };
   const h = fixture();
   let sent = 0;
+  let modelOutput = {
+    status: 'INSUFFICIENT_EVIDENCE',
+    boundedOccurrence: false,
+    boundedThread: false,
+    facts: [],
+  };
   try {
     process.env.DIALEKTIK_HEADLINE_REVIEW_ENABLED = 'true';
     process.env.CLOUDFLARE_API_TOKEN = 'test-token';
@@ -138,12 +144,7 @@ test('selects server-side metadata and records a validated result without sendin
         JSON.stringify({
           success: true,
           result: {
-            response: {
-              status: 'INSUFFICIENT_EVIDENCE',
-              boundedOccurrence: false,
-              boundedThread: false,
-              facts: [],
-            },
+            response: modelOutput,
           },
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
@@ -153,6 +154,16 @@ test('selects server-side metadata and records a validated result without sendin
     assert.equal(result.status, 'ANALYZED');
     assert.equal(result.observation, 'INSUFFICIENT_EVIDENCE');
     assert.equal(sent, 1);
+    modelOutput = {
+      status: 'OBSERVATION_AVAILABLE',
+      boundedOccurrence: true,
+      boundedThread: false,
+      facts: [{ id: 'f1', role: 'action', value: 'inventado' }],
+    };
+    const rejected = await h.analysis.analyzeNext('Bearer fixture', {});
+    assert.equal(rejected.status, 'REJECTED');
+    assert.equal(rejected.reason, 'MODEL_EVIDENCE');
+    assert.ok(!JSON.stringify(rejected).includes(input.headline));
     const statements = h.queries.map((query) => query.text);
     assert.ok(
       statements.findIndex((sql) => sql.includes('headline_ai_attempts')) <

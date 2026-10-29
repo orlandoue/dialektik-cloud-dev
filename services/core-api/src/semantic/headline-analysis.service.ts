@@ -8,7 +8,10 @@ import { HeadlineReviewService } from '../moderation/headline-review.service.js'
 import { ModerationHttpError } from '../moderation/moderation-http.error.js';
 import { HeadlineSemanticDatabaseService } from './headline-semantic-database.service.js';
 import { HeadlineSemanticRepository } from './headline-semantic-repository.js';
-import { analyzeHeadlineForReview } from './headline-semantic-runner.js';
+import {
+  analyzeHeadlineForReview,
+  HeadlineModelOutputRejectedError,
+} from './headline-semantic-runner.js';
 import { HEADLINE_EXTRACTION_PROMPT, headlineConfigHash } from './headline-extraction-contract.js';
 
 /** One explicitly requested, rights-gated title analysis; no autonomous publication. */
@@ -69,6 +72,12 @@ export class HeadlineAnalysisService {
         observation: result.extraction.status,
       };
     } catch (error) {
+      if (error instanceof HeadlineModelOutputRejectedError)
+        return {
+          status: 'REJECTED' as const,
+          attemptId: error.attemptId,
+          reason: error.rejectionCode,
+        };
       const code =
         typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
       if (code === '23505' || code === '40001')

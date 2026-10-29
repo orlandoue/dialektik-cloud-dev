@@ -10,6 +10,7 @@ on:
       - 'services/core-api/test/headline-*.test.mjs'
       - 'services/core-api/test/llm-title-only-grounding.test.mjs'
       - 'packages/database/src/migration/048_headline_semantic_review.ts'
+      - 'packages/database/src/migration/049_headline_rejection_diagnostics.ts'
       - 'package-lock.json'
       - '.github/workflows/core-headline-semantic-review-ci.yml'
 
