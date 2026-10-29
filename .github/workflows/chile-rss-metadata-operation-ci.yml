@@ -1,0 +1,26 @@
+name: Chile RSS metadata operation
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/operations/chile-rss-once/**'
+      - '.github/workflows/chile-rss-metadata-operation-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  metadata-operation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts/operations/chile-rss-once -p '*_test.py' -v
+      - run: node --test scripts/operations/chile-rss-once/prepare.test.mjs
