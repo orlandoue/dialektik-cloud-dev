@@ -32,8 +32,10 @@ class IngestionOperationTests(unittest.TestCase):
             for index, source in enumerate(module.SOURCE_IDS):
                 items.append({'sourceId': source, 'canonicalUrl': f'https://fixture.invalid/{index}',
                     'articleId': f'{index * 3 + 1:026d}', 'receiptId': f'{index * 3 + 2:026d}',
-                    'versionId': f'{index * 3 + 3:026d}'})
-            manifest = {'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(), 'items': items}
+                    'versionId': f'{index * 3 + 3:026d}', 'excerpt': 'Authorized synthetic excerpt'})
+            manifest = {'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(),
+                'targetDate': dt.datetime.now(module.ZoneInfo('America/Santiago')).date().isoformat(),
+                'expectedArticleCount': len(items), 'matchedArticleCount': len(items), 'items': items}
             manifest['signature'] = module.signature(manifest)
             module.write_private_json(module.PREPARED, manifest)
             with patch.object(module, 'query', return_value=[]) as query:
@@ -48,6 +50,30 @@ class IngestionOperationTests(unittest.TestCase):
             module.write_private_json(module.PREPARED, modified)
             with self.assertRaisesRegex(RuntimeError, 'PREPARED_BATCH_SIGNATURE_INVALID'):
                 module.write(True)
+
+    def test_backfill_refuses_metadata_only_rows_before_running_sql(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {'SUPABASE_ACCESS_TOKEN': 'fixture-secret'}):
+            module.RUN_DIR = Path(directory)
+            module.PREPARED = module.RUN_DIR / 'prepared.json'
+            module.DRY_RUN = module.RUN_DIR / 'dry-run.json'
+            module.BATCH_KEY = module.RUN_DIR / 'batch-key.bin'
+            module.create_batch_key()
+            today = dt.datetime.now(module.ZoneInfo('America/Santiago')).date().isoformat()
+            manifest = {
+                'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(),
+                'targetDate': today,
+                'expectedArticleCount': 1,
+                'matchedArticleCount': 1,
+                'items': [{'sourceId': module.SOURCE_IDS[0], 'canonicalUrl': 'https://fixture.invalid/item',
+                           'articleId': '0' * 26, 'receiptId': '1' * 26, 'versionId': '2' * 26,
+                           'excerpt': None}],
+            }
+            manifest['signature'] = module.signature(manifest)
+            module.write_private_json(module.PREPARED, manifest)
+            with patch.object(module, 'query') as query:
+                with self.assertRaisesRegex(RuntimeError, 'PREPARED_BATCH_CONTAINS_UNAUTHORIZED_EXCERPT'):
+                    module.write(True)
+                query.assert_not_called()
 
     def test_local_signature_does_not_use_the_proxy_credential(self):
         with tempfile.TemporaryDirectory() as directory:

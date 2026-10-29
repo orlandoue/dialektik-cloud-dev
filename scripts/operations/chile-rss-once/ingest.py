@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One bounded, metadata-only acquisition; use --prepare, --dry-run, then --apply."""
+"""One bounded, source-policy-gated RSS acquisition; use --prepare, --dry-run, then --apply."""
 import argparse
 import concurrent.futures
 import datetime as dt
@@ -17,6 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import urllib.robotparser
+from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
 RUN_DIR = Path(os.environ.get('DIALEKTIK_RSS_RUN_DIR', '/tmp/dialektik-rss-metadata-once'))
@@ -91,13 +92,14 @@ def query(sql, read_only=False):
 def sources():
     ids = ','.join("'" + value + "'" for value in SOURCE_IDS)
     return query(f"""select s.id,s.name,s.canonical_domain,p.id policy_id,p.registry_key,
-      p.policy->>'endpoint' endpoint,
+      p.policy->>'endpoint' endpoint,p.storage_policy,
       coalesce(p.policy->>'discoveryChannel','rss_atom') discovery_channel,
+      coalesce(p.policy->'canonicalPathAliases','{{}}'::jsonb) canonical_path_aliases,
       coalesce(p.policy->>'language','es') language from sources s
       join lateral (select * from live_source_policies where source_id=s.id
         order by recorded_at desc,id desc limit 1) p on true
       where s.id in ({ids}) and s.origin='LIVE_REAL' and p.active
-        and p.rights_class='LIVE_READY' and p.storage_policy='METADATA_ONLY'
+        and p.rights_class='LIVE_READY' and p.storage_policy in ('METADATA_ONLY','METADATA_AND_FEED_EXCERPT')
         and p.policy->>'rightsReviewStatus'='APPROVED'
         and nullif(p.policy->>'authorizationReference','') is not null
         and nullif(p.policy->>'rightsEvidenceUrl','') is not null
@@ -153,22 +155,49 @@ def prepare():
     records = sources()
     if {row['id'] for row in records} != set(SOURCE_IDS):
         raise RuntimeError('REVIEWED_SOURCE_SET_INCOMPLETE')
+    target_date = os.environ.get('DIALEKTIK_RSS_PUBLICATION_DATE') or \
+        dt.datetime.now(ZoneInfo('America/Santiago')).date().isoformat()
+    ids = ','.join("'" + value + "'" for value in SOURCE_IDS)
+    existing = query(f"""select a.id::text article_id,a.source_id::text source_id,a.url_canonical
+      from public.articles a where a.origin='LIVE_REAL' and a.source_id in ({ids})
+        and (a.published_at at time zone 'America/Santiago')::date='{target_date}'::date
+      order by a.source_id,a.url_canonical""", True)
+    existing_by_source = {source_id: {} for source_id in SOURCE_IDS}
+    for row in existing:
+        existing_by_source[row['source_id']][row['url_canonical']] = row['article_id']
     with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCE_IDS)) as pool:
         results = list(pool.map(get, records))
-    if any(not result['items'] for result in results):
-        raise RuntimeError('SOURCE_HAS_NO_ELIGIBLE_RECENT_ITEMS')
+    for source, result in zip(records, results):
+        stored_urls = existing_by_source[source['id']]
+        feed_items = result['items']
+        matched_items = [item for item in feed_items if item['canonicalUrl'] in stored_urls]
+        authorized_items = [item for item in matched_items if item.get('excerpt') is not None]
+        for item in authorized_items:
+            item['articleId'] = stored_urls[item['canonicalUrl']]
+        result['items'] = authorized_items
+        result['feed_candidates_today'] = len(feed_items)
+        result['existing_articles_today'] = len(stored_urls)
+        result['matched_articles_today'] = len(matched_items)
+        result['unmatched_articles_today'] = len(stored_urls) - len(matched_items)
+        result['authorized_excerpt_count'] = len(authorized_items)
     items = [item for result in results for item in result['items']]
     all_urls = [item['canonicalUrl'] for item in items]
-    if not items or len(set(all_urls)) != len(all_urls):
-        raise RuntimeError('EMPTY_OR_CROSS_SOURCE_DUPLICATE_BATCH')
+    for result in results:
+        print(f"{result['source']}: {result['matched_articles_today']}/{result['existing_articles_today']} artículos de hoy localizados en el feed; {result['authorized_excerpt_count']} con extracto autorizado")
+    print(f"Backfill de hoy: {len(items)} extractos autorizados listos para {len(existing)} artículos existentes.")
+    if not existing or not items:
+        PREPARED.unlink(missing_ok=True)
+        DRY_RUN.unlink(missing_ok=True)
+        raise RuntimeError('NO_AUTHORIZED_FEED_EXCERPTS_FOR_BACKFILL')
+    if len(set(all_urls)) != len(all_urls):
+        raise RuntimeError('BACKFILL_CANONICAL_URL_COLLISION')
     create_batch_key()
-    prepared = {'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(), 'items': items}
+    prepared = {'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(),
+                'targetDate': target_date, 'expectedArticleCount': len(existing),
+                'matchedArticleCount': len(items), 'items': items}
     prepared['signature'] = signature(prepared)
     write_private_json(PREPARED, prepared)
     DRY_RUN.unlink(missing_ok=True)
-    for result in results:
-        print(f"{result['source']}: {len(result['items'])} candidatos actuales de {result['parsed']} admitidos; metadatos solamente")
-    print('Candidatos totales:', len(items))
 
 
 def sql_for(items, dry_run):
@@ -183,6 +212,9 @@ do {tag}
 declare
   entry jsonb;
   source_entry record;
+  existing_article record;
+  latest_version record;
+  receipt_exclusion_id text;
 begin
   for source_entry in select distinct r->>'sourceId' as source_id from jsonb_array_elements('{literal}'::jsonb) r
       order by 1 loop
@@ -198,7 +230,7 @@ begin
           and p.id=(select id from live_source_policies where source_id=s.id order by recorded_at desc,id desc limit 1)
           and p.registry_key=entry->>'registryKey' and s.name=entry->>'publisher'
           and s.canonical_domain=entry->>'domain' and s.origin='LIVE_REAL'
-          and p.active and p.rights_class='LIVE_READY' and p.storage_policy='METADATA_ONLY'
+          and p.active and p.rights_class='LIVE_READY' and p.storage_policy=entry->>'storagePolicy'
           and p.policy->>'rightsReviewStatus'='APPROVED'
           and nullif(p.policy->>'authorizationReference','') is not null
           and nullif(p.policy->>'rightsEvidenceUrl','') is not null
@@ -208,43 +240,82 @@ begin
           and coalesce(p.policy->>'discoveryChannel','rss_atom')=entry->>'discoveryChannel') then
       raise exception 'SOURCE_REVIEW_CHANGED_OR_NOT_AUTHORIZED';
     end if;
-    if exists(select 1 from articles where url_canonical=entry->>'canonicalUrl')
-       or exists(select 1 from articles a join live_acquisition_receipts r on r.exclusion_id=a.live_exposure_id
-         where r.source_id=entry->>'sourceId' and r.source_item_id=entry->>'sourceItemId') then
-      continue;
+    select a.id,a.source_id,a.origin,a.live_exposure_id,a.text_original,a.text_normalized
+      into existing_article from articles a
+      where a.url_canonical=entry->>'canonicalUrl'
+        or exists(select 1 from live_acquisition_receipts r where r.source_id=entry->>'sourceId'
+          and r.source_item_id=entry->>'sourceItemId' and r.exclusion_id=a.live_exposure_id)
+      order by case when a.url_canonical=entry->>'canonicalUrl' then 0 else 1 end
+      limit 1 for update;
+    if found then
+      if existing_article.source_id::text<>entry->>'sourceId' or existing_article.origin<>'LIVE_REAL'
+          or existing_article.live_exposure_id is null or existing_article.id::text<>entry->>'articleId' then
+        raise exception 'ARTICLE_IDENTITY_CONFLICT';
+      end if;
+      if entry->>'excerpt' is null then continue; end if;
+      select v.id,v.version_number,v.headline,v.excerpt,r.policy_id into latest_version
+        from live_article_versions v join live_acquisition_receipts r on r.id=v.receipt_id
+        where v.article_id=existing_article.id order by v.version_number desc limit 1;
+      if latest_version.id is null then raise exception 'LIVE_VERSION_MISSING'; end if;
+      if latest_version.headline=entry->>'headline' and latest_version.excerpt=entry->>'excerpt'
+          and latest_version.policy_id=entry->>'policyId'
+          and existing_article.text_original=entry->>'articleText'
+          and existing_article.text_normalized=entry->>'normalizedText' then
+        continue;
+      end if;
+      insert into live_exposure_exclusions(id,registry_key,publisher_name,canonical_url,source_item_id,
+        published_at,first_seen_at,discovery_url,reason,content_hash,near_duplicate_signature)
+      values (entry->>'versionExclusionId',entry->>'registryKey',entry->>'publisher',entry->>'canonicalUrl',
+        entry->>'sourceItemId',(entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,
+        entry->>'discoveryUrl','live_feed_discovery',entry->>'contentHash',entry->>'signature')
+      on conflict (id) do nothing;
+      receipt_exclusion_id := existing_article.live_exposure_id;
+    else
+      insert into live_exposure_exclusions(id,registry_key,publisher_name,canonical_url,source_item_id,
+        published_at,first_seen_at,discovery_url,reason,content_hash,near_duplicate_signature)
+      values
+        (entry->>'exclusionId',entry->>'registryKey',entry->>'publisher',entry->>'canonicalUrl',entry->>'sourceItemId',
+         (entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,entry->>'discoveryUrl',
+         'live_feed_discovery',entry->>'contentHash',entry->>'signature'),
+        (entry->>'versionExclusionId',entry->>'registryKey',entry->>'publisher',entry->>'canonicalUrl',entry->>'sourceItemId',
+         (entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,entry->>'discoveryUrl',
+         'live_feed_discovery',entry->>'contentHash',entry->>'signature'),
+        (entry->>'guidExclusionId',entry->>'registryKey',entry->>'publisher',null,entry->>'sourceItemId',
+         (entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,entry->>'discoveryUrl',
+         'live_feed_source_item_identity',entry->>'contentHash',entry->>'signature')
+      on conflict (id) do nothing;
+      receipt_exclusion_id := entry->>'exclusionId';
     end if;
-    insert into live_exposure_exclusions(id,registry_key,publisher_name,canonical_url,source_item_id,
-      published_at,first_seen_at,discovery_url,reason,content_hash,near_duplicate_signature)
-    values
-      (entry->>'exclusionId',entry->>'registryKey',entry->>'publisher',entry->>'canonicalUrl',entry->>'sourceItemId',
-       (entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,entry->>'discoveryUrl',
-       'live_feed_discovery',entry->>'contentHash',entry->>'signature'),
-      (entry->>'versionExclusionId',entry->>'registryKey',entry->>'publisher',entry->>'canonicalUrl',entry->>'sourceItemId',
-       (entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,entry->>'discoveryUrl',
-       'live_feed_discovery',entry->>'contentHash',entry->>'signature'),
-      (entry->>'guidExclusionId',entry->>'registryKey',entry->>'publisher',null,entry->>'sourceItemId',
-       (entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,entry->>'discoveryUrl',
-       'live_feed_source_item_identity',entry->>'contentHash',entry->>'signature')
-    on conflict (id) do nothing;
     insert into live_acquisition_receipts(id,source_id,policy_id,exclusion_id,discovery_channel,discovery_channel_detail,discovery_url,
       discovered_url,canonical_url,source_item_id,published_at,modified_at,original_published_at,
       original_modified_at,seen_at,raw_payload_hash,adapter_version,disposition,error_code)
-    values (entry->>'receiptId',entry->>'sourceId',entry->>'policyId',entry->>'exclusionId',
+    values (entry->>'receiptId',entry->>'sourceId',entry->>'policyId',receipt_exclusion_id,
       case when entry->>'discoveryChannel'='news_sitemap' then 'rss_atom' else entry->>'discoveryChannel' end,
       entry->>'discoveryChannel',entry->>'discoveryUrl',
       entry->>'discoveredUrl',entry->>'canonicalUrl',entry->>'sourceItemId',
       (entry->>'publishedAt')::timestamptz,(entry->>'modifiedAt')::timestamptz,entry->>'originalPublishedAt',
       entry->>'originalModifiedAt',(entry->>'capturedAt')::timestamptz,entry->>'rawPayloadHash',
       entry->>'adapterVersion','PERSISTED',null);
+    if existing_article.id is not null then
+      insert into live_article_versions(id,article_id,receipt_id,version_number,metadata_hash,headline,excerpt,
+        author,published_at,modified_at,declared_upstream,content_hash,near_duplicate_signature,recorded_at)
+      values (entry->>'versionId',existing_article.id,entry->>'receiptId',latest_version.version_number+1,
+        entry->>'metadataHash',entry->>'headline',entry->>'excerpt',entry->>'author',
+        (entry->>'publishedAt')::timestamptz,(entry->>'modifiedAt')::timestamptz,entry->>'declaredUpstream',
+        entry->>'contentHash',entry->>'signature',(entry->>'capturedAt')::timestamptz);
+      update articles set text_original=entry->>'articleText',text_normalized=entry->>'normalizedText'
+        where id=existing_article.id;
+      continue;
+    end if;
     insert into articles(id,source_id,event_id,url_canonical,text_original,text_normalized,lang,published_at,
       captured_at,updated_at_source,declares_wire,syndication_of,syndication_confidence,clustering_score,
       processing_error,origin,live_exposure_id)
-    values (entry->>'articleId',entry->>'sourceId',null,entry->>'canonicalUrl',entry->>'headline',entry->>'headline',
+    values (entry->>'articleId',entry->>'sourceId',null,entry->>'canonicalUrl',entry->>'articleText',entry->>'normalizedText',
       entry->>'language',(entry->>'publishedAt')::timestamptz,(entry->>'capturedAt')::timestamptz,
       (entry->>'modifiedAt')::timestamptz,entry->>'declaredUpstream',null,null,null,null,'LIVE_REAL',entry->>'exclusionId');
     insert into live_article_versions(id,article_id,receipt_id,version_number,metadata_hash,headline,excerpt,
       author,published_at,modified_at,declared_upstream,content_hash,near_duplicate_signature,recorded_at)
-    values (entry->>'versionId',entry->>'articleId',entry->>'receiptId',1,entry->>'metadataHash',entry->>'headline',null,
+    values (entry->>'versionId',entry->>'articleId',entry->>'receiptId',1,entry->>'metadataHash',entry->>'headline',entry->>'excerpt',
       entry->>'author',(entry->>'publishedAt')::timestamptz,(entry->>'modifiedAt')::timestamptz,entry->>'declaredUpstream',
       entry->>'contentHash',entry->>'signature',(entry->>'capturedAt')::timestamptz);
   end loop;
@@ -262,9 +333,16 @@ def write(dry_run):
     items = prepared['items']
     created = dt.datetime.fromisoformat(prepared['createdAt'])
     age = dt.datetime.now(dt.timezone.utc) - created
-    if not 1 <= len(items) <= 72 or age > dt.timedelta(minutes=15) or age < dt.timedelta(minutes=-5):
+    if not 1 <= len(items) <= 1200 or age > dt.timedelta(minutes=15) or age < dt.timedelta(minutes=-5):
         raise RuntimeError('PREPARED_BATCH_MISSING_OR_EXPIRED')
-    if {item.get('sourceId') for item in items} != set(SOURCE_IDS):
+    if any(not isinstance(item.get('excerpt'), str) or not item['excerpt'].strip() for item in items):
+        raise RuntimeError('PREPARED_BATCH_CONTAINS_UNAUTHORIZED_EXCERPT')
+    target_date = prepared.get('targetDate')
+    if not isinstance(target_date, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', target_date):
+        raise RuntimeError('PREPARED_TARGET_DATE_INVALID')
+    if prepared.get('matchedArticleCount') != len(items) or not isinstance(prepared.get('expectedArticleCount'), int):
+        raise RuntimeError('PREPARED_BATCH_COUNTS_INVALID')
+    if not {item.get('sourceId') for item in items}.issubset(set(SOURCE_IDS)):
         raise RuntimeError('PREPARED_SOURCE_SET_INVALID')
     if len({item.get('canonicalUrl') for item in items}) != len(items):
         raise RuntimeError('PREPARED_URLS_NOT_UNIQUE')
@@ -287,9 +365,13 @@ def write(dry_run):
         print(f'Simulación correcta; {len(items)} candidatos; transacción revertida.')
         return
     DRY_RUN.unlink(missing_ok=True)
-    ids = ','.join("'" + item['articleId'] + "'" for item in items)
-    results = query(f"""select s.name,count(*)::int inserted from articles a join sources s on s.id=a.source_id
-      where a.id in ({ids}) and a.origin='LIVE_REAL' group by s.name order by s.name""", True)
+    results = query(f"""select s.name,count(*)::int articles_today,
+        count(*) filter (where v.excerpt is not null)::int with_feed_excerpt
+      from articles a join sources s on s.id=a.source_id
+      join lateral (select excerpt from live_article_versions where article_id=a.id order by version_number desc limit 1) v on true
+      where a.origin='LIVE_REAL' and (a.published_at at time zone 'America/Santiago')::date='{target_date}'::date
+        and a.source_id in ({','.join(chr(39)+value+chr(39) for value in SOURCE_IDS)})
+      group by s.name order by s.name""", True)
     print(json.dumps(results, ensure_ascii=False))
 
 

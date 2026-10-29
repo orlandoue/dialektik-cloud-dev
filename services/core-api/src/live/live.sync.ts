@@ -335,8 +335,11 @@ async function persistItem(
   const linkedExclusion = existing?.live_exposure_id ?? exclusionId;
   const acquisition = receipt(policy, policyId, item, linkedExclusion, now, discoveryUrl, null);
   await transaction.insertInto('live_acquisition_receipts').values(acquisition).execute();
+  const originalText = [item.headline, item.excerpt]
+    .filter((part): part is string => part !== null)
+    .join('. ');
+  const normalizedText = originalText.normalize('NFKC').toLocaleLowerCase('es-CL');
   if (existing === undefined) {
-    const original = [item.headline, item.excerpt].filter((part) => part !== null).join('\n\n');
     await transaction
       .insertInto('articles')
       .values({
@@ -344,8 +347,8 @@ async function persistItem(
         source_id: policy.sourceId,
         event_id: null,
         url_canonical: item.canonicalUrl,
-        text_original: original,
-        text_normalized: original,
+        text_original: originalText,
+        text_normalized: normalizedText,
         lang: item.language,
         published_at: item.publishedAt,
         captured_at: now,
@@ -359,14 +362,22 @@ async function persistItem(
         live_exposure_id: linkedExclusion,
       })
       .execute();
-  } else if (existing.lang !== item.language) {
-    // Correct mutable acquisition metadata without rewriting source text or
-    // manufacturing a publisher-content version for a language annotation.
-    await transaction
-      .updateTable('articles')
-      .set({ lang: item.language })
-      .where('id', '=', articleId)
-      .execute();
+  } else {
+    // Excerpts are stored only under the source's explicit feed-excerpt policy.
+    // When that policy becomes active, refresh the current projection while
+    // preserving the append-only acquisition/version history below.
+    const articleUpdate: { lang?: string; text_original?: string; text_normalized?: string } = {};
+    if (existing.lang !== item.language) articleUpdate.lang = item.language;
+    if (
+      item.excerpt !== null &&
+      (existing.text_original !== originalText || existing.text_normalized !== normalizedText)
+    ) {
+      articleUpdate.text_original = originalText;
+      articleUpdate.text_normalized = normalizedText;
+    }
+    if (Object.keys(articleUpdate).length > 0) {
+      await transaction.updateTable('articles').set(articleUpdate).where('id', '=', articleId).execute();
+    }
   }
   const metadata = {
     headline: item.headline,
@@ -398,7 +409,12 @@ async function persistItem(
     latest.declared_upstream === item.declaredUpstream &&
     latest.version_canonical_url === item.canonicalUrl
   )
-    return 'unchanged';
+    return existing !== undefined &&
+      ((item.excerpt !== null &&
+        (existing.text_original !== originalText || existing.text_normalized !== normalizedText)) ||
+        existing.lang !== item.language)
+      ? 'updated'
+      : 'unchanged';
   const legalText = [item.headline, item.excerpt].filter((part) => part !== null).join('\n');
   await transaction
     .insertInto('live_article_versions')

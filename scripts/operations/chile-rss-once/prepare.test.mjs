@@ -9,18 +9,22 @@ const source = {
   id: '01M4YDQK00CH1000C1PERCH11E', policy_id: 'a'.repeat(64),
   name: 'Synthetic publisher', canonical_domain: 'news.example.invalid',
   registry_key: 'fixture-only', endpoint: 'https://news.example.invalid/feed',
-  discovery_channel: 'rss_atom', language: 'en',
+  discovery_channel: 'rss_atom', language: 'en', storage_policy: 'METADATA_ONLY',
 };
 
 function run(xml) {
+  const date = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
   const result = spawnSync(process.execPath, [script], {
     input: JSON.stringify({ source, xml }), encoding: 'utf8',
+    env: { ...process.env, DIALEKTIK_RSS_PUBLICATION_DATE: date },
   });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 }
 
-test('prepares bounded RSS metadata without retaining a feed excerpt', () => {
+test('prepares all of today’s RSS items without retaining excerpts under metadata-only policy', () => {
   const date = new Date().toUTCString();
   const body = Array.from({ length: 15 }, (_, index) => `<item>
     <title>Synthetic headline ${index}</title>
@@ -28,14 +32,29 @@ test('prepares bounded RSS metadata without retaining a feed excerpt', () => {
     <guid>fixture-${index}</guid><pubDate>${date}</pubDate>
     <description><![CDATA[SECRET_FIXTURE_EXCERPT]]></description></item>`).join('');
   const result = run(`<rss><channel>${body}</channel></rss>`);
-  assert.equal(result.items.length, 12);
+  assert.equal(result.items.length, 15);
   assert.ok(!JSON.stringify(result).includes('SECRET_FIXTURE_EXCERPT'));
-  assert.equal(new Set(result.items.map((item) => item.canonicalUrl)).size, 12);
+  assert.equal(new Set(result.items.map((item) => item.canonicalUrl)).size, 15);
   for (const item of result.items) {
-    assert.equal(item.contentHash, createHash('sha256').update(item.headline.normalize('NFC')).digest('hex'));
+    assert.equal(item.excerpt, null);
+    assert.equal(item.contentHash, createHash('sha256').update(item.articleText.normalize('NFC')).digest('hex'));
     assert.match(item.articleId, /^[0-9A-HJKMNP-TV-Z]{26}$/);
     assert.notEqual(item.articleId, item.receiptId);
   }
+});
+
+test('retains a cleaned feed description only under an excerpt storage policy', () => {
+  const date = new Date().toUTCString();
+  const excerptSource = { ...source, storage_policy: 'METADATA_AND_FEED_EXCERPT' };
+  const xml = `<rss><channel><item><title>Headline</title>
+    <link>https://news.example.invalid/item/with-excerpt</link><guid>excerpt-1</guid>
+    <pubDate>${date}</pubDate><description><![CDATA[<p>RSS-provided excerpt &amp; detail.</p>]]></description>
+    </item></channel></rss>`;
+  const result = runWith(excerptSource, xml);
+  assert.equal(result.items.length, 1);
+  assert.equal(result.items[0].excerpt, 'RSS-provided excerpt & detail.');
+  assert.equal(result.items[0].articleText, 'Headline. RSS-provided excerpt & detail.');
+  assert.match(result.items[0].normalizedText, /^headline\. rss-provided excerpt/);
 });
 
 test('prepares news-sitemap provenance as metadata only', () => {
@@ -59,7 +78,7 @@ test('prepares news-sitemap provenance as metadata only', () => {
   assert.equal(result.items[0].discoveryChannel, 'news_sitemap');
   assert.equal(result.items[0].headline, 'Titular de ejemplo');
   assert.equal(result.items[0].canonicalUrl, 'https://www.elmostrador.cl/noticias/nota-ejemplo/');
-  assert.equal(result.items[0].excerpt, undefined);
+  assert.equal(result.items[0].excerpt, null);
 });
 
 function runWith(inputSource, xml) {
