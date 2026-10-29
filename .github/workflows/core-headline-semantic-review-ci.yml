@@ -1,0 +1,39 @@
+name: Core title-only semantic review
+
+on:
+  pull_request:
+    paths:
+      - 'services/core-api/src/semantic/**'
+      - 'services/core-api/src/moderation/**'
+      - 'services/core-api/src/llm-shadow/llm.grounding.ts'
+      - 'services/core-api/src/llm-shadow/llm.cloudflare*.ts'
+      - 'services/core-api/test/headline-*.test.mjs'
+      - 'services/core-api/test/llm-title-only-grounding.test.mjs'
+      - 'packages/database/src/migration/048_headline_semantic_review.ts'
+      - 'packages/database/src/migration/049_headline_rejection_diagnostics.ts'
+      - 'package-lock.json'
+      - '.github/workflows/core-headline-semantic-review-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: >-
+          node --test
+          services/core-api/test/llm-title-only-grounding.test.mjs
+          services/core-api/test/headline-semantic-runner.test.mjs
+          services/core-api/test/headline-semantic-repository.test.mjs
+          services/core-api/test/headline-analysis-service.test.mjs
+          services/core-api/test/headline-semantic-postgres.test.mjs

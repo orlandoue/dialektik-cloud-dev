@@ -541,8 +541,9 @@ export class CloudflareWorkersAITransport implements StructuredLLMTransport {
             { role: 'system', content: systemContent },
             { role: 'user', content: inputText },
           ],
-          max_completion_tokens: this.profile.config.maxOutputTokens,
-          tools: [],
+          ...(this.profile.outputMode === 'workers-json-schema-v1'
+            ? { max_tokens: this.profile.config.maxOutputTokens }
+            : { max_completion_tokens: this.profile.config.maxOutputTokens, tools: [] }),
           store: false,
           stream: false,
         };

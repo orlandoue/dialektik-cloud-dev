@@ -24,6 +24,7 @@
     "rxjs": "7.8.2"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.13",
     "@nestjs/testing": "12.0.1"
   }
 }
