@@ -11,6 +11,7 @@ on:
       - 'services/core-api/test/llm-title-only-grounding.test.mjs'
       - 'packages/database/src/migration/048_headline_semantic_review.ts'
       - 'packages/database/src/migration/049_headline_rejection_diagnostics.ts'
+      - 'packages/database/src/migration/050_headline_context_pair_review.ts'
       - 'package-lock.json'
       - '.github/workflows/core-headline-semantic-review-ci.yml'
 
@@ -37,3 +38,6 @@ jobs:
           services/core-api/test/headline-semantic-repository.test.mjs
           services/core-api/test/headline-analysis-service.test.mjs
           services/core-api/test/headline-semantic-postgres.test.mjs
+          services/core-api/test/headline-context-pairs.test.mjs
+          services/core-api/test/headline-context-runner.test.mjs
+          services/core-api/test/headline-context-postgres.test.mjs

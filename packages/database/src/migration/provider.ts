@@ -47,6 +47,7 @@ import { moderationWriterScopeMigration } from './046_moderation_writer_scope';
 import { editorialEventSplitsMigration } from './047_editorial_event_splits';
 import { headlineSemanticReviewMigration } from './048_headline_semantic_review';
 import { headlineRejectionDiagnosticsMigration } from './049_headline_rejection_diagnostics';
+import { headlineContextPairReviewMigration } from './050_headline_context_pair_review';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -75,6 +76,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '047_editorial_event_splits': editorialEventSplitsMigration,
   '048_headline_semantic_review': headlineSemanticReviewMigration,
   '049_headline_rejection_diagnostics': headlineRejectionDiagnosticsMigration,
+  '050_headline_context_pair_review': headlineContextPairReviewMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,
