@@ -5,6 +5,14 @@ plugins {
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseStorePath = providers.environmentVariable("DIALEKTIK_ANDROID_KEYSTORE_PATH").orNull
+val releaseStorePassword = providers.environmentVariable("DIALEKTIK_ANDROID_KEYSTORE_PASSWORD").orNull
+val releaseKeyAlias = providers.environmentVariable("DIALEKTIK_ANDROID_KEY_ALIAS").orNull
+val releaseKeyPassword = providers.environmentVariable("DIALEKTIK_ANDROID_KEY_PASSWORD").orNull
+val releaseSigningReady = listOf(
+    releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.dialektik.dialektik"
     compileSdk = flutter.compileSdkVersion
@@ -30,15 +38,37 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        create("dialektikRelease") {
+            if (releaseSigningReady) {
+                storeFile = file(checkNotNull(releaseStorePath))
+                storePassword = checkNotNull(releaseStorePassword)
+                keyAlias = checkNotNull(releaseKeyAlias)
+                keyPassword = checkNotNull(releaseKeyPassword)
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            if (releaseSigningReady) {
+                signingConfig = signingConfigs.getByName("dialektikRelease")
+            }
         }
     }
 }
 
 flutter {
     source = "../.."
+}
+
+// A production build must never silently fall back to a debug or unsigned key.
+if (!releaseSigningReady) {
+    tasks.configureEach {
+        if (name.contains("Release", ignoreCase = true)) {
+            doFirst {
+                throw GradleException("Android release signing requires DIALEKTIK_ANDROID_KEYSTORE_PATH, DIALEKTIK_ANDROID_KEYSTORE_PASSWORD, DIALEKTIK_ANDROID_KEY_ALIAS and DIALEKTIK_ANDROID_KEY_PASSWORD.")
+            }
+        }
+    }
 }

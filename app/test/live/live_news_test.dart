@@ -86,24 +86,73 @@ void main() {
     },
   );
 
-  test('Chile beta display excludes GOV.UK publisher from news and sources', () {
-    const LiveSourceDto chile = LiveSourceDto(
-      id: 'chile-test', name: 'BiobioChile', sourceType: 'radio',
-      canonicalDomain: 'biobiochile.cl',
-    );
-    const LiveSourceDto uk = LiveSourceDto(
-      id: 'uk-test', name: 'GOV.UK', sourceType: 'official_statistics',
-      canonicalDomain: 'gov.uk',
-    );
-    expect(isChileBetaPublisher(chile), isTrue);
-    expect(isChileBetaPublisher(uk), isFalse);
-  });
+  test(
+    'Chile beta display excludes GOV.UK publisher from news and sources',
+    () {
+      const LiveSourceDto chile = LiveSourceDto(
+        id: 'chile-test',
+        name: 'BiobioChile',
+        sourceType: 'radio',
+        canonicalDomain: 'biobiochile.cl',
+      );
+      const LiveSourceDto uk = LiveSourceDto(
+        id: 'uk-test',
+        name: 'GOV.UK',
+        sourceType: 'official_statistics',
+        canonicalDomain: 'gov.uk',
+      );
+      const LiveSourceDto elDia = LiveSourceDto(
+        id: 'eldia-test',
+        name: 'Diario El Día',
+        sourceType: 'news',
+        canonicalDomain: 'diarioeldia.cl',
+      );
+      const LiveSourceDto elDiaWww = LiveSourceDto(
+        id: 'eldia-www-test',
+        name: 'Diario El Día',
+        sourceType: 'news',
+        canonicalDomain: 'www.diarioeldia.cl',
+      );
+      const LiveSourceDto unknown = LiveSourceDto(
+        id: 'unknown-test',
+        name: 'Synthetic',
+        sourceType: 'other',
+        canonicalDomain: 'news.dialektik.invalid',
+      );
+      expect(isChileBetaPublisher(chile), isTrue);
+      expect(isChileBetaPublisher(elDia), isTrue);
+      expect(isChileBetaPublisher(elDiaWww), isTrue);
+      expect(isChileBetaPublisher(uk), isFalse);
+      expect(isChileBetaPublisher(unknown), isFalse);
+    },
+  );
 
   test(
     'live contracts reject fixture/UNKNOWN, prohibited semantics and unauthorized body',
     () {
       final Map<String, Object?> article = liveTestArticle();
       expect(LiveNewsItemDto.fromJson(article).headline, article['headline']);
+      expect(
+        LiveNewsItemDto.fromJson(<String, Object?>{
+          ...article,
+          'semantic_assignment': 'EVENT_LINKED',
+        }).headline,
+        article['headline'],
+      );
+      expect(
+        LiveNewsPageDto.fromJson(<String, Object?>{
+          ...liveTestPage(),
+          'semantic_mode': 'mixed',
+          'items': <Object?>[
+            article,
+            <String, Object?>{
+              ...article,
+              'semantic_assignment': 'EVENT_LINKED',
+            },
+          ],
+        }).items,
+        hasLength(2),
+      );
       expect(
         () => LiveNewsItemDto.fromJson(<String, Object?>{
           ...article,
@@ -232,7 +281,10 @@ void main() {
         find.text('El servicio de noticias no está disponible.'),
         findsOneWidget,
       );
-      expect(find.text('Todavía no hay noticias guardadas.'), findsNothing);
+      expect(
+        find.text('Todavía no hay artículos incorporados al análisis.'),
+        findsNothing,
+      );
 
       await mountLive(tester, missingRoutes, route: '/live/sources');
       expect(
@@ -248,7 +300,10 @@ void main() {
             : liveJsonResponse(<String, Object?>{'items': <Object?>[]}),
       );
       await mountLive(tester, emptyReader);
-      expect(find.text('Todavía no hay noticias guardadas.'), findsOneWidget);
+      expect(
+        find.text('Todavía no hay artículos incorporados al análisis.'),
+        findsOneWidget,
+      );
       expect(
         find.text('El servicio de noticias no está disponible.'),
         findsNothing,
@@ -280,8 +335,17 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(SemanticsBinding.instance.semanticsEnabled, isFalse);
-      expect(calls, hasLength(2));
+      final bool semanticsBefore = SemanticsBinding.instance.semanticsEnabled;
+      final List<Uri> initialCalls = List<Uri>.of(calls);
+      expect(
+        initialCalls.map((Uri uri) => uri.path),
+        unorderedEquals(<String>[
+          '/live/news',
+          '/live/sources',
+          '/live/preview/rss/chile/chronology',
+          '/live/observations/chile/seismic',
+        ]),
+      );
       final SemanticsHandle semantics = tester.ensureSemantics();
       try {
         await tester.pump();
@@ -292,13 +356,13 @@ void main() {
           ),
           findsOneWidget,
         );
-        expect(calls, hasLength(2));
+        expect(calls, initialCalls);
       } finally {
         semantics.dispose();
       }
       await tester.pump();
-      expect(SemanticsBinding.instance.semanticsEnabled, isFalse);
-      expect(calls, hasLength(2));
+      expect(SemanticsBinding.instance.semanticsEnabled, semanticsBefore);
+      expect(calls, initialCalls);
       expect(tester.takeException(), isNull);
     },
     semanticsEnabled: false,
@@ -322,7 +386,12 @@ void main() {
       expect(find.text('STRESS'), findsNothing);
       expect(
         calls.map((Uri uri) => uri.path),
-        unorderedEquals(<String>['/live/news', '/live/sources']),
+        unorderedEquals(<String>[
+          '/live/news',
+          '/live/sources',
+          '/live/preview/rss/chile/chronology',
+          '/live/observations/chile/seismic',
+        ]),
       );
       await tapLive(
         tester,
@@ -365,7 +434,7 @@ void main() {
         ),
       );
       expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
-      expect(find.text('news.dialektik.invalid'), findsOneWidget);
+      expect(find.text('diarioeldia.cl'), findsOneWidget);
       expect(find.text('LIVE · SHADOW'), findsNothing);
       await tapLive(tester, find.bySemanticsLabel('Volver'));
       await tapLive(tester, find.text('Consultar procedencia'));
@@ -496,11 +565,11 @@ void main() {
     expect(calls.any((Uri uri) => uri.path == '/live/sources'), isTrue);
     expect(find.text('Fuentes'), findsWidgets);
     expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
-    expect(find.text('news.dialektik.invalid'), findsOneWidget);
+    expect(find.text('diarioeldia.cl'), findsOneWidget);
     expect(find.text('Candidatas · 50'), findsOneWidget);
     expect(find.text('BioBioChile'), findsOneWidget);
     await tapLive(tester, find.text('BioBioChile'));
-    expect(find.text('Revalidación técnica actual'), findsOneWidget);
+    expect(find.text('Revalidación técnica registrada'), findsOneWidget);
     expect(find.text('Alcance de derechos'), findsOneWidget);
     expect(find.text('Consulta automatizada'), findsOneWidget);
     expect(find.text('No autorizada; desactivada'), findsOneWidget);
@@ -560,10 +629,11 @@ void main() {
       final Finder sourceStrip = find.byKey(
         const Key('live-source-filter-scroll'),
       );
+      await tester.ensureVisible(sourceStrip);
+      await tester.pumpAndSettle();
       await tester.drag(sourceStrip, const Offset(-400, 0));
       await tester.pumpAndSettle();
-      final Rect sourceViewport = tester.getRect(sourceStrip);
-      await tester.tapAt(sourceViewport.center);
+      await tester.tapAt(tester.getRect(sourceStrip).center);
       await tester.pumpAndSettle();
       expect(calls.last.queryParameters['source_id'], liveTestSourceId);
       await tapLive(tester, find.widgetWithText(ChoiceChip, 'Hoy'));
@@ -581,7 +651,9 @@ void main() {
         'océano',
       );
       expect(
-        find.text('Titulares oficiales con enlace al medio de origen.'),
+        find.text(
+          'Titulares y enlaces originales de los medios. No son artículos guardados ni acontecimientos analizados.',
+        ),
         findsOneWidget,
       );
       expect(find.byTooltip('Actualizar noticias'), findsOneWidget);

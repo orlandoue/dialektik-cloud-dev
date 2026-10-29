@@ -73,6 +73,30 @@ final class _FeedScreenState extends State<FeedScreen> {
     );
   }
 
+  Widget _emptyMessage(ConsumerStrings strings) {
+    final Widget empty = SystemStateView(
+      message: _controller.hasFilter
+          ? strings.filteredFeedEmpty
+          : strings.feedEmpty,
+      actionLabel: _controller.hasFilter ? strings.clearFilter : null,
+      onAction: _controller.hasFilter
+          ? () => unawaited(_controller.clearFilters())
+          : null,
+    );
+    final Future<CuratedEventPreview>? preview = _curatedPreviewFuture;
+    if (_editorialPreview == null || preview == null) return empty;
+    return FutureBuilder<CuratedEventPreview>(
+      future: preview,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done ||
+            snapshot.hasData) {
+          return const SizedBox.shrink();
+        }
+        return empty;
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ConsumerStrings strings = ConsumerStrings.of(context);
@@ -104,15 +128,7 @@ final class _FeedScreenState extends State<FeedScreen> {
             FeedPhase.empty => _FeedListFrame(
               controller: _controller,
               preview: _editorialPreview,
-              child: SystemStateView(
-                message: _controller.hasFilter
-                    ? strings.filteredFeedEmpty
-                    : strings.feedEmpty,
-                actionLabel: _controller.hasFilter ? strings.clearFilter : null,
-                onAction: _controller.hasFilter
-                    ? () => unawaited(_controller.clearFilters())
-                    : null,
-              ),
+              child: _emptyMessage(strings),
             ),
             FeedPhase.content => _FeedContent(
               controller: _controller,
@@ -241,7 +257,11 @@ final class _FeedContent extends StatelessWidget {
                     ),
                     if (index < controller.items.length - 1)
                       const SizedBox(height: DialektikSpacing.space6),
-                  ],if (preview != null) ...<Widget>[ const SizedBox(height: DialektikSpacing.space6), preview!, ],
+                  ],
+                  if (preview != null) ...<Widget>[
+                    const SizedBox(height: DialektikSpacing.space6),
+                    preview!,
+                  ],
                   if (controller.nextCursor != null) ...<Widget>[
                     const SizedBox(height: DialektikSpacing.space6),
                     FilledButton(

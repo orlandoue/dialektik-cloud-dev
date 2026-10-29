@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
@@ -36,6 +37,184 @@ void main() {
     expect(coreRequests, 0);
   });
 
+  for (final double width in <double>[390, 1200]) {
+    testWidgets('sign out remains available at ${width.toInt()}px', (
+      WidgetTester tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 900);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final List<http.Request> authRequests = <http.Request>[];
+      await tester.pumpWidget(
+        _gate(
+          authClient: MockClient((http.Request request) async {
+            authRequests.add(request);
+            if (request.url.path == '/auth/v1/logout') {
+              return http.Response('', 204);
+            }
+            return _sessionResponse('valid-access', 'valid-refresh', 3600);
+          }),
+          apiClient: MockClient((_) async => _emptyPage()),
+        ),
+      );
+      await _signIn(tester);
+      final Finder signOut = find.byTooltip('Cerrar sesión');
+      expect(signOut, findsOneWidget);
+      await tester.tap(signOut);
+      await tester.pumpAndSettle();
+      expect(find.text('Beta privada'), findsOneWidget);
+      expect(find.byTooltip('Cerrar sesión'), findsNothing);
+      expect(authRequests.last.url.path, '/auth/v1/logout');
+      expect(authRequests.last.headers['authorization'], 'Bearer valid-access');
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('authorized single editor can review and confirm a proposal', (
+    WidgetTester tester,
+  ) async {
+    const String editorId = '01M4YDQK00ED1T0R0R1AND0VE1';
+    const String taskId = '01M4YDQK000000000000000101';
+    const String proposalId = '01M4YDQK000000000000000102';
+    const List<String> assertionIds = <String>[
+      '01M4YDQK000000000000000103',
+      '01M4YDQK000000000000000104',
+    ];
+    bool claimed = false;
+    bool proposed = false;
+    bool confirmed = false;
+    final List<http.Request> commands = <http.Request>[];
+    await tester.pumpWidget(
+      _gate(
+        authClient: MockClient(
+          (_) async => _sessionResponse('editor-access', 'refresh', 3600),
+        ),
+        apiClient: MockClient((http.Request request) async {
+          final String path = request.url.path;
+          if (path == '/v1/mod/session') {
+            return _json(<String, Object?>{
+              'userId': editorId,
+              'role': 'editor',
+              'singleEditorEnabled': true,
+            });
+          }
+          final Map<String, Object?> task = <String, Object?>{
+            'taskId': taskId,
+            'eventTitle': 'Acontecimiento de prueba',
+            'taskState': 'pending',
+            'assignedTo': claimed ? editorId : null,
+            'isCurrentSnapshot': true,
+            'assertions': <Object?>[
+              for (final String id in assertionIds)
+                <String, Object?>{
+                  'assertionId': id,
+                  'sourceName': 'Fuente de prueba',
+                  'articleUrl': 'https://example.test/article',
+                  'articleTitle': 'Título de prueba',
+                  'articleAuthor': 'Autor de prueba',
+                  'articlePublishedAt': '2026-10-20T00:00:00.000Z',
+                  'quotedText': 'x' * 140,
+                },
+            ],
+            'proposals': <Object?>[
+              if (proposed)
+                <String, Object?>{
+                  'proposalId': proposalId,
+                  'state': confirmed ? 'confirmed' : 'submitted',
+                  'outcome': 'accept_subset',
+                  'proposerId': editorId,
+                  'members': <Object?>[
+                    for (final String id in assertionIds)
+                      <String, Object?>{
+                        'assertionId': id,
+                        'partitionOrdinal': null,
+                      },
+                  ],
+                },
+            ],
+          };
+          if (request.method == 'POST') {
+            commands.add(request);
+            if (path.endsWith('/claim')) claimed = true;
+            if (path.endsWith('/proposals')) proposed = true;
+            if (path.endsWith('/confirm')) confirmed = true;
+            return _json(<String, Object?>{});
+          }
+          if (path == '/v1/mod/tasks') return _json(<Object?>[task]);
+          if (path == '/v1/mod/tasks/$taskId') return _json(task);
+          return _emptyPage();
+        }),
+      ),
+    );
+
+    await _signIn(tester);
+    await tester.tap(find.byTooltip('Revisión editorial'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Acontecimiento de prueba'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Tomar revisión'));
+    await tester.pumpAndSettle();
+    for (final Finder checkbox in <Finder>[
+      find.byType(CheckboxListTile).first,
+      find.byType(CheckboxListTile).last,
+    ]) {
+      await tester.ensureVisible(checkbox);
+      await tester.tap(checkbox);
+      await tester.pumpAndSettle();
+    }
+    await tester.ensureVisible(find.text('Proponer agrupación'));
+    await tester.tap(find.text('Proponer agrupación'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Confirmar').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Confirmar').last);
+    await tester.pumpAndSettle();
+
+    expect(confirmed, isTrue);
+    expect(commands.map((request) => request.url.path), <String>[
+      '/v1/mod/tasks/$taskId/claim',
+      '/v1/mod/tasks/$taskId/proposals',
+      '/v1/mod/tasks/$taskId/proposals/$proposalId/confirm',
+    ]);
+    expect(
+      commands.every(
+        (request) =>
+            request.headers['authorization'] == 'Bearer editor-access' &&
+            RegExp(
+              r'^[0-7][0-9A-HJKMNP-TV-Z]{25}$',
+            ).hasMatch(request.headers['idempotency-key'] ?? ''),
+      ),
+      isTrue,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('sign out returns to login while remote logout is pending', (
+    WidgetTester tester,
+  ) async {
+    final Completer<http.Response> logout = Completer<http.Response>();
+    await tester.pumpWidget(
+      _gate(
+        authClient: MockClient((http.Request request) async {
+          if (request.url.path == '/auth/v1/logout') return logout.future;
+          return _sessionResponse('valid-access', 'valid-refresh', 3600);
+        }),
+        apiClient: MockClient((_) async => _emptyPage()),
+      ),
+    );
+    await _signIn(tester);
+    await tester.tap(find.byTooltip('Cerrar sesión'));
+    await tester.pump();
+    expect(find.text('Beta privada'), findsOneWidget);
+    expect(find.byTooltip('Cerrar sesión'), findsNothing);
+    logout.complete(http.Response('', 204));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
     'valid session reaches an authorized empty contradictions state',
     (WidgetTester tester) async {
@@ -61,6 +240,7 @@ void main() {
       );
       expect(coreRequests.map((request) => request.url.path), <String>[
         '/v1/feed',
+        '/v1/mod/session',
         '/v1/contradictions',
       ]);
       expect(
@@ -166,6 +346,7 @@ void main() {
     expect(coreTokens, <String?>[
       'Bearer refreshed-access',
       'Bearer refreshed-access',
+      'Bearer refreshed-access',
     ]);
     expect(find.text('Aún no hay contradicciones publicadas.'), findsOneWidget);
   });
@@ -211,5 +392,11 @@ http.Response _sessionResponse(String access, String refresh, int seconds) =>
 http.Response _emptyPage({int statusCode = 200}) => http.Response(
   jsonEncode(<String, Object?>{'items': <Object?>[], 'next_cursor': null}),
   statusCode,
+  headers: const <String, String>{'content-type': 'application/json'},
+);
+
+http.Response _json(Object? value) => http.Response(
+  jsonEncode(value),
+  200,
   headers: const <String, String>{'content-type': 'application/json'},
 );

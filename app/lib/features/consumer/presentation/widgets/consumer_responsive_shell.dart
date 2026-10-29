@@ -35,6 +35,10 @@ final class ConsumerResponsiveShell extends StatelessWidget {
       .whereType<ConsumerNavigationAction>()
       .toList(growable: false);
 
+  List<Widget> get _utilityActions => navigationActions
+      .where((Widget action) => action is! ConsumerNavigationAction)
+      .toList(growable: false);
+
   @override
   Widget build(BuildContext context) => AnnotatedRegion<SystemUiOverlayStyle>(
     value: const SystemUiOverlayStyle(
@@ -54,7 +58,10 @@ final class ConsumerResponsiveShell extends StatelessWidget {
               children: <Widget>[
                 SizedBox(
                   width: sidebarWidth,
-                  child: _DesktopSidebar(actions: _sections),
+                  child: _DesktopSidebar(
+                    actions: _sections,
+                    utilityActions: _utilityActions,
+                  ),
                 ),
                 Expanded(child: _content(context, wide: true)),
               ],
@@ -68,6 +75,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
             children: <Widget>[
               _MobileHeader(
                 actions: _sections,
+                utilityActions: _utilityActions,
                 location: location,
                 showBack: showBack,
               ),
@@ -129,11 +137,13 @@ final class ConsumerResponsiveShell extends StatelessWidget {
 final class _MobileHeader extends StatelessWidget {
   const _MobileHeader({
     required this.actions,
+    required this.utilityActions,
     required this.showBack,
     this.location,
   });
 
   final List<ConsumerNavigationAction> actions;
+  final List<Widget> utilityActions;
   final String? location;
   final bool showBack;
 
@@ -193,16 +203,21 @@ final class _MobileHeader extends StatelessWidget {
                     ),
                   ),
                   if (location != null && location != 'Dialektik')
-                    Semantics(
-                      label: 'Ubicación actual: $location',
-                      excludeSemantics: true,
-                      child: Text(
-                        location!,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: DialektikColors.correctedCoolGray,
+                    Flexible(
+                      child: Semantics(
+                        label: 'Ubicación actual: $location',
+                        excludeSemantics: true,
+                        child: Text(
+                          location!,
+                          softWrap: true,
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(
+                                color: DialektikColors.correctedCoolGray,
+                              ),
                         ),
                       ),
                     ),
+                  ...utilityActions,
                 ],
               ),
             ),
@@ -244,22 +259,21 @@ final class _MobilePrimaryNavigation extends StatelessWidget {
   final List<ConsumerNavigationAction> secondary;
 
   @override
-  Widget build(BuildContext context) => SingleChildScrollView(
+  Widget build(BuildContext context) => Wrap(
     key: const Key('consumer-primary-navigation-scroll'),
-    scrollDirection: Axis.horizontal,
-    child: Row(
-      children: <Widget>[
-        for (final ConsumerNavigationAction action in primary)
-          _PrimaryTab(action: action),
-        if (secondary.isNotEmpty)
-          _MoreTab(
+    children: <Widget>[
+      for (final ConsumerNavigationAction action in primary)
+        IntrinsicWidth(child: _PrimaryTab(action: action)),
+      if (secondary.isNotEmpty)
+        IntrinsicWidth(
+          child: _MoreTab(
             actions: secondary,
             selected: secondary.any(
               (ConsumerNavigationAction action) => action.selected,
             ),
           ),
-      ],
-    ),
+        ),
+    ],
   );
 }
 
@@ -293,8 +307,8 @@ final class _PrimaryTab extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           action.label,
-          maxLines: 1,
-          softWrap: false,
+          softWrap: true,
+          textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: DialektikColors.inkBlack,
             fontWeight: action.selected ? FontWeight.w500 : FontWeight.w400,
@@ -352,9 +366,10 @@ final class _MoreTab extends StatelessWidget {
 }
 
 final class _DesktopSidebar extends StatelessWidget {
-  const _DesktopSidebar({required this.actions});
+  const _DesktopSidebar({required this.actions, required this.utilityActions});
 
   final List<ConsumerNavigationAction> actions;
+  final List<Widget> utilityActions;
 
   @override
   Widget build(BuildContext context) {
@@ -394,11 +409,22 @@ final class _DesktopSidebar extends StatelessWidget {
                 ),
                 for (final ConsumerNavigationAction action in editorial)
                   _SidebarEntry(action: action),
-                if (secondary.isNotEmpty) ...<Widget>[
+                if (secondary.isNotEmpty ||
+                    utilityActions.isNotEmpty) ...<Widget>[
                   const Spacer(),
                   Divider(color: DialektikColors.nocturneDivider),
                   for (final ConsumerNavigationAction action in secondary)
                     _SidebarEntry(action: action),
+                  if (utilityActions.isNotEmpty)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: IconTheme(
+                        data: const IconThemeData(
+                          color: DialektikColors.nocturneText,
+                        ),
+                        child: Wrap(children: utilityActions),
+                      ),
+                    ),
                 ],
               ],
             ),

@@ -100,6 +100,29 @@ Future<void> _tapAndResolveSources(
 }
 
 void main() {
+  testWidgets('event sources use the public source route in the live reader', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      DialektikApp(
+        environment: AppEnvironment.test,
+        loadInterFromDependency: false,
+        consumerRepository: FakeConsumerRepository(event: pendingEventDetail),
+        liveNewsRepository: liveTestClient(),
+        initialRoute: ConsumerRoutes.event(pendingEventId),
+        locale: const Locale('es'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _tap(tester, find.text('Fuente: Agencia Uno').first);
+    expect(find.text('Agencia Uno'), findsOneWidget);
+    expect(
+      find.text('El servicio de fuentes no está disponible.'),
+      findsNothing,
+    );
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets('Acontecimientos remains the consumer root in personal mode', (
     WidgetTester tester,
   ) async {
@@ -181,7 +204,6 @@ void main() {
         findsOneWidget,
       );
       await _tapAndResolveSources(tester, liveRepository);
-      await _tap(tester, find.byTooltip('Más opciones'));
       await _tap(tester, find.text('Contradicciones'));
       expect(find.text('Contradicciones publicadas'), findsOneWidget);
       await _tap(tester, find.text('Actualidad'));

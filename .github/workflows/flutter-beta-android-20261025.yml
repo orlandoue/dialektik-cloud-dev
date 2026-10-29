@@ -5,6 +5,9 @@ on:
   push:
     branches:
       - codex/flutter-beta-android-20261025
+  pull_request:
+    branches:
+      - codex/flutter-beta-android-20261025
 
 permissions:
   contents: read
@@ -61,14 +64,7 @@ jobs:
       - name: Analyze Dart and assert beta provenance
         run: |
           flutter analyze --no-pub
-          flutter test --no-pub test/private_beta/private_beta_gate_test.dart test/private_beta/supabase_auth_client_test.dart test/live/govuk_preview_test.dart test/consumer/consumer_controller_test.dart
-          flutter test --no-pub test/live/live_news_test.dart --plain-name 'Chile beta display excludes GOV.UK publisher from news and sources'
-          flutter test --no-pub test/live/publisher_market_selection_test.dart
-          flutter test --no-pub test/live/registered_source_directory_test.dart
-          flutter test --no-pub test/live/chile_seismic_observations_test.dart
-          flutter test --no-pub test/live/chile_rss_linked_news_test.dart
-          flutter test --no-pub test/live/chile_rss_links_test.dart
-          flutter test --no-pub test/live/chile_rss_chronology_test.dart
+          flutter test --no-pub --test-randomize-ordering-seed=0 --concurrency=1 test/app test/consumer test/design_system test/live test/private_beta
           dart run tool/check_design_invariants.dart
   apk-debug:
     needs: [core-smoke, dart]

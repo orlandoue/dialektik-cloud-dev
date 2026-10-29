@@ -26,8 +26,8 @@ import 'package:flutter/material.dart';
 // Strict beta source allowlist for Chile, not a general geolocation engine.
 const Set<String> _chileBetaPublisherDomains = <String>{
   'bcentral.cl', 'biobiochile.cl', 'sismologia.cl',
-  'ciperchile.cl', 'cooperativa.cl', 'elmostrador.cl',
-  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl',
+  'ciperchile.cl', 'cooperativa.cl', 'diarioeldia.cl', 'www.diarioeldia.cl', 'elmostrador.cl',
+  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl', 'senapred.cl',
 };
 
 bool isChileBetaPublisher(LiveSourceDto source) =>
@@ -80,6 +80,7 @@ final class LiveNewsScreen extends StatefulWidget {
 final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   Future<GovUkPreview>? _govUkPreviewFuture;
   final TextEditingController _query = TextEditingController();
+  final ScrollController _countryScroll = ScrollController();
   PublicRequestToken? _newsToken;
   PublicRequestToken? _sourceToken;
   Timer? _debounce;
@@ -117,6 +118,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     _sourceToken?.cancel();
     _debounce?.cancel();
     _query.dispose();
+    _countryScroll.dispose();
     super.dispose();
   }
 
@@ -326,54 +328,75 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             child: Text('País', style: Theme.of(context).textTheme.titleMedium),
           ),
           const SizedBox(height: DialektikSpacing.space2),
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              children: <Widget>[
-                for (final (String code, String label) in const <(String, String)>[
-                  ('CL', 'Chile'), ('PE', 'Perú'), ('AR', 'Argentina'),
-                  ('CO', 'Colombia'), ('MX', 'México'), ('ES', 'España'),
-                ]) ...<Widget>[
-                  ChoiceChip(
-                    key: Key('live-country-$code'),
-                    label: Text(label),
-                    selected: _selectedCountry == code,
-                    onSelected: (_) => _chooseCountry(code),
-                  ),
-                  const SizedBox(width: DialektikSpacing.space2),
-                ],
-                ActionChip(
-                  label: const Text('Más países'),
-                  onPressed: () => showModalBottomSheet<void>(
-                    context: context,
-                    showDragHandle: true,
-                    builder: (BuildContext modalContext) => SafeArea(
-                      child: ListView(
-                        shrinkWrap: true,
-                        children: <Widget>[
-                          const ListTile(title: Text('Explorar países')),
-                          for (final (String code, String name) in const <(String, String)>[
-                            ('BO', 'Bolivia'), ('BR', 'Brasil'), ('CR', 'Costa Rica'),
-                            ('CU', 'Cuba'), ('DO', 'República Dominicana'),
-                            ('EC', 'Ecuador'), ('GT', 'Guatemala'),
-                            ('HN', 'Honduras'), ('NI', 'Nicaragua'),
-                            ('PA', 'Panamá'), ('PY', 'Paraguay'),
-                            ('SV', 'El Salvador'), ('UY', 'Uruguay'),
-                            ('VE', 'Venezuela'),
-                          ])
-                            ListTile(
-                              title: Text(name),
-                              onTap: () {
-                                Navigator.pop(modalContext);
-                                _chooseCountry(code);
-                              },
-                            ),
-                        ],
+          Scrollbar(
+            controller: _countryScroll,
+            thumbVisibility: true,
+            notificationPredicate: (notification) => notification.depth == 0,
+            child: SingleChildScrollView(
+              key: const Key('live-country-scroll'),
+              controller: _countryScroll,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(bottom: DialektikSpacing.space3),
+              child: Row(
+                children: <Widget>[
+                  for (final (String code, String label)
+                      in const <(String, String)>[
+                        ('CL', 'Chile'),
+                        ('PE', 'Perú'),
+                        ('AR', 'Argentina'),
+                        ('CO', 'Colombia'),
+                        ('MX', 'México'),
+                        ('ES', 'España'),
+                      ]) ...<Widget>[
+                    ChoiceChip(
+                      key: Key('live-country-$code'),
+                      label: Text(label),
+                      selected: _selectedCountry == code,
+                      onSelected: (_) => _chooseCountry(code),
+                    ),
+                    const SizedBox(width: DialektikSpacing.space2),
+                  ],
+                  ActionChip(
+                    label: const Text('Más países'),
+                    onPressed: () => showModalBottomSheet<void>(
+                      context: context,
+                      showDragHandle: true,
+                      builder: (BuildContext modalContext) => SafeArea(
+                        child: ListView(
+                          shrinkWrap: true,
+                          children: <Widget>[
+                            const ListTile(title: Text('Explorar países')),
+                            for (final (String code, String name)
+                                in const <(String, String)>[
+                                  ('BO', 'Bolivia'),
+                                  ('BR', 'Brasil'),
+                                  ('CR', 'Costa Rica'),
+                                  ('CU', 'Cuba'),
+                                  ('DO', 'República Dominicana'),
+                                  ('EC', 'Ecuador'),
+                                  ('GT', 'Guatemala'),
+                                  ('HN', 'Honduras'),
+                                  ('NI', 'Nicaragua'),
+                                  ('PA', 'Panamá'),
+                                  ('PY', 'Paraguay'),
+                                  ('SV', 'El Salvador'),
+                                  ('UY', 'Uruguay'),
+                                  ('VE', 'Venezuela'),
+                                ])
+                              ListTile(
+                                title: Text(name),
+                                onTap: () {
+                                  Navigator.pop(modalContext);
+                                  _chooseCountry(code);
+                                },
+                              ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
           if (_selectedCountry != 'CL') ...<Widget>[
@@ -889,7 +912,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
         SectionHeading(title: 'Registradas en revisión · ${_registered.length}'),
         const SizedBox(height: DialektikSpacing.space2),
         const Text(
-          'Estas fuentes constan en el registro técnico, pero aún no tienen autorización ni procedencia acreditadas. No se adquieren noticias por mostrarlas aquí.',
+          'Este registro técnico no verifica autorizaciones ni procedencia. Las fuentes operativas se muestran en la sección anterior.',
         ),
         const SizedBox(height: DialektikSpacing.space3),
         if (_registeredLoading)
@@ -915,7 +938,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
                       const SizedBox(height: DialektikSpacing.space1),
                       Text(source.canonicalDomain),
                       const SizedBox(height: DialektikSpacing.space1),
-                      Text('${source.stagedRecordCount} registros sin verificar · Permisos pendientes'),
+                      Text('${source.stagedRecordCount} registros · Verificación independiente pendiente'),
                     ],
                   ),
                 ),
@@ -925,7 +948,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
         SectionHeading(title: 'Candidatas · ${_candidates.length}'),
         const SizedBox(height: DialektikSpacing.space2),
         const Text(
-          'Este catálogo conserva los 50 medios revisados. Son propuestas de conexión: no se consultan ni se adquieren noticias y sus permisos siguen sin acreditar.',
+          'Este catálogo conserva la revisión histórica de 50 medios. Sus datos no reflejan necesariamente el estado actual de las fuentes operativas y no activan la adquisición de noticias.',
         ),
         const SizedBox(height: DialektikSpacing.space4),
         TextField(
@@ -974,7 +997,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
                   candidate.technicalState,
                 ),
                 LiveDetailLine(
-                  'Revalidación técnica actual',
+                  'Revalidación técnica registrada',
                   candidate.currentTechnicalState == 'NOT_RECHECKED'
                       ? 'Pendiente'
                       : candidate.currentTechnicalState,
@@ -1011,6 +1034,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
               ],
             ),
         ],
+        const SizedBox(height: DialektikSpacing.space8),
       ],
     ),
   );
