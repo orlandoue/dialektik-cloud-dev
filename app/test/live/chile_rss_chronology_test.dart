@@ -11,7 +11,9 @@ Map<String,Object?> item(String source,String slug,String time) {
     : 'https://www.cooperativa.cl/noticias/pais/$slug';
   return <String,Object?>{
     'item_key':'$source:$url','source_id':source,'publisher':publisher,
-    'title':'Titular de prueba verificado $slug',
+    'title':slug == 'older'
+        ? 'Natalia Valdebenito: &#34;El sueldo debiera ser más alto&#34; para ir a Viña'
+        : 'Titular de prueba verificado $slug',
     'original_url':url,'published_at':time,
     'content_kind':'PUBLISHER_RSS_TITLE_AND_DEEP_LINK',
   };
@@ -47,6 +49,8 @@ void main(){
     expect(data.sources.length,2);
     expect(data.items.first.publisher,'Cooperativa.cl');
     expect(data.items.last.publisher,'Diario El Día');
+    expect(data.items.last.title,
+        'Natalia Valdebenito: "El sueldo debiera ser más alto" para ir a Viña');
     expect(data.items.first.publishedAt.isAfter(data.items.last.publishedAt),isTrue);
   });
   test('forged URL, order, or semantic publication assertions fail closed',(){
@@ -72,7 +76,8 @@ void main(){
     ));
     await tester.pumpAndSettle();
     expect(find.text('Noticias RSS · Chile'),findsOneWidget);
-    expect(find.textContaining('Titular de prueba verificado'),findsNWidgets(2));
+    expect(find.textContaining('Titular de prueba verificado'),findsOneWidget);
+    expect(find.text('Natalia Valdebenito: "El sueldo debiera ser más alto" para ir a Viña'),findsOneWidget);
     expect(find.textContaining('Cooperativa.cl ·'),findsOneWidget);
     expect(find.textContaining('Diario El Día ·'),findsOneWidget);
     expect(find.text('Leer en medio original'),findsNWidgets(2));

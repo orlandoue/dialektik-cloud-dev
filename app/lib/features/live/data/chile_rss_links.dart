@@ -1,3 +1,4 @@
+import 'package:dialektik/features/live/data/html_entities.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 
 /// Direct links from a publisher RSS, never persisted newsroom Articles.
@@ -58,7 +59,7 @@ final class ChileRssLink {
     if(!RegExp(r'^[0-9a-f]{64}$').hasMatch(id)){
       throw const FormatException('Invalid RSS link identity.');
     }
-    final String title=liveString(d,'headline');
+    final String title=decodeHeadlineHtmlEntities(liveString(d,'headline'));
     if(title.length>230)throw const FormatException('Overlong title.');
     final Uri uri=liveHttpUri(d,'canonical_url');
     if(uri.scheme!='https'||uri.host!='www.cooperativa.cl'||

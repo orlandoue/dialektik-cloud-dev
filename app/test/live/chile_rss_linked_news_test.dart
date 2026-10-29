@@ -8,7 +8,9 @@ Map<String,Object?> headline(String suffix)=> <String,Object?>{
   'id':'https://www.diarioeldia.cl/noticias/2026/10/26/$suffix',
   'publisher':'Diario El Día',
   'publisher_domain':'diarioeldia.cl',
-  'headline':'Titular real de muestra original $suffix',
+  'headline':suffix == 'uno'
+      ? 'Natalia Valdebenito: &#34;El sueldo debiera ser más alto&#34; para ir a Viña'
+      : 'Titular real de muestra original $suffix',
   'original_url':'https://www.diarioeldia.cl/noticias/2026/10/26/$suffix',
   'published_at':'2026-10-26T20:00:00.000Z',
   'media_category':'NEWS_LINKS_NOT_INGESTED_ARTICLES',
@@ -41,6 +43,8 @@ void main(){
     expect(data.items.length,2);
     expect(data.items.first.publisher,'Diario El Día');
     expect(data.items.first.originalUrl.host,'www.diarioeldia.cl');
+    expect(data.items.first.headline,
+        'Natalia Valdebenito: "El sueldo debiera ser más alto" para ir a Viña');
   });
   test('spoofed URL, fake license or inference flag fails closed',(){
     final d=response();
@@ -63,7 +67,8 @@ void main(){
     ));
     await tester.pumpAndSettle();
     expect(find.text('Titulares RSS · Chile'),findsOneWidget);
-    expect(find.textContaining('Titular real de muestra original'),findsNWidgets(2));
+    expect(find.text('Natalia Valdebenito: "El sueldo debiera ser más alto" para ir a Viña'),findsOneWidget);
+    expect(find.textContaining('Titular real de muestra original'),findsOneWidget);
     expect(find.text('Leer en el medio original'),findsNWidgets(2));
     expect(find.textContaining('no incorporada ni analizada'),findsOneWidget);
   });

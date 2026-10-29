@@ -1,3 +1,5 @@
+import 'package:dialektik/features/live/data/html_entities.dart';
+
 /// Development-only live read contracts. No semantic relation is inferred.
 final class LiveSourceDto {
   const LiveSourceDto({
@@ -55,7 +57,7 @@ final class LiveNewsItemDto {
     }
     return LiveNewsItemDto(
       id: liveString(data, 'id'),
-      headline: liveString(data, 'headline'),
+      headline: decodeHeadlineHtmlEntities(liveString(data, 'headline')),
       excerpt: liveOptionalString(data, 'excerpt'),
       canonicalUrl: liveHttpUri(data, 'canonical_url'),
       publishedAt: liveDate(data, 'published_at'),
