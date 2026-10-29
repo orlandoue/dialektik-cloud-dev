@@ -6,6 +6,10 @@ import { CoreDatabaseService } from '../database/core-database.service.js';
 import { ModerationAuthService, type ModerationIdentity } from './moderation-auth.service.js';
 import { ModerationDatabaseService } from './moderation-database.service.js';
 import { ModerationHttpError } from './moderation-http.error.js';
+import {
+  calibrateContextRelation,
+  type ContextRelation,
+} from '../semantic/headline-context-pairs.js';
 
 type Decision = 'ACCEPT_FOR_GROUPING' | 'NEEDS_EVIDENCE' | 'REJECT';
 const DECISIONS: readonly Decision[] = ['ACCEPT_FOR_GROUPING', 'NEEDS_EVIDENCE', 'REJECT'];
@@ -39,6 +43,155 @@ export class HeadlineReviewService {
     );
     if (result.rows[0]?.allowed !== true) throw new ModerationHttpError(403, 'MOD_FORBIDDEN');
     return identity;
+  }
+
+  async authorizeContextEditor(authorization: string | undefined): Promise<ModerationIdentity> {
+    if (process.env.DIALEKTIK_CONTEXT_PAIR_ENABLED !== 'true') throw new NotFoundException();
+    return this.authorizeEditor(authorization);
+  }
+
+  async listContextPairs(authorization: string | undefined) {
+    const identity = await this.authorizeContextEditor(authorization);
+    const result = await sql<{
+      attemptId: Ulid;
+      relation: ContextRelation;
+      modelRelation: ContextRelation | null;
+      leftTitle: string;
+      leftSource: string;
+      leftUrl: string;
+      leftPublishedAt: Date;
+      rightTitle: string;
+      rightSource: string;
+      rightUrl: string;
+      rightPublishedAt: Date;
+      reviewDecision: string | null;
+    }>`select a.id as "attemptId",o.relation,o.model_relation as "modelRelation",lv.headline as "leftTitle",ls.name as "leftSource",
+        la.url_canonical as "leftUrl",lv.published_at as "leftPublishedAt",
+        rv.headline as "rightTitle",rs.name as "rightSource",ra.url_canonical as "rightUrl",
+        rv.published_at as "rightPublishedAt",d.decision as "reviewDecision"
+      from public.headline_context_pair_attempts a
+      join public.headline_context_pair_outcomes o on o.attempt_id=a.id and o.outcome='VALIDATED' and o.relation<>'UNRELATED'
+      join public.articles la on la.id=a.left_article_id join public.sources ls on ls.id=la.source_id
+      join public.live_article_versions lv on lv.id=a.left_version_id
+      join public.articles ra on ra.id=a.right_article_id join public.sources rs on rs.id=ra.source_id
+      join public.live_article_versions rv on rv.id=a.right_version_id
+      left join public.headline_context_pair_decisions d on d.attempt_id=a.id
+      where public.dialektik_context_title_authorized(a.left_article_id,a.left_version_id,a.left_grant_id,a.left_title_sha256,${identity.userId})
+        and public.dialektik_context_title_authorized(a.right_article_id,a.right_version_id,a.right_grant_id,a.right_title_sha256,${identity.userId})
+        and (d.decision is null or d.decision in ('KEEP_FOR_REVIEW','NEEDS_EVIDENCE'))
+        and (d.decision is not null or not exists(
+          select 1 from public.headline_context_pair_attempts newer
+          join public.headline_context_pair_outcomes newer_outcome on newer_outcome.attempt_id=newer.id and newer_outcome.outcome='VALIDATED'
+          where newer.left_version_id=a.left_version_id and newer.right_version_id=a.right_version_id
+            and newer.left_grant_id=a.left_grant_id and newer.right_grant_id=a.right_grant_id
+            and (newer.created_at,newer.id)>(a.created_at,a.id)))
+      order by a.created_at desc,a.id desc limit 50`.execute(this.reader.database);
+    return result.rows.map((row) => ({
+      attemptId: row.attemptId,
+      relation: calibrateContextRelation(row.relation, row.leftTitle, row.rightTitle),
+      modelRelation: row.modelRelation ?? row.relation,
+      reviewDecision: row.reviewDecision,
+      left: {
+        title: row.leftTitle,
+        sourceName: row.leftSource,
+        url: row.leftUrl,
+        publishedAt: row.leftPublishedAt.toISOString(),
+      },
+      right: {
+        title: row.rightTitle,
+        sourceName: row.rightSource,
+        url: row.rightUrl,
+        publishedAt: row.rightPublishedAt.toISOString(),
+      },
+    }));
+  }
+
+  async decideContextPair(
+    authorization: string | undefined,
+    attemptValue: unknown,
+    commandValue: unknown,
+    raw: unknown,
+  ) {
+    const identity = await this.authorizeContextEditor(authorization);
+    const attemptId = identityId(attemptValue),
+      commandId = identityId(commandValue);
+    if (
+      raw === null ||
+      typeof raw !== 'object' ||
+      Array.isArray(raw) ||
+      Object.keys(raw).length !== 1 ||
+      !('decision' in raw) ||
+      typeof raw.decision !== 'string' ||
+      !['KEEP_FOR_REVIEW', 'NEEDS_EVIDENCE', 'DISMISS'].includes(raw.decision)
+    )
+      throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
+    const decision = raw.decision;
+    const writer = this.writer.database;
+    try {
+      return await writer
+        .transaction()
+        .setIsolationLevel('serializable')
+        .execute(async (tx) => {
+          await this.recheck(tx, identity);
+          await sql`select set_config('dialektik.actor_id',${identity.userId},true),
+          set_config('dialektik.actor_type','editor',true)`.execute(tx);
+          if (decision === 'KEEP_FOR_REVIEW') {
+            const context = await sql<{
+              relation: ContextRelation;
+              leftTitle: string;
+              rightTitle: string;
+            }>`
+              select o.relation,lv.headline as "leftTitle",rv.headline as "rightTitle"
+              from public.headline_context_pair_attempts a
+              join public.headline_context_pair_outcomes o on o.attempt_id=a.id and o.outcome='VALIDATED'
+              join public.live_article_versions lv on lv.id=a.left_version_id
+              join public.live_article_versions rv on rv.id=a.right_version_id
+              where a.id=${attemptId}`.execute(tx);
+            const row = context.rows[0];
+            if (
+              !row ||
+              !['POSSIBLY_SAME_EVENT', 'POSSIBLY_SAME_THREAD'].includes(
+                calibrateContextRelation(row.relation, row.leftTitle, row.rightTitle),
+              )
+            )
+              throw new ModerationHttpError(409, 'MOD_STALE_CONTEXT');
+          }
+          const inserted = await sql<{ id: Ulid; attemptId: Ulid; decision: string }>`
+          insert into public.headline_context_pair_decisions(id,attempt_id,reviewed_by,decision,decided_at)
+          values (${commandId},${attemptId},${identity.userId},${decision},date_trunc('milliseconds',clock_timestamp()))
+          on conflict do nothing returning id,attempt_id as "attemptId",decision`.execute(tx);
+          if (inserted.rows[0]) return inserted.rows[0];
+          const prior = await sql<{
+            id: Ulid;
+            attemptId: Ulid;
+            reviewedBy: Ulid;
+            decision: string;
+          }>`
+          select id,attempt_id as "attemptId",reviewed_by as "reviewedBy",decision
+          from public.headline_context_pair_decisions where id=${commandId} or attempt_id=${attemptId} limit 1`.execute(
+            tx,
+          );
+          const row = prior.rows[0];
+          if (
+            row?.id === commandId &&
+            row.attemptId === attemptId &&
+            row.reviewedBy === identity.userId &&
+            row.decision === decision
+          )
+            return { id: row.id, attemptId: row.attemptId, decision: row.decision };
+          throw new ModerationHttpError(409, 'MOD_IDEMPOTENCY_CONFLICT');
+        });
+    } catch (error) {
+      if (error instanceof ModerationHttpError) throw error;
+      const code =
+        typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
+      if (
+        typeof code === 'string' &&
+        ['23503', '23505', '23514', '40001', 'P0001', 'P0002'].includes(code)
+      )
+        throw new ModerationHttpError(409, 'MOD_STALE_CONTEXT');
+      throw error;
+    }
   }
 
   async list(authorization: string | undefined) {

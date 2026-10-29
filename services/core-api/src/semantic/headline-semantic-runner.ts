@@ -90,7 +90,7 @@ export interface HeadlineSemanticResult {
 const ULID = /^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u;
 const HASH = /^[a-f0-9]{64}$/u;
 
-function validateInput(input: HeadlineSemanticInput): void {
+export function validateHeadlineInput(input: HeadlineSemanticInput): void {
   if (
     !ULID.test(input.articleId) ||
     !ULID.test(input.versionId) ||
@@ -125,7 +125,7 @@ function validateInput(input: HeadlineSemanticInput): void {
   }
 }
 
-function validateGrant(
+export function validateHeadlineGrant(
   input: HeadlineSemanticInput,
   grant: HeadlineSemanticGrant | null,
   now: Date,
@@ -171,12 +171,12 @@ export async function analyzeHeadlineForReview(
   signal: AbortSignal,
   now: () => Date = () => new Date(),
 ): Promise<HeadlineSemanticResult> {
-  validateInput(input);
+  validateHeadlineInput(input);
   if (transport.kind !== 'external' || transport.providerType !== 'llm_cloudflare_workers_ai')
     throw new Error('HEADLINE_PROVIDER_INVALID');
   if (signal.aborted) throw new Error('HEADLINE_ABORTED');
   return hooks.withRightsLease(input, signal, async () => {
-    validateGrant(input, await hooks.currentGrant(input), now());
+    validateHeadlineGrant(input, await hooks.currentGrant(input), now());
     const titleHash = sha256(input.headline);
     const attemptId = await hooks.reserveAttempt(input, titleHash);
     if (!ULID.test(attemptId)) throw new Error('HEADLINE_ATTEMPT_INVALID');
@@ -193,7 +193,7 @@ export async function analyzeHeadlineForReview(
       );
       if (signal.aborted) throw new Error('HEADLINE_ABORTED');
       try {
-        validateGrant(input, await hooks.currentGrant(input), now());
+        validateHeadlineGrant(input, await hooks.currentGrant(input), now());
       } catch {
         await hooks.finishAttempt(attemptId, 'RIGHTS_REVOKED');
         recorded = true;
