@@ -64,6 +64,25 @@ const entities: Readonly<Record<string, string>> = {
   rdquo: '”',
 };
 
+const EXCERPT_MAX_CHARACTERS = 700;
+
+function excerptKey(value: string): string {
+  return value
+    .normalize('NFKC')
+    .toLocaleLowerCase('es-CL')
+    .replace(/[.!?…]+$/u, '')
+    .trim();
+}
+
+function boundedFeedExcerpt(value: string | null, headline: string | null): string | null {
+  if (value === null || headline === null || excerptKey(value) === excerptKey(headline)) return null;
+  const characters = Array.from(value);
+  if (characters.length <= EXCERPT_MAX_CHARACTERS) return value;
+  const bounded = characters.slice(0, EXCERPT_MAX_CHARACTERS).join('');
+  const lastWordBoundary = bounded.lastIndexOf(' ');
+  return (lastWordBoundary >= 500 ? bounded.slice(0, lastWordBoundary) : bounded).trim();
+}
+
 export function cleanLiveText(input: string | null): string | null {
   if (input === null) return null;
   const clean = decodeCommonHtmlEntities(input)
@@ -182,7 +201,16 @@ function itemFromEntry(
       // An absent or malformed item declaration stays undetermined.
     }
   }
-  const rawExcerpt = textValue(atom ? item.summary : item.description);
+  const summary = cleanLiveText(textValue(atom ? item.summary : item.description));
+  const encodedContent = cleanLiveText(
+    textValue(atom ? (item.content ?? namespacedValue(item, 'content')) : namespacedValue(item, 'encoded')),
+  );
+  const rawExcerpt = boundedFeedExcerpt(
+    summary !== null && headline !== null && excerptKey(summary) !== excerptKey(headline)
+      ? summary
+      : encodedContent,
+    headline,
+  );
   const declaredRights = textValue(item.rights ?? item.copyright ?? item['dc:rights']);
   const declaredUpstream = cleanLiveText(textValue(item['dc:source'] ?? item.source));
   const decodedRights = [
@@ -218,10 +246,7 @@ function itemFromEntry(
     discoveredUrl,
     canonicalUrl,
     headline,
-    excerpt:
-      policy.storagePolicy === 'METADATA_AND_FEED_EXCERPT' && !thirdParty
-        ? cleanLiveText(rawExcerpt)
-        : null,
+    excerpt: policy.storagePolicy === 'METADATA_AND_FEED_EXCERPT' && !thirdParty ? rawExcerpt : null,
     author: cleanLiveText(
       textValue(atom ? record(item.author).name : (item.author ?? item['dc:creator'])),
     ),
