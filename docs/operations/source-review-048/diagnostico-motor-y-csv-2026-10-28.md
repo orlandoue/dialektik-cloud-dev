@@ -1,13 +1,15 @@
 # Diagnóstico del motor y del CSV de publicaciones originales
 
-Revisión realizada el 28 de octubre de 2026. Las consultas a Supabase fueron de
-solo lectura. Los sitios se consultaron mediante HEAD y metadatos del encabezado
-HTML; no se descargaron cuerpos de artículos para el análisis semántico.
+La inspección de las fuentes y los textos se realizó mediante consultas de solo
+lectura, HEAD y metadatos del encabezado HTML. Posteriormente se ejecutó el
+primer lote de adquisición, descrito abajo. No se descargaron páginas de
+artículos ni se enviaron cuerpos a un proveedor de IA.
 
 ## Inventario y ejecución
 
-- Hay 11 fuentes chilenas y 2 británicas; los 19 artículos `LIVE_REAL` guardados
-  siguen sin vincular a acontecimientos. Hay seis eventos en la base, que son
+- Hay 11 fuentes chilenas y 2 británicas en el registro. Los 19 artículos
+  anteriores siguen intactos y se añadieron 72 artículos `LIVE_REAL` a partir
+  de los RSS. Los 91 siguen sin vincular a acontecimientos. Hay seis eventos en la base, que son
   registros históricos o borradores, no eventos agrupados por una ejecución
   reciente del motor.
 - Las tablas tienen cero `claim_spans`, cero `assertions`, cero `evidence` y
@@ -28,6 +30,12 @@ HTML; no se descargaron cuerpos de artículos para el análisis semántico.
   política de contenido y un proveedor configurado. `METADATA_ONLY` no habilita
   por sí solo la transmisión de fragmentos a un proveedor externo. No se deben
   desactivar las comprobaciones para aparentar una ejecución.
+- La ruta experimental de solo titulares en `llm.title-only-projection.ts`
+  fija actualmente un único `sourceId`, `articleId` y `articleVersionId` en
+  `assertContext`; no admite estos 72 artículos. Sus resultados se registran
+  como propuestas de sombra, no como afirmaciones o contradicciones publicadas.
+  Hace falta una entrada generalizada con autorización por fuente y una vía de
+  revisión editorial que conecte propuestas verificadas con la publicación.
 - El registro de políticas en `live.sync.ts` no incluye actualmente los campos
   `rightsReviewStatus` y `authorizationReference` que exige la lectura pública.
   Un puente de ingesta deberá transportar la decisión vigente verificable a la
@@ -37,10 +45,13 @@ HTML; no se descargaron cuerpos de artículos para el análisis semántico.
 ## Diagnóstico del RSS sin persistencia
 
 Se consultaron los feeds después de comprobar sus instrucciones `robots.txt` y
-se pasaron por el adaptador Core con `METADATA_ONLY`, sin almacenar artículos
-ni extractos. Los resultados de esta muestra fueron: CIPER 16 titulares,
-Cooperativa 15, Diario El Día 200 y La Tercera 100. No son artículos nuevos
-guardados ni ejecuciones del motor semántico.
+se pasaron por el adaptador Core con `METADATA_ONLY`. Los resultados de esta
+muestra fueron: CIPER 16 titulares, Cooperativa 15, Diario El Día 200 y La
+Tercera 100. Después se guardaron 12 titulares recientes por cada fuente, y
+una segunda ejecución añadió 12 de Cooperativa y 12 de La Tercera al actualizar
+sus feeds. Todos tienen recibos y carecen de extractos o cuerpos. La API
+autenticada devuelve las 72 noticias y las cuatro fuentes. Son lotes puntuales:
+todavía no hay una programación de ingestas ni una ejecución del motor semántico.
 
 El feed de La Tercera exponía un fallo en el control de profundidad XML: el
 contador interpretaba como etiquetas XML los fragmentos HTML incluidos en
@@ -92,9 +103,11 @@ revisarse de nuevo antes de considerarlo permanente.
 El registro de Diario El Día `01M4YDQK000000000000000305` contiene un titular
 sobre una desaladora de 2026. Su URL devuelve un encabezado canónico para una
 noticia distinta: «65 años de historia en La Serena: los motivos del cierre de
-la Estrella Alpina», de 2025. El cambio de Core permite registrar una cuarentena
-por artículo en una versión nueva de la política de la fuente sin borrar ni
-editar las 19 noticias, sus recibos, restricciones o triggers. La última
+la Estrella Alpina», de 2025. Se registró una cuarentena para este artículo,
+tres artículos históricos de CIPER, dos de Cooperativa y uno de La Tercera,
+pendientes de reconciliar sus URL, titulares o fechas. Estas decisiones se
+añadieron en nuevas versiones de las políticas sin borrar ni editar las 19
+noticias anteriores, sus recibos, restricciones o triggers. La última
 decisión explícita `quarantinedArticleIds` se mantiene aunque otra versión de
 política omita ese campo; una nueva lista vacía revierte la cuarentena. Un
 valor de tipo distinto de lista cierra la lectura de esa fuente.

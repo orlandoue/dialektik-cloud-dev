@@ -3,6 +3,8 @@
 Consulta de solo lectura realizada el 28 de octubre de 2026. El propósito es
 contrastar las instrucciones de cierre con el esquema y los datos existentes,
 sin modificar restricciones, triggers, políticas RLS ni registros históricos.
+Este inventario describe el estado anterior al primer lote real de RSS. El
+resultado posterior figura en [el diagnóstico actualizado](diagnostico-motor-y-csv-2026-10-28.md).
 
 ## Inventario
 
