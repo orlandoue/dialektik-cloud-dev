@@ -286,7 +286,7 @@ export class HeadlineReviewService {
             const result = await sql<{
               grantId: Ulid;
             }>`update public.headline_ai_source_grants
-            set revoked_at=clock_timestamp() where source_id=${sourceId} and approved_by=${identity.userId}
+            set revoked_at=date_trunc('milliseconds',clock_timestamp()) where source_id=${sourceId} and approved_by=${identity.userId}
               and revoked_at is null returning id as "grantId"`.execute(tx);
             if (!result.rows[0]) throw new ModerationHttpError(409, 'MOD_STALE_CONTEXT');
             return { sourceId, enabled: false };
@@ -298,7 +298,7 @@ export class HeadlineReviewService {
             provider,scope,derived_scope,valid_from,expires_at,revoked_at,created_at)
           select ${commandId},s.id,p.id,${identity.userId},p.policy->>'authorizationReference',
             p.policy->>'rightsEvidenceUrl','CLOUDFLARE_WORKERS_AI','HEADLINE_ONLY','EDITORIAL_REVIEW_ONLY',
-            clock_timestamp(),null,null,clock_timestamp()
+            date_trunc('milliseconds',clock_timestamp()),null,null,date_trunc('milliseconds',clock_timestamp())
           from public.sources s join public.live_source_policies p on p.source_id=s.id and p.id=(
             select id from public.live_source_policies where source_id=s.id order by recorded_at desc,id desc limit 1)
           where s.id=${sourceId} and s.origin='LIVE_REAL' and p.active and p.rights_class='LIVE_READY'
@@ -365,7 +365,7 @@ export class HeadlineReviewService {
             decision: Decision;
           }>`
           insert into public.headline_ai_review_decisions(id,attempt_id,reviewed_by,decision,decided_at)
-          values (${commandId},${attemptId},${identity.userId},${decision},clock_timestamp())
+          values (${commandId},${attemptId},${identity.userId},${decision},date_trunc('milliseconds',clock_timestamp()))
           on conflict do nothing returning id,attempt_id as "attemptId",decision`.execute(tx);
           if (inserted.rows[0]) return inserted.rows[0];
           const prior = await sql<{

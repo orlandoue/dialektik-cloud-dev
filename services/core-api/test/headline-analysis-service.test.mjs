@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Kysely, PostgresDialect } from 'kysely';
-import { HeadlineAnalysisService } from '../dist/semantic/headline-analysis.service.js';
+import {
+  HeadlineAnalysisService,
+  headlineFailureDiagnostic,
+  headlineFailureResponseCode,
+} from '../dist/semantic/headline-analysis.service.js';
+import { CloudflareResponseFailure } from '../dist/llm-shadow/llm.cloudflare.js';
 import { HeadlineReviewService } from '../dist/moderation/headline-review.service.js';
 
 const editor = '01M4YDQK00ED1T0R0R1AND0VE1';
@@ -29,6 +34,48 @@ const grant = {
   validFrom: new Date('2020-01-01T00:00:00Z'),
   expiresAt: null,
 };
+
+test('failure diagnostics retain only fixed codes and never the message or model text', () => {
+  assert.deepEqual(headlineFailureDiagnostic(new Error('LLM_RATE_LIMIT')), {
+    code: 'LLM_RATE_LIMIT',
+    category: 'NONE',
+    databaseCode: 'NONE',
+  });
+  assert.deepEqual(headlineFailureDiagnostic(new Error('private title and token')), {
+    code: 'INTERNAL',
+    category: 'NONE',
+    databaseCode: 'NONE',
+  });
+  assert.deepEqual(
+    headlineFailureDiagnostic(
+      new CloudflareResponseFailure('LLM_RESPONSE_INVALID', {
+        diagnosticCategory: 'ASSISTANT_CONTENT_NON_JSON',
+      }),
+    ),
+    {
+      code: 'LLM_RESPONSE_INVALID',
+      category: 'ASSISTANT_CONTENT_NON_JSON',
+      databaseCode: 'NONE',
+    },
+  );
+  assert.deepEqual(headlineFailureDiagnostic({ code: '23514', detail: 'private content' }), {
+    code: 'INTERNAL',
+    category: 'NONE',
+    databaseCode: '23514',
+  });
+  assert.equal(
+    headlineFailureResponseCode(headlineFailureDiagnostic(new Error('LLM_RATE_LIMIT'))),
+    'MOD_HEADLINE_RATE_LIMIT',
+  );
+  assert.equal(
+    headlineFailureResponseCode(headlineFailureDiagnostic(new Error('private content'))),
+    'MOD_HEADLINE_INTERNAL_FAILURE',
+  );
+  assert.equal(
+    headlineFailureResponseCode(headlineFailureDiagnostic({ code: 'P0001' })),
+    'MOD_HEADLINE_DATABASE_TRIGGER_REJECTED',
+  );
+});
 function fixture({ allowed = true, eligible = true, role = 'editor' } = {}) {
   const queries = [];
   const pool = {
@@ -168,6 +215,51 @@ test('selects server-side metadata and records a validated result without sendin
     assert.ok(
       statements.findIndex((sql) => sql.includes('headline_ai_attempts')) <
         statements.findIndex((sql) => sql.includes('headline_ai_attempt_outcomes')),
+    );
+  } finally {
+    for (const [key, value] of [
+      ['DIALEKTIK_HEADLINE_REVIEW_ENABLED', saved.enabled],
+      ['CLOUDFLARE_API_TOKEN', saved.token],
+      ['CLOUDFLARE_ACCOUNT_ID', saved.account],
+    ]) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+    globalThis.fetch = saved.fetch;
+    await h.db.destroy();
+  }
+});
+
+test('returns a safe provider failure category after recording an unknown dispatched attempt', async () => {
+  const saved = {
+    enabled: process.env.DIALEKTIK_HEADLINE_REVIEW_ENABLED,
+    token: process.env.CLOUDFLARE_API_TOKEN,
+    account: process.env.CLOUDFLARE_ACCOUNT_ID,
+    fetch: globalThis.fetch,
+  };
+  const h = fixture();
+  let sent = 0;
+  try {
+    process.env.DIALEKTIK_HEADLINE_REVIEW_ENABLED = 'true';
+    process.env.CLOUDFLARE_API_TOKEN = 'test-token';
+    process.env.CLOUDFLARE_ACCOUNT_ID = 'a'.repeat(32);
+    globalThis.fetch = async () => {
+      sent += 1;
+      return new Response(JSON.stringify({ errors: [{ message: 'private provider details' }] }), {
+        status: 503,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+    await assert.rejects(h.analysis.analyzeNext('Bearer fixture', {}), (error) => {
+      assert.equal(error.getStatus(), 503);
+      assert.deepEqual(error.getResponse(), { code: 'MOD_HEADLINE_PROVIDER_FAILED' });
+      return true;
+    });
+    assert.equal(sent, 1);
+    assert.ok(
+      h.queries.some(
+        (q) => q.text.includes('headline_ai_attempt_outcomes') && q.values.includes('UNKNOWN_SENT'),
+      ),
     );
   } finally {
     for (const [key, value] of [
