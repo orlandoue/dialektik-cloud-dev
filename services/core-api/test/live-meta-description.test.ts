@@ -36,6 +36,28 @@ describe("live page metadata fallback", () => {
     expect(requests).toEqual(["https://meta-robots-denied.test/robots.txt"]);
   });
 
+  it("parses an early metadata description from a larger page without reading its body", async () => {
+    const fetched: string[] = [];
+    const fakeFetch = (async (input: string | URL | Request) => {
+      const url = String(input);
+      fetched.push(url);
+      if (url.endsWith("/robots.txt"))
+        return new Response("User-agent: *\nAllow: /\n", { status: 200 });
+      return new Response(
+        `<html><head><meta name="description" content="Early summary"></head><body>${"x".repeat(140 * 1024)}`,
+        { status: 200, headers: { "content-type": "text/html" } },
+      );
+    }) as typeof fetch;
+
+    await expect(
+      fetchMetaDescription("https://meta-large-page.test/story", ["meta-large-page.test"], fakeFetch),
+    ).resolves.toBe("Early summary");
+    expect(fetched).toEqual([
+      "https://meta-large-page.test/robots.txt",
+      "https://meta-large-page.test/story",
+    ]);
+  });
+
   it("fails closed if robots.txt cannot be read and rejects non-allowlisted hosts", async () => {
     let requests = 0;
     const fakeFetch = (async () => {
