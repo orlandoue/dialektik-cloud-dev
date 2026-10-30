@@ -238,6 +238,9 @@ export class LiveSemanticProductionService {
           where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256
             and g.state='active')
         and not exists(select 1 from public.live_semantic_article_attempts a
+          where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256
+            and a.config_sha256=${configSha})
+        and not exists(select 1 from public.live_semantic_article_attempts a
           join public.live_semantic_article_outcomes o on o.attempt_id=a.id
           where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256
             and o.outcome='UNKNOWN_SENT')
