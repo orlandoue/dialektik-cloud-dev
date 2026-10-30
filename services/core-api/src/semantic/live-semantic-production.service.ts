@@ -831,11 +831,23 @@ export class LiveSemanticProductionService {
         reasonCode: "live_semantic_editorial_promotion",
         metadata: { semantic_group_id: groupId },
       });
-      const result = await sql<{ result: Record<string, unknown> }>`
-        select public.dialektik_promote_live_semantic_event_group(
-          ${groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid
-        ) as result
-      `.execute(transaction);
+      let result;
+      try {
+        result = await sql<{ result: Record<string, unknown> }>`
+          select public.dialektik_promote_live_semantic_event_group(
+            ${groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid
+          ) as result
+        `.execute(transaction);
+      } catch (error) {
+        const databaseCode = safeDatabaseErrorCode(error);
+        if (databaseCode === "42501")
+          throw new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_PERMISSION_DENIED");
+        if (["23503", "23505", "23514", "55000"].includes(databaseCode ?? ""))
+          throw new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_CONSTRAINT_REJECTED");
+        if (databaseCode !== null)
+          throw new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE");
+        throw error;
+      }
       const response = result.rows[0]?.result;
       if (!response || response.status !== "PROMOTED")
         throw new ConflictException("SEMANTIC_GROUP_REQUIRES_FURTHER_EDITORIAL_REVIEW");

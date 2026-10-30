@@ -10,7 +10,10 @@ export type ModerationErrorCode =
   | 'MOD_NOT_FOUND'
   | 'MOD_TASK_CONFLICT'
   | 'MOD_PROPOSAL_CONFLICT'
-  | 'MOD_STALE_CONTEXT';
+  | 'MOD_STALE_CONTEXT'
+  | 'MOD_SEMANTIC_PROMOTION_PERMISSION_DENIED'
+  | 'MOD_SEMANTIC_PROMOTION_CONSTRAINT_REJECTED'
+  | 'MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE';
 
 export class ModerationHttpError extends HttpException {
   public constructor(
