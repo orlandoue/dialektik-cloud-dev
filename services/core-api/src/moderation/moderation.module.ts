@@ -12,6 +12,8 @@ import { HeadlineAnalysisService } from '../semantic/headline-analysis.service.j
 import { HeadlineSemanticDatabaseService } from '../semantic/headline-semantic-database.service.js';
 import { HeadlineContextController } from './headline-context.controller.js';
 import { HeadlineContextAnalysisService } from '../semantic/headline-context-analysis.service.js';
+import { LiveSemanticProductionController } from '../semantic/live-semantic-production.controller.js';
+import { LiveSemanticProductionService } from '../semantic/live-semantic-production.service.js';
 
 @Module({
   imports: [PrivateBetaAuthModule],
@@ -20,6 +22,7 @@ import { HeadlineContextAnalysisService } from '../semantic/headline-context-ana
     ModerationSessionController,
     HeadlineReviewController,
     HeadlineContextController,
+    LiveSemanticProductionController,
   ],
   providers: [
     ModerationAuthService,
@@ -29,6 +32,7 @@ import { HeadlineContextAnalysisService } from '../semantic/headline-context-ana
     HeadlineAnalysisService,
     HeadlineSemanticDatabaseService,
     HeadlineContextAnalysisService,
+    LiveSemanticProductionService,
   ],
 })
 export class ModerationModule {}

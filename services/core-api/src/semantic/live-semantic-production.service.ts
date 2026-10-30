@@ -1,0 +1,752 @@
+import { createHash } from "node:crypto";
+import {
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
+import { generateUlid } from "@dialektik/database";
+import { sql, type Kysely } from "kysely";
+import type { Database } from "@dialektik/database";
+import { CloudflareWorkersAITransport } from "../llm-shadow/llm.cloudflare.js";
+import {
+  CLOUDFLARE_JSON_MODE_MODEL,
+  createCloudflareProfile,
+} from "../llm-shadow/llm.cloudflare-config.js";
+import { HeadlineReviewService } from "../moderation/headline-review.service.js";
+import { ModerationHttpError } from "../moderation/moderation-http.error.js";
+import { HeadlineSemanticDatabaseService } from "./headline-semantic-database.service.js";
+import {
+  LIVE_CLAIM_EXTRACTION_PROMPT,
+  LIVE_CLAIM_EXTRACTION_SCHEMA,
+  LIVE_PAIR_ASSESSMENT_PROMPT,
+  LIVE_PAIR_ASSESSMENT_SCHEMA,
+  groundLiveClaim,
+  validateLivePairAssessment,
+} from "./live-semantic-production.contract.js";
+
+const MODEL = CLOUDFLARE_JSON_MODE_MODEL;
+const PROVIDER = "llm_cloudflare_workers_ai";
+const EXTRACTION_SCHEMA_VERSION = "live-claim-extraction-v1";
+const SEGMENTATION_VERSION = "dialektik-live-excerpt-claim-v1";
+const MAX_BATCH = 5;
+const MAX_PAIR_ASSESSMENTS = 20;
+const THRESHOLD_RULE =
+  "review-only:same-event>=70;contradiction>=60/60;divergence>=50/50";
+
+export interface LiveExcerptInput {
+  articleId: string;
+  sourceId: string;
+  eventId: string | null;
+  canonicalUrl: string;
+  textOriginal: string;
+  publishedAt: Date;
+  sourceName: string;
+  versionId: string;
+  headline: string;
+  excerpt: string;
+  policyId: string;
+  inputSha256: string;
+}
+
+interface ExtractedCandidate extends LiveExcerptInput {
+  generationId: string;
+  eventKey: string;
+  eventTitle: string;
+  eventSummary: string;
+  quotedText: string;
+  assertionText: string;
+  positionSummary: string;
+}
+
+interface ProposalRow {
+  articleId: string;
+  sourceId: string;
+  sourceName: string;
+  canonicalUrl: string;
+  headline: string;
+  generationId: string;
+  span: Record<string, unknown> | null;
+  currentRun: boolean;
+}
+
+interface ReviewGroupRow {
+  id: string;
+  targetDay: Date;
+  proposedEventKey: string;
+  proposedTitle: string;
+  proposedSummary: string;
+  articleCount: number;
+  sourceCount: number;
+  contradictionCount: number;
+  divergentCount: number;
+  createdAt: Date;
+}
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function exactBody(raw: unknown): { targetDay: string; limit: number } {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
+    throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
+  const value = raw as Record<string, unknown>;
+  if (Object.keys(value).some((key) => !["targetDay", "limit"].includes(key)))
+    throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
+  if (
+    typeof value.targetDay !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/u.test(value.targetDay) ||
+    !Number.isFinite(Date.parse(`${value.targetDay}T00:00:00.000Z`)) ||
+    new Date(`${value.targetDay}T00:00:00.000Z`).toISOString().slice(0, 10) !==
+      value.targetDay
+  )
+    throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
+  const limit = value.limit === undefined ? MAX_BATCH : value.limit;
+  if (
+    !Number.isInteger(limit) ||
+    Number(limit) < 1 ||
+    Number(limit) > MAX_BATCH
+  )
+    throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
+  return { targetDay: value.targetDay, limit: Number(limit) };
+}
+
+function proposalSpan(payload: unknown): Record<string, unknown> | null {
+  if (typeof payload !== "object" || payload === null || Array.isArray(payload))
+    return null;
+  const spans = (payload as Record<string, unknown>).spans;
+  if (!Array.isArray(spans) || spans.length === 0) return null;
+  const span = spans[0];
+  return typeof span === "object" && span !== null && !Array.isArray(span)
+    ? (span as Record<string, unknown>)
+    : null;
+}
+
+function normalizedEventKey(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9:._ -]/gu, "")
+    .replace(/[ _]+/gu, "-")
+    .replace(/-+/gu, "-")
+    .replace(/^-|-$/gu, "")
+    .slice(0, 120);
+}
+
+@Injectable()
+export class LiveSemanticProductionService {
+  constructor(
+    @Inject(HeadlineReviewService)
+    private readonly reviews: HeadlineReviewService,
+    @Inject(HeadlineSemanticDatabaseService)
+    private readonly writer: HeadlineSemanticDatabaseService,
+  ) {}
+
+  private ensureEnabled(): void {
+    if (process.env.DIALEKTIK_LIVE_SEMANTIC_PRODUCTION_ENABLED !== "true")
+      throw new NotFoundException();
+  }
+
+  private config() {
+    return createCloudflareProfile(MODEL, {
+      maxArticles: MAX_BATCH,
+      maxCalls: MAX_BATCH + MAX_PAIR_ASSESSMENTS,
+      timeoutMs: 30000,
+      maxOutputTokens: 1024,
+      maxRequestBytes: 16384,
+    });
+  }
+
+  private configSha256(): string {
+    const profile = this.config();
+    return sha256(
+      JSON.stringify({
+        providerConfigHash: profile.config.configHash,
+        extractionPrompt: LIVE_CLAIM_EXTRACTION_PROMPT,
+        extractionSchema: LIVE_CLAIM_EXTRACTION_SCHEMA,
+        pairPrompt: LIVE_PAIR_ASSESSMENT_PROMPT,
+        pairSchema: LIVE_PAIR_ASSESSMENT_SCHEMA,
+        grounding: "exact-unicode-codepoint-span-v1",
+        publication: "editorial-review-only-v1",
+      }),
+    );
+  }
+
+  async runBatch(authorization: string | undefined, raw: unknown) {
+    this.ensureEnabled();
+    const identity = await this.reviews.authorizeEditor(authorization);
+    const { targetDay, limit } = exactBody(raw);
+    const database = this.writer.database;
+    const configSha = this.configSha256();
+    return database.connection().execute(async (connection) => {
+      const leaseName = `dialektik-live-semantic:${targetDay}`;
+      const locked = await sql<{
+        locked: boolean;
+      }>`select pg_try_advisory_lock(hashtextextended(${leaseName},0)) as locked`.execute(
+        connection,
+      );
+      if (locked.rows[0]?.locked !== true)
+        throw new ConflictException("SEMANTIC_BATCH_ALREADY_RUNNING");
+      try {
+        return await this.runLocked(
+          connection,
+          identity.userId,
+          targetDay,
+          limit,
+          configSha,
+        );
+      } finally {
+        await sql`select pg_advisory_unlock(hashtextextended(${leaseName},0))`.execute(
+          connection,
+        );
+      }
+    });
+  }
+
+  private async runLocked(
+    connection: Kysely<Database>,
+    requestedBy: string,
+    targetDay: string,
+    limit: number,
+    configSha: string,
+  ) {
+    const pending = await sql<LiveExcerptInput>`
+      select i.article_id as "articleId",i.source_id as "sourceId",i.event_id as "eventId",
+        i.url_canonical as "canonicalUrl",i.text_original as "textOriginal",i.published_at as "publishedAt",
+        i.source_name as "sourceName",i.version_id as "versionId",i.headline,i.excerpt,
+        i.policy_id as "policyId",i.input_sha256 as "inputSha256"
+      from public.live_semantic_excerpt_inputs i
+      where (i.published_at at time zone 'America/Santiago')::date=${targetDay}::date
+        and not exists(select 1 from public.live_semantic_article_attempts a
+          where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256
+            and a.config_sha256=${configSha})
+      order by i.published_at desc,i.article_id desc limit ${limit}
+    `.execute(connection);
+    if (pending.rows.length === 0)
+      return { status: "NO_PENDING_ARTICLES", targetDay, processed: 0 };
+
+    const profile = this.config();
+    let extractionTransport: CloudflareWorkersAITransport;
+    let pairTransport: CloudflareWorkersAITransport;
+    try {
+      extractionTransport = new CloudflareWorkersAITransport(
+        profile,
+        undefined,
+        process.env,
+        LIVE_CLAIM_EXTRACTION_PROMPT,
+      );
+      pairTransport = new CloudflareWorkersAITransport(
+        profile,
+        undefined,
+        process.env,
+        LIVE_PAIR_ASSESSMENT_PROMPT,
+      );
+    } catch {
+      throw new ServiceUnavailableException(
+        "Workers AI is not configured for semantic review.",
+      );
+    }
+
+    const runId = generateUlid({ now: Date.now });
+    const startedAt = new Date().toISOString();
+    await sql`insert into public.live_semantic_production_runs
+      (id,requested_by,target_day,provider_type,model_id,config_sha256,requested_count,processed_count,
+       pair_assessment_count,started_at,completed_at)
+      values (${runId},${requestedBy}::dialektik_ulid,${targetDay}::date,${PROVIDER},${MODEL},
+        ${configSha},${pending.rows.length},0,0,${startedAt},null)`.execute(
+      connection,
+    );
+
+    const outcomes: Array<{
+      articleId: string;
+      outcome: string;
+      usedFallback?: boolean;
+    }> = [];
+    let pairAssessmentCount = 0;
+    try {
+      for (const input of pending.rows) {
+        const outcome = await this.analyzeArticle(
+          connection,
+          runId,
+          requestedBy,
+          input,
+          configSha,
+          profile.config.providerVersion,
+          extractionTransport,
+        );
+        outcomes.push(outcome);
+      }
+      pairAssessmentCount = await this.assessCurrentGroups(
+        connection,
+        runId,
+        targetDay,
+        configSha,
+        pairTransport,
+      );
+      const processed = outcomes.filter((item) =>
+        ["VALIDATED", "NO_CLAIM_WORTHY_CONTENT"].includes(item.outcome),
+      ).length;
+      await sql`update public.live_semantic_production_runs set processed_count=${processed},
+        pair_assessment_count=${pairAssessmentCount},completed_at=${new Date().toISOString()}
+        where id=${runId}`.execute(connection);
+      const reviewCounts = await sql<{
+        eventGroups: number;
+        conflictCandidates: number;
+        divergentCandidates: number;
+      }>`
+        select count(distinct g.id)::int as "eventGroups",
+          count(*) filter(where p.relation='CONTRADICTORY'
+            and p.ratio_conflicting>=60 and p.ratio_comparable>=60)::int as "conflictCandidates",
+          count(*) filter(where p.relation='DIVERGENT'
+            and p.ratio_conflicting>=50 and p.ratio_comparable>=50)::int as "divergentCandidates"
+        from public.live_semantic_event_group_candidates g
+        left join public.live_semantic_pair_assessments p on p.group_id=g.id
+        where g.target_day=${targetDay}::date and g.config_sha256=${configSha}
+      `.execute(connection);
+      return {
+        status: "COMPLETED_FOR_EDITORIAL_REVIEW",
+        runId,
+        targetDay,
+        attempted: pending.rows.length,
+        extracted: outcomes.filter((item) => item.outcome === "VALIDATED")
+          .length,
+        insufficientEvidence: outcomes.filter(
+          (item) => item.outcome === "NO_CLAIM_WORTHY_CONTENT",
+        ).length,
+        rejectedOrUnavailable: outcomes.filter(
+          (item) =>
+            !["VALIDATED", "NO_CLAIM_WORTHY_CONTENT"].includes(item.outcome),
+        ).length,
+        literalQuoteFallbacks: outcomes.filter((item) => item.usedFallback)
+          .length,
+        pairAssessments: pairAssessmentCount,
+        eventGroupsForReview: reviewCounts.rows[0]?.eventGroups ?? 0,
+        contradictionCandidatesForReview:
+          reviewCounts.rows[0]?.conflictCandidates ?? 0,
+        divergentCandidatesForReview:
+          reviewCounts.rows[0]?.divergentCandidates ?? 0,
+        canonicalEventsPublished: 0,
+        canonicalAssertionsPublished: 0,
+      };
+    } finally {
+      extractionTransport.dispose?.();
+      pairTransport.dispose?.();
+    }
+  }
+
+  private async ensureArticleGrant(
+    connection: Kysely<Database>,
+    input: LiveExcerptInput,
+  ): Promise<boolean> {
+    const sourceAllowed = await sql<{ allowed: boolean }>`
+      select public.dialektik_live_semantic_source_allowed(${input.sourceId}::dialektik_ulid) as allowed
+    `.execute(connection);
+    if (sourceAllowed.rows[0]?.allowed !== true) return false;
+    const route = await sql<{
+      allowed: boolean;
+    }>`select public.dialektik_live_semantic_route_allowed(
+      ${input.articleId}::dialektik_ulid,${input.inputSha256},${PROVIDER},${MODEL}) as allowed`.execute(
+      connection,
+    );
+    return route.rows[0]?.allowed === true;
+  }
+
+  private async analyzeArticle(
+    connection: Kysely<Database>,
+    runId: string,
+    requestedBy: string,
+    input: LiveExcerptInput,
+    configSha: string,
+    modelRevision: string,
+    transport: CloudflareWorkersAITransport,
+  ): Promise<{ articleId: string; outcome: string; usedFallback?: boolean }> {
+    if (
+      input.textOriginal.length > 1250 ||
+      input.excerpt.length > 700 ||
+      input.textOriginal !== `${input.headline}. ${input.excerpt}`
+    )
+      return { articleId: input.articleId, outcome: "INPUT_REJECTED" };
+    if (!(await this.ensureArticleGrant(connection, input)))
+      return { articleId: input.articleId, outcome: "RIGHTS_REVOKED" };
+
+    const attemptId = generateUlid({ now: Date.now });
+    const claim = await sql<{
+      id: string;
+    }>`insert into public.live_semantic_article_attempts
+      (id,run_id,requested_by,article_id,source_id,policy_id,input_sha256,provider_type,model_id,config_sha256,request_started_at)
+      values (${attemptId},${runId}::dialektik_ulid,${requestedBy}::dialektik_ulid,
+        ${input.articleId}::dialektik_ulid,${input.sourceId}::dialektik_ulid,${input.policyId},
+        ${input.inputSha256},${PROVIDER},${MODEL},${configSha},${new Date().toISOString()})
+      on conflict(article_id,input_sha256,config_sha256) do nothing returning id::text as id`.execute(
+      connection,
+    );
+    if (!claim.rows[0])
+      return { articleId: input.articleId, outcome: "ALREADY_ATTEMPTED" };
+
+    let rawOutput: unknown;
+    try {
+      rawOutput = (
+        await transport.generate(
+          "extraction",
+          { textOriginal: input.textOriginal },
+          LIVE_CLAIM_EXTRACTION_SCHEMA,
+          AbortSignal.timeout(32000),
+        )
+      ).output;
+    } catch {
+      await this.recordOutcome(
+        connection,
+        attemptId,
+        "UNKNOWN_SENT",
+        null,
+        "PROVIDER_UNAVAILABLE",
+      );
+      return { articleId: input.articleId, outcome: "UNKNOWN_SENT" };
+    }
+
+    let grounded;
+    try {
+      grounded = groundLiveClaim(rawOutput, input.textOriginal, input.headline);
+    } catch {
+      await this.recordOutcome(
+        connection,
+        attemptId,
+        "REJECTED",
+        null,
+        "MODEL_VALIDATION",
+      );
+      return { articleId: input.articleId, outcome: "REJECTED" };
+    }
+    const spans =
+      grounded.status === "EXTRACTED" &&
+      grounded.charStart !== null &&
+      grounded.charEnd !== null
+        ? [
+            {
+              start: grounded.charStart,
+              end: grounded.charEnd,
+              quoted_text: grounded.quotedText,
+              assertion_text: grounded.assertionText,
+              position_summary: grounded.positionSummary,
+              event_key: grounded.eventKey,
+              event_title: grounded.eventTitle,
+              event_summary: grounded.eventSummary,
+              used_literal_fallback: grounded.usedFallback,
+            },
+          ]
+        : [];
+    const payload = { schema_version: EXTRACTION_SCHEMA_VERSION, spans };
+    const payloadText = JSON.stringify(payload);
+    const generationId = generateUlid({ now: Date.now });
+    const generatedAt = new Date().toISOString();
+    let inserted: { id: string } | undefined;
+    try {
+      const result = await sql<{
+        id: string;
+      }>`insert into public.assertion_extraction_generations
+        (id,article_id,input_hash,text_basis,offset_encoding,segmentation_version,provider_id,model_id,
+         model_revision,config_version,schema_version,outcome,failure_category,proposal_payload,
+         proposal_hash,state,supersedes_id,created_at,completed_at)
+        values (${generationId}::dialektik_ulid,${input.articleId}::dialektik_ulid,${input.inputSha256},
+          'article.text_original','unicode_code_point_v1',${SEGMENTATION_VERSION},${PROVIDER},${MODEL},
+          ${modelRevision},${configSha},${EXTRACTION_SCHEMA_VERSION},
+          ${grounded.status === "EXTRACTED" ? "proposed" : "no_claim_worthy_content"},null,
+          ${payloadText}::jsonb,${sha256(payloadText)},'active',null,${generatedAt},${generatedAt})
+        on conflict do nothing returning id::text as id`.execute(connection);
+      inserted = result.rows[0];
+      if (!inserted) {
+        const prior = await sql<{
+          id: string;
+        }>`select id::text as id from public.assertion_extraction_generations
+          where article_id=${input.articleId}::dialektik_ulid and input_hash=${input.inputSha256}
+            and segmentation_version=${SEGMENTATION_VERSION} and provider_id=${PROVIDER}
+            and model_id=${MODEL} and model_revision=${modelRevision}
+            and config_version=${configSha} and schema_version=${EXTRACTION_SCHEMA_VERSION}
+          limit 1`.execute(connection);
+        inserted = prior.rows[0];
+      }
+      if (!inserted) throw new Error("LIVE_SEMANTIC_GENERATION_WRITE_FAILED");
+    } catch {
+      await this.recordOutcome(
+        connection,
+        attemptId,
+        "PERSISTENCE_FAILED",
+        null,
+        "PERSISTENCE_FAILED",
+      );
+      return { articleId: input.articleId, outcome: "PERSISTENCE_FAILED" };
+    }
+    const outcome =
+      grounded.status === "EXTRACTED" ? "VALIDATED" : "NO_CLAIM_WORTHY_CONTENT";
+    await this.recordOutcome(connection, attemptId, outcome, inserted.id, null);
+    return {
+      articleId: input.articleId,
+      outcome,
+      usedFallback: grounded.usedFallback,
+    };
+  }
+
+  private async recordOutcome(
+    connection: Kysely<Database>,
+    attemptId: string,
+    outcome: string,
+    generationId: string | null,
+    errorCode: string | null,
+  ): Promise<void> {
+    await sql`insert into public.live_semantic_article_outcomes
+      (attempt_id,outcome,extraction_generation_id,error_code,recorded_at)
+      values (${attemptId}::dialektik_ulid,${outcome},${generationId}::dialektik_ulid,
+        ${errorCode},${new Date().toISOString()})`.execute(connection);
+  }
+
+  private async assessCurrentGroups(
+    connection: Kysely<Database>,
+    runId: string,
+    targetDay: string,
+    configSha: string,
+    transport: CloudflareWorkersAITransport,
+  ): Promise<number> {
+    const result = await sql<ProposalRow>`
+      select i.article_id as "articleId",i.source_id as "sourceId",i.source_name as "sourceName",
+        i.url_canonical as "canonicalUrl",i.headline,g.id::text as "generationId",
+        g.proposal_payload->'spans'->0 as span,
+        exists(select 1 from public.live_semantic_article_attempts a
+          where a.run_id=${runId}::dialektik_ulid and a.article_id=i.article_id::dialektik_ulid
+            and a.input_sha256=i.input_sha256 and a.config_sha256=${configSha}) as "currentRun"
+      from public.live_semantic_excerpt_inputs i
+      join public.assertion_extraction_generations g on g.article_id=i.article_id::dialektik_ulid
+        and g.input_hash=i.input_sha256 and g.provider_id=${PROVIDER} and g.model_id=${MODEL}
+        and g.config_version=${configSha} and g.schema_version=${EXTRACTION_SCHEMA_VERSION}
+        and g.state='active' and g.outcome='proposed'
+      where (i.published_at at time zone 'America/Santiago')::date=${targetDay}::date
+      order by i.published_at desc,i.article_id desc
+    `.execute(connection);
+    const groups = new Map<string, ProposalRow[]>();
+    for (const row of result.rows) {
+      const span = row.span;
+      if (!span || typeof span.event_key !== "string") continue;
+      const key = normalizedEventKey(span.event_key);
+      if (!key) continue;
+      const bucket = groups.get(key) ?? [];
+      bucket.push(row);
+      groups.set(key, bucket);
+    }
+    let assessments = 0;
+    for (const [eventKey, members] of groups) {
+      if (assessments >= MAX_PAIR_ASSESSMENTS) break;
+      const pairs = members.flatMap((left, index) =>
+        members
+          .slice(index + 1)
+          .filter(
+            (right) =>
+              right.sourceId !== left.sourceId &&
+              (right.currentRun || left.currentRun),
+          )
+          .map((right) => [left, right] as const),
+      );
+      for (const [leftSource, rightSource] of pairs) {
+        if (assessments >= MAX_PAIR_ASSESSMENTS) break;
+        const [left, right] =
+          leftSource.articleId < rightSource.articleId
+            ? [leftSource, rightSource]
+            : [rightSource, leftSource];
+        const existing = await sql<{ exists: boolean }>`select exists(
+          select 1 from public.live_semantic_pair_assessments
+          where left_article_id=${left.articleId}::dialektik_ulid and right_article_id=${right.articleId}::dialektik_ulid
+            and config_sha256=${configSha}) as exists`.execute(connection);
+        if (existing.rows[0]?.exists) continue;
+        assessments += 1;
+        const leftSpan = left.span ?? {};
+        const rightSpan = right.span ?? {};
+        let assessment;
+        try {
+          const generated = await transport.generate(
+            "extraction",
+            {
+              left: {
+                headline: left.headline,
+                sourceName: left.sourceName,
+                assertion: leftSpan.assertion_text,
+                position: leftSpan.position_summary,
+              },
+              right: {
+                headline: right.headline,
+                sourceName: right.sourceName,
+                assertion: rightSpan.assertion_text,
+                position: rightSpan.position_summary,
+              },
+            },
+            LIVE_PAIR_ASSESSMENT_SCHEMA,
+            AbortSignal.timeout(32000),
+          );
+          assessment = validateLivePairAssessment(generated.output);
+        } catch {
+          continue;
+        }
+        if (!assessment.sameEvent || assessment.sameEventConfidence < 70)
+          continue;
+        const groupKey = sha256(`${targetDay}\n${eventKey}\n${configSha}`);
+        const eventTitle = String(
+          leftSpan.event_title || rightSpan.event_title || left.headline,
+        ).slice(0, 240);
+        const eventSummary = String(
+          leftSpan.event_summary || rightSpan.event_summary || left.headline,
+        ).slice(0, 500);
+        const groupId = generateUlid({ now: Date.now });
+        await sql`insert into public.live_semantic_event_group_candidates
+          (id,origin_run_id,group_key_sha256,target_day,proposed_event_key,proposed_title,proposed_summary,
+           provider_type,model_id,config_sha256,review_state,created_at)
+          values (${groupId},${runId}::dialektik_ulid,${groupKey},${targetDay}::date,${eventKey},
+            ${eventTitle},${eventSummary},${PROVIDER},${MODEL},${configSha},'REVIEW_REQUIRED',${new Date().toISOString()})
+          on conflict(group_key_sha256) do nothing`.execute(connection);
+        const group = await sql<{
+          id: string;
+        }>`select id::text as id from public.live_semantic_event_group_candidates
+          where group_key_sha256=${groupKey} limit 1`.execute(connection);
+        if (!group.rows[0]) continue;
+        const groupIdResolved = group.rows[0].id;
+        // A positive pair check only supports that pair; other members need their
+        // own same-event confirmation before joining this review candidate.
+        for (const member of [left, right]) {
+          await sql`insert into public.live_semantic_event_group_members
+            (group_id,article_id,source_id,extraction_generation_id,matched_at)
+            values (${groupIdResolved}::dialektik_ulid,${member.articleId}::dialektik_ulid,
+              ${member.sourceId}::dialektik_ulid,${member.generationId}::dialektik_ulid,${new Date().toISOString()})
+            on conflict(group_id,article_id) do nothing`.execute(connection);
+        }
+        await sql`insert into public.live_semantic_pair_assessments
+          (id,run_id,group_id,left_article_id,right_article_id,left_extraction_generation_id,
+           right_extraction_generation_id,relation,ratio_conflicting,ratio_comparable,same_event_confidence,
+           threshold_rule,provider_type,model_id,config_sha256,created_at)
+          values (${generateUlid({ now: Date.now })},${runId}::dialektik_ulid,
+            ${groupIdResolved}::dialektik_ulid,${left.articleId}::dialektik_ulid,${right.articleId}::dialektik_ulid,
+            ${left.generationId}::dialektik_ulid,${right.generationId}::dialektik_ulid,
+            ${assessment.relation},${assessment.ratioConflicting},${assessment.ratioComparable},
+            ${assessment.sameEventConfidence},${THRESHOLD_RULE},${PROVIDER},${MODEL},${configSha},
+            ${new Date().toISOString()}) on conflict(left_article_id,right_article_id,config_sha256) do nothing`.execute(
+          connection,
+        );
+      }
+    }
+    return assessments;
+  }
+
+  async listReview(authorization: string | undefined, rawDay: unknown) {
+    this.ensureEnabled();
+    await this.reviews.authorizeEditor(authorization);
+    if (typeof rawDay !== "string" || !/^\d{4}-\d{2}-\d{2}$/u.test(rawDay))
+      throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
+    const database = this.writer.database;
+    const configSha = this.configSha256();
+    const proposals = await sql<{
+      articleId: string;
+      sourceName: string;
+      headline: string;
+      canonicalUrl: string;
+      publishedAt: Date;
+      generationId: string;
+      outcome: string;
+      quotedText: string | null;
+      assertionText: string | null;
+      positionSummary: string | null;
+      charStart: number | null;
+      charEnd: number | null;
+      eventKey: string | null;
+      eventTitle: string | null;
+      eventSummary: string | null;
+      usedLiteralFallback: boolean | null;
+      reviewState: string;
+    }>`select i.article_id as "articleId",i.source_name as "sourceName",i.headline,
+        i.url_canonical as "canonicalUrl",i.published_at as "publishedAt",g.id::text as "generationId",
+        g.outcome::text as outcome,
+        g.proposal_payload->'spans'->0->>'quoted_text' as "quotedText",
+        g.proposal_payload->'spans'->0->>'assertion_text' as "assertionText",
+        g.proposal_payload->'spans'->0->>'position_summary' as "positionSummary",
+        nullif(g.proposal_payload->'spans'->0->>'start','')::int as "charStart",
+        nullif(g.proposal_payload->'spans'->0->>'end','')::int as "charEnd",
+        g.proposal_payload->'spans'->0->>'event_key' as "eventKey",
+        g.proposal_payload->'spans'->0->>'event_title' as "eventTitle",
+        g.proposal_payload->'spans'->0->>'event_summary' as "eventSummary",
+        (g.proposal_payload->'spans'->0->>'used_literal_fallback')::boolean as "usedLiteralFallback",
+        'REVIEW_REQUIRED'::text as "reviewState"
+      from public.live_semantic_excerpt_inputs i
+      join public.assertion_extraction_generations g on g.article_id=i.article_id::dialektik_ulid
+        and g.input_hash=i.input_sha256 and g.provider_id=${PROVIDER} and g.model_id=${MODEL}
+        and g.config_version=${configSha} and g.schema_version=${EXTRACTION_SCHEMA_VERSION}
+        and g.state='active' and g.outcome in ('proposed','no_claim_worthy_content')
+      where (i.published_at at time zone 'America/Santiago')::date=${rawDay}::date
+      order by i.published_at desc,i.article_id`.execute(database);
+    const groups = await sql<ReviewGroupRow>`
+      select g.id::text as id,g.target_day as "targetDay",g.proposed_event_key as "proposedEventKey",
+        g.proposed_title as "proposedTitle",g.proposed_summary as "proposedSummary",
+        count(distinct m.article_id)::int as "articleCount",count(distinct m.source_id)::int as "sourceCount",
+        count(*) filter(where p.relation='CONTRADICTORY'
+          and p.ratio_conflicting>=60 and p.ratio_comparable>=60)::int as "contradictionCount",
+        count(*) filter(where p.relation='DIVERGENT'
+          and p.ratio_conflicting>=50 and p.ratio_comparable>=50)::int as "divergentCount",g.created_at as "createdAt"
+      from public.live_semantic_event_group_candidates g
+      join public.live_semantic_event_group_members m on m.group_id=g.id
+      left join public.live_semantic_pair_assessments p on p.group_id=g.id
+      where g.target_day=${rawDay}::date and g.config_sha256=${configSha}
+      group by g.id order by g.created_at desc,g.id desc limit 50
+    `.execute(database);
+    const details = [];
+    for (const group of groups.rows) {
+      const members = await sql<{
+        sourceName: string;
+        headline: string;
+        canonicalUrl: string;
+        assertionText: string;
+        positionSummary: string;
+        quotedText: string;
+        charStart: number;
+        charEnd: number;
+      }>`select i.source_name as "sourceName",i.headline,i.url_canonical as "canonicalUrl",
+          g.proposal_payload->'spans'->0->>'assertion_text' as "assertionText",
+          g.proposal_payload->'spans'->0->>'position_summary' as "positionSummary",
+          g.proposal_payload->'spans'->0->>'quoted_text' as "quotedText",
+          (g.proposal_payload->'spans'->0->>'start')::int as "charStart",
+          (g.proposal_payload->'spans'->0->>'end')::int as "charEnd"
+        from public.live_semantic_event_group_members m
+        join public.live_semantic_excerpt_inputs i on i.article_id=m.article_id::text
+        join public.assertion_extraction_generations g on g.id=m.extraction_generation_id
+        where m.group_id=${group.id}::dialektik_ulid
+        order by i.published_at desc,i.article_id`.execute(database);
+      const pairs = await sql<{
+        relation: string;
+        ratioConflicting: number;
+        ratioComparable: number;
+        sameEventConfidence: number;
+      }>`select relation,ratio_conflicting as "ratioConflicting",ratio_comparable as "ratioComparable",
+          same_event_confidence as "sameEventConfidence"
+        from public.live_semantic_pair_assessments where group_id=${group.id}::dialektik_ulid
+        order by created_at,id`.execute(database);
+      details.push({
+        ...group,
+        members: members.rows,
+        pairAssessments: pairs.rows,
+      });
+    }
+    return {
+      targetDay: rawDay,
+      summary: {
+        articleProposals: proposals.rows.length,
+        claimProposals: proposals.rows.filter(
+          (row) => row.outcome === "proposed",
+        ).length,
+        insufficientEvidence: proposals.rows.filter(
+          (row) => row.outcome === "no_claim_worthy_content",
+        ).length,
+        groups: details.length,
+        contradictionCandidates: details.reduce(
+          (total, group) => total + group.contradictionCount,
+          0,
+        ),
+      },
+      articles: proposals.rows,
+      groups: details,
+    };
+  }
+}
