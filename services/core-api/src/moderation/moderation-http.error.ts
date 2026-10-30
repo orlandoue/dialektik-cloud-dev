@@ -24,7 +24,7 @@ export class ModerationHttpError extends HttpException {
   public constructor(
     status: HttpStatus,
     public readonly code: ModerationErrorCode,
-    diagnostic?: ModerationDiagnostic,
+    public readonly diagnostic?: ModerationDiagnostic,
   ) {
     super(diagnostic ? { code, diagnostic } : { code }, status);
     this.name = 'ModerationHttpError';
