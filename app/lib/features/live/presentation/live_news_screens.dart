@@ -5,18 +5,14 @@ import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
 import 'package:dialektik/features/live/data/candidate_source_registry.dart';
-import 'package:dialektik/features/live/data/chile_rss_chronology.dart';
-
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/data/registered_source_directory.dart';
-import 'package:dialektik/features/live/presentation/chile_rss_chronology_panel.dart';
-
-import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
+import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_vocabulary.dart';
 import 'package:flutter/material.dart';
@@ -27,13 +23,14 @@ import 'package:flutter/material.dart';
 const Set<String> _chileBetaPublisherDomains = <String>{
   'bcentral.cl', 'biobiochile.cl', 'sismologia.cl',
   'ciperchile.cl', 'cooperativa.cl', 'diarioeldia.cl', 'www.diarioeldia.cl', 'elmostrador.cl',
-  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl', 'senapred.cl',
+  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl', 'senapred.cl', 'youtube.com',
 };
 
 bool isChileBetaPublisher(LiveSourceDto source) =>
     _chileBetaPublisherDomains.contains(source.canonicalDomain.toLowerCase());
 
 enum LiveDateFilter { all, today, yesterday, week }
+enum LiveNewsFormatFilter { all, press, videos }
 
 typedef LiveClock = DateTime Function();
 
@@ -88,6 +85,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   List<LiveSourceDto> _sources = <LiveSourceDto>[];
   String? _sourceId;
   LiveDateFilter _date = LiveDateFilter.all;
+  LiveNewsFormatFilter _format = LiveNewsFormatFilter.all;
   String? _nextCursor;
   bool _loading = true;
   bool _addingPage = false;
@@ -99,7 +97,19 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   bool get _hasFilters =>
       _query.text.trim().isNotEmpty ||
       _sourceId != null ||
-      _date != LiveDateFilter.all;
+      _date != LiveDateFilter.all ||
+      _format != LiveNewsFormatFilter.all;
+  List<LiveNewsItemDto> get _visibleItems => _items
+      .where((LiveNewsItemDto item) {
+        final bool video =
+            item.source.canonicalDomain.toLowerCase() == 'youtube.com';
+        return switch (_format) {
+          LiveNewsFormatFilter.all => true,
+          LiveNewsFormatFilter.press => !video,
+          LiveNewsFormatFilter.videos => video,
+        };
+      })
+      .toList(growable: false);
   @override
   void initState() {
     super.initState();
@@ -130,6 +140,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     _query.clear();
     _sourceId = null;
     _date = LiveDateFilter.all;
+    _format = LiveNewsFormatFilter.all;
     setState(() => _selectedCountry = code);
     unawaited(_loadSources());
     unawaited(_load(refresh: true));
@@ -244,6 +255,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     _query.clear();
     _sourceId = null;
     _date = LiveDateFilter.all;
+    _format = LiveNewsFormatFilter.all;
     unawaited(_load());
   }
 
@@ -399,6 +411,26 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               ),
             ),
           ),
+          const SizedBox(height: DialektikSpacing.space3),
+          HorizontalChoiceStrip<LiveNewsFormatFilter>(
+            semanticsLabel: 'Filtrar noticias por formato',
+            allLabel: 'Todo',
+            selectedValue: _format == LiveNewsFormatFilter.all ? null : _format,
+            keyPrefix: 'live-news-format-filter',
+            options: const <HorizontalChoiceOption<LiveNewsFormatFilter>>[
+              HorizontalChoiceOption<LiveNewsFormatFilter>(
+                value: LiveNewsFormatFilter.press,
+                label: 'Prensa',
+              ),
+              HorizontalChoiceOption<LiveNewsFormatFilter>(
+                value: LiveNewsFormatFilter.videos,
+                label: 'Videos',
+              ),
+            ],
+            onSelected: (LiveNewsFormatFilter? value) => setState(
+              () => _format = value ?? LiveNewsFormatFilter.all,
+            ),
+          ),
           if (_selectedCountry != 'CL') ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             const EditorialEmptyState(
@@ -406,19 +438,12 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               description: 'El selector está preparado, pero aún no existe un feed de este país verificado. No mostraremos noticias chilenas como si fueran locales.',
             ),
           ] else ...<Widget>[
-          if (widget.repository is ChileRssChronologyRepository) ...<Widget>[
-            ChileRssChronologyPanel(
-              repository: widget.repository as ChileRssChronologyRepository,
-            ),
-            const SizedBox(height: DialektikSpacing.space4),
-          ],
           if (widget.repository is SeismicObservationRepository) ...<Widget>[
             ChileSeismicObservationsPanel(
               repository: widget.repository as SeismicObservationRepository,
             ),
             const SizedBox(height: DialektikSpacing.space4),
           ],
-          const Text('Artículos incorporados al motor de Dialektik'),
           if (widget.govUkPreviewLoader != null) ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             Card(
@@ -531,10 +556,6 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               ),
             ),
             const SizedBox(height: DialektikSpacing.space4),
-            Text(
-              'Artículos incorporados a Dialektik',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
           ],
           const SizedBox(height: DialektikSpacing.space4),
           Row(
@@ -653,7 +674,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                 child: const Text('Reintentar'),
               ),
             )
-          else if (_items.isEmpty)
+          else if (_visibleItems.isEmpty)
             EditorialEmptyState(
               title: _hasFilters
                   ? 'No hay noticias con estos filtros.'
@@ -670,10 +691,10 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             )
           else ...<Widget>[
             LiveLeadCard(
-              article: _items.first,
-              onPressed: () => widget.onOpenArticle(_items.first.id),
+              article: _visibleItems.first,
+              onPressed: () => widget.onOpenArticle(_visibleItems.first.id),
             ),
-            if (_items.length > 1) ...<Widget>[
+            if (_visibleItems.length > 1) ...<Widget>[
               const SizedBox(height: EditorialLayout.sectionGap),
               Semantics(
                 header: true,
@@ -695,7 +716,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                     spacing: EditorialLayout.cardGap,
                     runSpacing: EditorialLayout.cardGap,
                     children: <Widget>[
-                      for (final LiveNewsItemDto article in _items.skip(1))
+                      for (final LiveNewsItemDto article in _visibleItems.skip(1))
                         SizedBox(
                           width: cardWidth,
                           child: LiveNewsCard(
@@ -711,7 +732,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             const SizedBox(height: EditorialLayout.cardGap),
             Text(
               editorialCount(
-                _items.length,
+                _visibleItems.length,
                 'noticia visible',
                 'noticias visibles',
               ),
