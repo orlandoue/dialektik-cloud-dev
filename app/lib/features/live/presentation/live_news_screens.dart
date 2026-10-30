@@ -678,10 +678,10 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             EditorialEmptyState(
               title: _hasFilters
                   ? 'No hay noticias con estos filtros.'
-                  : 'Todavía no hay artículos incorporados al análisis.',
+                  : 'Todavía no hay noticias recientes disponibles.',
               description: _hasFilters
                   ? 'Puedes ampliar la búsqueda o cambiar la fuente y la fecha.'
-                  : 'Arriba puedes leer titulares RSS actuales en el sitio original del medio. La sección de artículos incorporados se habilitará cuando su procedencia y condiciones de uso estén acreditadas.',
+                  : 'Vuelve a consultar más tarde; aquí aparecerán publicaciones con su fuente y enlace originales.',
               action: _hasFilters
                   ? EditorialTextButton(
                       onPressed: _clearFilters,
