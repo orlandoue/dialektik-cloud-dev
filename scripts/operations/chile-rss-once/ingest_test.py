@@ -35,6 +35,11 @@ class IngestionOperationTests(unittest.TestCase):
         self.assertIn("O''Reilly $metadata_ingestion$", sql)
         self.assertTrue(sql.strip().endswith('rollback;'))
 
+    def test_existing_articles_keep_original_text_immutable(self):
+        sql = module.sql_for([{'articleText': 'new headline and excerpt'}], True)
+        self.assertIn('insert into live_article_versions', sql)
+        self.assertNotIn('update articles set text_original', sql.lower())
+
     def test_apply_requires_simulation_and_clears_the_private_batch_after_commit(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {'SUPABASE_ACCESS_TOKEN': 'fixture-secret'}):
             module.RUN_DIR = Path(directory)

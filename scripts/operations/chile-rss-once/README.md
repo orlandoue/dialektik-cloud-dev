@@ -15,8 +15,9 @@ extractos y las rutas RSS propuestas para ese medio responden 404, por lo que
 continúa en modalidad de metadatos.
 
 El lote detecta URLs canónicas existentes en toda `public.articles`, omite
-colisiones, actualiza solo artículos de la misma fuente y crea filas para
-publicaciones nuevas. Se apoya en recibos, exclusiones y versiones append-only.
+colisiones, agrega una versión append-only a artículos existentes de la misma
+fuente y crea filas para publicaciones nuevas. `articles.text_original` permanece
+inmutable; el extracto actualizado se guarda en `live_article_versions.excerpt`.
 La escritura revierte el lote completo si falla una comprobación. El token de
 gestión debe estar disponible solo para el operador en `SUPABASE_ACCESS_TOKEN`;
 nunca se imprime ni se guarda en el repositorio.

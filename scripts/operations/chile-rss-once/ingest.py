@@ -357,7 +357,7 @@ begin
           and coalesce(p.policy->>'discoveryChannel','rss_atom')=entry->>'discoveryChannel') then
       raise exception 'SOURCE_REVIEW_CHANGED_OR_NOT_AUTHORIZED';
     end if;
-    select a.id,a.source_id,a.origin,a.live_exposure_id,a.text_original,a.text_normalized
+    select a.id,a.source_id,a.origin,a.live_exposure_id
       into existing_article from articles a
       where a.url_canonical=entry->>'canonicalUrl'
         or exists(select 1 from live_acquisition_receipts r where r.source_id=entry->>'sourceId'
@@ -375,9 +375,7 @@ begin
         where v.article_id=existing_article.id order by v.version_number desc limit 1;
       if latest_version.id is null then raise exception 'LIVE_VERSION_MISSING'; end if;
       if latest_version.headline=entry->>'headline' and latest_version.excerpt=entry->>'excerpt'
-          and latest_version.policy_id=entry->>'policyId'
-          and existing_article.text_original=entry->>'articleText'
-          and existing_article.text_normalized=entry->>'normalizedText' then
+          and latest_version.policy_id=entry->>'policyId' then
         continue;
       end if;
       insert into live_exposure_exclusions(id,registry_key,publisher_name,canonical_url,source_item_id,
@@ -420,8 +418,6 @@ begin
         entry->>'metadataHash',entry->>'headline',entry->>'excerpt',entry->>'author',
         (entry->>'publishedAt')::timestamptz,(entry->>'modifiedAt')::timestamptz,entry->>'declaredUpstream',
         entry->>'contentHash',entry->>'signature',(entry->>'capturedAt')::timestamptz);
-      update articles set text_original=entry->>'articleText',text_normalized=entry->>'normalizedText'
-        where id=existing_article.id;
       continue;
     end if;
     insert into articles(id,source_id,event_id,url_canonical,text_original,text_normalized,lang,published_at,
