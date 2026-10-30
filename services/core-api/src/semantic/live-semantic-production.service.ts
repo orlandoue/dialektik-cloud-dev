@@ -221,6 +221,7 @@ export class LiveSemanticProductionService {
         publication: "single-editor-consistent-group-promotion-v1",
         precluster: "named-entity-complete-link-48h-v2",
         contradictionThreshold: "conflicting-positive-comparable-60",
+        generationLineage: "active-to-superseded-append-only-retry-v1",
       }),
     );
   }
@@ -530,15 +531,27 @@ export class LiveSemanticProductionService {
     try {
       const result = await sql<{
         id: string;
-      }>`insert into public.assertion_extraction_generations
+      }>`with prior_active as materialized (
+          select id from public.assertion_extraction_generations
+          where article_id=${input.articleId}::dialektik_ulid and state='active'
+          for update
+        ), superseded as (
+          update public.assertion_extraction_generations generation
+          set state='superseded'
+          where generation.id in (select id from prior_active)
+            and generation.state='active'
+          returning generation.id
+        )
+        insert into public.assertion_extraction_generations
         (id,article_id,input_hash,text_basis,offset_encoding,segmentation_version,provider_id,model_id,
          model_revision,config_version,schema_version,outcome,failure_category,proposal_payload,
          proposal_hash,state,supersedes_id,created_at,completed_at)
-        values (${generationId}::dialektik_ulid,${input.articleId}::dialektik_ulid,${input.inputSha256},
+        select ${generationId}::dialektik_ulid,${input.articleId}::dialektik_ulid,${input.inputSha256},
           'article.text_original','unicode_code_point_v1',${SEGMENTATION_VERSION},${PROVIDER},${MODEL},
           ${modelRevision},${configSha},${EXTRACTION_SCHEMA_VERSION},
           ${grounded.status === "EXTRACTED" ? "proposed" : "no_claim_worthy_content"},null,
-          ${payloadText}::jsonb,${sha256(payloadText)},'active',null,${generatedAt},${generatedAt})
+          ${payloadText}::jsonb,${sha256(payloadText)},'active',
+          (select id from superseded),${generatedAt},${generatedAt}
         on conflict do nothing returning id::text as id`.execute(connection);
       inserted = result.rows[0];
       if (!inserted) {
