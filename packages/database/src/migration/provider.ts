@@ -57,6 +57,7 @@ import { liveExcerptTextProjectionMigration } from './056_live_excerpt_text_proj
 import { enableExcerptSemanticGrantsAndLiveEventsMigration } from './057_enable_excerpt_semantic_grants_and_live_events';
 import { excerptGovernanceAndProviderGrantsMigration } from './058_seed_excerpt_governance_and_provider_grants';
 import { qualifyExtractionGenerationDigestMigration } from './059_qualify_extraction_generation_digest';
+import { liveSemanticEditorialPromotionMigration } from './060_live_semantic_editorial_promotion';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -95,6 +96,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '057_enable_excerpt_semantic_grants_and_live_events': enableExcerptSemanticGrantsAndLiveEventsMigration,
   '058_seed_excerpt_governance_and_provider_grants': excerptGovernanceAndProviderGrantsMigration,
   '059_qualify_extraction_generation_digest': qualifyExtractionGenerationDigestMigration,
+  '060_live_semantic_editorial_promotion': liveSemanticEditorialPromotionMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,
