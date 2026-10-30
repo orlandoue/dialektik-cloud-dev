@@ -59,7 +59,18 @@ export const emptyLiveSyncSummary = (): LiveSyncSummary => ({
 const nextId = (now: Date): Ulid => generateUlid({ now: () => now.getTime() });
 const exposureId = (key: string, identity: string): string => liveHash(`${key}\n${identity}`);
 
-export function assertLiveDatabase(config: Readonly<CoreApiConfig>): void {
+export function assertLiveDatabase(
+  config: Readonly<CoreApiConfig>,
+  corporateProductionAuthorization = false,
+): void {
+  if (
+    corporateProductionAuthorization &&
+    config.nodeEnvironment === 'production' &&
+    config.ownershipMode === 'corporate' &&
+    config.semanticMode === 'disabled' &&
+    process.env.DIALEKTIK_CORPORATE_LIVE_ACQUISITION_ENABLED === 'true'
+  )
+    return;
   const target = new URL(config.databaseUrl);
   if (
     config.nodeEnvironment === 'production' ||
@@ -488,10 +499,13 @@ export async function syncLivePayload(
   options: {
     readonly discoveredAt: Date;
     readonly discoveryUrl?: string;
+    readonly corporateProductionAuthorization?: boolean;
     readonly authorizePersistence?: (transaction: Transaction<Database>) => Promise<void>;
   },
 ): Promise<LiveSyncSummary> {
-  assertLiveDatabase(config);
+  assertLiveDatabase(config, options.corporateProductionAuthorization === true);
+  if (options.corporateProductionAuthorization && !options.authorizePersistence)
+    throw new Error('CORPORATE_ACQUISITION_REQUIRES_PER_ITEM_RIGHTS_AUTHORIZATION');
   const now = options.discoveredAt;
   if (!Number.isFinite(now.getTime())) throw new Error('INVALID_DISCOVERY_TIME');
   const discoveryUrl = options.discoveryUrl ?? policy.endpoint;

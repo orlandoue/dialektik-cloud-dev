@@ -7,6 +7,7 @@ import { LiveController } from './live.controller.js';
 import { LiveRepository } from './live.repository.js';
 import { LiveApplicationService } from './live.service.js';
 import { assertLiveDatabase } from './live.sync.js';
+import { CorporateLiveAcquisitionService } from './corporate-live-acquisition.service.js';
 
 @Module({})
 export class LiveModule {
@@ -22,11 +23,19 @@ export class LiveModule {
 
     if (config.nodeEnvironment === 'production') {
       if (config.semanticMode !== 'disabled') return { module: LiveModule };
+      const corporateAcquisitionProviders = config.ownershipMode === 'corporate'
+        ? [{
+            provide: CorporateLiveAcquisitionService,
+            inject: [CoreDatabaseService],
+            useFactory: (database: CoreDatabaseService) =>
+              new CorporateLiveAcquisitionService(config, database),
+          }]
+        : [];
       return {
         module: LiveModule,
         imports: [PrivateBetaAuthModule],
         controllers: [PrivateBetaLiveController],
-        providers,
+        providers: [...providers, ...corporateAcquisitionProviders],
       };
     }
 
