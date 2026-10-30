@@ -15,12 +15,18 @@ export type ModerationErrorCode =
   | 'MOD_SEMANTIC_PROMOTION_CONSTRAINT_REJECTED'
   | 'MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE';
 
+export type ModerationDiagnostic = {
+  failureStage: 'transaction' | 'audit_context' | 'promotion_function';
+  sqlState?: string;
+};
+
 export class ModerationHttpError extends HttpException {
   public constructor(
     status: HttpStatus,
     public readonly code: ModerationErrorCode,
+    diagnostic?: ModerationDiagnostic,
   ) {
-    super({ code }, status);
+    super(diagnostic ? { code, diagnostic } : { code }, status);
     this.name = 'ModerationHttpError';
   }
 }

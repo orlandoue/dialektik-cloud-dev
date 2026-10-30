@@ -41,14 +41,16 @@ test('classifies audit-context and promotion SQL failures through the same safe 
   const promote = productionService.slice(productionService.indexOf('async promote('));
   const context = promote.indexOf('await setTransactionAuditContext');
   const sqlCall = promote.indexOf('select public.dialektik_promote_live_semantic_event_group');
-  const errorMapping = promote.indexOf('throw semanticPromotionDatabaseError(error)');
+  const errorMapping = promote.indexOf('throw semanticPromotionDatabaseError(error, failureStage)');
   const tryBlock = promote.lastIndexOf('try {', context);
   assert.ok(tryBlock >= 0 && context > tryBlock);
   assert.ok(sqlCall > context && errorMapping > sqlCall);
   assert.match(promote, /try \{\s*return await database\.transaction\(\)\.execute/u);
   assert.match(promote, /catch \(error\) \{\s*if \(error instanceof ModerationHttpError \|\| error instanceof ConflictException\)/u);
-  assert.match(productionService, /function semanticPromotionDatabaseError\(error: unknown\): ModerationHttpError/u);
+  assert.match(productionService, /function semanticPromotionDatabaseError\(/u);
   assert.match(productionService, /MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE/u);
+  assert.match(productionService, /sqlState: databaseCode/u);
+  assert.match(productionService, /failureStage: "transaction" \| "audit_context" \| "promotion_function"/u);
 });
 
 test('limits the new inference grants to the named sources and short excerpts', () => {
