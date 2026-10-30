@@ -18,6 +18,10 @@ const eventOriginMigration = readFileSync(
   new URL('../../../packages/database/src/migration/064_live_event_origin.ts', import.meta.url),
   'utf8',
 );
+const generationLineageMigration = readFileSync(
+  new URL('../../../packages/database/src/migration/065_live_semantic_generation_lineage.ts', import.meta.url),
+  'utf8',
+);
 const provider = readFileSync(
   new URL('../../../packages/database/src/migration/provider.ts', import.meta.url),
   'utf8',
@@ -37,6 +41,7 @@ test('registers migration 060 and retains narrow signed-promotion gates', () => 
   assert.match(provider, /'062_finalize_live_semantic_promotion': finalizeLiveSemanticPromotionMigration/);
   assert.match(provider, /'063_skip_unconfirmed_stale_publications': skipUnconfirmedStalePublicationsMigration/);
   assert.match(provider, /'064_live_event_origin': liveEventOriginMigration/);
+  assert.match(provider, /'065_live_semantic_generation_lineage': liveSemanticGenerationLineageMigration/);
   assert.match(migration, /dialektik_require_context_actor\(actor_identity\)/);
   assert.match(migration, /editorial_single_editor_authorizations/);
   assert.match(migration, /substring\(item\.text_original from quote_start\+1 for quote_end-quote_start\)<>quote_text/);
@@ -47,6 +52,15 @@ test('registers migration 060 and retains narrow signed-promotion gates', () => 
   assert.match(migration, /on conflict\(id\) where id is not null/i);
   assert.doesNotMatch(migration, /\bdrop\s+constraint\b/i);
   assert.doesNotMatch(migration, /grant\s+[^;]*\bto\s+public\b/i);
+});
+
+test('limits extraction generation updates to state supersession and preserves append-only lineage', () => {
+  assert.match(generationLineageMigration, /grant update\(state\)[\s\S]*to dialektik_headline_ai_writer/u);
+  assert.match(generationLineageMigration, /has_table_privilege[\s\S]*'UPDATE'/u);
+  assert.match(generationLineageMigration, /has_column_privilege[\s\S]*'proposal_payload','UPDATE'/u);
+  assert.doesNotMatch(generationLineageMigration, /grant\s+[^;]*\bto\s+public\b/iu);
+  assert.match(productionService, /generationLineage: "active-to-superseded-append-only-retry-v1"/u);
+  assert.match(productionService, /with prior_active as materialized[\s\S]*update public\.assertion_extraction_generations[\s\S]*set state='superseded'[\s\S]*select id from superseded/u);
 });
 
 test('validates deferred graph constraints before returning and allows stale invalid publications to be demoted', () => {
