@@ -24,6 +24,14 @@ export class LiveSemanticProductionController {
     return this.service.runBatch(authorization, body);
   }
 
+  @Post("promote")
+  promote(
+    @Headers("authorization") authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    return this.service.promote(authorization, body);
+  }
+
   @Get("review")
   review(
     @Headers("authorization") authorization: string | undefined,

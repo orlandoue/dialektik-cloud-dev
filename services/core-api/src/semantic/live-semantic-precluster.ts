@@ -1,0 +1,172 @@
+export interface SemanticPreclusterArticle {
+  readonly articleId: string;
+  readonly sourceId: string;
+  readonly publishedAt: Date;
+  readonly headline: string;
+  readonly eventKey: string;
+  readonly eventTitle: string;
+  readonly eventSummary: string;
+}
+
+export interface SemanticCandidatePair {
+  readonly left: SemanticPreclusterArticle;
+  readonly right: SemanticPreclusterArticle;
+  readonly clusterKey: string;
+}
+
+const STOP_WORDS = new Set([
+  "ante", "como", "desde", "donde", "entre", "hacia", "hasta", "para", "pero",
+  "sobre", "tras", "segun", "según", "tambien", "también", "durante", "este",
+  "esta", "estos", "estas", "tras", "porque", "cuando", "quien", "quienes",
+  "the", "and", "with", "from", "after", "before", "into", "over", "under",
+  "chile", "chileno", "chilena", "nacional", "gobierno", "ministro", "ministra",
+  "presidente", "presidenta", "comision", "comisión", "anuncia", "anuncian",
+  "informa", "informan", "seguridad", "economia", "economía", "politica", "política",
+]);
+
+const TOPIC_ALIASES: ReadonlyArray<readonly [string, readonly string[]]> = [
+  ["monsalve-interior", ["monsalve", "interior"]],
+  ["corte-suprema-poder-judicial", ["corte suprema", "poder judicial"]],
+  ["elecciones-servel-alcaldias", ["elecciones", "servel", "alcaldias", "alcaldías"]],
+  ["seguridad-crimen-organizado", ["seguridad", "crimen organizado"]],
+  ["presupuesto-cae-economia", ["presupuesto", "cae", "economia", "economía"]],
+];
+
+function normalized(value: string): string {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/gu, "")
+    .toLocaleLowerCase("es-CL");
+}
+
+function namedTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {
+  const sourceText = [
+    article.headline,
+    article.eventTitle,
+    article.eventSummary,
+    article.eventKey.replace(/[-_:]/gu, " "),
+  ].join(" ");
+  const tokens = new Set<string>();
+  for (const match of sourceText.matchAll(/\b[\p{Lu}][\p{L}\p{N}-]{2,}\b/gu)) {
+    const token = normalized(match[0]);
+    if (token.length >= 4 && !STOP_WORDS.has(token)) tokens.add(token);
+  }
+  for (const match of sourceText.matchAll(/\b[\p{Lu}]{2,}\b/gu)) {
+    const token = normalized(match[0]);
+    if (!STOP_WORDS.has(token)) tokens.add(token);
+  }
+  return tokens;
+}
+
+function topicCluster(left: string, right: string): string | null {
+  for (const [key, aliases] of TOPIC_ALIASES) {
+    if (aliases.some((alias) => left.includes(normalized(alias))) &&
+        aliases.some((alias) => right.includes(normalized(alias)))) {
+      return `topic:${key}`;
+    }
+  }
+  return null;
+}
+
+const SANTIAGO_PARTS = new Intl.DateTimeFormat("en-US", {
+  timeZone: "America/Santiago",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function santiagoDayStart(day: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/u.test(day)) return null;
+  const utcMidnight = Date.parse(`${day}T00:00:00.000Z`);
+  if (
+    !Number.isFinite(utcMidnight) ||
+    new Date(utcMidnight).toISOString().slice(0, 10) !== day
+  ) return null;
+  const parts = Object.fromEntries(
+    SANTIAGO_PARTS.formatToParts(new Date(utcMidnight))
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const localAsUtc = Date.UTC(
+    parts.year ?? 0,
+    (parts.month ?? 1) - 1,
+    parts.day ?? 1,
+    parts.hour ?? 0,
+    parts.minute ?? 0,
+    parts.second ?? 0,
+  );
+  return utcMidnight - (localAsUtc - utcMidnight);
+}
+
+function addCalendarDays(day: string, days: number): string | null {
+  const parsed = Date.parse(`${day}T00:00:00.000Z`);
+  if (!Number.isFinite(parsed)) return null;
+  const date = new Date(parsed);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function clusterKey(
+  left: SemanticPreclusterArticle,
+  right: SemanticPreclusterArticle,
+): string | null {
+  const leftText = normalized([
+    left.headline,
+    left.eventTitle,
+    left.eventSummary,
+    left.eventKey.replace(/[-_:]/gu, " "),
+  ].join(" "));
+  const rightText = normalized([
+    right.headline,
+    right.eventTitle,
+    right.eventSummary,
+    right.eventKey.replace(/[-_:]/gu, " "),
+  ].join(" "));
+  const topic = topicCluster(leftText, rightText);
+  if (topic !== null) return topic;
+
+  const shared = [...namedTokens(left)].filter((token) => namedTokens(right).has(token)).sort();
+  if (shared.length === 0) return null;
+  return `entity:${shared.slice(0, 3).join("-")}`;
+}
+
+/**
+ * A conservative candidate generator. It only narrows the pair set; Workers AI
+ * still has to confirm the same occurrence before any editorial grouping.
+ */
+export function preclusterLiveSemanticArticles(
+  articles: readonly SemanticPreclusterArticle[],
+  targetDay: string,
+): readonly SemanticCandidatePair[] {
+  const endDay = addCalendarDays(targetDay, 2);
+  const start = santiagoDayStart(targetDay);
+  const end = endDay === null ? null : santiagoDayStart(endDay);
+  if (start === null || end === null) return [];
+  const eligible = articles.filter((article) => {
+    const time = article.publishedAt.getTime();
+    return Number.isFinite(time) && time >= start && time < end;
+  });
+  const pairs: SemanticCandidatePair[] = [];
+  for (let index = 0; index < eligible.length; index += 1) {
+    const left = eligible[index];
+    if (left === undefined) continue;
+    for (const right of eligible.slice(index + 1)) {
+      if (left.sourceId === right.sourceId) continue;
+      if (Math.abs(left.publishedAt.getTime() - right.publishedAt.getTime()) > 48 * 60 * 60 * 1000)
+        continue;
+      const key = clusterKey(left, right);
+      if (key === null) continue;
+      const [first, second] = left.articleId < right.articleId ? [left, right] : [right, left];
+      pairs.push({ left: first, right: second, clusterKey: key });
+    }
+  }
+  return pairs.sort((a, b) =>
+    a.clusterKey.localeCompare(b.clusterKey) ||
+    a.left.articleId.localeCompare(b.left.articleId) ||
+    a.right.articleId.localeCompare(b.right.articleId),
+  );
+}

@@ -11,6 +11,7 @@ import {
   type LiveDiscoveredItem,
 } from './live.adapter.js';
 import { assertLiveSourceReady, type LiveSourcePolicy } from './live.registry.js';
+import { fetchMetaDescription } from './meta-description.js';
 
 export interface LivePreflightExposure {
   readonly canonicalUrl: string | null;
@@ -533,11 +534,36 @@ export async function syncLivePayload(
     return summary;
   }
   summary.itemsDiscovered = parsed.itemCount;
+  let metaDescriptionReads = 0;
   for (const batch of parsed.batches) {
     // Metadata-only grants never retain RSS summaries in Article or version rows.
-    const items = batch.map((item) =>
-      policy.storagePolicy === 'METADATA_ONLY' ? Object.freeze({ ...item, excerpt: null }) : item,
-    );
+    const items: LiveDiscoveredItem[] = [];
+    for (const item of batch) {
+      if (policy.storagePolicy === 'METADATA_ONLY') {
+        items.push(Object.freeze({ ...item, excerpt: null }));
+        continue;
+      }
+      if (
+        item.excerpt === null &&
+        item.canonicalUrl !== null &&
+        options.authorizePersistence !== undefined &&
+        metaDescriptionReads < 25
+      ) {
+        metaDescriptionReads += 1;
+        try {
+          await database.transaction().execute(async (transaction) => {
+            await options.authorizePersistence?.(transaction);
+          });
+          const excerpt = await fetchMetaDescription(item.canonicalUrl, policy.allowedArticleDomains);
+          items.push(excerpt === null ? item : Object.freeze({ ...item, excerpt }));
+        } catch {
+          // Optional page metadata must never replace or block the RSS record.
+          items.push(item);
+        }
+      } else {
+        items.push(item);
+      }
+    }
     for (const item of items) {
       const excluded = await excludeItem(database, policy, item, now, discoveryUrl);
       summary.excludedItems++;
