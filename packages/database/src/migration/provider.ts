@@ -61,6 +61,7 @@ import { liveSemanticEditorialPromotionMigration } from './060_live_semantic_edi
 import { liveSemanticProposalMembersOrderMigration } from './061_live_semantic_proposal_members_order';
 import { finalizeLiveSemanticPromotionMigration } from './062_finalize_live_semantic_promotion';
 import { skipUnconfirmedStalePublicationsMigration } from './063_skip_unconfirmed_stale_publications';
+import { liveEventOriginMigration } from './064_live_event_origin';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -103,6 +104,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '061_live_semantic_proposal_members_order': liveSemanticProposalMembersOrderMigration,
   '062_finalize_live_semantic_promotion': finalizeLiveSemanticPromotionMigration,
   '063_skip_unconfirmed_stale_publications': skipUnconfirmedStalePublicationsMigration,
+  '064_live_event_origin': liveEventOriginMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,

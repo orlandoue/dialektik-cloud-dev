@@ -302,6 +302,7 @@ export interface SourceTable {
 
 export interface EventTable {
   id: Ulid;
+  origin: ColumnType<ProductOrigin | null, ProductOrigin | null | undefined, ProductOrigin | null>;
   title_descriptive: string;
   category_id: Ulid;
   window_from: Timestamp;

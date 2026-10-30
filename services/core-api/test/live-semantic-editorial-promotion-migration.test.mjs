@@ -14,6 +14,10 @@ const stalePublicationMigration = readFileSync(
   new URL('../../../packages/database/src/migration/063_skip_unconfirmed_stale_publications.ts', import.meta.url),
   'utf8',
 );
+const eventOriginMigration = readFileSync(
+  new URL('../../../packages/database/src/migration/064_live_event_origin.ts', import.meta.url),
+  'utf8',
+);
 const provider = readFileSync(
   new URL('../../../packages/database/src/migration/provider.ts', import.meta.url),
   'utf8',
@@ -32,6 +36,7 @@ test('registers migration 060 and retains narrow signed-promotion gates', () => 
   assert.match(provider, /'061_live_semantic_proposal_members_order': liveSemanticProposalMembersOrderMigration/);
   assert.match(provider, /'062_finalize_live_semantic_promotion': finalizeLiveSemanticPromotionMigration/);
   assert.match(provider, /'063_skip_unconfirmed_stale_publications': skipUnconfirmedStalePublicationsMigration/);
+  assert.match(provider, /'064_live_event_origin': liveEventOriginMigration/);
   assert.match(migration, /dialektik_require_context_actor\(actor_identity\)/);
   assert.match(migration, /editorial_single_editor_authorizations/);
   assert.match(migration, /substring\(item\.text_original from quote_start\+1 for quote_end-quote_start\)<>quote_text/);
@@ -61,6 +66,15 @@ test('stale publication invalidation preserves legacy rows that never had an edi
   assert.match(stalePublicationMigration, /set search_path=pg_catalog,public,extensions/u);
   assert.doesNotMatch(stalePublicationMigration, /\bdrop\s+constraint\b/i);
   assert.doesNotMatch(stalePublicationMigration, /grant\s+[^;]*\bto\s+public\b/i);
+});
+
+test('persists LIVE_REAL origin on promoted events and their public projection', () => {
+  assert.match(eventOriginMigration, /analysis_state,origin\)/u);
+  assert.match(eventOriginMigration, /'ANALYSIS_PENDING','LIVE_REAL'/u);
+  assert.match(eventOriginMigration, /merged_at,origin\)/u);
+  assert.match(eventOriginMigration, /merged_by,merged_at,origin\)/u);
+  assert.match(eventOriginMigration, /promotion\.event_id=event_row\.id/u);
+  assert.doesNotMatch(eventOriginMigration, /\bdrop\s+constraint\b/i);
 });
 
 test('inserts immutable proposal members before creating the submitted proposal', () => {
