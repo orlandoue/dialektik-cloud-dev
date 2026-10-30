@@ -1,4 +1,5 @@
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -35,10 +36,19 @@ class IngestionOperationTests(unittest.TestCase):
         self.assertIn("O''Reilly $metadata_ingestion$", sql)
         self.assertTrue(sql.strip().endswith('rollback;'))
 
-    def test_existing_articles_keep_original_text_immutable(self):
-        sql = module.sql_for([{'articleText': 'new headline and excerpt'}], True)
+    def test_existing_articles_refresh_only_through_the_approved_excerpt_guard(self):
+        sql = module.sql_for([{
+            'articleText': 'new headline and excerpt',
+            'normalizedText': 'new headline and excerpt',
+            'excerpt': 'excerpt',
+            'language': 'es',
+        }], True)
         self.assertIn('insert into live_article_versions', sql)
-        self.assertNotIn('update articles set text_original', sql.lower())
+        self.assertIn("set_config('dialektik.allow_live_excerpt_projection','on',true)", sql)
+        self.assertIn("set_config('dialektik.live_excerpt_version_id'", sql)
+        self.assertIn('update articles set text_original', sql.lower())
+        self.assertIn('not exists(select 1 from claim_spans', sql.lower())
+        self.assertIn('not exists(select 1 from assertion_extraction_generations', sql.lower())
 
     def test_apply_requires_simulation_and_clears_the_private_batch_after_commit(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {'SUPABASE_ACCESS_TOKEN': 'fixture-secret'}):
@@ -110,6 +120,34 @@ class IngestionOperationTests(unittest.TestCase):
                 self.assertEqual(first, module.signature({'items': ['example']}))
             module.create_batch_key()
             self.assertNotEqual(first, module.signature({'items': ['example']}))
+
+    def test_youtube_artifact_manifest_is_digest_checked_and_bound_to_current_feed_endpoints(self):
+        with tempfile.TemporaryDirectory() as directory:
+            entries = []
+            sources = []
+            for index, source_id in enumerate(module.YOUTUBE_SOURCE_IDS):
+                endpoint = f'https://www.youtube.com/feeds/videos.xml?channel_id=UC{index:022d}'
+                entries.append({'source_id': source_id, 'endpoint': endpoint,
+                    'status': 'failed', 'error_code': 'ROBOTS_DISALLOWS_FEED'})
+                sources.append({'id': source_id, 'endpoint': endpoint})
+            manifest = {
+                'schema': 'dialektik-youtube-feed-manifest-v1',
+                'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                'channels': entries,
+            }
+            manifest['sha256'] = hashlib.sha256(module.serialized(manifest)).hexdigest()
+            path = Path(directory) / 'manifest.json'
+            path.write_text(json.dumps(manifest), encoding='utf-8')
+            with patch.object(module, 'sources', return_value=sources):
+                imported = module.load_youtube_manifest(path)
+            self.assertEqual(set(imported), set(module.YOUTUBE_SOURCE_IDS))
+            self.assertEqual({item['status'] for item in imported.values()}, {'failed'})
+
+            manifest['channels'][0]['endpoint'] = 'https://attacker.example/feed'
+            path.write_text(json.dumps(manifest), encoding='utf-8')
+            with patch.object(module, 'sources', return_value=sources):
+                with self.assertRaisesRegex(RuntimeError, 'YOUTUBE_FEED_MANIFEST_DIGEST_INVALID'):
+                    module.load_youtube_manifest(path)
 
 
 if __name__ == '__main__':

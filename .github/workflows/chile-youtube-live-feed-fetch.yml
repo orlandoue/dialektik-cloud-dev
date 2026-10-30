@@ -1,0 +1,43 @@
+name: Chile YouTube metadata feed fetch
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chile-youtube-feed-fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch-public-feeds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Build the reviewed feed parser
+        run: |
+          npm install --global npm@11.6.2
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Fetch and parse the 32 public Atom feeds
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/dialektik-youtube"
+          python3 scripts/operations/chile-rss-once/fetch_youtube_feeds.py \
+            "$RUNNER_TEMP/dialektik-youtube/youtube-feed-manifest.json"
+      - name: Upload short-lived metadata manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chile-youtube-feed-manifest
+          path: ${{ runner.temp }}/dialektik-youtube/youtube-feed-manifest.json
+          retention-days: 1
+          if-no-files-found: error

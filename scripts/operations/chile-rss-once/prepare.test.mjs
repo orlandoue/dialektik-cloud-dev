@@ -57,6 +57,37 @@ test('retains a cleaned feed description only under an excerpt storage policy', 
   assert.match(result.items[0].normalizedText, /^headline\. rss-provided excerpt/);
 });
 
+test('repackages sanitized YouTube feed metadata with fresh locally generated receipt IDs', () => {
+  const youtubeSource = {
+    ...source,
+    id: '01M4YDQK00YT01MEGAN0T1C1AS',
+    policy_id: 'b'.repeat(64),
+    name: 'Meganoticias (YouTube)',
+    canonical_domain: 'youtube.com',
+    registry_key: 'chile-yt-meganoticias-v1',
+    endpoint: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCkccyEbqhhM3uKOI6Shm-4Q',
+    storage_policy: 'METADATA_AND_FEED_EXCERPT',
+  };
+  const description = 'Un resumen breve publicado por el canal.';
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns:media="http://search.yahoo.com/mrss/"><entry>
+      <id>yt:video:repack-1</id><title>Video reciente del canal</title>
+      <link rel="alternate" href="https://www.youtube.com/watch?v=repack-1"/>
+      <published>${new Date().toISOString()}</published>
+      <media:group><media:description>${description}</media:description></media:group>
+    </entry></feed>`;
+  const fetched = runWith(youtubeSource, xml);
+  assert.equal(fetched.items.length, 1);
+  const repacked = runWithItems(youtubeSource, fetched.items);
+  assert.equal(repacked.items.length, 1);
+  assert.equal(repacked.items[0].excerpt, description);
+  assert.equal(repacked.items[0].articleText, 'Video reciente del canal. ' + description);
+  assert.equal(repacked.items[0].sourceItemId, fetched.items[0].sourceItemId);
+  assert.notEqual(repacked.items[0].receiptId, fetched.items[0].receiptId);
+  assert.notEqual(repacked.items[0].versionId, fetched.items[0].versionId);
+});
+
 test('prepares news-sitemap provenance as metadata only', () => {
   const sitemapSource = {
     ...source,
@@ -84,6 +115,14 @@ test('prepares news-sitemap provenance as metadata only', () => {
 function runWith(inputSource, xml) {
   const result = spawnSync(process.execPath, [script], {
     input: JSON.stringify({ source: inputSource, xml }), encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+function runWithItems(inputSource, items) {
+  const result = spawnSync(process.execPath, [script], {
+    input: JSON.stringify({ source: inputSource, items }), encoding: 'utf8',
   });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);

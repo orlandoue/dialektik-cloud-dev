@@ -294,6 +294,47 @@ function receipt(
   };
 }
 
+async function refreshLiveArticleTextProjection(
+  transaction: Transaction<Database>,
+  articleId: Ulid,
+  versionId: Ulid,
+  language: string,
+  headline: string,
+  excerpt: string | null,
+): Promise<boolean> {
+  const article = await transaction
+    .selectFrom('articles')
+    .select(['lang', 'text_original', 'text_normalized'])
+    .where('id', '=', articleId)
+    .executeTakeFirst();
+  if (article === undefined) throw new Error('LIVE_ARTICLE_MISSING');
+
+  const update: { lang?: string; text_original?: string; text_normalized?: string } = {};
+  if (article.lang !== language) update.lang = language;
+  if (excerpt !== null) {
+    const originalText = `${headline}. ${excerpt}`;
+    const normalizedText = originalText.normalize('NFKC').toLowerCase();
+    if (article.text_original !== originalText || article.text_normalized !== normalizedText) {
+      const semanticHistory = await sql<{ present: boolean }>`
+        select exists(select 1 from public.claim_spans where article_id=${articleId})
+          or exists(select 1 from public.assertion_extraction_generations
+            where article_id=${articleId} and state='active') as present
+      `.execute(transaction);
+      if (semanticHistory.rows[0]?.present !== true) {
+        await sql`
+          select set_config('dialektik.allow_live_excerpt_projection','on',true),
+            set_config('dialektik.live_excerpt_version_id',${versionId},true)
+        `.execute(transaction);
+        update.text_original = originalText;
+        update.text_normalized = normalizedText;
+      }
+    }
+  }
+  if (Object.keys(update).length === 0) return false;
+  await transaction.updateTable('articles').set(update).where('id', '=', articleId).execute();
+  return true;
+}
+
 async function persistItem(
   transaction: Transaction<Database>,
   policy: LiveSourcePolicy,
@@ -338,7 +379,7 @@ async function persistItem(
   const originalText = [item.headline, item.excerpt]
     .filter((part): part is string => part !== null)
     .join('. ');
-  const normalizedText = originalText.normalize('NFKC').toLocaleLowerCase('es-CL');
+  const normalizedText = originalText.normalize('NFKC').toLowerCase();
   if (existing === undefined) {
     await transaction
       .insertInto('articles')
@@ -362,22 +403,6 @@ async function persistItem(
         live_exposure_id: linkedExclusion,
       })
       .execute();
-  } else {
-    // Excerpts are stored only under the source's explicit feed-excerpt policy.
-    // When that policy becomes active, refresh the current projection while
-    // preserving the append-only acquisition/version history below.
-    const articleUpdate: { lang?: string; text_original?: string; text_normalized?: string } = {};
-    if (existing.lang !== item.language) articleUpdate.lang = item.language;
-    if (
-      item.excerpt !== null &&
-      (existing.text_original !== originalText || existing.text_normalized !== normalizedText)
-    ) {
-      articleUpdate.text_original = originalText;
-      articleUpdate.text_normalized = normalizedText;
-    }
-    if (Object.keys(articleUpdate).length > 0) {
-      await transaction.updateTable('articles').set(articleUpdate).where('id', '=', articleId).execute();
-    }
   }
   const metadata = {
     headline: item.headline,
@@ -410,16 +435,22 @@ async function persistItem(
     latest.version_canonical_url === item.canonicalUrl
   )
     return existing !== undefined &&
-      ((item.excerpt !== null &&
-        (existing.text_original !== originalText || existing.text_normalized !== normalizedText)) ||
-        existing.lang !== item.language)
+      (await refreshLiveArticleTextProjection(
+        transaction,
+        articleId,
+        latest.id,
+        item.language,
+        item.headline,
+        item.excerpt,
+      ))
       ? 'updated'
       : 'unchanged';
   const legalText = [item.headline, item.excerpt].filter((part) => part !== null).join('\n');
+  const versionId = nextId(now);
   await transaction
     .insertInto('live_article_versions')
     .values({
-      id: nextId(now),
+      id: versionId,
       article_id: articleId,
       receipt_id: acquisition.id,
       version_number: (latest?.version_number ?? 0) + 1,
@@ -435,6 +466,16 @@ async function persistItem(
       recorded_at: now,
     })
     .execute();
+  if (existing !== undefined) {
+    await refreshLiveArticleTextProjection(
+      transaction,
+      articleId,
+      versionId,
+      item.language,
+      item.headline,
+      item.excerpt,
+    );
+  }
   return existing === undefined ? 'new' : 'updated';
 }
 

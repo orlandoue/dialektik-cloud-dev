@@ -132,9 +132,9 @@ def allowed_fetch_hosts(source):
     return hosts
 
 
-def sources():
-    ids = ','.join("'" + value + "'" for value in SOURCE_IDS)
-    return query(f"""select s.id,s.name,s.canonical_domain,p.id policy_id,p.registry_key,
+def sources(source_ids=SOURCE_IDS):
+    ids = ','.join("'" + value + "'" for value in source_ids)
+    rows = query(f"""select s.id,s.name,s.canonical_domain,p.id policy_id,p.registry_key,
       p.policy->>'endpoint' endpoint,p.storage_policy,
       coalesce(p.policy->>'discoveryChannel','rss_atom') discovery_channel,
       coalesce(p.policy->'canonicalPathAliases','{{}}'::jsonb) canonical_path_aliases,
@@ -149,6 +149,9 @@ def sources():
         and p.policy->>'rightsEvidenceUrl'<>'https://supabase.com'
         and p.policy->>'endpoint'<>'https://supabase.com'
       order by s.id""", True)
+    if {row['id'] for row in rows} != set(source_ids):
+        raise RuntimeError('REVIEWED_SOURCE_SET_INCOMPLETE')
+    return rows
 
 
 def get(source):
@@ -188,36 +191,59 @@ def get(source):
         )
         if not xml_mime and not biofeed_octet_stream:
             raise ValueError('FEED_CONTENT_TYPE_INVALID')
-    input_json = json.dumps({'source': source, 'xml': raw.decode('utf-8', 'strict')}, ensure_ascii=False)
+    return parse_feed(source, raw.decode('utf-8', 'strict'))
+
+
+def parse_feed(source, xml=None, items=None):
+    payload = {'source': source, 'xml': xml} if xml is not None else {'source': source, 'items': items}
+    input_json = json.dumps(payload, ensure_ascii=False)
     result = subprocess.run(['node', str(HERE / 'prepare.mjs')], input=input_json, text=True,
                             capture_output=True, timeout=30, check=True)
     return json.loads(result.stdout)
 
 
-def prepare():
-    records = sources()
-    if {row['id'] for row in records} != set(SOURCE_IDS):
-        raise RuntimeError('REVIEWED_SOURCE_SET_INCOMPLETE')
+def prepare(source_ids=SOURCE_IDS, imported_feeds=None):
+    records = sources(source_ids)
     target_date = os.environ.get('DIALEKTIK_RSS_PUBLICATION_DATE') or \
         dt.datetime.now(ZoneInfo('America/Santiago')).date().isoformat()
-    ids = ','.join("'" + value + "'" for value in SOURCE_IDS)
+    ids = ','.join("'" + value + "'" for value in source_ids)
     existing = query(f"""select a.id::text article_id,a.source_id::text source_id,a.origin,a.url_canonical,
         (a.published_at at time zone 'America/Santiago')::date='{target_date}'::date as is_today
       from public.articles a where a.origin='LIVE_REAL' and a.source_id in ({ids})
       order by a.source_id,a.url_canonical""", True)
     existing_by_url = {row['url_canonical']: row for row in existing}
-    today_counts = {source_id: 0 for source_id in SOURCE_IDS}
+    today_counts = {source_id: 0 for source_id in source_ids}
     for row in existing:
         if row['is_today']:
             today_counts[row['source_id']] += 1
 
     results = []
-    with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(records))) as pool:
-        futures = {pool.submit(get, source): source for source in records}
-        for future in concurrent.futures.as_completed(futures):
-            source = futures[future]
+    if imported_feeds is None:
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(records))) as pool:
+            futures = {pool.submit(get, source): source for source in records}
+            for future in concurrent.futures.as_completed(futures):
+                source = futures[future]
+                try:
+                    result = future.result()
+                    result['source_id'] = source['id']
+                    result['status'] = 'succeeded'
+                except Exception as error:
+                    result = {
+                        'source': source['name'], 'source_id': source['id'],
+                        'status': 'failed', 'error_code': type(error).__name__, 'items': [],
+                    }
+                results.append(result)
+    else:
+        for source in records:
+            entry = imported_feeds[source['id']]
+            if entry['status'] != 'succeeded':
+                results.append({
+                    'source': source['name'], 'source_id': source['id'],
+                    'status': 'failed', 'error_code': entry['error_code'], 'items': [],
+                })
+                continue
             try:
-                result = future.result()
+                result = parse_feed(source, items=entry['items'])
                 result['source_id'] = source['id']
                 result['status'] = 'succeeded'
             except Exception as error:
@@ -244,8 +270,8 @@ def prepare():
 
     selected_items = []
     selected_urls = set()
-    matched_counts = {source_id: 0 for source_id in SOURCE_IDS}
-    collision_counts = {source_id: 0 for source_id in SOURCE_IDS}
+    matched_counts = {source_id: 0 for source_id in source_ids}
+    collision_counts = {source_id: 0 for source_id in source_ids}
     for result in results:
         source_id = result['source_id']
         source = next(source for source in records if source['id'] == source_id)
@@ -317,6 +343,64 @@ def prepare():
     DRY_RUN.unlink(missing_ok=True)
 
 
+def load_youtube_manifest(path):
+    manifest = json.loads(Path(path).read_text(encoding='utf-8'))
+    if not isinstance(manifest, dict):
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_INVALID')
+    recorded_digest = manifest.pop('sha256', None)
+    if (manifest.get('schema') != 'dialektik-youtube-feed-manifest-v1'
+            or set(manifest) != {'schema', 'fetched_at', 'channels'}
+            or not isinstance(recorded_digest, str)):
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_INVALID')
+    actual_digest = hashlib.sha256(serialized(manifest)).hexdigest()
+    if not hmac.compare_digest(recorded_digest, actual_digest):
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_DIGEST_INVALID')
+    try:
+        fetched_at = dt.datetime.fromisoformat(manifest['fetched_at'].replace('Z', '+00:00'))
+    except (AttributeError, TypeError, ValueError) as error:
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_TIMESTAMP_INVALID') from error
+    if fetched_at.tzinfo is None:
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_TIMESTAMP_INVALID')
+    age = dt.datetime.now(dt.timezone.utc) - fetched_at.astimezone(dt.timezone.utc)
+    if age > dt.timedelta(hours=2) or age < dt.timedelta(minutes=-5):
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_EXPIRED')
+    entries = manifest['channels']
+    if not isinstance(entries, list) or len(entries) != len(YOUTUBE_SOURCE_IDS):
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_CHANNEL_COUNT_INVALID')
+    if any(not isinstance(entry, dict) for entry in entries):
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
+    if {entry.get('source_id') for entry in entries} != set(YOUTUBE_SOURCE_IDS):
+        raise RuntimeError('YOUTUBE_FEED_MANIFEST_SOURCE_SET_INVALID')
+
+    records = sources(YOUTUBE_SOURCE_IDS)
+    source_by_id = {row['id']: row for row in records}
+    imported = {}
+    for entry in entries:
+        source_id = entry['source_id']
+        endpoint = entry.get('endpoint')
+        if endpoint != source_by_id[source_id]['endpoint']:
+            raise RuntimeError('YOUTUBE_FEED_ENDPOINT_MISMATCH')
+        if entry.get('status') == 'succeeded':
+            if set(entry) != {'source_id', 'endpoint', 'status', 'items'}:
+                raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
+            items = entry.get('items')
+            parsed = urllib.parse.urlsplit(endpoint)
+            if (not isinstance(items, list) or len(items) > 200
+                    or parsed.scheme != 'https' or parsed.hostname != 'www.youtube.com'
+                    or parsed.path != '/feeds/videos.xml'):
+                raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
+            imported[source_id] = {'status': 'succeeded', 'items': items}
+        elif entry.get('status') == 'failed':
+            if (set(entry) != {'source_id', 'endpoint', 'status', 'error_code'}
+                    or not isinstance(entry.get('error_code'), str)
+                    or not re.fullmatch(r'[A-Z_]{1,64}', entry['error_code'])):
+                raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
+            imported[source_id] = {'status': 'failed', 'error_code': entry['error_code']}
+        else:
+            raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
+    return imported
+
+
 def sql_for(items, dry_run):
     literal = json.dumps(items, ensure_ascii=False, separators=(',', ':')).replace("'", "''")
     ending = 'rollback;' if dry_run else 'commit;'
@@ -357,7 +441,7 @@ begin
           and coalesce(p.policy->>'discoveryChannel','rss_atom')=entry->>'discoveryChannel') then
       raise exception 'SOURCE_REVIEW_CHANGED_OR_NOT_AUTHORIZED';
     end if;
-    select a.id,a.source_id,a.origin,a.live_exposure_id
+    select a.id,a.source_id,a.origin,a.live_exposure_id,a.text_original,a.text_normalized,a.lang
       into existing_article from articles a
       where a.url_canonical=entry->>'canonicalUrl'
         or exists(select 1 from live_acquisition_receipts r where r.source_id=entry->>'sourceId'
@@ -376,6 +460,19 @@ begin
       if latest_version.id is null then raise exception 'LIVE_VERSION_MISSING'; end if;
       if latest_version.headline=entry->>'headline' and latest_version.excerpt=entry->>'excerpt'
           and latest_version.policy_id=entry->>'policyId' then
+        if (existing_article.text_original is distinct from entry->>'articleText'
+            or existing_article.text_normalized is distinct from entry->>'normalizedText')
+            and not exists(select 1 from claim_spans where article_id=existing_article.id)
+            and not exists(select 1 from assertion_extraction_generations
+              where article_id=existing_article.id and state='active') then
+          perform set_config('dialektik.allow_live_excerpt_projection','on',true);
+          perform set_config('dialektik.live_excerpt_version_id',latest_version.id::text,true);
+          update articles set text_original=entry->>'articleText',
+            text_normalized=entry->>'normalizedText',lang=entry->>'language'
+            where id=existing_article.id;
+        elsif existing_article.lang is distinct from entry->>'language' then
+          update articles set lang=entry->>'language' where id=existing_article.id;
+        end if;
         continue;
       end if;
       insert into live_exposure_exclusions(id,registry_key,publisher_name,canonical_url,source_item_id,
@@ -418,6 +515,18 @@ begin
         entry->>'metadataHash',entry->>'headline',entry->>'excerpt',entry->>'author',
         (entry->>'publishedAt')::timestamptz,(entry->>'modifiedAt')::timestamptz,entry->>'declaredUpstream',
         entry->>'contentHash',entry->>'signature',(entry->>'capturedAt')::timestamptz);
+      if not exists(select 1 from claim_spans where article_id=existing_article.id)
+          and not exists(select 1 from assertion_extraction_generations
+            where article_id=existing_article.id and state='active') then
+        perform set_config('dialektik.allow_live_excerpt_projection','on',true);
+        perform set_config('dialektik.live_excerpt_version_id',entry->>'versionId',true);
+        update articles set text_original=entry->>'articleText',
+          text_normalized=entry->>'normalizedText',lang=entry->>'language'
+          where id=existing_article.id
+            and (text_original is distinct from entry->>'articleText'
+              or text_normalized is distinct from entry->>'normalizedText'
+              or lang is distinct from entry->>'language');
+      end if;
       continue;
     end if;
     insert into articles(id,source_id,event_id,url_canonical,text_original,text_normalized,lang,published_at,
@@ -487,12 +596,13 @@ def write(dry_run):
         print(f'Simulación correcta; {len(items)} candidatos; transacción revertida.')
         return
     DRY_RUN.unlink(missing_ok=True)
+    source_ids = sorted({item['sourceId'] for item in items})
     results = query(f"""select s.name,count(*)::int articles_today,
         count(*) filter (where v.excerpt is not null)::int with_feed_excerpt
       from articles a join sources s on s.id=a.source_id
       join lateral (select excerpt from live_article_versions where article_id=a.id order by version_number desc limit 1) v on true
       where a.origin='LIVE_REAL' and (a.published_at at time zone 'America/Santiago')::date='{target_date}'::date
-        and a.source_id in ({','.join(chr(39)+value+chr(39) for value in SOURCE_IDS)})
+        and a.source_id in ({','.join(chr(39)+value+chr(39) for value in source_ids)})
       group by s.name order by s.name""", True)
     print(json.dumps(results, ensure_ascii=False))
     PREPARED.unlink(missing_ok=True)
@@ -501,10 +611,20 @@ def write(dry_run):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['prepare', 'dry-run', 'apply'])
-    action = parser.parse_args().action
+    parser.add_argument('action', choices=['prepare', 'prepare-youtube-manifest', 'dry-run', 'apply'])
+    parser.add_argument('--manifest')
+    args = parser.parse_args()
+    action = args.action
     try:
-        prepare() if action == 'prepare' else write(action == 'dry-run')
+        if action == 'prepare':
+            prepare()
+        elif action == 'prepare-youtube-manifest':
+            if not args.manifest:
+                raise RuntimeError('YOUTUBE_FEED_MANIFEST_REQUIRED')
+            imported = load_youtube_manifest(args.manifest)
+            prepare(YOUTUBE_SOURCE_IDS, imported)
+        else:
+            write(action == 'dry-run')
     except Exception as error:
         print(f'INGESTION_FAILED: {error}', file=sys.stderr)
         sys.exit(1)
