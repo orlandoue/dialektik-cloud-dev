@@ -115,7 +115,7 @@ export class ShadowPreflightRepository {
           order by version_number desc limit 1) v on true
         left join live_acquisition_receipts r on r.id = v.receipt_id
         left join live_source_policies p on p.id = r.policy_id
-        where a.origin = 'LIVE_REAL' and a.event_id is null
+        where a.origin = 'LIVE_REAL'
         order by a.captured_at, a.id
       `.execute(transaction);
         const articles: ShadowPreflightArticle[] = result.rows.map((row) => {

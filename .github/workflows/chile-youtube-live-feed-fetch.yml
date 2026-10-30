@@ -1,0 +1,56 @@
+name: Chile YouTube metadata feed fetch
+
+on:
+  push:
+    branches:
+      - codex/production-feed-semantics
+    paths:
+      - ".github/workflows/chile-youtube-live-feed-fetch.yml"
+      - "scripts/operations/chile-rss-once/fetch_youtube_data_api.mjs"
+      - "scripts/operations/chile-rss-once/ingest.py"
+      - "scripts/operations/chile-rss-once/prepare.mjs"
+      - "packages/database/src/migration/054_chile_feed_excerpt_and_youtube_sources.ts"
+      - "services/core-api/src/live/youtube-data-api.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chile-youtube-feed-fetch
+  cancel-in-progress: false
+
+jobs:
+  fetch-public-feeds:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Build the reviewed feed parser
+        run: |
+          npm install --global npm@11.6.2
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Fetch current channel metadata with YouTube Data API v3
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p "$RUNNER_TEMP/dialektik-youtube"
+          node scripts/operations/chile-rss-once/fetch_youtube_data_api.mjs \
+            "$RUNNER_TEMP/dialektik-youtube/youtube-feed-manifest.json"
+      - name: Upload short-lived metadata manifest
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: chile-youtube-feed-manifest
+          path: ${{ runner.temp }}/dialektik-youtube/youtube-feed-manifest.json
+          retention-days: 1
+          if-no-files-found: error

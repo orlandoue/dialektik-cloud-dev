@@ -100,7 +100,7 @@ export class EphemeralInspectorRepository {
           order by failed_at desc,id desc limit 1) failure on true
         left join lateral (select * from semantic_refetch_verifications where article_version_id=v.id
           order by verified_at desc,id desc limit 1) ref on true
-        where a.origin='LIVE_REAL' and a.event_id is null order by a.captured_at,a.id
+        where a.origin='LIVE_REAL' order by a.captured_at,a.id
       `.execute(tx);
         const articles = [];
         for (const row of rows.rows) {

@@ -128,7 +128,7 @@ export class EphemeralGraphInspectorRepository {
           and recorded_at<=v.acquired_at order by version_number desc limit 1) m on true
         left join lateral (select * from semantic_refetch_verifications where article_version_id=v.id
           order by verified_at desc,id desc limit 1) ref on true
-        where i.snapshot_id=${snapshotId} and a.event_id is null
+        where i.snapshot_id=${snapshotId}
         order by v.published_at,a.id
       `.execute(tx);
         const expected = await tx
