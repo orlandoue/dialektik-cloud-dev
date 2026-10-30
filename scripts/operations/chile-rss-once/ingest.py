@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""One bounded, source-policy-gated RSS acquisition; use --prepare, --dry-run, then --apply."""
+"""One bounded, source-policy-gated RSS/Atom acquisition; use prepare, dry-run, then apply."""
 import argparse
 import concurrent.futures
 import datetime as dt
@@ -25,13 +25,49 @@ PREPARED = RUN_DIR / 'prepared.json'
 DRY_RUN = RUN_DIR / 'dry-run.json'
 BATCH_KEY = RUN_DIR / 'batch-key.bin'
 PROJECT = 'vclsswwfhljczxgnsciq'
-SOURCE_IDS = [
+CHILE_SOURCE_IDS = [
     '01M4YDQK00CH1000C1PERCH11E', '01M4YDQK00CH100C00PERAT1VA',
     '01M4YDQK00CH100D1AR10E1D1A', '01M4YDQK00CH100001ATERCERA',
     '01M4YDQK00CH1000B10B10CH11', '01M4YDQK00CH100E1M0STRAD0R',
 ]
+YOUTUBE_SOURCE_IDS = [
+        "01M4YDQK00YT01MEGAN0T1C1AS",
+        "01M4YDQK00YT02TE1ETRECE013",
+        "01M4YDQK00YT03TVN24H0RAS01",
+        "01M4YDQK00YT04CHVN0T1C1AS1",
+        "01M4YDQK00YT05CNNCH11E0001",
+        "01M4YDQK00YT06B10B10CH11E1",
+        "01M4YDQK00YT07CANA19B10B10",
+        "01M4YDQK00YT08C00PERAT1VA1",
+        "01M4YDQK00YT09ADNRAD10CH11",
+        "01M4YDQK00YT10AGR1CV1TVRA1",
+        "01M4YDQK00YT11RAD10PAVTA01",
+        "01M4YDQK00YT12TE1E13RAD101",
+        "01M4YDQK00YT13RAD101NF1N1T",
+        "01M4YDQK00YT14RAD10DVNA001",
+        "01M4YDQK00YT15E1M0STRAD0R1",
+        "01M4YDQK00YT16C1PERCH11E01",
+        "01M4YDQK00YT17THEC11N1CTV1",
+        "01M4YDQK00YT18V0ZS0BRAN001",
+        "01M4YDQK00YT19S1NF11TR0STV",
+        "01M4YDQK00YT20CANA1V1AX001",
+        "01M4YDQK00YT21E111BER0TV01",
+        "01M4YDQK00YT22DESC0NC1ERT0",
+        "01M4YDQK00YT23E1C1VDADAN01",
+        "01M4YDQK00YT24TVRN0C0PAN01",
+        "01M4YDQK00YT25FASTCHECKC11",
+        "01M4YDQK00YT26RAD10VCH11E1",
+        "01M4YDQK00YT271ATERCERATV1",
+        "01M4YDQK00YT28DF11VECH11E1",
+        "01M4YDQK00YT29CAMARAD1PVT1",
+        "01M4YDQK00YT30TVSENAD0CH11",
+        "01M4YDQK00YT31P0DERJVD1C1A",
+        "01M4YDQK00YT32V0CER1AG0BC1"
+    ]
+SOURCE_IDS = [*CHILE_SOURCE_IDS, *YOUTUBE_SOURCE_IDS]
 BIOBIO_ID = '01M4YDQK00CH1000B10B10CH11'
-BIOBIO_FEED = 'https://www.biobiochile.cl/static/feed-rss'
+BIOBIO_FEED = 'https://feeds.feedburner.com/radiobiobio/NNeJ'
+BIOBIO_FEED_HOST = 'feeds.feedburner.com'
 AGENT = 'DialektikRSSMetadata/1.0'
 
 
@@ -89,6 +125,13 @@ def query(sql, read_only=False):
         raise RuntimeError(f'SUPABASE_QUERY_HTTP_{error.code}: {error.read(1600).decode()}') from error
 
 
+def allowed_fetch_hosts(source):
+    hosts = {source['canonical_domain'], 'www.' + source['canonical_domain']}
+    if source['id'] == BIOBIO_ID and source['endpoint'] == BIOBIO_FEED:
+        hosts.add(BIOBIO_FEED_HOST)
+    return hosts
+
+
 def sources():
     ids = ','.join("'" + value + "'" for value in SOURCE_IDS)
     return query(f"""select s.id,s.name,s.canonical_domain,p.id policy_id,p.registry_key,
@@ -111,7 +154,7 @@ def sources():
 def get(source):
     endpoint = source['endpoint']
     parsed = urllib.parse.urlsplit(endpoint)
-    allowed_hosts = {source['canonical_domain'], 'www.' + source['canonical_domain']}
+    allowed_hosts = allowed_fetch_hosts(source)
     if parsed.scheme != 'https' or parsed.hostname not in allowed_hosts or parsed.username or parsed.password:
         raise ValueError('SOURCE_ENDPOINT_IDENTITY_INVALID')
     robots_url = f'https://{parsed.netloc}/robots.txt'
@@ -158,43 +201,117 @@ def prepare():
     target_date = os.environ.get('DIALEKTIK_RSS_PUBLICATION_DATE') or \
         dt.datetime.now(ZoneInfo('America/Santiago')).date().isoformat()
     ids = ','.join("'" + value + "'" for value in SOURCE_IDS)
-    existing = query(f"""select a.id::text article_id,a.source_id::text source_id,a.url_canonical
+    existing = query(f"""select a.id::text article_id,a.source_id::text source_id,a.origin,a.url_canonical,
+        (a.published_at at time zone 'America/Santiago')::date='{target_date}'::date as is_today
       from public.articles a where a.origin='LIVE_REAL' and a.source_id in ({ids})
-        and (a.published_at at time zone 'America/Santiago')::date='{target_date}'::date
       order by a.source_id,a.url_canonical""", True)
-    existing_by_source = {source_id: {} for source_id in SOURCE_IDS}
+    existing_by_url = {row['url_canonical']: row for row in existing}
+    today_counts = {source_id: 0 for source_id in SOURCE_IDS}
     for row in existing:
-        existing_by_source[row['source_id']][row['url_canonical']] = row['article_id']
-    with concurrent.futures.ThreadPoolExecutor(max_workers=len(SOURCE_IDS)) as pool:
-        results = list(pool.map(get, records))
-    for source, result in zip(records, results):
-        stored_urls = existing_by_source[source['id']]
-        feed_items = result['items']
-        matched_items = [item for item in feed_items if item['canonicalUrl'] in stored_urls]
-        authorized_items = [item for item in matched_items if item.get('excerpt') is not None]
-        for item in authorized_items:
-            item['articleId'] = stored_urls[item['canonicalUrl']]
-        result['items'] = authorized_items
-        result['feed_candidates_today'] = len(feed_items)
-        result['existing_articles_today'] = len(stored_urls)
-        result['matched_articles_today'] = len(matched_items)
-        result['unmatched_articles_today'] = len(stored_urls) - len(matched_items)
-        result['authorized_excerpt_count'] = len(authorized_items)
-    items = [item for result in results for item in result['items']]
+        if row['is_today']:
+            today_counts[row['source_id']] += 1
+
+    results = []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=min(6, len(records))) as pool:
+        futures = {pool.submit(get, source): source for source in records}
+        for future in concurrent.futures.as_completed(futures):
+            source = futures[future]
+            try:
+                result = future.result()
+                result['source_id'] = source['id']
+                result['status'] = 'succeeded'
+            except Exception as error:
+                result = {
+                    'source': source['name'], 'source_id': source['id'],
+                    'status': 'failed', 'error_code': type(error).__name__, 'items': [],
+                }
+            results.append(result)
+    results.sort(key=lambda result: result['source_id'])
+
+    candidate_urls = sorted({
+        item['canonicalUrl']
+        for result in results
+        for item in result['items']
+    })
+    if candidate_urls:
+        urls_json = json.dumps(candidate_urls, ensure_ascii=False).replace("'", "''")
+        collisions = query(f"""select a.id::text article_id,a.source_id::text source_id,
+            a.origin,a.url_canonical from public.articles a
+          where a.url_canonical in (
+            select value from jsonb_array_elements_text('{urls_json}'::jsonb)
+          )""", True)
+        existing_by_url.update({row['url_canonical']: row for row in collisions})
+
+    selected_items = []
+    selected_urls = set()
+    matched_counts = {source_id: 0 for source_id in SOURCE_IDS}
+    collision_counts = {source_id: 0 for source_id in SOURCE_IDS}
+    for result in results:
+        source_id = result['source_id']
+        source = next(source for source in records if source['id'] == source_id)
+        kept = []
+        for item in result['items']:
+            canonical_url = item['canonicalUrl']
+            if canonical_url in selected_urls:
+                collision_counts[source_id] += 1
+                continue
+            existing_row = existing_by_url.get(canonical_url)
+            if existing_row is not None:
+                if existing_row['source_id'] != source_id or existing_row['origin'] != 'LIVE_REAL':
+                    collision_counts[source_id] += 1
+                    continue
+                matched_counts[source_id] += 1
+                if item.get('excerpt') is None:
+                    continue
+                item['articleId'] = existing_row['article_id']
+            selected_urls.add(canonical_url)
+            kept.append(item)
+            selected_items.append(item)
+        result['items'] = kept
+        result['feed_candidates_today'] = len(kept)
+        result['existing_articles_today'] = today_counts[source_id]
+        result['matched_articles_today'] = matched_counts[source_id]
+        result['new_articles_today'] = sum(
+            1 for item in kept if item['canonicalUrl'] not in existing_by_url
+        )
+        result['canonical_collisions_skipped'] = collision_counts[source_id]
+        result['with_feed_excerpt'] = sum(1 for item in kept if item.get('excerpt') is not None)
+
+    items = selected_items
     all_urls = [item['canonicalUrl'] for item in items]
     for result in results:
-        print(f"{result['source']}: {result['matched_articles_today']}/{result['existing_articles_today']} artículos de hoy localizados en el feed; {result['authorized_excerpt_count']} con extracto autorizado")
-    print(f"Backfill de hoy: {len(items)} extractos autorizados listos para {len(existing)} artículos existentes.")
-    if not existing or not items:
+        if result['status'] == 'failed':
+            print(f"{result['source']}: no disponible ({result['error_code']})")
+        else:
+            print(
+                f"{result['source']}: {result['matched_articles_today']}/"
+                f"{result['existing_articles_today']} artículos de hoy encontrados; "
+                f"{result['new_articles_today']} nuevos; "
+                f"{result['with_feed_excerpt']} con extracto; "
+                f"{result['canonical_collisions_skipped']} colisiones omitidas"
+            )
+    print(
+        f"Ingesta de hoy: {len(items)} artículos nuevos o actualizados; "
+        f"{sum(today_counts.values())} existentes en el catálogo."
+    )
+    if not items:
         PREPARED.unlink(missing_ok=True)
         DRY_RUN.unlink(missing_ok=True)
-        raise RuntimeError('NO_AUTHORIZED_FEED_EXCERPTS_FOR_BACKFILL')
+        raise RuntimeError('NO_FEED_ARTICLES_READY_FOR_INGESTION')
     if len(set(all_urls)) != len(all_urls):
-        raise RuntimeError('BACKFILL_CANONICAL_URL_COLLISION')
+        raise RuntimeError('INGESTION_CANONICAL_URL_COLLISION')
     create_batch_key()
-    prepared = {'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(),
-                'targetDate': target_date, 'expectedArticleCount': len(existing),
-                'matchedArticleCount': len(items), 'items': items}
+    prepared = {
+        'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(),
+        'targetDate': target_date,
+        'expectedArticleCount': sum(today_counts.values()),
+        'matchedArticleCount': len(items),
+        'sourceResults': [
+            {key: value for key, value in result.items() if key != 'items'}
+            for result in results
+        ],
+        'items': items,
+    }
     prepared['signature'] = signature(prepared)
     write_private_json(PREPARED, prepared)
     DRY_RUN.unlink(missing_ok=True)
@@ -335,8 +452,17 @@ def write(dry_run):
     age = dt.datetime.now(dt.timezone.utc) - created
     if not 1 <= len(items) <= 1200 or age > dt.timedelta(minutes=15) or age < dt.timedelta(minutes=-5):
         raise RuntimeError('PREPARED_BATCH_MISSING_OR_EXPIRED')
-    if any(not isinstance(item.get('excerpt'), str) or not item['excerpt'].strip() for item in items):
-        raise RuntimeError('PREPARED_BATCH_CONTAINS_UNAUTHORIZED_EXCERPT')
+    for item in items:
+        storage_policy = item.get('storagePolicy')
+        excerpt = item.get('excerpt')
+        if storage_policy not in ('METADATA_ONLY', 'METADATA_AND_FEED_EXCERPT'):
+            raise RuntimeError('PREPARED_STORAGE_POLICY_INVALID')
+        if storage_policy == 'METADATA_ONLY' and excerpt is not None:
+            raise RuntimeError('PREPARED_BATCH_CONTAINS_UNAUTHORIZED_EXCERPT')
+        if excerpt is not None and (
+            not isinstance(excerpt, str) or not excerpt.strip() or len(excerpt) > 700
+        ):
+            raise RuntimeError('PREPARED_FEED_EXCERPT_INVALID')
     target_date = prepared.get('targetDate')
     if not isinstance(target_date, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2}', target_date):
         raise RuntimeError('PREPARED_TARGET_DATE_INVALID')
@@ -373,6 +499,8 @@ def write(dry_run):
         and a.source_id in ({','.join(chr(39)+value+chr(39) for value in SOURCE_IDS)})
       group by s.name order by s.name""", True)
     print(json.dumps(results, ensure_ascii=False))
+    PREPARED.unlink(missing_ok=True)
+    BATCH_KEY.unlink(missing_ok=True)
 
 
 if __name__ == '__main__':

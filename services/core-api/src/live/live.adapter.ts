@@ -205,12 +205,19 @@ function itemFromEntry(
   const encodedContent = cleanLiveText(
     textValue(atom ? (item.content ?? namespacedValue(item, 'content')) : namespacedValue(item, 'encoded')),
   );
-  const rawExcerpt = boundedFeedExcerpt(
-    summary !== null && headline !== null && excerptKey(summary) !== excerptKey(headline)
-      ? summary
-      : encodedContent,
-    headline,
+  // YouTube's official Atom feed nests its publisher-provided description in
+  // media:group/media:description instead of Atom's summary/content elements.
+  const mediaGroup = record(namespacedValue(item, 'group'));
+  const mediaDescription = cleanLiveText(
+    textValue(namespacedValue(mediaGroup, 'description')),
   );
+  const excerptCandidate = [summary, encodedContent, mediaDescription].find(
+    (candidate) =>
+      candidate !== null &&
+      headline !== null &&
+      excerptKey(candidate) !== excerptKey(headline),
+  ) ?? null;
+  const rawExcerpt = boundedFeedExcerpt(excerptCandidate, headline);
   const declaredRights = textValue(item.rights ?? item.copyright ?? item['dc:rights']);
   const declaredUpstream = cleanLiveText(textValue(item['dc:source'] ?? item.source));
   const decodedRights = [

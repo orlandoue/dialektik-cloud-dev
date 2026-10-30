@@ -51,6 +51,8 @@ import { headlineContextPairReviewMigration } from './050_headline_context_pair_
 import { headlineContextModelRelationMigration } from './051_headline_context_model_relation';
 import { liveNewsSitemapChannelMigration } from './052_live_news_sitemap_channel';
 import { chileVerifiedMetadataRoutesMigration } from './053_chile_verified_metadata_routes';
+import { chileFeedExcerptAndYoutubeSourcesMigration } from './054_chile_feed_excerpt_and_youtube_sources';
+import { liveArticlesEventLinkCheckMigration } from './055_live_articles_event_link_check';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -83,6 +85,8 @@ const migrations: Readonly<Record<string, Migration>> = {
   '051_headline_context_model_relation': headlineContextModelRelationMigration,
   '052_live_news_sitemap_channel': liveNewsSitemapChannelMigration,
   '053_chile_verified_metadata_routes': chileVerifiedMetadataRoutesMigration,
+  '054_chile_feed_excerpt_and_youtube_sources': chileFeedExcerptAndYoutubeSourcesMigration,
+  '055_live_articles_event_link_check': liveArticlesEventLinkCheckMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,

@@ -1,26 +1,29 @@
-# Ingesta puntual de metadatos RSS de Chile
+# Ingesta puntual RSS/Atom de Chile
 
-Este procedimiento ejecuta un lote puntual para el proyecto de desarrollo
-`vclsswwfhljczxgnsciq` y las cuatro fuentes revisadas: CIPER, Cooperativa,
-Diario El Día y La Tercera. No instala un programador de tareas, no procesa
-artículos con IA y no publica acontecimientos ni contradicciones.
+Este procedimiento ejecuta un lote puntual para `dialektik-dev`: seis fuentes
+de prensa de Chile y los 32 canales de YouTube del catálogo editorial. Usa la
+política vigente de cada fuente, consulta `robots.txt`, valida HTTPS y limita
+cada feed a 2 MB y 200 entradas. YouTube puede quedar sin respuesta por la
+restricción de red de la máquina ejecutora; los errores se registran por fuente
+y no impiden procesar los demás feeds.
 
-Se consulta `robots.txt` y cada RSS por HTTPS, con tamaño acotado. El adaptador
-del Core valida los enlaces y las fechas; se seleccionan como máximo 12
-titulares recientes por medio. Solo se persisten titular, fecha, autor si el
-RSS lo informa, enlace, recibo y huellas de procedencia. No se descargan
-páginas de artículos ni se guardan extractos o cuerpos de texto.
+Para fuentes con `METADATA_AND_FEED_EXCERPT`, conserva el título y la
+descripción que el propio feed publica, limitada a 700 caracteres. Para las
+fuentes `METADATA_ONLY`, procesa solo metadatos. No descarga páginas de
+artículos ni transcripciones de videos. El sitemap de El Mostrador no entrega
+extractos y las rutas RSS propuestas para ese medio responden 404, por lo que
+continúa en modalidad de metadatos.
 
-La escritura requiere la política de metadatos vigente y aprobada de cada
-fuente. Respeta las restricciones y triggers de la base, detecta las URL y los
-identificadores de fuente existentes y no modifica los artículos previos. La
-transacción revierte el lote completo si falla una comprobación. El token de
-gestión tiene privilegios amplios: debe estar disponible solo para el operador,
-en `SUPABASE_ACCESS_TOKEN`, y nunca imprimirse o incluirse en un repositorio.
+El lote detecta URLs canónicas existentes en toda `public.articles`, omite
+colisiones, actualiza solo artículos de la misma fuente y crea filas para
+publicaciones nuevas. Se apoya en recibos, exclusiones y versiones append-only.
+La escritura revierte el lote completo si falla una comprobación. El token de
+gestión debe estar disponible solo para el operador en `SUPABASE_ACCESS_TOKEN`;
+nunca se imprime ni se guarda en el repositorio.
 
 ## Ejecución
 
-Desde la raíz del repositorio y con `SUPABASE_ACCESS_TOKEN` ya configurado:
+Desde la raíz del repositorio y con `SUPABASE_ACCESS_TOKEN` configurado:
 
 ```bash
 npm run build
@@ -29,21 +32,14 @@ python3 scripts/operations/chile-rss-once/ingest.py dry-run
 python3 scripts/operations/chile-rss-once/ingest.py apply
 ```
 
-La preparación crea un manifiesto de metadatos privado en
-`/tmp/dialektik-rss-metadata-once`; puede cambiarse el directorio mediante
-`DIALEKTIK_RSS_RUN_DIR`. El manifiesto caduca a los 15 minutos y queda firmado
-con una clave aleatoria local, guardada con permisos privados para ese lote;
-no utiliza el marcador de la credencial del proxy como clave. La firma permite
-detectar cambios accidentales en el lote; el directorio sigue siendo accesible
-al usuario local que ejecuta el proceso. La aplicación exige que el mismo manifiesto haya
-pasado la simulación. Una ejecución posterior vuelve a leer los RSS; no se
-reutiliza el manifiesto anterior ni se fabrican recibos para entradas que ya
-existen.
+La preparación guarda temporalmente el manifiesto en
+`/tmp/dialektik-rss-metadata-once`; puede cambiarse con
+`DIALEKTIK_RSS_RUN_DIR`. Caduca a los 15 minutos, queda firmado con una clave
+aleatoria local de permisos privados y se elimina al aplicar el lote. La
+aplicación exige que el mismo manifiesto haya pasado la simulación. No se
+reutilizan lotes anteriores ni se crean duplicados por URL.
 
-El primer lote de 48 artículos se ejecutó y verificó con este procedimiento
-en desarrollo antes de añadir estas salvaguardas al programa reproducible. Una
-segunda ejecución simuló el lote completo, omitió los 24 ya presentes y añadió
-24 titulares nuevos de Cooperativa y La Tercera.
-Para operación automática hace falta un trabajador con credenciales de
-escritura limitadas y un mecanismo de programación; no se debe colocar el
-token de gestión en el servicio web como sustituto de ese diseño.
+Esta herramienta es manual; no configura un programador. Para operación
+periódica hace falta un trabajador con credenciales de escritura limitadas y
+un mecanismo de programación. No debe colocarse el token de gestión en el
+servicio web como sustituto de ese diseño.

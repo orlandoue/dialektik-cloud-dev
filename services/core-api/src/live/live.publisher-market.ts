@@ -16,7 +16,7 @@ export type PublisherMarket = typeof PUBLISHER_MARKET_CODES[number];
 export const CHILE_PUBLISHER_DOMAINS = [
   'bcentral.cl', 'biobiochile.cl', 'sismologia.cl',
   'ciperchile.cl', 'cooperativa.cl', 'diarioeldia.cl', 'www.diarioeldia.cl', 'elmostrador.cl',
-  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl', 'senapred.cl',
+  'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl', 'senapred.cl', 'youtube.com',
 ] as const;
 
 /** GOV.UK hosts many organisations; the trial includes only these two. */
