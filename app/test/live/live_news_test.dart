@@ -282,7 +282,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.text('Todavía no hay artículos incorporados al análisis.'),
+        find.text('Todavía no hay noticias recientes disponibles.'),
         findsNothing,
       );
 
@@ -301,7 +301,7 @@ void main() {
       );
       await mountLive(tester, emptyReader);
       expect(
-        find.text('Todavía no hay artículos incorporados al análisis.'),
+        find.text('Todavía no hay noticias recientes disponibles.'),
         findsOneWidget,
       );
       expect(
@@ -342,7 +342,6 @@ void main() {
         unorderedEquals(<String>[
           '/live/news',
           '/live/sources',
-          '/live/preview/rss/chile/chronology',
           '/live/observations/chile/seismic',
         ]),
       );
@@ -389,7 +388,6 @@ void main() {
         unorderedEquals(<String>[
           '/live/news',
           '/live/sources',
-          '/live/preview/rss/chile/chronology',
           '/live/observations/chile/seismic',
         ]),
       );
@@ -651,10 +649,8 @@ void main() {
         'océano',
       );
       expect(
-        find.text(
-          'Titulares y enlaces originales de los medios. No son artículos guardados ni acontecimientos analizados.',
-        ),
-        findsOneWidget,
+        find.text('Todavía no hay noticias recientes disponibles.'),
+        findsNothing,
       );
       expect(find.byTooltip('Actualizar noticias'), findsOneWidget);
       await tapLive(tester, find.text('Limpiar filtros'));
@@ -664,6 +660,48 @@ void main() {
       );
     },
   );
+
+  testWidgets('format filters show press and YouTube items from one feed', (
+    WidgetTester tester,
+  ) async {
+    final Map<String, Object?> responses = liveTestResponses();
+    final Map<String, Object?> video = <String, Object?>{
+      ...liveTestArticle(id: liveTestArticleId2),
+      'headline': 'Video verificado de Meganoticias',
+      'canonical_url': 'https://www.youtube.com/watch?v=video-test-1',
+      'source': <String, Object?>{
+        ...liveTestSource(),
+        'id': '01K6MYH0000000000000000011',
+        'name': 'Meganoticias',
+        'source_type': 'tv',
+        'canonical_domain': 'youtube.com',
+      },
+    };
+    responses['/live/news'] = liveTestPage(
+      items: <Object?>[
+        liveTestArticle(),
+        video,
+      ],
+    );
+    await mountLive(tester, liveTestClient(responses: responses));
+
+    expect(
+      find.text('Noticia escrita para pruebas: océano & atmósfera — señales'),
+      findsOneWidget,
+    );
+    expect(find.text('Video verificado de Meganoticias'), findsOneWidget);
+
+    await tapLive(tester, find.text('Prensa'));
+    expect(
+      find.text('Noticia escrita para pruebas: océano & atmósfera — señales'),
+      findsOneWidget,
+    );
+    expect(find.text('Video verificado de Meganoticias'), findsNothing);
+
+    await tapLive(tester, find.text('Videos'));
+    expect(find.text('Noticia escrita para pruebas: océano & atmósfera — señales'), findsNothing);
+    expect(find.text('Video verificado de Meganoticias'), findsOneWidget);
+  });
 
   testWidgets('mobile news filters open on request and retain exact filters', (
     WidgetTester tester,
