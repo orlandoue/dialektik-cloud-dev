@@ -14,6 +14,20 @@ export interface SemanticCandidatePair {
   readonly clusterKey: string;
 }
 
+export function canJoinSemanticEventGroup(assessment: {
+  readonly sameEvent: boolean;
+  readonly sameEventConfidence: number;
+  readonly relation: string;
+  readonly ratioComparable: number;
+}): boolean {
+  return (
+    assessment.sameEvent &&
+    assessment.sameEventConfidence >= 70 &&
+    assessment.relation !== "NOT_COMPARABLE" &&
+    assessment.ratioComparable >= 60
+  );
+}
+
 const STOP_WORDS = new Set([
   "ante", "como", "desde", "donde", "entre", "hacia", "hasta", "para", "pero",
   "sobre", "tras", "segun", "según", "tambien", "también", "durante", "este",
