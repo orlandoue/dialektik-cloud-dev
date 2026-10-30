@@ -1294,7 +1294,7 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
       join live_acquisition_receipts r on r.id=v.receipt_id
       left join lateral (select * from observed_article_content_versions where article_id=a.id
         order by version_number desc limit 1) prior on true
-      where a.source_id=${parseUlid(sourceId)} and a.origin='LIVE_REAL' and a.event_id is null
+      where a.source_id=${parseUlid(sourceId)} and a.origin='LIVE_REAL'
         and v.excerpt is not null and r.disposition='PERSISTED'
       order by a.id limit 100
     `.execute(this.database.database);
@@ -1785,7 +1785,7 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
           and disposition='PERSISTED' order by seen_at desc,id desc limit 1)
       left join lateral (select policy from live_source_policies where source_id=s.id
         order by recorded_at desc,id desc limit 1) current_policy on true
-      where a.origin='LIVE_REAL' and a.event_id is null
+      where a.origin='LIVE_REAL'
         and (${sourceId}::text is null or a.source_id::text=${sourceId?.toString() ?? null})
       order by a.published_at desc,a.id desc limit 100
     `.execute(this.database.database);
@@ -2464,7 +2464,7 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
           left join lateral (select * from personal_owner_source_rights_decisions
             where source_id=a.source_id order by sequence_number desc limit 1) d on true
           where a.id=${articleId} and v.id=${versionId} and v.source_id=a.source_id
-            and a.event_id is null and a.origin='LIVE_REAL'
+            and a.origin='LIVE_REAL'
         `.execute(tx);
         const row = found.rows[0];
         if (!row) throw new NotFoundException('ARTICLE_VERSION_NOT_FOUND');

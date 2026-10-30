@@ -20,6 +20,18 @@ const policy = {
 };
 const seenUrls = new Set();
 const seenGuids = new Set();
+const discoveryUrlAllowed = (value) => {
+  try {
+    const url = new URL(value);
+    if (url.protocol !== 'https:' || url.username || url.password || url.hash) return false;
+    if (allowedDomains.includes(url.hostname)) return true;
+    return source.discovery_channel === 'official_api' && source.canonical_domain === 'youtube.com' &&
+      url.hostname === 'www.googleapis.com' && url.pathname === '/youtube/v3/playlistItems' &&
+      url.searchParams.get('part') === 'snippet' && /^UU[A-Za-z0-9_-]{22}$/u.test(url.searchParams.get('playlistId') ?? '') &&
+      url.searchParams.get('maxResults') === '10' && !url.searchParams.has('key') &&
+      [...url.searchParams.keys()].sort().join(',') === 'maxResults,part,playlistId';
+  } catch { return false; }
+};
 const dateInSantiago = (date) => new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
 }).format(date);
@@ -50,13 +62,13 @@ const items = inputItems
     dateInSantiago(item.publishedAt) === targetDate &&
     item.sourceItemId && item.sourceItemId.length <= 2048 &&
     (!item.excerpt || item.excerpt.length <= 700) &&
-    [item.canonicalUrl, item.discoveredUrl].every((value) => {
+    [item.canonicalUrl].every((value) => {
       try {
         const url = new URL(value);
         return url.protocol === 'https:' && !url.username && !url.password &&
           allowedDomains.includes(url.hostname);
       } catch { return false; }
-    }))
+    }) && discoveryUrlAllowed(item.discoveredUrl))
   .sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
 const output = [];
 for (const item of items) {
@@ -75,7 +87,8 @@ for (const item of items) {
   };
   const id = () => generateUlid({ now: () => now.getTime() });
   output.push({
-    sourceId: source.id, policyId: source.policy_id, publisher: source.name,
+    sourceId: source.id, policyId: source.policy_id, policyEndpoint: source.policy_endpoint ?? source.endpoint,
+    publisher: source.name,
     domain: source.canonical_domain, registryKey: source.registry_key,
     discoveryChannel: source.discovery_channel, storagePolicy: source.storage_policy,
     discoveryUrl: source.endpoint, capturedAt: now.toISOString(),

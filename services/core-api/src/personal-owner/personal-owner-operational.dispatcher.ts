@@ -441,7 +441,7 @@ export class PersonalOwnerOperationalDispatcher
       left join lateral (select d.* from personal_owner_source_rights_decisions d
         where d.source_id=a.source_id order by d.sequence_number desc limit 1) d on true
       where j.id=${job.id} and j.owner_identity=${job.owner_identity}
-        and a.origin='LIVE_REAL' and a.event_id is null and v.persisted_body is null
+        and a.origin='LIVE_REAL' and v.persisted_body is null
     `.execute(this.database.database);
     const row = rows.rows[0];
     if (!row?.excerpt || !row.title || !row.permanent_exclusion_verified)

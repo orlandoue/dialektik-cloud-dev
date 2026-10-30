@@ -20,6 +20,7 @@ import urllib.robotparser
 from zoneinfo import ZoneInfo
 
 HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[2]
 RUN_DIR = Path(os.environ.get('DIALEKTIK_RSS_RUN_DIR', '/tmp/dialektik-rss-metadata-once'))
 PREPARED = RUN_DIR / 'prepared.json'
 DRY_RUN = RUN_DIR / 'dry-run.json'
@@ -154,6 +155,19 @@ def sources(source_ids=SOURCE_IDS):
     return rows
 
 
+def youtube_catalog():
+    migration = ROOT / 'packages/database/src/migration/054_chile_feed_excerpt_and_youtube_sources.ts'
+    content = migration.read_text(encoding='utf-8')
+    match = re.search(r'const YOUTUBE_CHANNELS = (\[.*?\]) as const;', content, re.S)
+    if not match:
+        raise RuntimeError('YOUTUBE_CATALOG_NOT_FOUND')
+    channels = json.loads(match.group(1))
+    if (len(channels) != len(YOUTUBE_SOURCE_IDS)
+            or {row.get('source_id') for row in channels} != set(YOUTUBE_SOURCE_IDS)):
+        raise RuntimeError('YOUTUBE_CATALOG_INVALID')
+    return {row['source_id']: row for row in channels}
+
+
 def get(source):
     endpoint = source['endpoint']
     parsed = urllib.parse.urlsplit(endpoint)
@@ -243,7 +257,11 @@ def prepare(source_ids=SOURCE_IDS, imported_feeds=None):
                 })
                 continue
             try:
-                result = parse_feed(source, items=entry['items'])
+                feed_source = dict(source)
+                feed_source['policy_endpoint'] = source['endpoint']
+                feed_source['endpoint'] = entry['discovery_url']
+                feed_source['discovery_channel'] = 'official_api'
+                result = parse_feed(feed_source, items=entry['items'])
                 result['source_id'] = source['id']
                 result['status'] = 'succeeded'
             except Exception as error:
@@ -323,6 +341,9 @@ def prepare(source_ids=SOURCE_IDS, imported_feeds=None):
     if not items:
         PREPARED.unlink(missing_ok=True)
         DRY_RUN.unlink(missing_ok=True)
+        if imported_feeds is not None and set(source_ids) == set(YOUTUBE_SOURCE_IDS):
+            print('YouTube Data API import skipped: no current-day channel metadata is available.')
+            return
         raise RuntimeError('NO_FEED_ARTICLES_READY_FOR_INGESTION')
     if len(set(all_urls)) != len(all_urls):
         raise RuntimeError('INGESTION_CANONICAL_URL_COLLISION')
@@ -348,7 +369,8 @@ def load_youtube_manifest(path):
     if not isinstance(manifest, dict):
         raise RuntimeError('YOUTUBE_FEED_MANIFEST_INVALID')
     recorded_digest = manifest.pop('sha256', None)
-    if (manifest.get('schema') != 'dialektik-youtube-feed-manifest-v1'
+    schema = manifest.get('schema')
+    if (schema != 'dialektik-youtube-data-api-manifest-v1'
             or set(manifest) != {'schema', 'fetched_at', 'channels'}
             or not isinstance(recorded_digest, str)):
         raise RuntimeError('YOUTUBE_FEED_MANIFEST_INVALID')
@@ -374,28 +396,62 @@ def load_youtube_manifest(path):
 
     records = sources(YOUTUBE_SOURCE_IDS)
     source_by_id = {row['id']: row for row in records}
+    catalog_by_id = youtube_catalog()
     imported = {}
     for entry in entries:
         source_id = entry['source_id']
-        endpoint = entry.get('endpoint')
+        endpoint = entry.get('policy_endpoint')
         if endpoint != source_by_id[source_id]['endpoint']:
             raise RuntimeError('YOUTUBE_FEED_ENDPOINT_MISMATCH')
         if entry.get('status') == 'succeeded':
-            if set(entry) != {'source_id', 'endpoint', 'status', 'items'}:
-                raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
+            if set(entry) != {'source_id', 'policy_endpoint', 'status', 'channel_id',
+                              'discovery_channel', 'discovery_url', 'items'}:
+                raise RuntimeError('YOUTUBE_DATA_API_MANIFEST_ENTRY_INVALID')
+            channel_id = entry.get('channel_id')
+            if (entry.get('discovery_channel') != 'official_api'
+                    or not isinstance(channel_id, str)
+                    or not re.fullmatch(r'UC[A-Za-z0-9_-]{22}', channel_id)):
+                raise RuntimeError('YOUTUBE_DATA_API_CHANNEL_INVALID')
+            catalog = catalog_by_id[source_id]
+            known_ids = re.findall(
+                r'UC[A-Za-z0-9_-]{22}',
+                catalog.get('channel_url', '') + ' ' + catalog.get('atom_feed_endpoint', ''),
+            )
+            if known_ids and set(known_ids) != {channel_id}:
+                raise RuntimeError('YOUTUBE_DATA_API_CHANNEL_MISMATCH')
+            api_url = urllib.parse.urlsplit(entry.get('discovery_url', ''))
+            api_query = urllib.parse.parse_qs(api_url.query, keep_blank_values=True)
+            if (api_url.scheme != 'https' or api_url.hostname != 'www.googleapis.com'
+                    or api_url.path != '/youtube/v3/playlistItems' or api_url.username or api_url.password
+                    or api_url.fragment or set(api_query) != {'part', 'playlistId', 'maxResults'}
+                    or api_query.get('part') != ['snippet']
+                    or api_query.get('playlistId') != ['UU' + channel_id[2:]]
+                    or api_query.get('maxResults') != ['10']):
+                raise RuntimeError('YOUTUBE_DATA_API_ENDPOINT_INVALID')
             items = entry.get('items')
-            parsed = urllib.parse.urlsplit(endpoint)
-            if (not isinstance(items, list) or len(items) > 200
-                    or parsed.scheme != 'https' or parsed.hostname != 'www.youtube.com'
-                    or parsed.path != '/feeds/videos.xml'):
-                raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
-            imported[source_id] = {'status': 'succeeded', 'items': items}
-        elif entry.get('status') == 'failed':
-            if (set(entry) != {'source_id', 'endpoint', 'status', 'error_code'}
+            if not isinstance(items, list) or len(items) > 10:
+                raise RuntimeError('YOUTUBE_DATA_API_ITEM_LIST_INVALID')
+            for item in items:
+                if (not isinstance(item, dict)
+                        or item.get('channelId') != channel_id
+                        or item.get('discoveredUrl') != entry['discovery_url']
+                        or not re.fullmatch(r'[A-Za-z0-9_-]{11}', item.get('sourceItemId', ''))
+                        or item.get('canonicalUrl') != f"https://www.youtube.com/watch?v={item.get('sourceItemId')}"
+                        or not isinstance(item.get('headline'), str) or not 1 <= len(item['headline']) <= 500
+                        or (item.get('excerpt') is not None
+                            and (not isinstance(item['excerpt'], str) or len(item['excerpt']) > 700))
+                        or not isinstance(item.get('publishedAt'), str)
+                        or not re.fullmatch(r'[0-9a-f]{64}', item.get('rawPayloadHash', ''))):
+                    raise RuntimeError('YOUTUBE_DATA_API_ITEM_INVALID')
+            imported[source_id] = {
+                'status': 'succeeded', 'items': items, 'discovery_url': entry['discovery_url'],
+            }
+        elif entry.get('status') in ('failed', 'skipped'):
+            if (set(entry) != {'source_id', 'policy_endpoint', 'status', 'error_code'}
                     or not isinstance(entry.get('error_code'), str)
-                    or not re.fullmatch(r'[A-Z_]{1,64}', entry['error_code'])):
+                    or not re.fullmatch(r'[A-Z0-9_]{1,64}', entry['error_code'])):
                 raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
-            imported[source_id] = {'status': 'failed', 'error_code': entry['error_code']}
+            imported[source_id] = {'status': entry['status'], 'error_code': entry['error_code']}
         else:
             raise RuntimeError('YOUTUBE_FEED_MANIFEST_ENTRY_INVALID')
     return imported
@@ -437,8 +493,14 @@ begin
           and nullif(p.policy->>'rightsEvidenceUrl','') is not null
           and p.policy->>'rightsEvidenceUrl'<>'https://supabase.com'
           and p.policy->>'endpoint'<>'https://supabase.com'
-          and p.policy->>'endpoint'=entry->>'discoveryUrl'
-          and coalesce(p.policy->>'discoveryChannel','rss_atom')=entry->>'discoveryChannel') then
+          and ((entry->>'discoveryChannel'='official_api'
+            and s.canonical_domain='youtube.com'
+            and p.policy->>'endpoint'=entry->>'policyEndpoint'
+            and coalesce(p.policy->>'discoveryChannel','rss_atom')='rss_atom'
+            and entry->>'discoveryUrl' ~ '^https://www[.]googleapis[.]com/youtube/v3/playlistItems[?]part=snippet&playlistId=UU[A-Za-z0-9_-]{22}&maxResults=10$')
+            or (entry->>'discoveryChannel'<>'official_api'
+              and p.policy->>'endpoint'=entry->>'discoveryUrl'
+              and coalesce(p.policy->>'discoveryChannel','rss_atom')=entry->>'discoveryChannel'))) then
       raise exception 'SOURCE_REVIEW_CHANGED_OR_NOT_AUTHORIZED';
     end if;
     select a.id,a.source_id,a.origin,a.live_exposure_id,a.text_original,a.text_normalized,a.lang

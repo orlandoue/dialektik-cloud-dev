@@ -121,17 +121,18 @@ class IngestionOperationTests(unittest.TestCase):
             module.create_batch_key()
             self.assertNotEqual(first, module.signature({'items': ['example']}))
 
-    def test_youtube_artifact_manifest_is_digest_checked_and_bound_to_current_feed_endpoints(self):
+    def test_youtube_data_api_manifest_skips_all_channels_without_key_and_checks_digest(self):
         with tempfile.TemporaryDirectory() as directory:
             entries = []
             sources = []
-            for index, source_id in enumerate(module.YOUTUBE_SOURCE_IDS):
-                endpoint = f'https://www.youtube.com/feeds/videos.xml?channel_id=UC{index:022d}'
-                entries.append({'source_id': source_id, 'endpoint': endpoint,
-                    'status': 'failed', 'error_code': 'ROBOTS_DISALLOWS_FEED'})
+            for channel in module.youtube_catalog().values():
+                source_id = channel['source_id']
+                endpoint = channel['atom_feed_endpoint']
+                entries.append({'source_id': source_id, 'policy_endpoint': endpoint,
+                    'status': 'skipped', 'error_code': 'YOUTUBE_API_KEY_MISSING'})
                 sources.append({'id': source_id, 'endpoint': endpoint})
             manifest = {
-                'schema': 'dialektik-youtube-feed-manifest-v1',
+                'schema': 'dialektik-youtube-data-api-manifest-v1',
                 'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),
                 'channels': entries,
             }
@@ -141,13 +142,59 @@ class IngestionOperationTests(unittest.TestCase):
             with patch.object(module, 'sources', return_value=sources):
                 imported = module.load_youtube_manifest(path)
             self.assertEqual(set(imported), set(module.YOUTUBE_SOURCE_IDS))
-            self.assertEqual({item['status'] for item in imported.values()}, {'failed'})
+            self.assertEqual({item['status'] for item in imported.values()}, {'skipped'})
 
-            manifest['channels'][0]['endpoint'] = 'https://attacker.example/feed'
+            manifest['channels'][0]['policy_endpoint'] = 'https://attacker.example/feed'
             path.write_text(json.dumps(manifest), encoding='utf-8')
             with patch.object(module, 'sources', return_value=sources):
                 with self.assertRaisesRegex(RuntimeError, 'YOUTUBE_FEED_MANIFEST_DIGEST_INVALID'):
                     module.load_youtube_manifest(path)
+
+    def test_youtube_data_api_manifest_binds_playlist_id_and_video_to_catalog_channel(self):
+        with tempfile.TemporaryDirectory() as directory:
+            catalog = module.youtube_catalog()
+            sources = [{'id': item['source_id'], 'endpoint': item['atom_feed_endpoint']}
+                       for item in catalog.values()]
+            entries = []
+            channel = catalog[module.YOUTUBE_SOURCE_IDS[0]]
+            channel_id = re.search(r'UC[A-Za-z0-9_-]{22}', channel['channel_url']).group(0)
+            discovery_url = (
+                'https://www.googleapis.com/youtube/v3/playlistItems?part=snippet'
+                f'&playlistId=UU{channel_id[2:]}&maxResults=10'
+            )
+            for source_id in module.YOUTUBE_SOURCE_IDS:
+                current = catalog[source_id]
+                if source_id == channel['source_id']:
+                    entries.append({
+                        'source_id': source_id, 'policy_endpoint': current['atom_feed_endpoint'],
+                        'status': 'succeeded', 'channel_id': channel_id,
+                        'discovery_channel': 'official_api', 'discovery_url': discovery_url,
+                        'items': [{
+                            'channelId': channel_id, 'discoveredUrl': discovery_url,
+                            'sourceItemId': 'abcdefghijk',
+                            'canonicalUrl': 'https://www.youtube.com/watch?v=abcdefghijk',
+                            'headline': 'Video de prueba', 'excerpt': 'Descripción breve',
+                            'publishedAt': '2026-10-30T12:00:00.000Z',
+                            'rawPayloadHash': 'a' * 64,
+                        }],
+                    })
+                else:
+                    entries.append({
+                        'source_id': source_id, 'policy_endpoint': current['atom_feed_endpoint'],
+                        'status': 'skipped', 'error_code': 'YOUTUBE_API_KEY_MISSING',
+                    })
+            manifest = {
+                'schema': 'dialektik-youtube-data-api-manifest-v1',
+                'fetched_at': dt.datetime.now(dt.timezone.utc).isoformat(),
+                'channels': entries,
+            }
+            manifest['sha256'] = hashlib.sha256(module.serialized(manifest)).hexdigest()
+            path = Path(directory) / 'manifest.json'
+            path.write_text(json.dumps(manifest), encoding='utf-8')
+            with patch.object(module, 'sources', return_value=sources):
+                imported = module.load_youtube_manifest(path)
+            self.assertEqual(imported[channel['source_id']]['discovery_url'], discovery_url)
+            self.assertEqual(imported[channel['source_id']]['items'][0]['sourceItemId'], 'abcdefghijk')
 
 
 if __name__ == '__main__':

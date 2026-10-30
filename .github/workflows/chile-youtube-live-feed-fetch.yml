@@ -5,10 +5,12 @@ on:
     branches:
       - codex/production-feed-semantics
     paths:
-      - '.github/workflows/chile-youtube-live-feed-fetch.yml'
-      - 'scripts/operations/chile-rss-once/fetch_youtube_feeds.py'
-      - 'scripts/operations/chile-rss-once/prepare.mjs'
-      - 'packages/database/src/migration/054_chile_feed_excerpt_and_youtube_sources.ts'
+      - ".github/workflows/chile-youtube-live-feed-fetch.yml"
+      - "scripts/operations/chile-rss-once/fetch_youtube_data_api.mjs"
+      - "scripts/operations/chile-rss-once/ingest.py"
+      - "scripts/operations/chile-rss-once/prepare.mjs"
+      - "packages/database/src/migration/054_chile_feed_excerpt_and_youtube_sources.ts"
+      - "services/core-api/src/live/youtube-data-api.ts"
   workflow_dispatch:
 
 permissions:
@@ -28,19 +30,21 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
       - name: Build the reviewed feed parser
         run: |
           npm install --global npm@11.6.2
           npm ci --no-audit --no-fund
           npm run build
-      - name: Fetch and parse the 32 public Atom feeds
+      - name: Fetch current channel metadata with YouTube Data API v3
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: |
           set -euo pipefail
           umask 077
           mkdir -p "$RUNNER_TEMP/dialektik-youtube"
-          python3 scripts/operations/chile-rss-once/fetch_youtube_feeds.py \
+          node scripts/operations/chile-rss-once/fetch_youtube_data_api.mjs \
             "$RUNNER_TEMP/dialektik-youtube/youtube-feed-manifest.json"
       - name: Upload short-lived metadata manifest
         if: always()

@@ -54,6 +54,7 @@ import { chileVerifiedMetadataRoutesMigration } from './053_chile_verified_metad
 import { chileFeedExcerptAndYoutubeSourcesMigration } from './054_chile_feed_excerpt_and_youtube_sources';
 import { liveArticlesEventLinkCheckMigration } from './055_live_articles_event_link_check';
 import { liveExcerptTextProjectionMigration } from './056_live_excerpt_text_projection';
+import { enableExcerptSemanticGrantsAndLiveEventsMigration } from './057_enable_excerpt_semantic_grants_and_live_events';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -89,6 +90,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '054_chile_feed_excerpt_and_youtube_sources': chileFeedExcerptAndYoutubeSourcesMigration,
   '055_live_articles_event_link_check': liveArticlesEventLinkCheckMigration,
   '056_live_excerpt_text_projection': liveExcerptTextProjectionMigration,
+  '057_enable_excerpt_semantic_grants_and_live_events': enableExcerptSemanticGrantsAndLiveEventsMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,
