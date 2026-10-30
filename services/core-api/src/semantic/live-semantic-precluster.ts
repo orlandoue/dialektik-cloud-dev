@@ -25,6 +25,14 @@ const STOP_WORDS = new Set([
   "caso", "corte", "suprema", "tribunal", "fiscalia", "fiscalía", "justicia",
   "causa", "proceso", "acusacion", "acusación", "nueva", "nuevas", "nuevo", "nuevos",
   "informe", "medida", "medidas", "proyecto", "comunicado", "tras", "reporta",
+  "desempleo", "desocupacion", "desocupación", "unemployment", "employment",
+  "economy", "economic", "regional", "rate", "tasa", "porcentaje", "crisis",
+  "controversy", "controversia", "tour", "gira", "viaje", "government",
+  "party", "partido", "critica", "critican", "criticó", "criticized", "criticizes",
+  "criticize", "criticism", "actions", "acción", "acciones", "becomes",
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
+  "uno", "una", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho",
+  "nueve", "diez",
 ]);
 
 function normalized(value: string): string {
@@ -37,7 +45,6 @@ function normalized(value: string): string {
 function namedTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {
   const sourceText = [
     article.headline,
-    article.eventTitle,
     article.eventSummary,
     article.eventKey.replace(/[-_:]/gu, " "),
   ].join(" ");
@@ -49,6 +56,28 @@ function namedTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {
   for (const match of sourceText.matchAll(/\b[\p{Lu}]{2,}\b/gu)) {
     const token = normalized(match[0]);
     if (!STOP_WORDS.has(token)) tokens.add(token);
+  }
+  return tokens;
+}
+
+function incidentTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {
+  const text = [
+    article.headline,
+    article.eventTitle,
+    article.eventSummary,
+    article.eventKey.replace(/[-_:]/gu, " "),
+  ].join(" ");
+  const names = namedTokens(article);
+  const tokens = new Set<string>();
+  for (const match of text.matchAll(/[\p{L}\p{N}]+/gu)) {
+    const token = normalized(match[0]);
+    if (
+      token.length >= 4 &&
+      !/^\d+$/u.test(token) &&
+      !STOP_WORDS.has(token) &&
+      !names.has(token)
+    )
+      tokens.add(token);
   }
   return tokens;
 }
@@ -102,7 +131,16 @@ function clusterKey(
   const rightEntities = namedTokens(right);
   const shared = [...namedTokens(left)].filter((token) => rightEntities.has(token)).sort();
   if (shared.length === 0) return null;
-  return `entity:${shared.slice(0, 3).join("-")}`;
+  const leftKey = normalized(left.eventKey.replace(/[-_:]/gu, " ")).trim();
+  const rightKey = normalized(right.eventKey.replace(/[-_:]/gu, " ")).trim();
+  if (leftKey.length > 0 && leftKey === rightKey)
+    return `signature:${leftKey.replace(/\s+/gu, "-")}`;
+  const rightIncidents = incidentTokens(right);
+  const incident = [...incidentTokens(left)]
+    .filter((token) => rightIncidents.has(token))
+    .sort();
+  if (incident.length === 0) return null;
+  return `entity:${shared[0]}:incident:${incident.slice(0, 2).join("-")}`;
 }
 
 function pairKey(left: string, right: string): string {
