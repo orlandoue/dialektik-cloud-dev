@@ -14,6 +14,10 @@ const productionService = readFileSync(
   new URL('../src/semantic/live-semantic-production.service.ts', import.meta.url),
   'utf8',
 );
+const exceptionFilter = readFileSync(
+  new URL('../src/http/safe-http-exception.filter.ts', import.meta.url),
+  'utf8',
+);
 
 test('registers migration 060 and retains narrow signed-promotion gates', () => {
   assert.match(provider, /'060_live_semantic_editorial_promotion': liveSemanticEditorialPromotionMigration/);
@@ -51,6 +55,8 @@ test('classifies audit-context and promotion SQL failures through the same safe 
   assert.match(productionService, /MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE/u);
   assert.match(productionService, /sqlState: databaseCode/u);
   assert.match(productionService, /failureStage: "transaction" \| "audit_context" \| "promotion_function"/u);
+  assert.match(exceptionFilter, /exception instanceof ModerationHttpError \? exception\.diagnostic/u);
+  assert.match(exceptionFilter, /diagnostic === undefined \? \{\} : \{ diagnostic \}/u);
 });
 
 test('limits the new inference grants to the named sources and short excerpts', () => {
