@@ -105,13 +105,22 @@ function safeDatabaseErrorCode(error: unknown): string | null {
   return null;
 }
 
-function semanticPromotionDatabaseError(error: unknown): ModerationHttpError {
+function semanticPromotionDatabaseError(
+  error: unknown,
+  failureStage: "transaction" | "audit_context" | "promotion_function",
+): ModerationHttpError {
   const databaseCode = safeDatabaseErrorCode(error);
+  const diagnostic = {
+    failureStage,
+    ...(databaseCode && /^[0-9A-Z]{5}$/u.test(databaseCode)
+      ? { sqlState: databaseCode }
+      : {}),
+  };
   if (databaseCode === "42501")
-    return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_PERMISSION_DENIED");
+    return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_PERMISSION_DENIED", diagnostic);
   if (["23503", "23505", "23514", "55000"].includes(databaseCode ?? ""))
-    return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_CONSTRAINT_REJECTED");
-  return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE");
+    return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_CONSTRAINT_REJECTED", diagnostic);
+  return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE", diagnostic);
 }
 
 function exactBody(raw: unknown): { targetDay: string; limit: number } {
@@ -834,6 +843,7 @@ export class LiveSemanticProductionService {
     try {
       return await database.transaction().execute(async (transaction) => {
         let result;
+        let failureStage: "audit_context" | "promotion_function" = "audit_context";
         try {
           await setTransactionAuditContext(transaction, {
             action: "moderation_decision",
@@ -843,13 +853,14 @@ export class LiveSemanticProductionService {
             reasonCode: "live_semantic_editorial_promotion",
             metadata: { semantic_group_id: groupId },
           });
+          failureStage = "promotion_function";
           result = await sql<{ result: Record<string, unknown> }>`
             select public.dialektik_promote_live_semantic_event_group(
               ${groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid
             ) as result
           `.execute(transaction);
         } catch (error) {
-          throw semanticPromotionDatabaseError(error);
+          throw semanticPromotionDatabaseError(error, failureStage);
         }
         const response = result.rows[0]?.result;
         if (!response || response.status !== "PROMOTED")
@@ -859,7 +870,7 @@ export class LiveSemanticProductionService {
     } catch (error) {
       if (error instanceof ModerationHttpError || error instanceof ConflictException)
         throw error;
-      throw semanticPromotionDatabaseError(error);
+      throw semanticPromotionDatabaseError(error, "transaction");
     }
   }
 }
