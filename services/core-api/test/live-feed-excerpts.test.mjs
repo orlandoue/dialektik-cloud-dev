@@ -71,3 +71,27 @@ test('allows Atom summary fallback and never stores excerpts under metadata-only
   const [metadataOnlyItem] = parseLiveFeed(rssXml, { ...policy, storagePolicy: 'METADATA_ONLY' });
   assert.equal(metadataOnlyItem.excerpt, null);
 });
+
+test('reads the nested YouTube Atom media:description as a bounded feed excerpt', () => {
+  const youtubePolicy = {
+    ...policy,
+    sourceId: '01M4YDQK00YT01MEGAN0T1C1AS',
+    registryKey: 'chile-yt-meganoticias-v1',
+    publisherName: 'Meganoticias (YouTube)',
+    canonicalDomain: 'youtube.com',
+    endpoint: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCkccyEbqhhM3uKOI6Shm-4Q',
+    allowedArticleDomains: ['youtube.com', 'www.youtube.com'],
+  };
+  const description = 'La reportera explica los antecedentes y entrega cifras del anuncio oficial.';
+  const xml = `<feed xmlns="http://www.w3.org/2005/Atom"
+      xmlns:yt="http://www.youtube.com/xml/schemas/2015"
+      xmlns:media="http://search.yahoo.com/mrss/">
+    <entry><id>yt:video:abc123</id><title>Actualización sobre el anuncio</title>
+      <link rel="alternate" href="https://www.youtube.com/watch?v=abc123"/>
+      <published>2026-10-29T10:00:00Z</published>
+      <media:group><media:description>${description}</media:description></media:group>
+    </entry></feed>`;
+  const [item] = parseLiveFeed(xml, youtubePolicy);
+  assert.equal(item.canonicalUrl, 'https://www.youtube.com/watch?v=abc123');
+  assert.equal(item.excerpt, description);
+});

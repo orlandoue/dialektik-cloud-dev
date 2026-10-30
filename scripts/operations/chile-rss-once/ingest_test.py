@@ -13,6 +13,21 @@ spec.loader.exec_module(module)
 
 
 class IngestionOperationTests(unittest.TestCase):
+    def test_channel_catalog_contains_six_press_sources_and_32_video_sources(self):
+        self.assertEqual(len(module.CHILE_SOURCE_IDS), 6)
+        self.assertEqual(len(module.YOUTUBE_SOURCE_IDS), 32)
+        self.assertEqual(len(set(module.SOURCE_IDS)), 38)
+
+    def test_feedburner_is_allowed_only_for_the_reviewed_biobio_endpoint(self):
+        source = {
+            'id': module.BIOBIO_ID,
+            'canonical_domain': 'biobiochile.cl',
+            'endpoint': module.BIOBIO_FEED,
+        }
+        self.assertIn('feeds.feedburner.com', module.allowed_fetch_hosts(source))
+        source['endpoint'] = 'https://feeds.feedburner.com/other/feed'
+        self.assertNotIn('feeds.feedburner.com', module.allowed_fetch_hosts(source))
+
     def test_sql_quotes_hostile_source_text_inside_an_unpredictable_dollar_tag(self):
         sql = module.sql_for([{'headline': "O'Reilly $metadata_ingestion$ <synthetic>"}], True)
         tag = re.search(r'do (\$dialektik_[a-f0-9]{32}\$)', sql).group(1)
@@ -20,7 +35,7 @@ class IngestionOperationTests(unittest.TestCase):
         self.assertIn("O''Reilly $metadata_ingestion$", sql)
         self.assertTrue(sql.strip().endswith('rollback;'))
 
-    def test_apply_requires_a_successful_simulation_of_the_signed_batch(self):
+    def test_apply_requires_simulation_and_clears_the_private_batch_after_commit(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {'SUPABASE_ACCESS_TOKEN': 'fixture-secret'}):
             module.RUN_DIR = Path(directory)
             module.PREPARED = module.RUN_DIR / 'prepared.json'
@@ -32,7 +47,8 @@ class IngestionOperationTests(unittest.TestCase):
             for index, source in enumerate(module.SOURCE_IDS):
                 items.append({'sourceId': source, 'canonicalUrl': f'https://fixture.invalid/{index}',
                     'articleId': f'{index * 3 + 1:026d}', 'receiptId': f'{index * 3 + 2:026d}',
-                    'versionId': f'{index * 3 + 3:026d}', 'excerpt': 'Authorized synthetic excerpt'})
+                    'versionId': f'{index * 3 + 3:026d}', 'storagePolicy': 'METADATA_AND_FEED_EXCERPT',
+                    'excerpt': 'Authorized synthetic excerpt'})
             manifest = {'createdAt': dt.datetime.now(dt.timezone.utc).isoformat(),
                 'targetDate': dt.datetime.now(module.ZoneInfo('America/Santiago')).date().isoformat(),
                 'expectedArticleCount': len(items), 'matchedArticleCount': len(items), 'items': items}
@@ -43,15 +59,18 @@ class IngestionOperationTests(unittest.TestCase):
                     module.write(False)
                 module.write(True)
                 self.assertTrue(query.call_args.args[0].strip().endswith('rollback;'))
+                modified = json.loads(module.PREPARED.read_text())
+                modified['items'][0]['canonicalUrl'] += '/changed'
+                module.write_private_json(module.PREPARED, modified)
+                with self.assertRaisesRegex(RuntimeError, 'PREPARED_BATCH_SIGNATURE_INVALID'):
+                    module.write(True)
+                module.write_private_json(module.PREPARED, manifest)
                 module.write(False)
                 self.assertFalse(module.DRY_RUN.exists())
-            modified = json.loads(module.PREPARED.read_text())
-            modified['items'][0]['canonicalUrl'] += '/changed'
-            module.write_private_json(module.PREPARED, modified)
-            with self.assertRaisesRegex(RuntimeError, 'PREPARED_BATCH_SIGNATURE_INVALID'):
-                module.write(True)
+                self.assertFalse(module.PREPARED.exists())
+                self.assertFalse(module.BATCH_KEY.exists())
 
-    def test_backfill_refuses_metadata_only_rows_before_running_sql(self):
+    def test_metadata_only_rows_cannot_retain_feed_excerpts(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict('os.environ', {'SUPABASE_ACCESS_TOKEN': 'fixture-secret'}):
             module.RUN_DIR = Path(directory)
             module.PREPARED = module.RUN_DIR / 'prepared.json'
@@ -66,7 +85,7 @@ class IngestionOperationTests(unittest.TestCase):
                 'matchedArticleCount': 1,
                 'items': [{'sourceId': module.SOURCE_IDS[0], 'canonicalUrl': 'https://fixture.invalid/item',
                            'articleId': '0' * 26, 'receiptId': '1' * 26, 'versionId': '2' * 26,
-                           'excerpt': None}],
+                           'storagePolicy': 'METADATA_ONLY', 'excerpt': 'unauthorized excerpt'}],
             }
             manifest['signature'] = module.signature(manifest)
             module.write_private_json(module.PREPARED, manifest)
