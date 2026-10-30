@@ -10,6 +10,10 @@ const provider = readFileSync(
   new URL('../../../packages/database/src/migration/provider.ts', import.meta.url),
   'utf8',
 );
+const productionService = readFileSync(
+  new URL('../src/semantic/live-semantic-production.service.ts', import.meta.url),
+  'utf8',
+);
 
 test('registers migration 060 and retains narrow signed-promotion gates', () => {
   assert.match(provider, /'060_live_semantic_editorial_promotion': liveSemanticEditorialPromotionMigration/);
@@ -31,6 +35,16 @@ test('inserts immutable proposal members before creating the submitted proposal'
   const proposal = migration.indexOf('insert into public.moderation_review_proposals', members);
   assert.ok(members >= 0 && proposal > members);
   assert.match(migration.slice(members, proposal), /select proposal_identity,assertion_id,null/);
+});
+
+test('classifies audit-context and promotion SQL failures through the same safe error mapping', () => {
+  const promote = productionService.slice(productionService.indexOf('async promote('));
+  const context = promote.indexOf('await setTransactionAuditContext');
+  const sqlCall = promote.indexOf('select public.dialektik_promote_live_semantic_event_group');
+  const errorMapping = promote.indexOf('const databaseCode = safeDatabaseErrorCode(error)');
+  const tryBlock = promote.lastIndexOf('try {', context);
+  assert.ok(tryBlock >= 0 && context > tryBlock);
+  assert.ok(sqlCall > context && errorMapping > sqlCall);
 });
 
 test('limits the new inference grants to the named sources and short excerpts', () => {
