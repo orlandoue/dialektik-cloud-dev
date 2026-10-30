@@ -656,10 +656,15 @@ function replacedPromotionDdl(): string {
     liveSemanticPromotionFinalizeDdl.slice(end);
 }
 
+export const liveSemanticMultiClaimPositionsDdl = {
+  schema: SCHEMA,
+  promotion: replacedPromotionDdl(),
+} as const;
+
 export const liveSemanticMultiClaimPositionsMigration: Migration = {
   async up(database): Promise<void> {
-    await sql.raw(SCHEMA).execute(database);
-    await sql.raw(replacedPromotionDdl()).execute(database);
+    await sql.raw(liveSemanticMultiClaimPositionsDdl.schema).execute(database);
+    await sql.raw(liveSemanticMultiClaimPositionsDdl.promotion).execute(database);
   },
   async down(): Promise<void> {
     throw new Error("Multi-claim editorial promotion history is forward-only.");

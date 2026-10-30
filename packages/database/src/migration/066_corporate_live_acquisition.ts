@@ -32,7 +32,9 @@ begin
     select 1 from public.sources s
     where s.id=new.source_id
       and (lower(split_part(split_part(new.endpoint,'://',2),'/',1))=s.canonical_domain
-        or lower(split_part(split_part(new.endpoint,'://',2),'/',1))='www.'||s.canonical_domain)
+        or lower(split_part(split_part(new.endpoint,'://',2),'/',1))='www.'||s.canonical_domain
+        or (s.canonical_domain='biobiochile.cl'
+          and lower(split_part(split_part(new.endpoint,'://',2),'/',1))='feeds.feedburner.com'))
   ) then
     raise exception using errcode='23514',message='corporate source endpoint domain is invalid';
   end if;
@@ -111,7 +113,7 @@ declare
   source_row record;
   old_decision record;
   decision_id dialektik_ulid;
-  policy_id text;
+  content_policy_identity text;
   connection_id dialektik_ulid;
   connection_sequence integer;
   decision_sequence integer;
@@ -124,7 +126,7 @@ declare
   registered integer := 0;
   editor_id dialektik_ulid := '01M4YDQK00ED1T0R0R1AND0VE1';
 begin
-  if not exists(select 1 from public.users where id=editor_id and role='editor' and status='active') then
+  if not exists(select 1 from public.users where id=editor_id and role='editor') then
     raise exception 'MIGRATION_066_EDITOR_NOT_ACTIVE';
   end if;
   select evidence_sha256 into provider_hash
@@ -184,7 +186,7 @@ begin
       select coalesce(max(sequence_number),0)+1 into decision_sequence
         from public.personal_owner_source_rights_decisions where source_id=source_row.source_id::dialektik_ulid;
       decision_id := public.dialektik_generate_ulid();
-      now_value := clock_timestamp();
+      now_value := clock_timestamp() - interval '1 second';
       insert into public.personal_owner_source_rights_decisions
         (id,owner_identity,source_id,sequence_number,publisher_identity,acquisition_method,rights_evidence_url,
          rights_evidence_sha256,scopes,attribution,restrictions,decision_status,decision_provenance,
@@ -198,28 +200,30 @@ begin
         now_value,old_decision.expires_at,now_value,true);
     end if;
 
-    policy_id := encode(extensions.digest(convert_to(
+    content_policy_identity := encode(extensions.digest(convert_to(
       'dialektik-live-semantic-excerpt-policy-v3'||E'\n'||source_row.source_id||E'\n'||decision_id::text||E'\n'||old_decision.rights_evidence_sha256,
       'UTF8'),'sha256'),'hex');
-    now_value := clock_timestamp();
+    now_value := clock_timestamp() - interval '1 second';
     insert into public.content_access_policies
       (id,source_id,content_access_mode,metadata_storage,excerpt_storage,fulltext_acquisition,
        fulltext_machine_processing,fulltext_persistence,derived_semantic_persistence,minimal_evidence_fragment,
        redisplay,external_source_link,evidence_quote_max_codepoints,rights_evidence_url,rights_verified_at,
        recorded_at,local_processing,external_ai_transmission,rights_evidence_sha256,
        personal_owner_source_rights_decision_id)
-    values (policy_id,source_row.source_id::dialektik_ulid,'EXCERPT_EPHEMERAL',true,true,false,
+    values (content_policy_identity,source_row.source_id::dialektik_ulid,'EXCERPT_EPHEMERAL',true,true,false,
       false,false,true,true,false,false,300,old_decision.rights_evidence_url,now_value,now_value,
       true,(old_decision.scopes->>'external_ai_transmission')::boolean,old_decision.rights_evidence_sha256,decision_id)
     on conflict(id) do nothing;
     route_hash := encode(extensions.digest(convert_to(old_decision.rights_evidence_sha256||E'\n'||
-      provider_hash||E'\n'||policy_id||E'\nEXTERNAL_LLM_PROCESSING_ALLOWED','UTF8'),'sha256'),'hex');
+      provider_hash||E'\n'||content_policy_identity||E'\nEXTERNAL_LLM_PROCESSING_ALLOWED','UTF8'),'sha256'),'hex');
     insert into public.live_semantic_source_route_grants
       (id,source_id,policy_id,provider_type,processing_route,fulltext_acquisition,machine_processing,
        derived_persistence,fulltext_persistence,evidence_fragments,rights_receipt_sha256,recorded_at)
-    values (public.dialektik_generate_ulid(),source_row.source_id::dialektik_ulid,policy_id,
-      'llm_cloudflare_workers_ai','EXTERNAL_LLM_PROCESSING_ALLOWED',false,true,true,false,true,route_hash,now_value)
-    on conflict(source_id,policy_id,provider_type) do nothing;
+    select public.dialektik_generate_ulid(),source_row.source_id::dialektik_ulid,content_policy_identity,
+      'llm_cloudflare_workers_ai','EXTERNAL_LLM_PROCESSING_ALLOWED',false,true,true,false,true,route_hash,now_value
+    where not exists(select 1 from public.live_semantic_source_route_grants existing
+      where existing.source_id=source_row.source_id::dialektik_ulid
+        and existing.policy_id=content_policy_identity and existing.provider_type='llm_cloudflare_workers_ai');
 
     allowed_domains := jsonb_build_array(source_row.canonical_domain,'www.'||source_row.canonical_domain);
     discovery_value := case when source_row.canonical_domain='youtube.com' then 'youtube_data_api_v3'
@@ -236,7 +240,7 @@ begin
       (id,source_id,sequence_number,rights_decision_id,endpoint,channel_url,discovery_channel,
        allowed_article_domains,active,approved_by,recorded_at)
     values (connection_id,source_row.source_id::dialektik_ulid,connection_sequence,decision_id,
-      source_row.endpoint,channel_url,discovery_value,allowed_domains,true,editor_id,clock_timestamp());
+      source_row.endpoint,channel_url,discovery_value,allowed_domains,true,editor_id,now_value);
     insert into public.corporate_live_source_poll_state
       (source_id,poll_interval_seconds,last_status,next_poll_at,updated_at)
     values (source_row.source_id::dialektik_ulid,
@@ -250,6 +254,8 @@ begin
 end;
 $seed$;
 `;
+
+export const corporateLiveAcquisitionDdl = { schema: SCHEMA, seed: SEED } as const;
 
 export const corporateLiveAcquisitionMigration: Migration = {
   async up(database): Promise<void> {
