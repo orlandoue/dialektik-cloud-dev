@@ -88,6 +88,21 @@ function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
+function safeDatabaseErrorCode(error: unknown): string | null {
+  let current: unknown = error;
+  for (
+    let depth = 0;
+    depth < 4 && typeof current === "object" && current !== null;
+    depth += 1
+  ) {
+    const code = "code" in current ? current.code : null;
+    if (typeof code === "string" && /^[A-Z0-9_]{1,64}$/u.test(code))
+      return code;
+    current = "cause" in current ? current.cause : null;
+  }
+  return null;
+}
+
 function exactBody(raw: unknown): { targetDay: string; limit: number } {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw))
     throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
@@ -169,7 +184,7 @@ export class LiveSemanticProductionService {
         pairPrompt: LIVE_PAIR_ASSESSMENT_PROMPT,
         pairSchema: LIVE_PAIR_ASSESSMENT_SCHEMA,
         grounding: "exact-unicode-codepoint-span-v1",
-        publication: "editorial-review-only-v1",
+        publication: "editorial-review-only-v2",
       }),
     );
   }
@@ -263,6 +278,7 @@ export class LiveSemanticProductionService {
       articleId: string;
       outcome: string;
       usedFallback?: boolean;
+      persistenceErrorCode?: string;
     }> = [];
     let pairAssessmentCount = 0;
     try {
@@ -319,6 +335,13 @@ export class LiveSemanticProductionService {
           (item) =>
             !["VALIDATED", "NO_CLAIM_WORTHY_CONTENT"].includes(item.outcome),
         ).length,
+        persistenceErrorCodes: Array.from(
+          new Set(
+            outcomes.flatMap((item) =>
+              item.persistenceErrorCode ? [item.persistenceErrorCode] : [],
+            ),
+          ),
+        ),
         literalQuoteFallbacks: outcomes.filter((item) => item.usedFallback)
           .length,
         pairAssessments: pairAssessmentCount,
@@ -361,7 +384,12 @@ export class LiveSemanticProductionService {
     configSha: string,
     modelRevision: string,
     transport: CloudflareWorkersAITransport,
-  ): Promise<{ articleId: string; outcome: string; usedFallback?: boolean }> {
+  ): Promise<{
+    articleId: string;
+    outcome: string;
+    usedFallback?: boolean;
+    persistenceErrorCode?: string;
+  }> {
     if (
       input.textOriginal.length > 1250 ||
       input.excerpt.length > 700 ||
@@ -467,16 +495,29 @@ export class LiveSemanticProductionService {
           limit 1`.execute(connection);
         inserted = prior.rows[0];
       }
-      if (!inserted) throw new Error("LIVE_SEMANTIC_GENERATION_WRITE_FAILED");
-    } catch {
+      if (!inserted) {
+        throw Object.assign(
+          new Error("LIVE_SEMANTIC_GENERATION_WRITE_FAILED"),
+          {
+            code: "NO_GENERATION_FOR_CONFLICT",
+          },
+        );
+      }
+    } catch (error) {
+      const persistenceErrorCode =
+        safeDatabaseErrorCode(error) ?? "PERSISTENCE_FAILED";
       await this.recordOutcome(
         connection,
         attemptId,
         "PERSISTENCE_FAILED",
         null,
-        "PERSISTENCE_FAILED",
+        persistenceErrorCode,
       );
-      return { articleId: input.articleId, outcome: "PERSISTENCE_FAILED" };
+      return {
+        articleId: input.articleId,
+        outcome: "PERSISTENCE_FAILED",
+        persistenceErrorCode,
+      };
     }
     const outcome =
       grounded.status === "EXTRACTED" ? "VALIDATED" : "NO_CLAIM_WORTHY_CONTENT";
