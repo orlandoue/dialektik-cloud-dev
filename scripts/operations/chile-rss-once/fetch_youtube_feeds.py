@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Fetch the 32 reviewed public YouTube Atom feeds for a short-lived GitHub artifact."""
 import datetime as dt
+from collections import Counter
 import hashlib
 import json
 import os
@@ -131,6 +132,10 @@ def main():
     succeeded = sum(entry['status'] == 'succeeded' for entry in entries)
     candidates = sum(len(entry.get('items', [])) for entry in entries if entry['status'] == 'succeeded')
     print(f'YouTube Atom feeds fetched: {succeeded}/32; current-day candidates: {candidates}; feed content omitted from logs.')
+    failures = Counter(entry['error_code'] for entry in entries if entry['status'] == 'failed')
+    if failures:
+        print('Feed failure codes: ' + ', '.join(
+            f'{code}={count}' for code, count in sorted(failures.items())))
     if succeeded == 0:
         raise SystemExit('NO_YOUTUBE_FEEDS_FETCHED')
 
