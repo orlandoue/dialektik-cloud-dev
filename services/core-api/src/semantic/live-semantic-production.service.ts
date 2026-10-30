@@ -184,7 +184,7 @@ export class LiveSemanticProductionService {
         pairPrompt: LIVE_PAIR_ASSESSMENT_PROMPT,
         pairSchema: LIVE_PAIR_ASSESSMENT_SCHEMA,
         grounding: "exact-unicode-codepoint-span-v1",
-        publication: "editorial-review-only-v2",
+        publication: "editorial-review-only-v3",
       }),
     );
   }
@@ -234,9 +234,13 @@ export class LiveSemanticProductionService {
         i.policy_id as "policyId",i.input_sha256 as "inputSha256"
       from public.live_semantic_excerpt_inputs i
       where (i.published_at at time zone 'America/Santiago')::date=${targetDay}::date
+        and not exists(select 1 from public.assertion_extraction_generations g
+          where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256
+            and g.state='active')
         and not exists(select 1 from public.live_semantic_article_attempts a
+          join public.live_semantic_article_outcomes o on o.attempt_id=a.id
           where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256
-            and a.config_sha256=${configSha})
+            and o.outcome='UNKNOWN_SENT')
       order by i.published_at desc,i.article_id desc limit ${limit}
     `.execute(connection);
     if (pending.rows.length === 0)
