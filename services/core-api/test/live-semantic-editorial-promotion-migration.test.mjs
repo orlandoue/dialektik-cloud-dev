@@ -41,6 +41,7 @@ test('registers migration 060 and retains narrow signed-promotion gates', () => 
 
 test('validates deferred graph constraints before returning and allows stale invalid publications to be demoted', () => {
   assert.match(finalizeMigration, /set constraints all immediate;\\n\$\{promotionFinalizeMarker\}/u);
+  assert.match(finalizeMigration, /promotionFinalizeMarker,\s*\(\)\s*=>/u);
   assert.match(finalizeMigration, /row_data ->> 'confirmed_by' is distinct from old_row_data ->> 'confirmed_by'/u);
   assert.match(finalizeMigration, /row_data ->> 'publication_state'='published'/u);
   assert.match(finalizeMigration, /set search_path=pg_catalog,public,extensions/u);

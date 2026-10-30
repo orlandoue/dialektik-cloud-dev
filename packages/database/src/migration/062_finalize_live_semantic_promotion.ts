@@ -4,7 +4,7 @@ import { liveSemanticEditorialPromotionDdl } from "./060_live_semantic_editorial
 const promotionFinalizeMarker = "  return response_json;\nend;\n$$;";
 const finalizedPromotionDdl = liveSemanticEditorialPromotionDdl.replace(
   promotionFinalizeMarker,
-  `  set constraints all immediate;\n${promotionFinalizeMarker}`,
+  () => `  set constraints all immediate;\n${promotionFinalizeMarker}`,
 );
 
 const sensitiveActorUpdate = String.raw`
