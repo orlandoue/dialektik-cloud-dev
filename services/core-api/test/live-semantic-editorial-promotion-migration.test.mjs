@@ -22,6 +22,14 @@ const generationLineageMigration = readFileSync(
   new URL('../../../packages/database/src/migration/065_live_semantic_generation_lineage.ts', import.meta.url),
   'utf8',
 );
+const multiClaimMigration = readFileSync(
+  new URL('../../../packages/database/src/migration/067_live_semantic_multi_claim_positions.ts', import.meta.url),
+  'utf8',
+);
+const acquisitionMigration = readFileSync(
+  new URL('../../../packages/database/src/migration/066_corporate_live_acquisition.ts', import.meta.url),
+  'utf8',
+);
 const provider = readFileSync(
   new URL('../../../packages/database/src/migration/provider.ts', import.meta.url),
   'utf8',
@@ -42,6 +50,8 @@ test('registers migration 060 and retains narrow signed-promotion gates', () => 
   assert.match(provider, /'063_skip_unconfirmed_stale_publications': skipUnconfirmedStalePublicationsMigration/);
   assert.match(provider, /'064_live_event_origin': liveEventOriginMigration/);
   assert.match(provider, /'065_live_semantic_generation_lineage': liveSemanticGenerationLineageMigration/);
+  assert.match(provider, /'066_corporate_live_acquisition': corporateLiveAcquisitionMigration/);
+  assert.match(provider, /'067_live_semantic_multi_claim_positions': liveSemanticMultiClaimPositionsMigration/);
   assert.match(migration, /dialektik_require_context_actor\(actor_identity\)/);
   assert.match(migration, /editorial_single_editor_authorizations/);
   assert.match(migration, /substring\(item\.text_original from quote_start\+1 for quote_end-quote_start\)<>quote_text/);
@@ -52,6 +62,35 @@ test('registers migration 060 and retains narrow signed-promotion gates', () => 
   assert.match(migration, /on conflict\(id\) where id is not null/i);
   assert.doesNotMatch(migration, /\bdrop\s+constraint\b/i);
   assert.doesNotMatch(migration, /grant\s+[^;]*\bto\s+public\b/i);
+});
+
+test('persists claim-pair comparisons and promotes independently reviewed positions', () => {
+  assert.match(multiClaimMigration, /create table public\.live_semantic_claim_pair_assessments/);
+  assert.match(multiClaimMigration, /left_claim_ordinal smallint[\s\S]*right_claim_ordinal smallint/);
+  assert.match(multiClaimMigration, /ratio_conflicting>=50 and assessment\.ratio_comparable>=60/);
+  assert.match(multiClaimMigration, /position_count\+1,publication_state='published'/);
+  assert.match(multiClaimMigration, /'LIVE_REAL'\);/);
+  assert.match(multiClaimMigration, /public\.position_relation_projections/);
+  assert.match(multiClaimMigration, /public\.contradiction_publications/);
+  assert.match(multiClaimMigration, /'confirmed','live_semantic_single_editor_approval'/);
+  assert.match(multiClaimMigration, /values\(proposal_identity,task_identity,candidate_identity,'split'/);
+  assert.match(multiClaimMigration, /state='superseded' where id=candidate_identity/);
+  assert.match(multiClaimMigration, /live_semantic_promotion_positions\([\s\S]*select group_identity,event_identity,position_id,candidate_identity,task_identity,proposal_identity/);
+  assert.match(multiClaimMigration, /live_semantic_task_resolution/);
+  assert.match(multiClaimMigration, /moderation_decision','live_semantic_candidate_split'/);
+  assert.doesNotMatch(multiClaimMigration, /\bdrop\s+constraint\b/i);
+  assert.doesNotMatch(multiClaimMigration, /grant\s+[^;]*\bto\s+public\b/i);
+});
+
+test('registers exactly the approved corporate press and channel connections with short-text policy', () => {
+  assert.match(provider, /'066_corporate_live_acquisition': corporateLiveAcquisitionMigration/);
+  assert.match(acquisitionMigration, /registered<>38/);
+  assert.match(acquisitionMigration, /METADATA_AND_FEED_EXCERPT/);
+  assert.match(acquisitionMigration, /youtube_data_api_v3/);
+  assert.match(acquisitionMigration, /maximum_public_excerpt_characters',700/);
+  assert.match(acquisitionMigration, /'fulltext_acquisition'<>'false'/);
+  assert.match(acquisitionMigration, /'fulltext_persistence'<>'false'/);
+  assert.doesNotMatch(acquisitionMigration, /grant\s+[^;]*\bto\s+public\b/i);
 });
 
 test('limits extraction generation updates to state supersession and preserves append-only lineage', () => {
@@ -92,10 +131,10 @@ test('persists LIVE_REAL origin on promoted events and their public projection',
 });
 
 test('inserts immutable proposal members before creating the submitted proposal', () => {
-  const members = migration.indexOf('insert into public.moderation_review_proposal_members');
-  const proposal = migration.indexOf('insert into public.moderation_review_proposals', members);
+  const members = multiClaimMigration.indexOf('insert into public.moderation_review_proposal_members');
+  const proposal = multiClaimMigration.indexOf('insert into public.moderation_review_proposals', members);
   assert.ok(members >= 0 && proposal > members);
-  assert.match(migration.slice(members, proposal), /select proposal_identity,assertion_id,null/);
+  assert.match(multiClaimMigration.slice(members, proposal), /select proposal_identity,assertion_id,row_number\(\) over\(order by assertion_id\)::integer/);
 });
 
 test('classifies audit-context and promotion SQL failures through the same safe error mapping', () => {

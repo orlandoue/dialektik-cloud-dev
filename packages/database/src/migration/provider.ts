@@ -63,6 +63,8 @@ import { finalizeLiveSemanticPromotionMigration } from './062_finalize_live_sema
 import { skipUnconfirmedStalePublicationsMigration } from './063_skip_unconfirmed_stale_publications';
 import { liveEventOriginMigration } from './064_live_event_origin';
 import { liveSemanticGenerationLineageMigration } from './065_live_semantic_generation_lineage';
+import { corporateLiveAcquisitionMigration } from './066_corporate_live_acquisition';
+import { liveSemanticMultiClaimPositionsMigration } from './067_live_semantic_multi_claim_positions';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -107,6 +109,8 @@ const migrations: Readonly<Record<string, Migration>> = {
   '063_skip_unconfirmed_stale_publications': skipUnconfirmedStalePublicationsMigration,
   '064_live_event_origin': liveEventOriginMigration,
   '065_live_semantic_generation_lineage': liveSemanticGenerationLineageMigration,
+  '066_corporate_live_acquisition': corporateLiveAcquisitionMigration,
+  '067_live_semantic_multi_claim_positions': liveSemanticMultiClaimPositionsMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,

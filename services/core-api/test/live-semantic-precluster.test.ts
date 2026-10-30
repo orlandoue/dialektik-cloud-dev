@@ -74,13 +74,13 @@ describe("live semantic 48 hour pre-clustering", () => {
     ).toBe(true);
   });
 
-  it("never adds same-event assessments whose claims are not comparable", () => {
+  it("groups the same incident even when the claims themselves are not comparable", () => {
     expect(canJoinSemanticEventGroup({
       sameEvent: true,
       sameEventConfidence: 100,
       relation: "NOT_COMPARABLE",
       ratioComparable: 0,
-    })).toBe(false);
+    })).toBe(true);
     expect(canJoinSemanticEventGroup({
       sameEvent: true,
       sameEventConfidence: 70,

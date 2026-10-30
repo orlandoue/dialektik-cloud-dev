@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   groundLiveClaim,
+  groundLiveClaims,
   validateLivePairAssessment,
 } from "../src/semantic/live-semantic-production.contract.js";
 
@@ -44,6 +45,33 @@ describe("live semantic production grounding", () => {
       Array.from(text).slice(result.charStart!, result.charEnd!).join(""),
     ).toBe(result.quotedText);
     expect(result.usedFallback).toBe(true);
+  });
+
+  it("grounds multiple non-overlapping claims with exact Unicode offsets", () => {
+    const text = "Titular. La ministra negó haber recibido la alerta. El fiscal afirmó que sí fue informada.";
+    const result = groundLiveClaims({
+      status: "EXTRACTED",
+      eventKey: "ministra-alerta-fiscalia",
+      eventTitle: "Investigación sobre alerta recibida",
+      eventSummary: "La ministra y el fiscal describen de manera distinta si se recibió la alerta.",
+      claims: [
+        {
+          quotedText: "La ministra negó haber recibido la alerta.",
+          assertionText: "La ministra niega haber recibido la alerta.",
+          positionSummary: "La ministra niega recepción de la alerta.",
+        },
+        {
+          quotedText: "El fiscal afirmó que sí fue informada.",
+          assertionText: "El fiscal sostiene que la ministra fue informada.",
+          positionSummary: "La fiscalía afirma que la ministra recibió la alerta.",
+        },
+      ],
+    }, text, "Titular");
+
+    expect(result.claims).toHaveLength(2);
+    for (const item of result.claims) {
+      expect(Array.from(text).slice(item.charStart!, item.charEnd!).join("")).toBe(item.quotedText);
+    }
   });
 
   it("rejects an inconsistent pair assessment", () => {
