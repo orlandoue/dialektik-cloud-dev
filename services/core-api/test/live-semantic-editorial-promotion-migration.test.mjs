@@ -10,6 +10,10 @@ const finalizeMigration = readFileSync(
   new URL('../../../packages/database/src/migration/062_finalize_live_semantic_promotion.ts', import.meta.url),
   'utf8',
 );
+const stalePublicationMigration = readFileSync(
+  new URL('../../../packages/database/src/migration/063_skip_unconfirmed_stale_publications.ts', import.meta.url),
+  'utf8',
+);
 const provider = readFileSync(
   new URL('../../../packages/database/src/migration/provider.ts', import.meta.url),
   'utf8',
@@ -27,6 +31,7 @@ test('registers migration 060 and retains narrow signed-promotion gates', () => 
   assert.match(provider, /'060_live_semantic_editorial_promotion': liveSemanticEditorialPromotionMigration/);
   assert.match(provider, /'061_live_semantic_proposal_members_order': liveSemanticProposalMembersOrderMigration/);
   assert.match(provider, /'062_finalize_live_semantic_promotion': finalizeLiveSemanticPromotionMigration/);
+  assert.match(provider, /'063_skip_unconfirmed_stale_publications': skipUnconfirmedStalePublicationsMigration/);
   assert.match(migration, /dialektik_require_context_actor\(actor_identity\)/);
   assert.match(migration, /editorial_single_editor_authorizations/);
   assert.match(migration, /substring\(item\.text_original from quote_start\+1 for quote_end-quote_start\)<>quote_text/);
@@ -47,6 +52,15 @@ test('validates deferred graph constraints before returning and allows stale inv
   assert.match(finalizeMigration, /set search_path=pg_catalog,public,extensions/u);
   assert.doesNotMatch(finalizeMigration, /\bdrop\s+constraint\b/i);
   assert.doesNotMatch(finalizeMigration, /grant\s+[^;]*\bto\s+public\b/i);
+});
+
+test('stale publication invalidation preserves legacy rows that never had an editor signoff', () => {
+  assert.match(stalePublicationMigration, /publication\.confirmed_by is not null/u);
+  assert.match(stalePublicationMigration, /publication\.confirmed_at is not null/u);
+  assert.match(stalePublicationMigration, /publication_state='requires_review'/u);
+  assert.match(stalePublicationMigration, /set search_path=pg_catalog,public,extensions/u);
+  assert.doesNotMatch(stalePublicationMigration, /\bdrop\s+constraint\b/i);
+  assert.doesNotMatch(stalePublicationMigration, /grant\s+[^;]*\bto\s+public\b/i);
 });
 
 test('inserts immutable proposal members before creating the submitted proposal', () => {
