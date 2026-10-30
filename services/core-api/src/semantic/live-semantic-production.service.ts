@@ -18,7 +18,10 @@ import { HeadlineReviewService } from "../moderation/headline-review.service.js"
 import { ModerationHttpError } from "../moderation/moderation-http.error.js";
 import { HeadlineSemanticDatabaseService } from "./headline-semantic-database.service.js";
 import { ModerationDatabaseService } from "../moderation/moderation-database.service.js";
-import { preclusterLiveSemanticArticles } from "./live-semantic-precluster.js";
+import {
+  canAddSemanticPairToClique,
+  preclusterLiveSemanticArticles,
+} from "./live-semantic-precluster.js";
 import {
   LIVE_CLAIM_EXTRACTION_PROMPT,
   LIVE_CLAIM_EXTRACTION_SCHEMA,
@@ -30,12 +33,12 @@ import {
 
 const MODEL = CLOUDFLARE_JSON_MODE_MODEL;
 const PROVIDER = "llm_cloudflare_workers_ai";
-const EXTRACTION_SCHEMA_VERSION = "live-claim-extraction-v1";
-const SEGMENTATION_VERSION = "dialektik-live-excerpt-claim-v1";
+const EXTRACTION_SCHEMA_VERSION = "live-claim-extraction-v2";
+const SEGMENTATION_VERSION = "dialektik-live-excerpt-claim-v2";
 const MAX_BATCH = 5;
 const MAX_PAIR_ASSESSMENTS = 20;
 const THRESHOLD_RULE =
-  "review-only:same-event>=70;contradiction>0/50;divergence>0/50";
+  "review-only:same-event>=70;conflict>0/comparable>=60;divergence>0/comparable>=60";
 
 export interface LiveExcerptInput {
   articleId: string;
@@ -216,8 +219,8 @@ export class LiveSemanticProductionService {
         pairSchema: LIVE_PAIR_ASSESSMENT_SCHEMA,
         grounding: "exact-unicode-codepoint-span-v1",
         publication: "single-editor-consistent-group-promotion-v1",
-        precluster: "entity-topic-48h-v1",
-        contradictionThreshold: "conflicting-positive-comparable-50",
+        precluster: "named-entity-complete-link-48h-v2",
+        contradictionThreshold: "conflicting-positive-comparable-60",
       }),
     );
   }
@@ -270,6 +273,8 @@ export class LiveSemanticProductionService {
         and (i.published_at at time zone 'America/Santiago')::date<${targetDay}::date+2
         and not exists(select 1 from public.assertion_extraction_generations g
           where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256
+            and g.provider_id=${PROVIDER} and g.model_id=${MODEL}
+            and g.schema_version=${EXTRACTION_SCHEMA_VERSION} and g.config_version=${configSha}
             and g.state='active')
         and not exists(select 1 from public.live_semantic_article_attempts a
           where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256
@@ -277,7 +282,7 @@ export class LiveSemanticProductionService {
         and not exists(select 1 from public.live_semantic_article_attempts a
           join public.live_semantic_article_outcomes o on o.attempt_id=a.id
           where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256
-            and o.outcome='UNKNOWN_SENT')
+            and a.config_sha256=${configSha} and o.outcome='UNKNOWN_SENT')
       order by i.published_at desc,i.article_id desc limit ${limit}
     `.execute(connection);
     const eligible = await sql<{ count: number }>`
@@ -287,6 +292,7 @@ export class LiveSemanticProductionService {
         and exists(select 1 from public.assertion_extraction_generations g
           where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256
             and g.provider_id=${PROVIDER} and g.model_id=${MODEL} and g.state='active'
+            and g.schema_version=${EXTRACTION_SCHEMA_VERSION} and g.config_version=${configSha}
             and g.outcome='proposed')
     `.execute(connection);
     if (pending.rows.length === 0 && eligible.rows[0]?.count === 0)
@@ -364,9 +370,9 @@ export class LiveSemanticProductionService {
       }>`
         select count(distinct g.id)::int as "eventGroups",
           count(*) filter(where p.relation='CONTRADICTORY'
-            and p.ratio_conflicting>0 and p.ratio_comparable>=50)::int as "conflictCandidates",
+            and p.ratio_conflicting>0 and p.ratio_comparable>=60)::int as "conflictCandidates",
           count(*) filter(where p.relation='DIVERGENT'
-            and p.ratio_conflicting>0 and p.ratio_comparable>=50)::int as "divergentCandidates"
+            and p.ratio_conflicting>0 and p.ratio_comparable>=60)::int as "divergentCandidates"
         from public.live_semantic_event_group_candidates g
         left join public.live_semantic_pair_assessments p on p.group_id=g.id
         where g.target_day=${targetDay}::date and g.config_sha256=${configSha}
@@ -609,6 +615,7 @@ export class LiveSemanticProductionService {
         where generation.article_id=i.article_id::dialektik_ulid and generation.input_hash=i.input_sha256
           and generation.provider_id=${PROVIDER} and generation.model_id=${MODEL}
           and generation.schema_version=${EXTRACTION_SCHEMA_VERSION}
+          and generation.config_version=${configSha}
           and generation.state='active' and generation.outcome='proposed'
         order by generation.created_at desc,generation.id desc limit 1) g on true
       where (i.published_at at time zone 'America/Santiago')::date>=${targetDay}::date
@@ -700,12 +707,33 @@ export class LiveSemanticProductionService {
           ${assessment.sameEventConfidence},${THRESHOLD_RULE},${PROVIDER},${MODEL},${configSha},
           ${new Date().toISOString()}) on conflict(left_article_id,right_article_id,config_sha256) do nothing`.execute(connection);
       if (assessment.sameEvent && assessment.sameEventConfidence >= 70) {
-        for (const member of [left, right]) {
-          await sql`insert into public.live_semantic_event_group_members
-            (group_id,article_id,source_id,extraction_generation_id,matched_at)
-            values (${groupId}::dialektik_ulid,${member.articleId}::dialektik_ulid,
-              ${member.sourceId}::dialektik_ulid,${member.generationId}::dialektik_ulid,${new Date().toISOString()})
-            on conflict(group_id,article_id) do nothing`.execute(connection);
+        const existingMembers = await sql<{ articleId: string }>`select article_id::text as "articleId"
+          from public.live_semantic_event_group_members where group_id=${groupId}::dialektik_ulid
+          order by article_id`.execute(connection);
+        const confirmedRows = await sql<{
+          leftArticleId: string;
+          rightArticleId: string;
+        }>`select left_article_id::text as "leftArticleId",right_article_id::text as "rightArticleId"
+          from public.live_semantic_pair_assessments where group_id=${groupId}::dialektik_ulid
+            and config_sha256=${configSha} and same_event and same_event_confidence>=70`.execute(connection);
+        const confirmedPairs = new Set(
+          confirmedRows.rows.map((row) => `${row.leftArticleId}\n${row.rightArticleId}`),
+        );
+        if (
+          canAddSemanticPairToClique(
+            existingMembers.rows.map((row) => row.articleId),
+            left.articleId,
+            right.articleId,
+            confirmedPairs,
+          )
+        ) {
+          for (const member of [left, right]) {
+            await sql`insert into public.live_semantic_event_group_members
+              (group_id,article_id,source_id,extraction_generation_id,matched_at)
+              values (${groupId}::dialektik_ulid,${member.articleId}::dialektik_ulid,
+                ${member.sourceId}::dialektik_ulid,${member.generationId}::dialektik_ulid,${new Date().toISOString()})
+              on conflict(group_id,article_id) do nothing`.execute(connection);
+          }
         }
       }
     }
@@ -755,6 +783,7 @@ export class LiveSemanticProductionService {
         where generation.article_id=i.article_id::dialektik_ulid and generation.input_hash=i.input_sha256
           and generation.provider_id=${PROVIDER} and generation.model_id=${MODEL}
           and generation.schema_version=${EXTRACTION_SCHEMA_VERSION}
+          and generation.config_version=${configSha}
           and generation.state='active' and generation.outcome in ('proposed','no_claim_worthy_content')
         order by generation.created_at desc,generation.id desc limit 1) g on true
       where (i.published_at at time zone 'America/Santiago')::date>=${rawDay}::date
@@ -765,9 +794,9 @@ export class LiveSemanticProductionService {
         g.proposed_title as "proposedTitle",g.proposed_summary as "proposedSummary",
         count(distinct m.article_id)::int as "articleCount",count(distinct m.source_id)::int as "sourceCount",
         count(*) filter(where p.same_event and p.relation='CONTRADICTORY'
-          and p.ratio_conflicting>0 and p.ratio_comparable>=50)::int as "contradictionCount",
+          and p.ratio_conflicting>0 and p.ratio_comparable>=60)::int as "contradictionCount",
         count(*) filter(where p.same_event and p.relation='DIVERGENT'
-          and p.ratio_conflicting>0 and p.ratio_comparable>=50)::int as "divergentCount",g.created_at as "createdAt"
+          and p.ratio_conflicting>0 and p.ratio_comparable>=60)::int as "divergentCount",g.created_at as "createdAt"
       from public.live_semantic_event_group_candidates g
       join public.live_semantic_event_group_members m on m.group_id=g.id
       left join public.live_semantic_pair_assessments p on p.group_id=g.id
