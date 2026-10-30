@@ -22,15 +22,10 @@ const STOP_WORDS = new Set([
   "chile", "chileno", "chilena", "nacional", "gobierno", "ministro", "ministra",
   "presidente", "presidenta", "comision", "comisión", "anuncia", "anuncian",
   "informa", "informan", "seguridad", "economia", "economía", "politica", "política",
+  "caso", "corte", "suprema", "tribunal", "fiscalia", "fiscalía", "justicia",
+  "causa", "proceso", "acusacion", "acusación", "nueva", "nuevas", "nuevo", "nuevos",
+  "informe", "medida", "medidas", "proyecto", "comunicado", "tras", "reporta",
 ]);
-
-const TOPIC_ALIASES: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ["monsalve-interior", ["monsalve", "interior"]],
-  ["corte-suprema-poder-judicial", ["corte suprema", "poder judicial"]],
-  ["elecciones-servel-alcaldias", ["elecciones", "servel", "alcaldias", "alcaldías"]],
-  ["seguridad-crimen-organizado", ["seguridad", "crimen organizado"]],
-  ["presupuesto-cae-economia", ["presupuesto", "cae", "economia", "economía"]],
-];
 
 function normalized(value: string): string {
   return value
@@ -56,16 +51,6 @@ function namedTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {
     if (!STOP_WORDS.has(token)) tokens.add(token);
   }
   return tokens;
-}
-
-function topicCluster(left: string, right: string): string | null {
-  for (const [key, aliases] of TOPIC_ALIASES) {
-    if (aliases.some((alias) => left.includes(normalized(alias))) &&
-        aliases.some((alias) => right.includes(normalized(alias)))) {
-      return `topic:${key}`;
-    }
-  }
-  return null;
 }
 
 const SANTIAGO_PARTS = new Intl.DateTimeFormat("en-US", {
@@ -114,24 +99,32 @@ function clusterKey(
   left: SemanticPreclusterArticle,
   right: SemanticPreclusterArticle,
 ): string | null {
-  const leftText = normalized([
-    left.headline,
-    left.eventTitle,
-    left.eventSummary,
-    left.eventKey.replace(/[-_:]/gu, " "),
-  ].join(" "));
-  const rightText = normalized([
-    right.headline,
-    right.eventTitle,
-    right.eventSummary,
-    right.eventKey.replace(/[-_:]/gu, " "),
-  ].join(" "));
-  const topic = topicCluster(leftText, rightText);
-  if (topic !== null) return topic;
-
-  const shared = [...namedTokens(left)].filter((token) => namedTokens(right).has(token)).sort();
+  const rightEntities = namedTokens(right);
+  const shared = [...namedTokens(left)].filter((token) => rightEntities.has(token)).sort();
   if (shared.length === 0) return null;
   return `entity:${shared.slice(0, 3).join("-")}`;
+}
+
+function pairKey(left: string, right: string): string {
+  return left < right ? `${left}\n${right}` : `${right}\n${left}`;
+}
+
+/** Prevents a bridge article from joining a group without pairwise confirmation. */
+export function canAddSemanticPairToClique(
+  existingMemberIds: readonly string[],
+  leftArticleId: string,
+  rightArticleId: string,
+  confirmedSameEventPairs: ReadonlySet<string>,
+): boolean {
+  if (!confirmedSameEventPairs.has(pairKey(leftArticleId, rightArticleId))) return false;
+  const candidates = new Set([leftArticleId, rightArticleId]);
+  for (const existingId of existingMemberIds) {
+    if (candidates.has(existingId)) continue;
+    for (const candidateId of candidates) {
+      if (!confirmedSameEventPairs.has(pairKey(existingId, candidateId))) return false;
+    }
+  }
+  return true;
 }
 
 /**

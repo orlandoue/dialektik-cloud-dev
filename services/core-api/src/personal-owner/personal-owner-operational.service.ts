@@ -25,6 +25,11 @@ import { CoreDatabaseService } from '../database/core-database.service.js';
 import { emptyLiveSyncSummary, syncLivePayload } from '../live/live.sync.js';
 import type { LiveSourcePolicy } from '../live/live.registry.js';
 import {
+  fetchYouTubeDataApiItems,
+  YouTubeDataApiError,
+  youtubeDataApiRssPayload,
+} from '../live/youtube-data-api.js';
+import {
   FROZEN_NORMALIZATION_VERSION,
   normalizeFrozenFields,
   sha256Bytes,
@@ -1089,8 +1094,29 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
     `.execute(this.database.database);
     const row = current.rows[0];
     if (!row) throw new NotFoundException('SOURCE_NOT_FOUND');
-    if (!row.connection_id || !row.endpoint || !row.decision_id || !row.scopes)
+    const youtubeSource = row.canonical_domain === 'youtube.com';
+    const youtubeApiKey = process.env.YOUTUBE_API_KEY?.trim();
+    if (youtubeSource && !youtubeApiKey) {
+      return {
+        source_id: row.id,
+        skipped: true,
+        reason: 'YOUTUBE_API_KEY_MISSING',
+        acquisition: emptyLiveSyncSummary(),
+        external_acquisition_mode: 'LIVE_EXPLICIT_OPT_IN',
+      };
+    }
+    if (!row.connection_id || !row.endpoint || !row.decision_id || !row.scopes) {
+      if (youtubeSource) {
+        return {
+          source_id: row.id,
+          skipped: true,
+          reason: 'YOUTUBE_SOURCE_CONNECTION_MISSING',
+          acquisition: emptyLiveSyncSummary(),
+          external_acquisition_mode: 'LIVE_EXPLICIT_OPT_IN',
+        };
+      }
       throw new ConflictException('SOURCE_CONNECTION_OR_RIGHTS_MISSING');
+    }
     const scopes = row.scopes;
     const validFrom = row.valid_from;
     if (
@@ -1099,8 +1125,18 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
       !isDecisionEffective(row.decision_status, validFrom, row.expires_at, this.now()) ||
       !scopes.acquisition ||
       !scopes.metadata_storage
-    )
+    ) {
+      if (youtubeSource) {
+        return {
+          source_id: row.id,
+          skipped: true,
+          reason: 'YOUTUBE_SOURCE_ACQUISITION_NOT_AUTHORIZED',
+          acquisition: emptyLiveSyncSummary(),
+          external_acquisition_mode: 'LIVE_EXPLICIT_OPT_IN',
+        };
+      }
       throw new ConflictException('SOURCE_ACQUISITION_RIGHTS_NOT_AUTHORIZED');
+    }
     const decisionId = row.decision_id;
     const domains = row.allowed_article_domains ?? [row.canonical_domain];
     const policy: LiveSourcePolicy = {
@@ -1147,40 +1183,102 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
       .where('source_id', '=', parseUlid(row.id))
       .executeTakeFirst();
     let feedResult: PersonalOwnerFeedReadResult;
+    let discoveryUrl = row.endpoint;
     try {
-      const reader = this.activeFeedReader;
-      feedResult = reader.readConditional
-        ? await reader.readConditional(row.endpoint, {
-            etag: pollState?.etag ?? null,
-            lastModified: pollState?.last_modified ?? null,
-          })
-        : {
-            status: 200,
-            content: await reader.read(row.endpoint),
-            etag: null,
-            lastModified: null,
-            retryAfterMs: null,
-          };
+      if (youtubeSource) {
+        const endpoint = new URL(row.endpoint);
+        const channelId = endpoint.searchParams.get('channel_id');
+        const channelUrl = channelId && /^UC[A-Za-z0-9_-]{22}$/u.test(channelId)
+          ? `https://www.youtube.com/channel/${channelId}`
+          : 'https://www.youtube.com/';
+        const youtube = await fetchYouTubeDataApiItems(
+          {
+            sourceId: row.id,
+            channelUrl,
+            feedEndpoint: row.endpoint,
+            publisherName: row.name,
+          },
+          youtubeApiKey!,
+        );
+        feedResult = {
+          status: 200,
+          content: youtubeDataApiRssPayload(youtube, row.name),
+          etag: null,
+          lastModified: null,
+          retryAfterMs: null,
+        };
+        discoveryUrl = youtube.apiEndpoint;
+      } else {
+        const reader = this.activeFeedReader;
+        feedResult = reader.readConditional
+          ? await reader.readConditional(row.endpoint, {
+              etag: pollState?.etag ?? null,
+              lastModified: pollState?.last_modified ?? null,
+            })
+          : {
+              status: 200,
+              content: await reader.read(row.endpoint),
+              etag: null,
+              lastModified: null,
+              retryAfterMs: null,
+            };
+      }
     } catch (error) {
       await this.recordPollFailure({ owner, sourceId: row.id, error }).catch(() => undefined);
       throw new ServiceUnavailableException(
-        error instanceof PersonalOwnerFeedReadFailure ? error.code : 'PUBLISHER_FEED_FETCH_FAILED',
+        error instanceof PersonalOwnerFeedReadFailure
+          ? error.code
+          : error instanceof YouTubeDataApiError
+            ? error.code
+            : 'PUBLISHER_FEED_FETCH_FAILED',
       );
     }
     if (feedResult.status === 304) {
-      await this.recordPollSuccess({
-        owner,
-        sourceId: row.id,
-        response: feedResult,
-        changed: false,
-      });
-      return {
-        source_id: row.id,
-        not_modified: true,
-        acquisition: emptyLiveSyncSummary(),
-        processing_versions_created: 0,
-        external_acquisition_mode: 'LIVE_EXPLICIT_OPT_IN',
-      };
+      const missingAuthorizedExcerpts = scopes.excerpt_storage
+        ? await sql<{ missing: boolean }>`select exists(
+            select 1 from public.articles article
+            where article.source_id=${row.id}::dialektik_ulid and article.origin='LIVE_REAL'
+              and not exists(
+                select 1 from lateral(
+                  select version.excerpt from public.live_article_versions version
+                  where version.article_id=article.id order by version.version_number desc limit 1
+                ) current_version
+                where current_version.excerpt is not null and btrim(current_version.excerpt)<>'')
+          ) as missing`.execute(this.database.database)
+        : null;
+      if (missingAuthorizedExcerpts?.rows[0]?.missing === true) {
+        try {
+          const etag = feedResult.etag;
+          const lastModified = feedResult.lastModified;
+          const content = await this.activeFeedReader.read(row.endpoint);
+          feedResult = {
+            status: 200,
+            content,
+            etag,
+            lastModified,
+            retryAfterMs: null,
+          };
+        } catch (error) {
+          await this.recordPollFailure({ owner, sourceId: row.id, error }).catch(() => undefined);
+          throw new ServiceUnavailableException(
+            error instanceof PersonalOwnerFeedReadFailure ? error.code : 'PUBLISHER_FEED_FETCH_FAILED',
+          );
+        }
+      } else {
+        await this.recordPollSuccess({
+          owner,
+          sourceId: row.id,
+          response: feedResult,
+          changed: false,
+        });
+        return {
+          source_id: row.id,
+          not_modified: true,
+          acquisition: emptyLiveSyncSummary(),
+          processing_versions_created: 0,
+          external_acquisition_mode: 'LIVE_EXPLICIT_OPT_IN',
+        };
+      }
     }
     if (feedResult.content === null) {
       const error = new PersonalOwnerFeedReadFailure('PUBLISHER_FEED_EMPTY', null, 200);
@@ -1198,7 +1296,7 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
         feedResult.content,
         {
           discoveredAt,
-          discoveryUrl: row.endpoint,
+          discoveryUrl,
           authorizePersistence: (tx) =>
             this.assertCurrentSourceRights(tx, row.id, decisionId, [
               'acquisition',

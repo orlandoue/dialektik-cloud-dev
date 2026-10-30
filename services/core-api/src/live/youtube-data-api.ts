@@ -224,3 +224,32 @@ export async function fetchYouTubeDataApiItems(
   });
   return { channelId, apiEndpoint: endpoint, items };
 }
+
+function xmlText(value: string): string {
+  return value
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&apos;");
+}
+
+/** Adapts authorized Data API snippets to the shared rights-gated live sync path. */
+export function youtubeDataApiRssPayload(
+  result: YouTubeApiResult,
+  channelTitle = result.channelId,
+): string {
+  const entries = result.items.map((item) => `
+    <item>
+      <title>${xmlText(item.headline)}</title>
+      <link>${xmlText(item.canonicalUrl)}</link>
+      <guid isPermaLink="false">${xmlText(item.sourceItemId)}</guid>
+      <pubDate>${xmlText(new Date(item.publishedAt).toUTCString())}</pubDate>
+      ${item.author === null ? "" : `<author>${xmlText(item.author)}</author>`}
+      ${item.excerpt === null ? "" : `<description>${xmlText(item.excerpt)}</description>`}
+    </item>`).join("");
+  return `<?xml version="1.0" encoding="UTF-8"?>
+    <rss version="2.0"><channel><title>${xmlText(channelTitle)}</title>
+      <description>Official YouTube Data API video metadata</description>${entries}
+    </channel></rss>`;
+}

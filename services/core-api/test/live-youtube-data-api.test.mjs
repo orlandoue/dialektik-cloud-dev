@@ -4,6 +4,7 @@ import {
   fetchYouTubeDataApiItems,
   YouTubeDataApiError,
   youtubePlaylistId,
+  youtubeDataApiRssPayload,
 } from "../dist/live/youtube-data-api.js";
 
 const channelId = "UCkccyEbqhhM3uKOI6Shm-4Q";
@@ -57,6 +58,10 @@ test("maps official playlistItems responses to attributed bounded metadata", asy
   );
   assert.equal(requestUrl.searchParams.get("maxResults"), "10");
   assert.equal(requestUrl.searchParams.get("key"), "test-key");
+  const payload = youtubeDataApiRssPayload(result, "Canal & prueba");
+  assert.match(payload, /Canal &amp; prueba/u);
+  assert.match(payload, /<guid isPermaLink="false">abcdefghijk<\/guid>/u);
+  assert.match(payload, /<description>x{700}<\/description>/u);
 });
 
 test("filters videos whose snippet belongs to a different channel", async () => {

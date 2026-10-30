@@ -534,31 +534,103 @@ export async function syncLivePayload(
     return summary;
   }
   summary.itemsDiscovered = parsed.itemCount;
-  let metaDescriptionReads = 0;
   for (const batch of parsed.batches) {
     // Metadata-only grants never retain RSS summaries in Article or version rows.
     const items: LiveDiscoveredItem[] = [];
+    const itemUrls = batch.flatMap((item) =>
+      item.excerpt === null && item.canonicalUrl !== null ? [item.canonicalUrl] : [],
+    );
+    const existingExcerpts = new Map<string, { headline: string; excerpt: string }>();
+    if (itemUrls.length > 0) {
+      const result = await sql<{
+        canonicalUrl: string;
+        headline: string;
+        excerpt: string;
+      }>`select article.url_canonical as "canonicalUrl",version_row.headline,version_row.excerpt
+        from public.articles article
+        join lateral(select version.* from public.live_article_versions version
+          where version.article_id=article.id order by version.version_number desc limit 1) version_row on true
+        where article.source_id=${policy.sourceId}::dialektik_ulid
+          and article.url_canonical=any(${itemUrls}::text[])
+          and version_row.excerpt is not null and btrim(version_row.excerpt)<>''`.execute(database);
+      for (const row of result.rows) {
+        existingExcerpts.set(row.canonicalUrl, {
+          headline: row.headline,
+          excerpt: row.excerpt,
+        });
+      }
+    }
+    const metadataCandidates = batch.filter((item) => {
+      if (
+        policy.storagePolicy !== 'METADATA_AND_FEED_EXCERPT' ||
+        options.authorizePersistence === undefined ||
+        item.errorCode !== null ||
+        item.excerpt !== null ||
+        item.canonicalUrl === null
+      )
+        return false;
+      const existing = existingExcerpts.get(item.canonicalUrl);
+      return existing?.headline !== item.headline;
+    });
+    const selectedMetadataUrls = new Set<string>();
+    if (metadataCandidates.length > 0) {
+      const offset = Math.floor(now.getTime() / 60_000) % metadataCandidates.length;
+      const rotated = [
+        ...metadataCandidates.slice(offset),
+        ...metadataCandidates.slice(0, offset),
+      ];
+      for (const item of rotated.slice(0, 25)) {
+        if (item.canonicalUrl !== null) selectedMetadataUrls.add(item.canonicalUrl);
+      }
+    }
     for (const item of batch) {
       if (policy.storagePolicy === 'METADATA_ONLY') {
         items.push(Object.freeze({ ...item, excerpt: null }));
+        continue;
+      }
+      const existing = item.canonicalUrl === null
+        ? undefined
+        : existingExcerpts.get(item.canonicalUrl);
+      if (item.excerpt === null && existing?.headline === item.headline) {
+        items.push(Object.freeze({ ...item, excerpt: existing.excerpt }));
+        continue;
+      }
+      const outdatedExcerpt = existing !== undefined && existing.headline !== item.headline;
+      if (
+        item.excerpt === null &&
+        outdatedExcerpt &&
+        item.canonicalUrl !== null &&
+        !selectedMetadataUrls.has(item.canonicalUrl)
+      ) {
+        // Do not supersede a usable prior version with a title-only version.
+        items.push(Object.freeze({ ...item, errorCode: 'META_DESCRIPTION_REFRESH_REQUIRED' }));
         continue;
       }
       if (
         item.excerpt === null &&
         item.canonicalUrl !== null &&
         options.authorizePersistence !== undefined &&
-        metaDescriptionReads < 25
+        selectedMetadataUrls.has(item.canonicalUrl)
       ) {
-        metaDescriptionReads += 1;
         try {
           await database.transaction().execute(async (transaction) => {
             await options.authorizePersistence?.(transaction);
           });
           const excerpt = await fetchMetaDescription(item.canonicalUrl, policy.allowedArticleDomains);
-          items.push(excerpt === null ? item : Object.freeze({ ...item, excerpt }));
+          items.push(
+            excerpt === null
+              ? outdatedExcerpt
+                ? Object.freeze({ ...item, errorCode: 'META_DESCRIPTION_REFRESH_REQUIRED' })
+                : item
+              : Object.freeze({ ...item, excerpt }),
+          );
         } catch {
-          // Optional page metadata must never replace or block the RSS record.
-          items.push(item);
+          // Preserve the last authorized excerpt when a refresh is unavailable.
+          items.push(
+            outdatedExcerpt
+              ? Object.freeze({ ...item, errorCode: 'META_DESCRIPTION_REFRESH_REQUIRED' })
+              : item,
+          );
         }
       } else {
         items.push(item);
