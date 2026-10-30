@@ -1,6 +1,14 @@
 name: Chile YouTube metadata feed fetch
 
 on:
+  push:
+    branches:
+      - codex/production-feed-semantics
+    paths:
+      - '.github/workflows/chile-youtube-live-feed-fetch.yml'
+      - 'scripts/operations/chile-rss-once/fetch_youtube_feeds.py'
+      - 'scripts/operations/chile-rss-once/prepare.mjs'
+      - 'packages/database/src/migration/054_chile_feed_excerpt_and_youtube_sources.ts'
   workflow_dispatch:
 
 permissions:
