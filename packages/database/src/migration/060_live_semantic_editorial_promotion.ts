@@ -259,16 +259,18 @@ begin
   update public.moderation_tasks set assigned_to=actor_identity where id=task_identity;
   payload_hash := encode(extensions.digest(convert_to(jsonb_build_object('outcome','accept_subset',
     'assertionIds',to_jsonb(assertion_identities))::text,'UTF8'),'sha256'),'hex');
+  -- Proposal members are immutable after their parent proposal exists. The FK
+  -- is deferred, so insert the members first, matching the moderation service.
+  insert into public.moderation_review_proposal_members(proposal_id,assertion_id,partition_ordinal)
+    select proposal_identity,assertion_id,null from unnest(assertion_identities) assertion_id;
   insert into public.moderation_review_proposals(id,task_id,candidate_class_id,outcome,proposer_id,payload_hash,
     state,submitted_at,decided_by,decided_at,decision_reason,single_editor_authorization_id)
     values(proposal_identity,task_identity,candidate_identity,'accept_subset',actor_identity,payload_hash,
       'submitted',decision_time,null,null,null,single_editor_identity);
-  insert into public.moderation_review_proposal_members(proposal_id,assertion_id,partition_ordinal)
-    select proposal_identity,assertion_id,null from unnest(assertion_identities) assertion_id;
   perform public.dialektik_set_audit_context('editor',actor_identity,correlation_identity,'confirmed','live_semantic_single_editor_approval');
   update public.moderation_review_proposals set state='confirmed',decided_by=actor_identity,decided_at=decision_time
     where id=proposal_identity;
-  perform public.dialektik_set_audit_context('editor',actor_identity,correlation_identity,'moderation_decision','live_semantic_candidate_acceptance');
+  perform public.dialektik_set_audit_context('editor',actor_identity,correlation_identity,'confirmed','live_semantic_candidate_acceptance');
   update public.candidate_classes set state='accepted' where id=candidate_identity;
   perform public.dialektik_set_audit_context('editor',actor_identity,correlation_identity,'confirmed','live_semantic_task_resolution');
   update public.moderation_tasks set state='resolved',resolved_at=decision_time,
@@ -315,6 +317,7 @@ begin
     editor_user_id,correlation_id,created_at)
     values(group_identity,event_identity,candidate_identity,task_identity,proposal_identity,actor_identity,
       correlation_identity,decision_time);
+  perform public.dialektik_set_audit_context('editor',actor_identity,correlation_identity,'confirmed','live_semantic_command_receipt');
   insert into public.moderation_command_receipts(actor_id,task_id,command_id,command_type,payload_hash,
     response_payload,created_at)
     values(actor_identity,task_identity,correlation_identity,'confirm_proposal',payload_hash,response_json,decision_time)
@@ -529,3 +532,5 @@ export const liveSemanticEditorialPromotionMigration: Migration = {
     throw new Error("Live semantic editorial decisions and published graph records are forward-only.");
   },
 };
+
+export const liveSemanticEditorialPromotionDdl = DDL;
