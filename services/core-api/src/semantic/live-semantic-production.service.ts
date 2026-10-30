@@ -823,16 +823,16 @@ export class LiveSemanticProductionService {
     const commandId = generateUlid({ now: Date.now });
     const database = this.moderationWriter.database;
     return database.transaction().execute(async (transaction) => {
-      await setTransactionAuditContext(transaction, {
-        action: "moderation_decision",
-        actorId: identity.userId,
-        actorType: "editor",
-        correlationId: commandId,
-        reasonCode: "live_semantic_editorial_promotion",
-        metadata: { semantic_group_id: groupId },
-      });
       let result;
       try {
+        await setTransactionAuditContext(transaction, {
+          action: "moderation_decision",
+          actorId: identity.userId,
+          actorType: "editor",
+          correlationId: commandId,
+          reasonCode: "live_semantic_editorial_promotion",
+          metadata: { semantic_group_id: groupId },
+        });
         result = await sql<{ result: Record<string, unknown> }>`
           select public.dialektik_promote_live_semantic_event_group(
             ${groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid
