@@ -6,6 +6,10 @@ const migration = readFileSync(
   new URL('../../../packages/database/src/migration/060_live_semantic_editorial_promotion.ts', import.meta.url),
   'utf8',
 );
+const finalizeMigration = readFileSync(
+  new URL('../../../packages/database/src/migration/062_finalize_live_semantic_promotion.ts', import.meta.url),
+  'utf8',
+);
 const provider = readFileSync(
   new URL('../../../packages/database/src/migration/provider.ts', import.meta.url),
   'utf8',
@@ -22,6 +26,7 @@ const exceptionFilter = readFileSync(
 test('registers migration 060 and retains narrow signed-promotion gates', () => {
   assert.match(provider, /'060_live_semantic_editorial_promotion': liveSemanticEditorialPromotionMigration/);
   assert.match(provider, /'061_live_semantic_proposal_members_order': liveSemanticProposalMembersOrderMigration/);
+  assert.match(provider, /'062_finalize_live_semantic_promotion': finalizeLiveSemanticPromotionMigration/);
   assert.match(migration, /dialektik_require_context_actor\(actor_identity\)/);
   assert.match(migration, /editorial_single_editor_authorizations/);
   assert.match(migration, /substring\(item\.text_original from quote_start\+1 for quote_end-quote_start\)<>quote_text/);
@@ -32,6 +37,15 @@ test('registers migration 060 and retains narrow signed-promotion gates', () => 
   assert.match(migration, /on conflict\(id\) where id is not null/i);
   assert.doesNotMatch(migration, /\bdrop\s+constraint\b/i);
   assert.doesNotMatch(migration, /grant\s+[^;]*\bto\s+public\b/i);
+});
+
+test('validates deferred graph constraints before returning and allows stale invalid publications to be demoted', () => {
+  assert.match(finalizeMigration, /set constraints all immediate;\\n\$\{promotionFinalizeMarker\}/u);
+  assert.match(finalizeMigration, /row_data ->> 'confirmed_by' is distinct from old_row_data ->> 'confirmed_by'/u);
+  assert.match(finalizeMigration, /row_data ->> 'publication_state'='published'/u);
+  assert.match(finalizeMigration, /set search_path=pg_catalog,public,extensions/u);
+  assert.doesNotMatch(finalizeMigration, /\bdrop\s+constraint\b/i);
+  assert.doesNotMatch(finalizeMigration, /grant\s+[^;]*\bto\s+public\b/i);
 });
 
 test('inserts immutable proposal members before creating the submitted proposal', () => {
