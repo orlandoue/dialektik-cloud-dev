@@ -8,7 +8,11 @@ const FETCH_TIMEOUT_MS = 5000;
 
 const robotsCache = new Map<string, { expiresAt: number; rules: string | null }>();
 
-function boundedBody(response: Response, maximum: number): Promise<string | null> {
+function boundedBody(
+  response: Response,
+  maximum: number,
+  allowTruncatedPrefix = false,
+): Promise<string | null> {
   return (async () => {
     if (!response.body) return null;
     const reader = response.body.getReader();
@@ -18,8 +22,14 @@ function boundedBody(response: Response, maximum: number): Promise<string | null
       while (bytes < maximum) {
         const part = await reader.read();
         if (part.done) break;
+        const remaining = maximum - bytes;
+        if (part.value.byteLength > remaining) {
+          if (!allowTruncatedPrefix) return null;
+          chunks.push(part.value.slice(0, remaining));
+          bytes = maximum;
+          break;
+        }
         bytes += part.value.byteLength;
-        if (bytes > maximum) return null;
         chunks.push(part.value);
       }
     } finally {
@@ -162,7 +172,7 @@ export async function fetchMetaDescription(
     });
     if (response.status !== 200 || !/text\/html/iu.test(response.headers.get("content-type") ?? ""))
       return null;
-    const html = await boundedBody(response, MAX_HTML_HEAD_BYTES);
+    const html = await boundedBody(response, MAX_HTML_HEAD_BYTES, true);
     return html ? parseMetaDescription(html) : null;
   } catch {
     return null;
