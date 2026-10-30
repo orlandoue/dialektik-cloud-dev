@@ -105,6 +105,15 @@ function safeDatabaseErrorCode(error: unknown): string | null {
   return null;
 }
 
+function semanticPromotionDatabaseError(error: unknown): ModerationHttpError {
+  const databaseCode = safeDatabaseErrorCode(error);
+  if (databaseCode === "42501")
+    return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_PERMISSION_DENIED");
+  if (["23503", "23505", "23514", "55000"].includes(databaseCode ?? ""))
+    return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_CONSTRAINT_REJECTED");
+  return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE");
+}
+
 function exactBody(raw: unknown): { targetDay: string; limit: number } {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw))
     throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
@@ -822,36 +831,35 @@ export class LiveSemanticProductionService {
     const groupId = exactPromotionBody(raw);
     const commandId = generateUlid({ now: Date.now });
     const database = this.moderationWriter.database;
-    return database.transaction().execute(async (transaction) => {
-      let result;
-      try {
-        await setTransactionAuditContext(transaction, {
-          action: "moderation_decision",
-          actorId: identity.userId,
-          actorType: "editor",
-          correlationId: commandId,
-          reasonCode: "live_semantic_editorial_promotion",
-          metadata: { semantic_group_id: groupId },
-        });
-        result = await sql<{ result: Record<string, unknown> }>`
-          select public.dialektik_promote_live_semantic_event_group(
-            ${groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid
-          ) as result
-        `.execute(transaction);
-      } catch (error) {
-        const databaseCode = safeDatabaseErrorCode(error);
-        if (databaseCode === "42501")
-          throw new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_PERMISSION_DENIED");
-        if (["23503", "23505", "23514", "55000"].includes(databaseCode ?? ""))
-          throw new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_CONSTRAINT_REJECTED");
-        if (databaseCode !== null)
-          throw new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE");
+    try {
+      return await database.transaction().execute(async (transaction) => {
+        let result;
+        try {
+          await setTransactionAuditContext(transaction, {
+            action: "moderation_decision",
+            actorId: identity.userId,
+            actorType: "editor",
+            correlationId: commandId,
+            reasonCode: "live_semantic_editorial_promotion",
+            metadata: { semantic_group_id: groupId },
+          });
+          result = await sql<{ result: Record<string, unknown> }>`
+            select public.dialektik_promote_live_semantic_event_group(
+              ${groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid
+            ) as result
+          `.execute(transaction);
+        } catch (error) {
+          throw semanticPromotionDatabaseError(error);
+        }
+        const response = result.rows[0]?.result;
+        if (!response || response.status !== "PROMOTED")
+          throw new ConflictException("SEMANTIC_GROUP_REQUIRES_FURTHER_EDITORIAL_REVIEW");
+        return response;
+      });
+    } catch (error) {
+      if (error instanceof ModerationHttpError || error instanceof ConflictException)
         throw error;
-      }
-      const response = result.rows[0]?.result;
-      if (!response || response.status !== "PROMOTED")
-        throw new ConflictException("SEMANTIC_GROUP_REQUIRES_FURTHER_EDITORIAL_REVIEW");
-      return response;
-    });
+      throw semanticPromotionDatabaseError(error);
+    }
   }
 }
