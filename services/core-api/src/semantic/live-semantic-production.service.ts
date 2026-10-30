@@ -20,6 +20,7 @@ import { HeadlineSemanticDatabaseService } from "./headline-semantic-database.se
 import { ModerationDatabaseService } from "../moderation/moderation-database.service.js";
 import {
   canAddSemanticPairToClique,
+  canJoinSemanticEventGroup,
   preclusterLiveSemanticArticles,
 } from "./live-semantic-precluster.js";
 import {
@@ -221,6 +222,7 @@ export class LiveSemanticProductionService {
         publication: "single-editor-consistent-group-promotion-v1",
         precluster: "named-entity-incident-signature-complete-link-48h-v3",
         pairInput: "assertion-first-incident-calibrated-v2",
+        groupMembership: "same-event-comparable-pair-only-v1",
         contradictionThreshold: "conflicting-positive-comparable-60",
         generationLineage: "active-to-superseded-append-only-retry-v1",
       }),
@@ -718,7 +720,7 @@ export class LiveSemanticProductionService {
           ${assessment.relation},${assessment.ratioConflicting},${assessment.ratioComparable},
           ${assessment.sameEventConfidence},${THRESHOLD_RULE},${PROVIDER},${MODEL},${configSha},
           ${new Date().toISOString()}) on conflict(left_article_id,right_article_id,config_sha256) do nothing`.execute(connection);
-      if (assessment.sameEvent && assessment.sameEventConfidence >= 70) {
+      if (canJoinSemanticEventGroup(assessment)) {
         const existingMembers = await sql<{ articleId: string }>`select article_id::text as "articleId"
           from public.live_semantic_event_group_members where group_id=${groupId}::dialektik_ulid
           order by article_id`.execute(connection);

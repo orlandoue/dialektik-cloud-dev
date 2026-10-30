@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canAddSemanticPairToClique,
+  canJoinSemanticEventGroup,
   preclusterLiveSemanticArticles,
 } from "../src/semantic/live-semantic-precluster.js";
 
@@ -71,6 +72,27 @@ describe("live semantic 48 hour pre-clustering", () => {
         confirmed,
       ),
     ).toBe(true);
+  });
+
+  it("never adds same-event assessments whose claims are not comparable", () => {
+    expect(canJoinSemanticEventGroup({
+      sameEvent: true,
+      sameEventConfidence: 100,
+      relation: "NOT_COMPARABLE",
+      ratioComparable: 0,
+    })).toBe(false);
+    expect(canJoinSemanticEventGroup({
+      sameEvent: true,
+      sameEventConfidence: 70,
+      relation: "CONSISTENT",
+      ratioComparable: 60,
+    })).toBe(true);
+    expect(canJoinSemanticEventGroup({
+      sameEvent: true,
+      sameEventConfidence: 90,
+      relation: "CONTRADICTORY",
+      ratioComparable: 75,
+    })).toBe(true);
   });
 
   it("rejects shared politicians and broad topics when the incidents differ", () => {
