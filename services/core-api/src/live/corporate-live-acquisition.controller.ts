@@ -1,7 +1,6 @@
 import {
   Controller,
   Inject,
-  NotFoundException,
   Post,
   Res,
   UseGuards,
@@ -21,7 +20,10 @@ export class CorporateLiveAcquisitionController {
   @Post('poll')
   async poll(@Res({ passthrough: true }) reply: FastifyReply) {
     const result = await this.acquisition.startIfEnabled();
-    if (!result.enabled) throw new NotFoundException();
+    if (!result.enabled) {
+      reply.status(404);
+      return { status: 'POLL_DISABLED', reason: result.disabledReason };
+    }
     if (!result.scheduled) {
       reply.status(503);
       return {
