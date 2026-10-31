@@ -65,6 +65,7 @@ import { liveEventOriginMigration } from './064_live_event_origin';
 import { liveSemanticGenerationLineageMigration } from './065_live_semantic_generation_lineage';
 import { corporateLiveAcquisitionMigration } from './066_corporate_live_acquisition';
 import { liveSemanticMultiClaimPositionsMigration } from './067_live_semantic_multi_claim_positions';
+import { corporateLiveAcquisitionWriterMigration } from './068_corporate_live_acquisition_writer';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -111,6 +112,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '065_live_semantic_generation_lineage': liveSemanticGenerationLineageMigration,
   '066_corporate_live_acquisition': corporateLiveAcquisitionMigration,
   '067_live_semantic_multi_claim_positions': liveSemanticMultiClaimPositionsMigration,
+  '068_corporate_live_acquisition_writer': corporateLiveAcquisitionWriterMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,

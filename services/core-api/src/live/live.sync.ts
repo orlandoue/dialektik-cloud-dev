@@ -333,16 +333,16 @@ async function refreshLiveArticleTextProjection(
             where article_id=${articleId} and state='active') as present
       `.execute(transaction);
       if (semanticHistory.rows[0]?.present !== true) {
-        await sql`
-          select set_config('dialektik.allow_live_excerpt_projection','on',true),
-            set_config('dialektik.live_excerpt_version_id',${versionId},true)
-        `.execute(transaction);
         update.text_original = originalText;
         update.text_normalized = normalizedText;
       }
     }
   }
   if (Object.keys(update).length === 0) return false;
+  await sql`
+    select set_config('dialektik.allow_live_excerpt_projection','on',true),
+      set_config('dialektik.live_excerpt_version_id',${versionId},true)
+  `.execute(transaction);
   await transaction.updateTable('articles').set(update).where('id', '=', articleId).execute();
   return true;
 }
