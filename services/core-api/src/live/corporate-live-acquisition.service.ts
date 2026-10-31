@@ -112,6 +112,30 @@ function postgresDiagnostic(error: unknown): {
   };
 }
 
+function safeDatabaseErrorResource(error: unknown): string | null {
+  const queue: unknown[] = [error];
+  const seen = new Set<object>();
+  for (let depth = 0; depth < 8 && queue.length > 0; depth += 1) {
+    const current = queue.shift();
+    if (typeof current !== 'object' || current === null || seen.has(current)) continue;
+    seen.add(current);
+    const record = current as Record<string, unknown>;
+    for (const key of ['table', 'column', 'schema', 'constraint']) {
+      const value = record[key];
+      if (typeof value === 'string' && /^[a-z_][a-z0-9_]{0,62}$/iu.test(value))
+        return value.toUpperCase();
+    }
+    if (typeof record.message === 'string') {
+      const match = /(?:permission denied for (?:table|relation|column|sequence|schema)|row-level security policy for table)\s+["']?([a-z_][a-z0-9_]*)/iu.exec(record.message);
+      if (match?.[1] !== undefined) return match[1].toUpperCase();
+    }
+    for (const key of ['cause', 'error', 'originalError', 'driverError']) {
+      if (key in record) queue.push(record[key]);
+    }
+  }
+  return null;
+}
+
 function xmlText(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -661,10 +685,11 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
 
   private async recordFailure(sourceId: string, error: unknown): Promise<void> {
     const diagnostic = postgresDiagnostic(error);
+    const resource = safeDatabaseErrorResource(error);
     const message = error instanceof YouTubeDataApiError ? error.code :
       error instanceof Error && /^[A-Z0-9_]{1,64}$/u.test(error.message) ? error.message :
       diagnostic.driverCode !== null
-        ? `DB_${diagnostic.driverCode.toUpperCase().replace(/[^A-Z0-9_-]/gu, '_')}`
+        ? `DB_${diagnostic.driverCode.toUpperCase().replace(/[^A-Z0-9_-]/gu, '_')}${resource === null ? '' : `_${resource}`}`
         : diagnostic.errorType !== null
           ? `ERROR_${diagnostic.errorType.replace(/[^A-Z0-9_]/gu, '_').toUpperCase()}`
           : 'CORPORATE_ACQUISITION_FAILED';
