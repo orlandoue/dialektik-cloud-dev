@@ -73,6 +73,7 @@ interface BackfillArticle {
 export interface CorporateAcquisitionStartResult {
   readonly enabled: boolean;
   readonly scheduled: boolean;
+  readonly disabledReason: string | null;
   readonly errorType: string | null;
   readonly driverCode: string | null;
   readonly sqlState: string | null;
@@ -240,14 +241,27 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   public async startIfEnabled(): Promise<CorporateAcquisitionStartResult> {
-    if (
-      this.config.nodeEnvironment !== 'production' ||
-      this.config.ownershipMode !== 'corporate' ||
-      this.config.semanticMode !== 'disabled' ||
-      !this.acquisitionDatabaseService.isConfigured ||
-      process.env.DIALEKTIK_CORPORATE_LIVE_ACQUISITION_ENABLED !== 'true'
-    )
-      return { enabled: false, scheduled: false, errorType: null, driverCode: null, sqlState: null };
+    const disabledReason = this.config.nodeEnvironment !== 'production'
+      ? 'NOT_PRODUCTION'
+      : this.config.ownershipMode !== 'corporate'
+        ? 'NON_CORPORATE_OWNERSHIP'
+        : this.config.semanticMode !== 'disabled'
+          ? 'SEMANTIC_MODE_NOT_DISABLED'
+          : !this.acquisitionDatabaseService.isConfigured
+            ? 'WRITER_CONNECTION_MISSING'
+            : process.env.DIALEKTIK_CORPORATE_LIVE_ACQUISITION_ENABLED !== 'true'
+              ? 'FEATURE_FLAG_DISABLED'
+              : null;
+    if (disabledReason !== null) {
+      return {
+        enabled: false,
+        scheduled: false,
+        disabledReason,
+        errorType: null,
+        driverCode: null,
+        sqlState: null,
+      };
+    }
     if (!this.timer) {
       this.timer = setInterval(() => void this.pollOneDueSource(), CORPORATE_ACQUISITION_TICK_MS);
       this.timer.unref();
@@ -256,10 +270,17 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       await this.markPollScheduled();
     } catch (error) {
       await this.recordClaimFailure(error);
-      return { enabled: true, scheduled: false, ...postgresDiagnostic(error) };
+      return { enabled: true, scheduled: false, disabledReason: null, ...postgresDiagnostic(error) };
     }
     void this.pollOneDueSource();
-    return { enabled: true, scheduled: true, errorType: null, driverCode: null, sqlState: null };
+    return {
+      enabled: true,
+      scheduled: true,
+      disabledReason: null,
+      errorType: null,
+      driverCode: null,
+      sqlState: null,
+    };
   }
 
   private async markPollScheduled(): Promise<void> {
