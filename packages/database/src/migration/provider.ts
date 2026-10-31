@@ -68,6 +68,7 @@ import { liveSemanticMultiClaimPositionsMigration } from './067_live_semantic_mu
 import { corporateLiveAcquisitionWriterMigration } from './068_corporate_live_acquisition_writer';
 import { corporateLiveHashSchemaUsageMigration } from './069_corporate_live_hash_schema_usage';
 import { corporateLiveQuarantineIdentityMigration } from './070_corporate_live_quarantine_identity';
+import { restoreCorporateLiveApprovalMetadataMigration } from './071_restore_corporate_live_approval_metadata';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -117,6 +118,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '068_corporate_live_acquisition_writer': corporateLiveAcquisitionWriterMigration,
   '069_corporate_live_hash_schema_usage': corporateLiveHashSchemaUsageMigration,
   '070_corporate_live_quarantine_identity': corporateLiveQuarantineIdentityMigration,
+  '071_restore_corporate_live_approval_metadata': restoreCorporateLiveApprovalMetadataMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,

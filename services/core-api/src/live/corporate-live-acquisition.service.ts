@@ -43,6 +43,7 @@ interface CorporateSourceRow {
   readonly allowedArticleDomains: string[];
   readonly rightsEvidenceUrl: string;
   readonly rightsEvidenceSha256: string;
+  readonly authorizationReference: string | null;
   readonly attribution: string;
   readonly validFrom: Date;
   readonly expiresAt: Date | null;
@@ -52,7 +53,7 @@ interface CorporateSourceRow {
   readonly storagePolicy: string;
   readonly policyActive: boolean;
   readonly policyEndpoint: string;
-  readonly rightsReviewStatus: string;
+  readonly rightsReviewStatus: string | null;
   readonly language: string;
   readonly publisherFamily: string | null;
   readonly category: string | null;
@@ -308,12 +309,17 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   private async markPollScheduled(): Promise<void> {
+    const youtubeApiConfigured = Boolean(process.env.YOUTUBE_API_KEY?.trim());
     await sql`update public.corporate_live_source_poll_state state
       set last_status='POLL_SCHEDULED',last_polled_at=clock_timestamp(),updated_at=clock_timestamp()
       where state.source_id=(select pending.source_id from public.corporate_live_source_poll_state pending
+        join public.sources due_source on due_source.id=pending.source_id
         where pending.next_poll_at<=clock_timestamp()
           and (pending.lease_until is null or pending.lease_until<=clock_timestamp())
-        order by pending.next_poll_at,pending.source_id limit 1)`.execute(this.database);
+          and (${youtubeApiConfigured} or due_source.canonical_domain<>'youtube.com')
+        order by case when due_source.canonical_domain='elmostrador.cl' then 0
+          when due_source.canonical_domain='youtube.com' then 2 else 1 end,
+          pending.next_poll_at,pending.source_id limit 1)`.execute(this.database);
   }
 
   onModuleDestroy(): void {
@@ -383,6 +389,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
         decision.scopes,policy.registry_key as "registryKey",policy.rights_class as "rightsClass",
         policy.storage_policy as "storagePolicy",policy.active as "policyActive",
         policy.policy->>'endpoint' as "policyEndpoint",policy.policy->>'rightsReviewStatus' as "rightsReviewStatus",
+        policy.policy->>'authorizationReference' as "authorizationReference",
         coalesce(policy.policy->>'language','es') as language,
         policy.policy->>'publisherFamily' as "publisherFamily",policy.policy->>'category' as category,
         state.etag,state.last_modified as "lastModified",state.poll_interval_seconds as "pollIntervalSeconds"
@@ -419,6 +426,8 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       storagePolicy: 'METADATA_AND_FEED_EXCERPT',
       active: row.policyActive,
       rightsEvidenceUrl: row.rightsEvidenceUrl,
+      rightsReviewStatus: row.rightsReviewStatus,
+      authorizationReference: row.authorizationReference,
       rightsVerifiedAt: row.validFrom.toISOString(),
       attribution: row.attribution,
       language: row.language,
@@ -430,6 +439,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       row.rightsClass !== 'LIVE_READY' ||
       row.storagePolicy !== 'METADATA_AND_FEED_EXCERPT' ||
       row.rightsReviewStatus !== 'APPROVED' ||
+      row.authorizationReference === null || row.authorizationReference.trim().length === 0 ||
       row.policyEndpoint !== row.endpoint
     )
       throw new Error('CORPORATE_SOURCE_POLICY_CHANGED');
@@ -460,6 +470,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
           on policy.active and policy.rights_class='LIVE_READY'
             and policy.storage_policy='METADATA_AND_FEED_EXCERPT'
             and policy.policy->>'rightsReviewStatus'='APPROVED'
+            and nullif(policy.policy->>'authorizationReference','') is not null
             and policy.policy->>'endpoint'=connection.endpoint
         where connection.id=${row.connectionId}::dialektik_ulid
           and decision.id=${row.decisionId}::dialektik_ulid
