@@ -59,6 +59,49 @@ export const emptyLiveSyncSummary = (): LiveSyncSummary => ({
 const nextId = (now: Date): Ulid => generateUlid({ now: () => now.getTime() });
 const exposureId = (key: string, identity: string): string => liveHash(`${key}\n${identity}`);
 
+function safePersistenceErrorCode(error: unknown): string {
+  const queue: unknown[] = [error];
+  const seen = new Set<object>();
+  let sqlState: string | null = null;
+  let resource: string | null = null;
+  let knownApplicationCode: string | null = null;
+  for (let depth = 0; depth < 8 && queue.length > 0; depth += 1) {
+    const current = queue.shift();
+    if (typeof current !== 'object' || current === null || seen.has(current)) continue;
+    seen.add(current);
+    const record = current as Record<string, unknown>;
+    if (sqlState === null && typeof record.code === 'string' && /^[0-9A-Z]{5}$/u.test(record.code))
+      sqlState = record.code;
+    if (resource === null) {
+      for (const key of ['table', 'column', 'constraint']) {
+        const value = record[key];
+        if (typeof value === 'string' && /^[a-z_][a-z0-9_]{0,62}$/iu.test(value)) {
+          resource = value.toUpperCase();
+          break;
+        }
+      }
+    }
+    if (
+      knownApplicationCode === null &&
+      typeof record.message === 'string' &&
+      /^[A-Z][A-Z0-9_]{1,62}$/u.test(record.message)
+    )
+      knownApplicationCode = record.message;
+    if (typeof record.message === 'string' && resource === null) {
+      const match = /(?:permission denied for (?:table|relation|column|sequence|schema)|row-level security policy for table)\s+["']?([a-z_][a-z0-9_]*)/iu.exec(record.message);
+      if (match?.[1] !== undefined) resource = match[1].toUpperCase();
+    }
+    for (const key of ['cause', 'error', 'originalError', 'driverError']) {
+      if (key in record) queue.push(record[key]);
+    }
+  }
+  if (sqlState !== null)
+    return `ARTICLE_PERSISTENCE_FAILED_${sqlState}${resource === null ? '' : `_${resource}`}`;
+  if (knownApplicationCode !== null)
+    return `ARTICLE_PERSISTENCE_FAILED_${knownApplicationCode}`.slice(0, 64);
+  return 'ARTICLE_PERSISTENCE_FAILED';
+}
+
 export function assertLiveDatabase(
   config: Readonly<CoreApiConfig>,
   corporateProductionAuthorization = false,
@@ -672,8 +715,8 @@ export async function syncLivePayload(
             summary.unchangedArticles++;
             summary.duplicateArticles++;
           }
-        } catch {
-          error = 'ARTICLE_PERSISTENCE_FAILED';
+        } catch (persistenceError) {
+          error = safePersistenceErrorCode(persistenceError);
         }
       }
       if (error !== null) {
