@@ -2,7 +2,7 @@ import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/com
 import { parseUlid, type Database, type SourceType } from '@dialektik/database';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import type { CoreApiConfig } from '../config/core-api-config.js';
-import { CoreDatabaseService } from '../database/core-database.service.js';
+import { CorporateLiveAcquisitionDatabaseService } from './corporate-live-acquisition-database.service.js';
 import { MAX_LIVE_FEED_BYTES } from './live.adapter.js';
 import { fetchMetaDescription } from './meta-description.js';
 import {
@@ -232,7 +232,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
 
   constructor(
     private readonly config: Readonly<CoreApiConfig>,
-    private readonly databaseService: CoreDatabaseService,
+    private readonly acquisitionDatabaseService: CorporateLiveAcquisitionDatabaseService,
   ) {}
 
   onModuleInit(): void {
@@ -244,6 +244,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       this.config.nodeEnvironment !== 'production' ||
       this.config.ownershipMode !== 'corporate' ||
       this.config.semanticMode !== 'disabled' ||
+      !this.acquisitionDatabaseService.isConfigured ||
       process.env.DIALEKTIK_CORPORATE_LIVE_ACQUISITION_ENABLED !== 'true'
     )
       return { enabled: false, scheduled: false, errorType: null, driverCode: null, sqlState: null };
@@ -275,7 +276,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   private get database(): Kysely<Database> {
-    return this.databaseService.database;
+    return this.acquisitionDatabaseService.database;
   }
 
   private async claimDueSource(): Promise<string | null> {

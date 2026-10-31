@@ -1,5 +1,6 @@
 import { Module, type DynamicModule } from '@nestjs/common';
 import type { CoreApiConfig } from '../config/core-api-config.js';
+import { CORE_API_CONFIG } from '../config/core-api-config.js';
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { PrivateBetaAuthModule } from '../private-beta/private-beta-auth.module.js';
 import { PrivateBetaLiveController } from './private-beta-live.controller.js';
@@ -9,6 +10,7 @@ import { LiveApplicationService } from './live.service.js';
 import { assertLiveDatabase } from './live.sync.js';
 import { CorporateLiveAcquisitionService } from './corporate-live-acquisition.service.js';
 import { CorporateLiveAcquisitionController } from './corporate-live-acquisition.controller.js';
+import { CorporateLiveAcquisitionDatabaseService } from './corporate-live-acquisition-database.service.js';
 
 @Module({})
 export class LiveModule {
@@ -26,9 +28,14 @@ export class LiveModule {
       if (config.semanticMode !== 'disabled') return { module: LiveModule };
       const corporateAcquisitionProviders = config.ownershipMode === 'corporate'
         ? [{
+            provide: CorporateLiveAcquisitionDatabaseService,
+            inject: [CORE_API_CONFIG],
+            useFactory: (apiConfig: Readonly<CoreApiConfig>) =>
+              new CorporateLiveAcquisitionDatabaseService(apiConfig),
+          }, {
             provide: CorporateLiveAcquisitionService,
-            inject: [CoreDatabaseService],
-            useFactory: (database: CoreDatabaseService) =>
+            inject: [CorporateLiveAcquisitionDatabaseService],
+            useFactory: (database: CorporateLiveAcquisitionDatabaseService) =>
               new CorporateLiveAcquisitionService(config, database),
           }]
         : [];
