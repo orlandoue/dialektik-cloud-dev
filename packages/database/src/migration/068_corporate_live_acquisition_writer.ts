@@ -5,13 +5,17 @@ do $roles$
 begin
   if not exists(select 1 from pg_roles where rolname='dialektik_corporate_live_writer') then
     execute 'create role dialektik_corporate_live_writer nologin inherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls';
+  elsif exists(select 1 from pg_roles where rolname='dialektik_corporate_live_writer'
+    and (rolcanlogin or rolsuper or rolcreatedb or rolcreaterole or rolreplication or rolbypassrls)) then
+    raise exception 'MIGRATION_068_WRITER_GROUP_ROLE_UNSAFE';
   end if;
-  execute 'alter role dialektik_corporate_live_writer with nologin inherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls';
 
   if not exists(select 1 from pg_roles where rolname='dialektik_corporate_live_service_20261031') then
     execute 'create role dialektik_corporate_live_service_20261031 login inherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls connection limit 5';
+  elsif exists(select 1 from pg_roles where rolname='dialektik_corporate_live_service_20261031'
+    and (not rolcanlogin or rolsuper or rolcreatedb or rolcreaterole or rolreplication or rolbypassrls or not rolinherit)) then
+    raise exception 'MIGRATION_068_SERVICE_ROLE_UNSAFE';
   end if;
-  execute 'alter role dialektik_corporate_live_service_20261031 with login inherit nosuperuser nocreatedb nocreaterole noreplication nobypassrls connection limit 5';
   execute 'alter role dialektik_corporate_live_service_20261031 set default_transaction_read_only=off';
   execute 'alter role dialektik_corporate_live_service_20261031 set search_path=public';
   execute 'alter role dialektik_corporate_live_service_20261031 set statement_timeout=''20s''';
