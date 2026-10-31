@@ -450,8 +450,9 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
     transaction: Transaction<Database>,
     row: CorporateSourceRow,
   ): Promise<void> {
-    await sql`select source_id from public.prospective_content_rights_write_guards
-      where source_id=${row.sourceId}::dialektik_ulid for update`.execute(transaction);
+    await sql`select public.dialektik_lock_corporate_source_rights_guard(
+      ${row.sourceId}::dialektik_ulid
+    )`.execute(transaction);
     const allowed = await sql<{ allowed: boolean }>`
       select exists(
         select 1 from public.corporate_live_source_connections connection
