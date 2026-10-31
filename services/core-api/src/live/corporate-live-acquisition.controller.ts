@@ -17,8 +17,8 @@ export class CorporateLiveAcquisitionController {
   ) {}
 
   @Post('poll')
-  poll() {
-    if (!this.acquisition.startIfEnabled()) throw new NotFoundException();
+  async poll() {
+    if (!(await this.acquisition.startIfEnabled())) throw new NotFoundException();
     return { status: 'POLL_SCHEDULED' as const };
   }
 }

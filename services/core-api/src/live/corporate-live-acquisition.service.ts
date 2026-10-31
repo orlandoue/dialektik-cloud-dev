@@ -195,10 +195,10 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   ) {}
 
   onModuleInit(): void {
-    this.startIfEnabled();
+    void this.startIfEnabled().catch(() => undefined);
   }
 
-  public startIfEnabled(): boolean {
+  public async startIfEnabled(): Promise<boolean> {
     if (
       this.config.nodeEnvironment !== 'production' ||
       this.config.ownershipMode !== 'corporate' ||
@@ -210,8 +210,18 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       this.timer = setInterval(() => void this.pollOneDueSource(), CORPORATE_ACQUISITION_TICK_MS);
       this.timer.unref();
     }
+    await this.markPollScheduled();
     void this.pollOneDueSource();
     return true;
+  }
+
+  private async markPollScheduled(): Promise<void> {
+    await sql`update public.corporate_live_source_poll_state state
+      set last_status='POLL_SCHEDULED',last_polled_at=clock_timestamp(),updated_at=clock_timestamp()
+      where state.source_id=(select pending.source_id from public.corporate_live_source_poll_state pending
+        where pending.next_poll_at<=clock_timestamp()
+          and (pending.lease_until is null or pending.lease_until<=clock_timestamp())
+        order by pending.next_poll_at,pending.source_id limit 1)`.execute(this.database);
   }
 
   onModuleDestroy(): void {
@@ -532,8 +542,32 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
         : 'SUCCEEDED');
     } catch (error) {
       if (sourceId !== null) await this.recordFailure(sourceId, error);
+      else await this.recordClaimFailure(error);
     } finally {
       this.inFlight = false;
+    }
+  }
+
+  private async recordClaimFailure(error: unknown): Promise<void> {
+    let current: unknown = error;
+    let sqlState: string | null = null;
+    for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
+      const code = 'code' in current ? current.code : null;
+      if (typeof code === 'string' && /^[0-9A-Z]{5}$/u.test(code)) {
+        sqlState = code;
+        break;
+      }
+      current = 'cause' in current ? current.cause : null;
+    }
+    const status = `CLAIM_FAILED_${sqlState ?? 'UNKNOWN'}`;
+    try {
+      await sql`update public.corporate_live_source_poll_state state
+        set last_status=${status},last_polled_at=clock_timestamp(),
+          next_poll_at=clock_timestamp()+interval '60 seconds',lease_until=null,updated_at=clock_timestamp()
+        where state.source_id=(select pending.source_id from public.corporate_live_source_poll_state pending
+          order by pending.next_poll_at,pending.source_id limit 1)`.execute(this.database);
+    } catch {
+      process.stderr.write(`${JSON.stringify({ event: 'corporate_live_acquisition_claim_failed', sqlState })}\n`);
     }
   }
 
