@@ -73,17 +73,42 @@ interface BackfillArticle {
 export interface CorporateAcquisitionStartResult {
   readonly enabled: boolean;
   readonly scheduled: boolean;
+  readonly errorType: string | null;
+  readonly driverCode: string | null;
   readonly sqlState: string | null;
 }
 
-function postgresSqlState(error: unknown): string | null {
-  let current: unknown = error;
-  for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
+function postgresDiagnostic(error: unknown): {
+  readonly driverCode: string | null;
+  readonly errorType: string | null;
+  readonly sqlState: string | null;
+} {
+  const queue: unknown[] = [error];
+  const seen = new Set<object>();
+  let driverCode: string | null = null;
+  let errorType: string | null = null;
+  for (let depth = 0; depth < 8 && queue.length > 0; depth += 1) {
+    const current = queue.shift();
+    if (typeof current !== 'object' || current === null || seen.has(current)) continue;
+    seen.add(current);
+    const currentRecord = current as Record<string, unknown>;
+    if (errorType === null && current instanceof Error) {
+      const name = current.constructor.name;
+      if (/^[A-Za-z][A-Za-z0-9]{0,63}$/u.test(name)) errorType = name;
+    }
     const code = 'code' in current ? current.code : null;
-    if (typeof code === 'string' && /^[0-9A-Z]{5}$/u.test(code)) return code;
-    current = 'cause' in current ? current.cause : null;
+    if (driverCode === null && typeof code === 'string' && /^[0-9A-Za-z_-]{1,32}$/u.test(code)) {
+      driverCode = code;
+    }
+    for (const key of ['cause', 'error', 'originalError', 'driverError']) {
+      if (key in currentRecord) queue.push(currentRecord[key]);
+    }
   }
-  return null;
+  return {
+    driverCode,
+    errorType,
+    sqlState: driverCode !== null && /^[0-9A-Z]{5}$/u.test(driverCode) ? driverCode : null,
+  };
 }
 
 function xmlText(value: string): string {
@@ -221,7 +246,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       this.config.semanticMode !== 'disabled' ||
       process.env.DIALEKTIK_CORPORATE_LIVE_ACQUISITION_ENABLED !== 'true'
     )
-      return { enabled: false, scheduled: false, sqlState: null };
+      return { enabled: false, scheduled: false, errorType: null, driverCode: null, sqlState: null };
     if (!this.timer) {
       this.timer = setInterval(() => void this.pollOneDueSource(), CORPORATE_ACQUISITION_TICK_MS);
       this.timer.unref();
@@ -230,10 +255,10 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       await this.markPollScheduled();
     } catch (error) {
       await this.recordClaimFailure(error);
-      return { enabled: true, scheduled: false, sqlState: postgresSqlState(error) };
+      return { enabled: true, scheduled: false, ...postgresDiagnostic(error) };
     }
     void this.pollOneDueSource();
-    return { enabled: true, scheduled: true, sqlState: null };
+    return { enabled: true, scheduled: true, errorType: null, driverCode: null, sqlState: null };
   }
 
   private async markPollScheduled(): Promise<void> {
@@ -570,7 +595,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   private async recordClaimFailure(error: unknown): Promise<void> {
-    const sqlState = postgresSqlState(error);
+    const { sqlState } = postgresDiagnostic(error);
     const status = `CLAIM_FAILED_${sqlState ?? 'UNKNOWN'}`;
     try {
       await sql`update public.corporate_live_source_poll_state state
