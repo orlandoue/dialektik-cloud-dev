@@ -6,7 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
-import { generateUlid, isUlid, setTransactionAuditContext } from "@dialektik/database";
+import { generateUlid, setTransactionAuditContext } from "@dialektik/database";
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@dialektik/database";
 import { CloudflareWorkersAITransport } from "../llm-shadow/llm.cloudflare.js";
@@ -18,6 +18,7 @@ import { HeadlineReviewService } from "../moderation/headline-review.service.js"
 import { ModerationHttpError } from "../moderation/moderation-http.error.js";
 import { HeadlineSemanticDatabaseService } from "./headline-semantic-database.service.js";
 import { ModerationDatabaseService } from "../moderation/moderation-database.service.js";
+import { parseLegacyContradictionReview, parseSemanticPromotionDecision, parseSemanticRejection } from "./live-semantic-editorial.contract.js";
 import {
   canAddSemanticPairToClique,
   canJoinSemanticEventGroup,
@@ -100,6 +101,8 @@ interface ReviewGroupRow {
   contradictionCount: number;
   divergentCount: number;
   createdAt: Date;
+  editorialDecision: string | null;
+  editorialReason: string | null;
 }
 
 function sha256(value: string): string {
@@ -161,15 +164,6 @@ function exactBody(raw: unknown): { targetDay: string; limit: number } {
   )
     throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
   return { targetDay: value.targetDay, limit: Number(limit) };
-}
-
-function exactPromotionBody(raw: unknown): string {
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw))
-    throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
-  const value = raw as Record<string, unknown>;
-  if (Object.keys(value).length !== 1 || typeof value.groupId !== "string" || !isUlid(value.groupId))
-    throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
-  return value.groupId;
 }
 
 function proposalSpan(payload: unknown): Record<string, unknown> | null {
@@ -697,7 +691,11 @@ export class LiveSemanticProductionService {
           ${eventKey},${eventTitle},${eventSummary},${PROVIDER},${MODEL},${configSha},'REVIEW_REQUIRED',${new Date().toISOString()})
         on conflict(group_key_sha256) do nothing`.execute(connection);
       const group = await sql<{ id: string }>`select id::text as id
-        from public.live_semantic_event_group_candidates where group_key_sha256=${groupKey} limit 1`.execute(connection);
+        from public.live_semantic_event_group_candidates candidate
+        where candidate.group_key_sha256=${groupKey}
+          and not exists(select 1 from public.live_semantic_editorial_decisions decision
+            where decision.group_id=candidate.id)
+        limit 1`.execute(connection);
       if (!group.rows[0]) continue;
       const groupId = group.rows[0].id;
       assessments += 1;
@@ -792,6 +790,8 @@ export class LiveSemanticProductionService {
       join public.assertion_extraction_generations generation on generation.id=member.extraction_generation_id
       where group_row.target_day=${targetDay}::date and group_row.config_sha256=${configSha}
         and group_row.review_state='REVIEW_REQUIRED'
+        and not exists(select 1 from public.live_semantic_editorial_decisions decision
+          where decision.group_id=group_row.id)
         and (select count(distinct source_id) from public.live_semantic_event_group_members
           where group_id=group_row.id)>=2
       order by group_row.id,member.article_id
@@ -943,7 +943,11 @@ export class LiveSemanticProductionService {
         count(distinct p.id) filter(where p.same_event and p.relation='CONTRADICTORY'
           and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "contradictionCount",
         count(distinct p.id) filter(where p.same_event and p.relation='DIVERGENT'
-          and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "divergentCount",g.created_at as "createdAt"
+          and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "divergentCount",g.created_at as "createdAt",
+        (select decision.decision from public.live_semantic_editorial_decisions decision
+          where decision.group_id=g.id) as "editorialDecision",
+        (select decision.reason from public.live_semantic_editorial_decisions decision
+          where decision.group_id=g.id) as "editorialReason"
       from public.live_semantic_event_group_candidates g
       join public.live_semantic_event_group_members m on m.group_id=g.id
       left join public.live_semantic_claim_pair_assessments p on p.group_id=g.id
@@ -952,6 +956,8 @@ export class LiveSemanticProductionService {
     `.execute(database);
     type ReviewMember = {
       groupId: string;
+      articleId: string;
+      generationId: string;
       sourceName: string;
       headline: string;
       canonicalUrl: string;
@@ -971,6 +977,7 @@ export class LiveSemanticProductionService {
       sameEventConfidence: number;
     };
     type ReviewClaimPair = {
+      id: string;
       groupId: string;
       leftArticleId: string;
       leftClaimOrdinal: number;
@@ -994,7 +1001,8 @@ export class LiveSemanticProductionService {
         groups.rows.map((group) => sql`${group.id}::dialektik_ulid`),
       );
       const [members, pairs, claimPairs] = await Promise.all([
-        sql<ReviewMember>`select m.group_id::text as "groupId",i.source_name as "sourceName",
+        sql<ReviewMember>`select m.group_id::text as "groupId",m.article_id::text as "articleId",
+            m.extraction_generation_id::text as "generationId",i.source_name as "sourceName",
             i.headline,i.url_canonical as "canonicalUrl",
             g.proposal_payload->'spans'->0->>'assertion_text' as "assertionText",
             g.proposal_payload->'spans'->0->>'position_summary' as "positionSummary",
@@ -1013,7 +1021,7 @@ export class LiveSemanticProductionService {
           from public.live_semantic_pair_assessments
           where group_id in (${groupIdFilter})
           order by group_id,created_at,id`.execute(database),
-        sql<ReviewClaimPair>`select pair.group_id::text as "groupId",
+        sql<ReviewClaimPair>`select pair.id::text as id,pair.group_id::text as "groupId",
             pair.left_article_id::text as "leftArticleId",pair.left_claim_ordinal as "leftClaimOrdinal",
             left_input.source_name as "leftSourceName",left_input.headline as "leftHeadline",
             pair.right_article_id::text as "rightArticleId",pair.right_claim_ordinal as "rightClaimOrdinal",
@@ -1061,13 +1069,23 @@ export class LiveSemanticProductionService {
       windowDays: 2,
       summary: {
         articleProposals: proposals.rows.length,
-        claimProposals: proposals.rows.filter(
+        articlesWithClaims: proposals.rows.filter(
           (row) => row.outcome === "proposed",
         ).length,
+        claimProposals: proposals.rows.reduce(
+          (total, row) => total + (Array.isArray(row.claims) ? row.claims.length : 0),
+          0,
+        ),
         insufficientEvidence: proposals.rows.filter(
           (row) => row.outcome === "no_claim_worthy_content",
         ).length,
         groups: details.length,
+        claimPairAssessments: {
+          consistent: claimPairRows.filter((pair) => pair.relation === "CONSISTENT").length,
+          divergent: claimPairRows.filter((pair) => pair.relation === "DIVERGENT").length,
+          contradictory: claimPairRows.filter((pair) => pair.relation === "CONTRADICTORY").length,
+          notComparable: claimPairRows.filter((pair) => pair.relation === "NOT_COMPARABLE").length,
+        },
         contradictionCandidates: details.reduce(
           (total, group) => total + group.contradictionCount,
           0,
@@ -1081,7 +1099,8 @@ export class LiveSemanticProductionService {
   async promote(authorization: string | undefined, raw: unknown) {
     this.ensureEnabled();
     const identity = await this.reviews.authorizeEditor(authorization);
-    const groupId = exactPromotionBody(raw);
+    const decision = parseSemanticPromotionDecision(raw);
+    const { groupId } = decision;
     const commandId = generateUlid({ now: Date.now });
     const database = this.moderationWriter.database;
     try {
@@ -1098,6 +1117,11 @@ export class LiveSemanticProductionService {
             metadata: { semantic_group_id: groupId },
           });
           failureStage = "promotion_function";
+          await sql`select public.dialektik_record_live_semantic_editorial_decision(
+              ${groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid,
+              'APPROVED',${decision.reason},${decision.title},${JSON.stringify(decision.claims)}::jsonb,
+              ${JSON.stringify(decision.approvedConflictPairIds)}::jsonb
+            )`.execute(transaction);
           result = await sql<{ result: Record<string, unknown> }>`
             select public.dialektik_promote_live_semantic_event_group(
               ${groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid
@@ -1114,6 +1138,62 @@ export class LiveSemanticProductionService {
     } catch (error) {
       if (error instanceof ModerationHttpError || error instanceof ConflictException)
         throw error;
+      throw semanticPromotionDatabaseError(error, "transaction");
+    }
+  }
+
+  async reject(authorization: string | undefined, raw: unknown) {
+    this.ensureEnabled();
+    const identity = await this.reviews.authorizeEditor(authorization);
+    const decision = parseSemanticRejection(raw);
+    const commandId = generateUlid({ now: Date.now });
+    try {
+      return await this.moderationWriter.database.transaction().execute(async (transaction) => {
+        await setTransactionAuditContext(transaction, {
+          action: "moderation_decision",
+          actorId: identity.userId,
+          actorType: "editor",
+          correlationId: commandId,
+          reasonCode: "live_semantic_editorial_rejection",
+          metadata: { semantic_group_id: decision.groupId },
+        });
+        const result = await sql<{ result: Record<string, unknown> }>`
+          select public.dialektik_record_live_semantic_editorial_decision(
+            ${decision.groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid,
+            'REJECTED',${decision.reason},null,'[]'::jsonb,'[]'::jsonb
+          ) as result`.execute(transaction);
+        return result.rows[0]?.result;
+      });
+    } catch (error) {
+      if (error instanceof ModerationHttpError || error instanceof ConflictException) throw error;
+      throw semanticPromotionDatabaseError(error, "transaction");
+    }
+  }
+
+  async quarantineLegacyContradiction(authorization: string | undefined, raw: unknown) {
+    this.ensureEnabled();
+    const identity = await this.reviews.authorizeEditor(authorization);
+    const decision = parseLegacyContradictionReview(raw);
+    const commandId = generateUlid({ now: Date.now });
+    try {
+      return await this.moderationWriter.database.transaction().execute(async (transaction) => {
+        await setTransactionAuditContext(transaction, {
+          action: "moderation_decision",
+          actorId: identity.userId,
+          actorType: "editor",
+          correlationId: commandId,
+          reasonCode: "live_semantic_legacy_contradiction_review",
+          metadata: { contradiction_publication_id: decision.publicationId },
+        });
+        const result = await sql<{ result: Record<string, unknown> }>`
+          select public.dialektik_quarantine_legacy_contradiction(
+            ${decision.publicationId}::dialektik_ulid,${identity.userId}::dialektik_ulid,
+            ${commandId}::dialektik_ulid,${decision.reason}
+          ) as result`.execute(transaction);
+        return result.rows[0]?.result;
+      });
+    } catch (error) {
+      if (error instanceof ModerationHttpError || error instanceof ConflictException) throw error;
       throw semanticPromotionDatabaseError(error, "transaction");
     }
   }
