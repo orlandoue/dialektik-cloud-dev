@@ -70,6 +70,22 @@ interface BackfillArticle {
   readonly inputSha256: string;
 }
 
+export interface CorporateAcquisitionStartResult {
+  readonly enabled: boolean;
+  readonly scheduled: boolean;
+  readonly sqlState: string | null;
+}
+
+function postgresSqlState(error: unknown): string | null {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
+    const code = 'code' in current ? current.code : null;
+    if (typeof code === 'string' && /^[0-9A-Z]{5}$/u.test(code)) return code;
+    current = 'cause' in current ? current.cause : null;
+  }
+  return null;
+}
+
 function xmlText(value: string): string {
   return value
     .replace(/&/gu, '&amp;')
@@ -198,21 +214,26 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
     void this.startIfEnabled().catch(() => undefined);
   }
 
-  public async startIfEnabled(): Promise<boolean> {
+  public async startIfEnabled(): Promise<CorporateAcquisitionStartResult> {
     if (
       this.config.nodeEnvironment !== 'production' ||
       this.config.ownershipMode !== 'corporate' ||
       this.config.semanticMode !== 'disabled' ||
       process.env.DIALEKTIK_CORPORATE_LIVE_ACQUISITION_ENABLED !== 'true'
     )
-      return false;
+      return { enabled: false, scheduled: false, sqlState: null };
     if (!this.timer) {
       this.timer = setInterval(() => void this.pollOneDueSource(), CORPORATE_ACQUISITION_TICK_MS);
       this.timer.unref();
     }
-    await this.markPollScheduled();
+    try {
+      await this.markPollScheduled();
+    } catch (error) {
+      await this.recordClaimFailure(error);
+      return { enabled: true, scheduled: false, sqlState: postgresSqlState(error) };
+    }
     void this.pollOneDueSource();
-    return true;
+    return { enabled: true, scheduled: true, sqlState: null };
   }
 
   private async markPollScheduled(): Promise<void> {
@@ -549,16 +570,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   private async recordClaimFailure(error: unknown): Promise<void> {
-    let current: unknown = error;
-    let sqlState: string | null = null;
-    for (let depth = 0; depth < 4 && typeof current === 'object' && current !== null; depth += 1) {
-      const code = 'code' in current ? current.code : null;
-      if (typeof code === 'string' && /^[0-9A-Z]{5}$/u.test(code)) {
-        sqlState = code;
-        break;
-      }
-      current = 'cause' in current ? current.cause : null;
-    }
+    const sqlState = postgresSqlState(error);
     const status = `CLAIM_FAILED_${sqlState ?? 'UNKNOWN'}`;
     try {
       await sql`update public.corporate_live_source_poll_state state

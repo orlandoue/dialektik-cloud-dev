@@ -3,6 +3,7 @@ import {
   Inject,
   NotFoundException,
   Post,
+  ServiceUnavailableException,
   UseGuards,
 } from '@nestjs/common';
 import { PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
@@ -18,7 +19,14 @@ export class CorporateLiveAcquisitionController {
 
   @Post('poll')
   async poll() {
-    if (!(await this.acquisition.startIfEnabled())) throw new NotFoundException();
+    const result = await this.acquisition.startIfEnabled();
+    if (!result.enabled) throw new NotFoundException();
+    if (!result.scheduled) {
+      throw new ServiceUnavailableException({
+        status: 'POLL_STATUS_UPDATE_FAILED',
+        sqlState: result.sqlState,
+      });
+    }
     return { status: 'POLL_SCHEDULED' as const };
   }
 }
