@@ -195,16 +195,23 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   ) {}
 
   onModuleInit(): void {
+    this.startIfEnabled();
+  }
+
+  public startIfEnabled(): boolean {
     if (
       this.config.nodeEnvironment !== 'production' ||
       this.config.ownershipMode !== 'corporate' ||
       this.config.semanticMode !== 'disabled' ||
       process.env.DIALEKTIK_CORPORATE_LIVE_ACQUISITION_ENABLED !== 'true'
     )
-      return;
-    this.timer = setInterval(() => void this.pollOneDueSource(), CORPORATE_ACQUISITION_TICK_MS);
-    this.timer.unref();
+      return false;
+    if (!this.timer) {
+      this.timer = setInterval(() => void this.pollOneDueSource(), CORPORATE_ACQUISITION_TICK_MS);
+      this.timer.unref();
+    }
     void this.pollOneDueSource();
+    return true;
   }
 
   onModuleDestroy(): void {

@@ -8,6 +8,7 @@ import { LiveRepository } from './live.repository.js';
 import { LiveApplicationService } from './live.service.js';
 import { assertLiveDatabase } from './live.sync.js';
 import { CorporateLiveAcquisitionService } from './corporate-live-acquisition.service.js';
+import { CorporateLiveAcquisitionController } from './corporate-live-acquisition.controller.js';
 
 @Module({})
 export class LiveModule {
@@ -34,7 +35,10 @@ export class LiveModule {
       return {
         module: LiveModule,
         imports: [PrivateBetaAuthModule],
-        controllers: [PrivateBetaLiveController],
+        controllers: [
+          PrivateBetaLiveController,
+          ...(config.ownershipMode === 'corporate' ? [CorporateLiveAcquisitionController] : []),
+        ],
         providers: [...providers, ...corporateAcquisitionProviders],
       };
     }
