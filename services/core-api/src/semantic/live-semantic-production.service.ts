@@ -949,72 +949,112 @@ export class LiveSemanticProductionService {
       where g.target_day=${rawDay}::date and g.config_sha256=${configSha}
       group by g.id order by g.created_at desc,g.id desc limit 50
     `.execute(database);
-    const details = [];
-    for (const group of groups.rows) {
-      const members = await sql<{
-        sourceName: string;
-        headline: string;
-        canonicalUrl: string;
-        assertionText: string;
-        positionSummary: string;
-        quotedText: string;
-        charStart: number;
-        charEnd: number;
-        claims: unknown;
-      }>`select i.source_name as "sourceName",i.headline,i.url_canonical as "canonicalUrl",
-          g.proposal_payload->'spans'->0->>'assertion_text' as "assertionText",
-          g.proposal_payload->'spans'->0->>'position_summary' as "positionSummary",
-          g.proposal_payload->'spans'->0->>'quoted_text' as "quotedText",
-          (g.proposal_payload->'spans'->0->>'start')::int as "charStart",
-          (g.proposal_payload->'spans'->0->>'end')::int as "charEnd",
-          g.proposal_payload->'spans' as claims
-        from public.live_semantic_event_group_members m
-        join public.live_semantic_excerpt_inputs i on i.article_id=m.article_id::text
-        join public.assertion_extraction_generations g on g.id=m.extraction_generation_id
-        where m.group_id=${group.id}::dialektik_ulid
-        order by i.published_at desc,i.article_id`.execute(database);
-      const pairs = await sql<{
-        sameEvent: boolean;
-        relation: string;
-        ratioConflicting: number;
-        ratioComparable: number;
-        sameEventConfidence: number;
-      }>`select same_event as "sameEvent",relation,ratio_conflicting as "ratioConflicting",ratio_comparable as "ratioComparable",
-          same_event_confidence as "sameEventConfidence"
-        from public.live_semantic_pair_assessments where group_id=${group.id}::dialektik_ulid
-        order by created_at,id`.execute(database);
-      const claimPairs = await sql<{
-        leftArticleId: string;
-        leftClaimOrdinal: number;
-        leftSourceName: string;
-        leftHeadline: string;
-        rightArticleId: string;
-        rightClaimOrdinal: number;
-        rightSourceName: string;
-        rightHeadline: string;
-        sameEvent: boolean;
-        relation: string;
-        ratioConflicting: number;
-        ratioComparable: number;
-        sameEventConfidence: number;
-      }>`select pair.left_article_id::text as "leftArticleId",pair.left_claim_ordinal as "leftClaimOrdinal",
-          left_input.source_name as "leftSourceName",left_input.headline as "leftHeadline",
-          pair.right_article_id::text as "rightArticleId",pair.right_claim_ordinal as "rightClaimOrdinal",
-          right_input.source_name as "rightSourceName",right_input.headline as "rightHeadline",
-          pair.same_event as "sameEvent",pair.relation,pair.ratio_conflicting as "ratioConflicting",
-          pair.ratio_comparable as "ratioComparable",pair.same_event_confidence as "sameEventConfidence"
-        from public.live_semantic_claim_pair_assessments pair
-        join public.live_semantic_excerpt_inputs left_input on left_input.article_id=pair.left_article_id::text
-        join public.live_semantic_excerpt_inputs right_input on right_input.article_id=pair.right_article_id::text
-        where pair.group_id=${group.id}::dialektik_ulid and pair.config_sha256=${configSha}
-        order by pair.left_article_id,pair.left_claim_ordinal,pair.right_article_id,pair.right_claim_ordinal`.execute(database);
-      details.push({
-        ...group,
-        members: members.rows,
-        pairAssessments: pairs.rows,
-        claimPairAssessments: claimPairs.rows,
-      });
+    type ReviewMember = {
+      groupId: string;
+      sourceName: string;
+      headline: string;
+      canonicalUrl: string;
+      assertionText: string;
+      positionSummary: string;
+      quotedText: string;
+      charStart: number;
+      charEnd: number;
+      claims: unknown;
+    };
+    type ReviewPair = {
+      groupId: string;
+      sameEvent: boolean;
+      relation: string;
+      ratioConflicting: number;
+      ratioComparable: number;
+      sameEventConfidence: number;
+    };
+    type ReviewClaimPair = {
+      groupId: string;
+      leftArticleId: string;
+      leftClaimOrdinal: number;
+      leftSourceName: string;
+      leftHeadline: string;
+      rightArticleId: string;
+      rightClaimOrdinal: number;
+      rightSourceName: string;
+      rightHeadline: string;
+      sameEvent: boolean;
+      relation: string;
+      ratioConflicting: number;
+      ratioComparable: number;
+      sameEventConfidence: number;
+    };
+    let memberRows: ReviewMember[] = [];
+    let pairRows: ReviewPair[] = [];
+    let claimPairRows: ReviewClaimPair[] = [];
+    if (groups.rows.length > 0) {
+      const groupIdFilter = sql.join(
+        groups.rows.map((group) => sql`${group.id}::dialektik_ulid`),
+      );
+      const [members, pairs, claimPairs] = await Promise.all([
+        sql<ReviewMember>`select m.group_id::text as "groupId",i.source_name as "sourceName",
+            i.headline,i.url_canonical as "canonicalUrl",
+            g.proposal_payload->'spans'->0->>'assertion_text' as "assertionText",
+            g.proposal_payload->'spans'->0->>'position_summary' as "positionSummary",
+            g.proposal_payload->'spans'->0->>'quoted_text' as "quotedText",
+            (g.proposal_payload->'spans'->0->>'start')::int as "charStart",
+            (g.proposal_payload->'spans'->0->>'end')::int as "charEnd",
+            g.proposal_payload->'spans' as claims
+          from public.live_semantic_event_group_members m
+          join public.live_semantic_excerpt_inputs i on i.article_id=m.article_id::text
+          join public.assertion_extraction_generations g on g.id=m.extraction_generation_id
+          where m.group_id in (${groupIdFilter})
+          order by m.group_id,i.published_at desc,i.article_id`.execute(database),
+        sql<ReviewPair>`select group_id::text as "groupId",same_event as "sameEvent",relation,
+            ratio_conflicting as "ratioConflicting",ratio_comparable as "ratioComparable",
+            same_event_confidence as "sameEventConfidence"
+          from public.live_semantic_pair_assessments
+          where group_id in (${groupIdFilter})
+          order by group_id,created_at,id`.execute(database),
+        sql<ReviewClaimPair>`select pair.group_id::text as "groupId",
+            pair.left_article_id::text as "leftArticleId",pair.left_claim_ordinal as "leftClaimOrdinal",
+            left_input.source_name as "leftSourceName",left_input.headline as "leftHeadline",
+            pair.right_article_id::text as "rightArticleId",pair.right_claim_ordinal as "rightClaimOrdinal",
+            right_input.source_name as "rightSourceName",right_input.headline as "rightHeadline",
+            pair.same_event as "sameEvent",pair.relation,
+            pair.ratio_conflicting as "ratioConflicting",pair.ratio_comparable as "ratioComparable",
+            pair.same_event_confidence as "sameEventConfidence"
+          from public.live_semantic_claim_pair_assessments pair
+          join public.live_semantic_excerpt_inputs left_input on left_input.article_id=pair.left_article_id::text
+          join public.live_semantic_excerpt_inputs right_input on right_input.article_id=pair.right_article_id::text
+          where pair.group_id in (${groupIdFilter}) and pair.config_sha256=${configSha}
+          order by pair.group_id,pair.left_article_id,pair.left_claim_ordinal,
+            pair.right_article_id,pair.right_claim_ordinal`.execute(database),
+      ]);
+      memberRows = members.rows;
+      pairRows = pairs.rows;
+      claimPairRows = claimPairs.rows;
     }
+    const membersByGroup = new Map<string, ReviewMember[]>();
+    const pairsByGroup = new Map<string, ReviewPair[]>();
+    const claimPairsByGroup = new Map<string, ReviewClaimPair[]>();
+    for (const member of memberRows) {
+      const groupMembers = membersByGroup.get(member.groupId) ?? [];
+      groupMembers.push(member);
+      membersByGroup.set(member.groupId, groupMembers);
+    }
+    for (const pair of pairRows) {
+      const groupPairs = pairsByGroup.get(pair.groupId) ?? [];
+      groupPairs.push(pair);
+      pairsByGroup.set(pair.groupId, groupPairs);
+    }
+    for (const pair of claimPairRows) {
+      const groupPairs = claimPairsByGroup.get(pair.groupId) ?? [];
+      groupPairs.push(pair);
+      claimPairsByGroup.set(pair.groupId, groupPairs);
+    }
+    const details = groups.rows.map((group) => ({
+      ...group,
+      members: membersByGroup.get(group.id) ?? [],
+      pairAssessments: pairsByGroup.get(group.id) ?? [],
+      claimPairAssessments: claimPairsByGroup.get(group.id) ?? [],
+    }));
     return {
       targetDay: rawDay,
       windowDays: 2,
