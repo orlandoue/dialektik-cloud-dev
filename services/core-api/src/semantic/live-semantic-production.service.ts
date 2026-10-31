@@ -392,11 +392,12 @@ export class LiveSemanticProductionService {
         divergentCandidates: number;
       }>`
         select count(distinct g.id)::int as "eventGroups",
-          count(*) filter(where p.relation='CONTRADICTORY'
+          count(distinct p.id) filter(where p.relation='CONTRADICTORY'
             and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "conflictCandidates",
-          count(*) filter(where p.relation='DIVERGENT'
+          count(distinct p.id) filter(where p.relation='DIVERGENT'
             and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "divergentCandidates"
         from public.live_semantic_event_group_candidates g
+        join public.live_semantic_event_group_members m on m.group_id=g.id
         left join public.live_semantic_claim_pair_assessments p on p.group_id=g.id and p.same_event
         where g.target_day=${targetDay}::date and g.config_sha256=${configSha}
       `.execute(connection);
