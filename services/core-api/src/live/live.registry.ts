@@ -23,6 +23,8 @@ export interface LiveSourcePolicy {
   readonly storagePolicy: LiveStoragePolicy;
   readonly active: boolean;
   readonly rightsEvidenceUrl: string;
+  readonly rightsReviewStatus?: string | null;
+  readonly authorizationReference?: string | null;
   readonly rightsVerifiedAt: string;
   readonly attribution: string;
   readonly language: string;

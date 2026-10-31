@@ -101,6 +101,12 @@ function policyJson(policy: LiveSourcePolicy) {
     storagePolicy: policy.storagePolicy,
     active: policy.active,
     rightsEvidenceUrl: policy.rightsEvidenceUrl,
+    ...(policy.rightsReviewStatus === undefined
+      ? {}
+      : { rightsReviewStatus: policy.rightsReviewStatus }),
+    ...(policy.authorizationReference === undefined
+      ? {}
+      : { authorizationReference: policy.authorizationReference }),
     rightsVerifiedAt: policy.rightsVerifiedAt,
     attribution: policy.attribution,
     language: policy.language,
