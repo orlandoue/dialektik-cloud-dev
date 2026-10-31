@@ -660,9 +660,14 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   private async recordFailure(sourceId: string, error: unknown): Promise<void> {
+    const diagnostic = postgresDiagnostic(error);
     const message = error instanceof YouTubeDataApiError ? error.code :
       error instanceof Error && /^[A-Z0-9_]{1,64}$/u.test(error.message) ? error.message :
-      'CORPORATE_ACQUISITION_FAILED';
+      diagnostic.driverCode !== null
+        ? `DB_${diagnostic.driverCode.toUpperCase().replace(/[^A-Z0-9_-]/gu, '_')}`
+        : diagnostic.errorType !== null
+          ? `ERROR_${diagnostic.errorType.replace(/[^A-Z0-9_]/gu, '_').toUpperCase()}`
+          : 'CORPORATE_ACQUISITION_FAILED';
     await sql`update public.corporate_live_source_poll_state
       set consecutive_failures=least(consecutive_failures+1,12),
           poll_interval_seconds=least(poll_interval_seconds*2,2592000),
