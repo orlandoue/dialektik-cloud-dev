@@ -32,6 +32,22 @@ export class LiveSemanticProductionController {
     return this.service.promote(authorization, body);
   }
 
+  @Post("reject")
+  reject(
+    @Headers("authorization") authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    return this.service.reject(authorization, body);
+  }
+
+  @Post("quarantine-legacy")
+  quarantineLegacy(
+    @Headers("authorization") authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    return this.service.quarantineLegacyContradiction(authorization, body);
+  }
+
   @Get("review")
   review(
     @Headers("authorization") authorization: string | undefined,
