@@ -394,6 +394,7 @@ export class LiveSemanticProductionService {
         join public.live_semantic_event_group_members m on m.group_id=g.id
         left join public.live_semantic_claim_pair_assessments p on p.group_id=g.id and p.same_event
         where g.target_day=${targetDay}::date and g.config_sha256=${configSha}
+          and not exists(select 1 from public.live_semantic_editorial_decisions decision where decision.group_id=g.id)
       `.execute(connection);
       return {
         status: "COMPLETED_FOR_EDITORIAL_REVIEW",
@@ -1080,6 +1081,7 @@ export class LiveSemanticProductionService {
           (row) => row.outcome === "no_claim_worthy_content",
         ).length,
         groups: details.length,
+        pendingGroups: details.filter((group) => group.editorialDecision === null).length,
         claimPairAssessments: {
           consistent: claimPairRows.filter((pair) => pair.relation === "CONSISTENT").length,
           divergent: claimPairRows.filter((pair) => pair.relation === "DIVERGENT").length,
@@ -1087,7 +1089,7 @@ export class LiveSemanticProductionService {
           notComparable: claimPairRows.filter((pair) => pair.relation === "NOT_COMPARABLE").length,
         },
         contradictionCandidates: details.reduce(
-          (total, group) => total + group.contradictionCount,
+          (total, group) => total + (group.editorialDecision === null ? group.contradictionCount : 0),
           0,
         ),
       },

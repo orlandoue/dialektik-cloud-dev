@@ -39,6 +39,7 @@ export interface PositionListRow {
   readonly published_at: Date;
   readonly assertion_count: number;
   readonly formed_by_count: number;
+  readonly has_reviewed_single_claim: boolean;
   readonly evidence_absence: 'no_evidence_yet' | 'inconclusive' | null;
   readonly representation_updated_at: Date;
 }
@@ -136,11 +137,64 @@ export interface PositionSuccessorRow {
   readonly ordinal: number;
 }
 
+/** A single-claim position is public only through the signed editorial promotion path. */
+function reviewedSingleClaim(positionId: string, eventId: string) {
+  return sql`exists (
+    select 1 from public.live_semantic_promotion_claims promoted_claim
+    join public.live_semantic_promotion_positions promoted_position
+      on promoted_position.group_id=promoted_claim.group_id
+      and promoted_position.position_id=promoted_claim.position_id
+      and promoted_position.event_id=${sql.ref(eventId)}
+    join public.live_semantic_editorial_decisions decision
+      on decision.group_id=promoted_claim.group_id and decision.decision='APPROVED'
+      and decision.editor_user_id=promoted_position.editor_user_id
+      and decision.selected_claims @> jsonb_build_array(jsonb_build_object(
+        'articleId',promoted_claim.article_id::text,'ordinal',promoted_claim.claim_ordinal))
+    join public.assertions selected_assertion on selected_assertion.id=promoted_claim.assertion_id
+      and selected_assertion.position_id=promoted_claim.position_id
+      and selected_assertion.claim_span_id=promoted_claim.claim_span_id
+      and selected_assertion.lifecycle_state='active' and selected_assertion.is_principal
+    join public.claim_spans selected_span on selected_span.id=promoted_claim.claim_span_id
+      and selected_span.article_id=promoted_claim.article_id and selected_span.tombstone_id is null
+    join public.articles source_article on source_article.id=promoted_claim.article_id
+      and source_article.event_id=${sql.ref(eventId)} and source_article.origin='LIVE_REAL'
+    join public.evidence selected_evidence on selected_evidence.id=promoted_claim.evidence_id
+      and selected_evidence.scope_assertion_id=selected_assertion.id
+      and selected_evidence.anchor_span_id=selected_span.id
+      and selected_evidence.publication_state='published'
+      and selected_evidence.approved_by=decision.editor_user_id
+      and selected_evidence.approved_at is not null
+      and selected_evidence.citable_source_url=source_article.url_canonical
+    join lateral (select policy.* from public.live_source_policies policy
+      where policy.source_id=source_article.source_id order by policy.recorded_at desc,policy.id desc limit 1) current_policy
+      on current_policy.active and current_policy.rights_class='LIVE_READY'
+      and current_policy.policy->>'rightsReviewStatus'='APPROVED'
+      and nullif(current_policy.policy->>'authorizationReference','') is not null
+      and nullif(current_policy.policy->>'rightsEvidenceUrl','') is not null
+      and nullif(current_policy.policy->>'endpoint','') is not null
+      and current_policy.policy->>'rightsEvidenceUrl' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
+      and current_policy.policy->>'endpoint' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
+    where promoted_claim.position_id=${sql.ref(positionId)}
+      and exists(select 1 from public.live_acquisition_receipts receipt
+        where receipt.exclusion_id=source_article.live_exposure_id
+          and receipt.source_id=source_article.source_id and receipt.disposition='PERSISTED')
+      and coalesce((select case when jsonb_typeof(policy.policy->'quarantinedArticleIds')='array'
+          then not (policy.policy->'quarantinedArticleIds' @> jsonb_build_array(source_article.id::text))
+          else false end from public.live_source_policies policy
+        where policy.source_id=source_article.source_id and policy.policy ? 'quarantinedArticleIds'
+        order by policy.recorded_at desc,policy.id desc limit 1),true)
+      and not exists(select 1 from public.assertions successor where successor.supersedes_id=selected_assertion.id)
+      and (select count(*) from public.assertions current_assertion
+        where current_assertion.position_id=promoted_claim.position_id and current_assertion.lifecycle_state='active'
+          and not exists(select 1 from public.assertions successor where successor.supersedes_id=current_assertion.id))=1
+  )`;
+}
+
 /**
  * Publication gate for public Event list AND direct detail/position routes.
  * A bare PUBLISHED database flag is not evidence. All visible active
- * Positions must be formed by confirmed R01a relationships and carry at
- * least one active, non-superseded claim with approved source-backed evidence.
+ * Positions need either confirmed R01a formation or a signed single-claim
+ * promotion, plus active, non-superseded source-backed evidence.
  * ANALYSIS_PENDING is permitted only with an authentic linked Article.
  */
 const groundedEvent = sql`
@@ -172,7 +226,7 @@ const groundedEvent = sql`
             invalid_position.neutral_rank is null
             or invalid_position.published_at is null
             or invalid_position.published_by is null
-            or not exists (
+            or (not exists (
               select 1 from position_formed_by formation
               join relationships formed_relation
                 on formed_relation.id = formation.relationship_id
@@ -182,7 +236,7 @@ const groundedEvent = sql`
                 and formed_relation.declared_by is not null
                 and formed_relation.confirmed_by is not null
                 and formed_relation.confirmed_at is not null
-            )
+            ) and not ${reviewedSingleClaim('invalid_position.id', 'event_row.id')})
             or not exists (
               select 1 from assertions grounded_assertion
               join claim_spans grounded_span
@@ -386,6 +440,7 @@ export class PublicApiRepository {
           from position_formed_by formation
           where formation.position_id = position_row.id
         ) as formed_by_count,
+        ${reviewedSingleClaim('position_row.id', 'position_row.event_id')} as has_reviewed_single_claim,
         evidence_absence.evidence_absence,
         greatest(
           position_row.published_at,
@@ -646,20 +701,20 @@ export class PublicApiRepository {
         and position_a.status = 'active'
         and position_b.publication_state = 'published'
         and position_b.status = 'active'
-        -- Never publish a purported contradiction without traceable claims
-        -- and a confirmed formation relationship for BOTH positions.
-        and exists (
+        -- Both positions need confirmed formation or a signed, source-backed
+        -- single-claim editorial promotion.
+        and (exists (
           select 1 from position_formed_by formation
           join relationships relationship_row
             on relationship_row.id = formation.relationship_id
           where formation.position_id = position_a.id
-        )
-        and exists (
+        ) or ${reviewedSingleClaim('position_a.id', 'event_row.id')})
+        and (exists (
           select 1 from position_formed_by formation
           join relationships relationship_row
             on relationship_row.id = formation.relationship_id
           where formation.position_id = position_b.id
-        )
+        ) or ${reviewedSingleClaim('position_b.id', 'event_row.id')})
         and exists (
           select 1 from assertions assertion_row
           join claim_spans claim on claim.id = assertion_row.claim_span_id

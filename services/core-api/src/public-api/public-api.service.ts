@@ -223,7 +223,8 @@ export class PublicApiService {
       ...new Set(assertionRows.map((assertion) => assertion.span_id)),
     ]);
     const formedByRows = await this.repository.listFormedBy(id);
-    if (formedByRows.length === 0 || formedByRows.length !== row.formed_by_count) {
+    if (formedByRows.length !== row.formed_by_count ||
+        (formedByRows.length === 0 && !row.has_reviewed_single_claim)) {
       throw new TypeError('Public Position formation is incomplete.');
     }
     const formedBy: readonly FormedByDto[] = formedByRows.map((formation) => ({

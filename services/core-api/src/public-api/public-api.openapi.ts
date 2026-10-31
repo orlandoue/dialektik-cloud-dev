@@ -413,7 +413,7 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
           title: { type: 'string' },
           published_at: { type: 'string', format: 'date-time' },
           assertion_count: { type: 'integer', minimum: 1 },
-          formed_by_count: { type: 'integer', minimum: 1 },
+          formed_by_count: { type: 'integer', minimum: 0, description: 'Confirmed formation relationships; zero for an individually reviewed single-claim position.' },
           evidence_absence: {
             type: ['string', 'null'],
             enum: ['no_evidence_yet', 'inconclusive', null],
