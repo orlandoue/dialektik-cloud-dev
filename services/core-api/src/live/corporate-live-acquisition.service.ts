@@ -408,9 +408,10 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   private makePolicy(row: CorporateSourceRow, channelOverride?: 'rss_atom'): LiveSourcePolicy {
+    const stableRegistryKey = row.registryKey.replace(/^(?:corporate-)+/u, '');
     const policy: LiveSourcePolicy = {
       sourceId: parseUlid(row.sourceId),
-      registryKey: `corporate-${row.registryKey}`,
+      registryKey: stableRegistryKey,
       publisherName: row.sourceName,
       canonicalDomain: row.canonicalDomain,
       sourceType: row.sourceType as SourceType,

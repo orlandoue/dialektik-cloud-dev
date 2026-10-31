@@ -435,7 +435,34 @@ async function persistItem(
   }
   const articleId = existing?.id ?? nextId(now);
   const linkedExclusion = existing?.live_exposure_id ?? exclusionId;
-  const acquisition = receipt(policy, policyId, item, linkedExclusion, now, discoveryUrl, null);
+  const receiptPolicyId = existing === undefined
+    ? policyId
+    : (await transaction
+        .selectFrom('live_source_policies as source_policy')
+        .innerJoin(
+          'live_exposure_exclusions as source_exclusion',
+          'source_exclusion.registry_key',
+          'source_policy.registry_key',
+        )
+        .select('source_policy.id')
+        .where('source_policy.source_id', '=', policy.sourceId)
+        .where('source_policy.active', '=', true)
+        .where('source_policy.rights_class', '=', 'LIVE_READY')
+        .where('source_exclusion.id', '=', linkedExclusion)
+        .orderBy('source_policy.recorded_at', 'desc')
+        .orderBy('source_policy.id', 'desc')
+        .executeTakeFirst())?.id;
+  if (receiptPolicyId === undefined)
+    throw new Error('ARTICLE_POLICY_EXCLUSION_MISMATCH');
+  const acquisition = receipt(
+    policy,
+    receiptPolicyId,
+    item,
+    linkedExclusion,
+    now,
+    discoveryUrl,
+    null,
+  );
   await transaction.insertInto('live_acquisition_receipts').values(acquisition).execute();
   const originalText = [item.headline, item.excerpt]
     .filter((part): part is string => part !== null)
