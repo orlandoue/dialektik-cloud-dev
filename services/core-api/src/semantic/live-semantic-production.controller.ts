@@ -24,6 +24,11 @@ export class LiveSemanticProductionController {
     return this.service.runBatch(authorization, body);
   }
 
+  @Post("run-joint")
+  runJoint(@Headers("authorization") authorization: string | undefined, @Body() body: unknown) {
+    return this.service.runJointClusterOnly(authorization, body);
+  }
+
   @Post("promote")
   promote(
     @Headers("authorization") authorization: string | undefined,

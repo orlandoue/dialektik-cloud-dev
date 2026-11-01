@@ -290,6 +290,33 @@ export class LiveSemanticProductionService {
     });
   }
 
+  async runJointClusterOnly(authorization: string | undefined, raw: unknown) {
+    this.ensureEnabled();
+    const identity = await this.reviews.authorizeEditor(authorization);
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new ModerationHttpError(400,"MOD_INVALID_REQUEST");
+    const value = raw as Record<string, unknown>;
+    if (Object.keys(value).some(key => !["targetDay","maxModelCalls"].includes(key))) throw new ModerationHttpError(400,"MOD_INVALID_REQUEST");
+    const {targetDay} = exactBody({targetDay:value.targetDay,limit:1});
+    const maxModelCalls = value.maxModelCalls ?? 40;
+    if (!Number.isInteger(maxModelCalls) || Number(maxModelCalls)<1 || Number(maxModelCalls)>40) throw new ModerationHttpError(400,"MOD_INVALID_REQUEST");
+    const configSha=this.configSha256();
+    const transport=new CloudflareWorkersAITransport(this.config(),undefined,process.env,LIVE_JOINT_SCOPE_PROMPT);
+    return this.writer.database.connection().execute(async connection => {
+      const leaseName=`dialektik-live-semantic:${targetDay}`;
+      const lock=await sql<{locked:boolean}>`select pg_try_advisory_lock(hashtextextended(${leaseName},0)) as locked`.execute(connection);
+      if(!lock.rows[0]?.locked) throw new ConflictException("SEMANTIC_BATCH_ALREADY_RUNNING");
+      const runId=generateUlid({now:Date.now});
+      try {
+        await sql`insert into public.live_semantic_production_runs
+          (id,requested_by,target_day,provider_type,model_id,config_sha256,requested_count,processed_count,pair_assessment_count,started_at,completed_at)
+          values (${runId},${identity.userId}::dialektik_ulid,${targetDay}::date,${PROVIDER},${MODEL},${configSha},${Number(maxModelCalls)},0,0,${new Date().toISOString()},null)`.execute(connection);
+        const results=await this.assessJointScope(connection,runId,identity.userId,targetDay,configSha,transport,Number(maxModelCalls));
+        await sql`update public.live_semantic_production_runs set processed_count=${results.validated},pair_assessment_count=${results.attempted},completed_at=${new Date().toISOString()} where id=${runId}`.execute(connection);
+        return {status:"COMPLETED_FOR_EDITORIAL_REVIEW",runId,targetDay,jointClusterOnly:true,modelCallsCount:results.modelCalls,maxModelCalls:Number(maxModelCalls),results};
+      } finally { await sql`select pg_advisory_unlock(hashtextextended(${leaseName},0))`.execute(connection); }
+    });
+  }
+
   private async runLocked(
     connection: Kysely<Database>,
     requestedBy: string,
@@ -336,7 +363,6 @@ export class LiveSemanticProductionService {
     let extractionTransport: CloudflareWorkersAITransport;
     let pairTransport: CloudflareWorkersAITransport;
     let stanceTransport: CloudflareWorkersAITransport;
-    let jointTransport: CloudflareWorkersAITransport;
     try {
       extractionTransport = new CloudflareWorkersAITransport(
         profile,
@@ -350,7 +376,6 @@ export class LiveSemanticProductionService {
         process.env,
         LIVE_PAIR_ASSESSMENT_PROMPT,
       );
-      jointTransport = new CloudflareWorkersAITransport(profile, undefined, process.env, LIVE_JOINT_SCOPE_PROMPT);
       stanceTransport = new CloudflareWorkersAITransport(
         profile,
         undefined,
@@ -411,7 +436,6 @@ export class LiveSemanticProductionService {
       const stanceAssessment = await this.reassessClaimPairs(
         connection, runId, requestedBy, targetDay, configSha, stanceTransport,
       );
-      const jointScope = await this.assessJointScope(connection, runId, requestedBy, targetDay, configSha, jointTransport);
       const processed = outcomes.filter((item) =>
         ["VALIDATED", "NO_CLAIM_WORTHY_CONTENT"].includes(item.outcome),
       ).length;
@@ -462,7 +486,6 @@ export class LiveSemanticProductionService {
         claimPairAssessments: claimPairAssessment.count,
         claimPairAssessmentLimitReached: claimPairAssessment.limitReached,
         stanceReassessment: stanceAssessment,
-        jointScope,
         windowDays: 2,
         eventGroupsForReview: reviewCounts.rows[0]?.eventGroups ?? 0,
         contradictionCandidatesForReview:
@@ -1076,7 +1099,7 @@ export class LiveSemanticProductionService {
 
   private async assessJointScope(
     connection: Kysely<Database>, runId: string, requestedBy: string, targetDay: string,
-    extractionConfig: string, transport: CloudflareWorkersAITransport,
+    extractionConfig: string, transport: CloudflareWorkersAITransport, maxModelCalls = 2,
   ) {
     type Pair = { groupId: string; leftId: string; rightId: string; leftHash: string; rightHash: string;
       leftText: string; rightText: string; leftHeadline: string; rightHeadline: string; leftSource: string; rightSource: string };
@@ -1095,8 +1118,8 @@ export class LiveSemanticProductionService {
         and not exists(select 1 from public.live_semantic_joint_scope_attempts a where a.group_id=g.id
           and a.left_article_id=l.article_id and a.right_article_id=r.article_id and a.left_input_sha256=li.input_sha256
           and a.right_input_sha256=ri.input_sha256 and a.config_sha256=${jointConfig})
-      order by "groupId","leftId","rightId" limit 2`.execute(connection);
-    const totals = { attempted: 0, validated: 0, invalidSchema: 0, invalidScope: 0, unavailable: 0, aligned: 0 };
+      order by "groupId","leftId","rightId" limit ${maxModelCalls}`.execute(connection);
+    const totals = { attempted: 0, modelCalls: 0, validated: 0, invalidSchema: 0, invalidScope: 0, unavailable: 0, aligned: 0 };
     for (const pair of pairs.rows) {
       const attemptId = generateUlid({now:Date.now});
       const inserted = await sql<{id:string}>`insert into public.live_semantic_joint_scope_attempts
@@ -1115,11 +1138,12 @@ export class LiveSemanticProductionService {
       if (allowed.rows[0]?.allowed !== true) { totals.unavailable++; await outcome('INPUT_UNAVAILABLE'); continue; }
       let output:unknown;
       try {
+        totals.modelCalls++;
         output = (await transport.generate('extraction', {
           left:{headline:pair.leftHeadline,source:pair.leftSource,textOriginal:pair.leftText},
           right:{headline:pair.rightHeadline,source:pair.rightSource,textOriginal:pair.rightText},
         }, LIVE_JOINT_SCOPE_SCHEMA, AbortSignal.timeout(32000))).output;
-      } catch { totals.unavailable++; await outcome('PROVIDER_UNAVAILABLE'); continue; }
+      } catch { totals.unavailable++; await outcome('PROVIDER_UNAVAILABLE'); break; }
       let result: ReturnType<typeof validateJointScope>;
       try { result=validateJointScope(output,pair.leftText,pair.rightText); }
       catch(error) {
