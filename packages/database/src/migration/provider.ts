@@ -75,6 +75,7 @@ import { qualifyEphemeralArticleGuardDigestMigration } from './074_qualify_ephem
 import { liveSemanticEditorialDecisionsMigration } from './075_live_semantic_editorial_decisions';
 import { liveStanceReassessmentMigration } from './076_live_stance_reassessment';
 import { liveSemanticEventAttachmentMigration } from './077_live_semantic_event_attachment';
+import { liveJointScopeReviewMigration } from './078_live_joint_scope_review';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -131,6 +132,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '075_live_semantic_editorial_decisions': liveSemanticEditorialDecisionsMigration,
   '076_live_stance_reassessment': liveStanceReassessmentMigration,
   '077_live_semantic_event_attachment': liveSemanticEventAttachmentMigration,
+  '078_live_joint_scope_review': liveJointScopeReviewMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,
