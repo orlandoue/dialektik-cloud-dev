@@ -1152,7 +1152,19 @@ export class LiveSemanticProductionService {
         } else { totals.invalidSchema++; await outcome('INVALID_SCHEMA'); }
         continue;
       }
-      await outcome('VALIDATED',result); totals.validated++; if(result.scopeAligned) totals.aligned++;
+      if (result.scopeAligned) {
+        const leftId=generateUlid({now:Date.now}),rightId=generateUlid({now:Date.now});
+        await connection.transaction().execute(async transaction => {
+          await sql`insert into public.live_semantic_joint_scope_outcomes(attempt_id,outcome,result,recorded_at)
+            values(${attemptId}::dialektik_ulid,'VALIDATED',${JSON.stringify(result)}::jsonb,${new Date().toISOString()})`.execute(transaction);
+          await sql`insert into public.live_semantic_joint_claims
+            (id,attempt_id,article_id,side,input_sha256,quoted_text,char_start,char_end,assertion_text,created_at)
+            values (${leftId},${attemptId}::dialektik_ulid,${pair.leftId}::dialektik_ulid,'left',${pair.leftHash},${result.left.quotedText},${result.left.charStart},${result.left.charEnd},${result.left.assertionText},${new Date().toISOString()}),
+              (${rightId},${attemptId}::dialektik_ulid,${pair.rightId}::dialektik_ulid,'right',${pair.rightHash},${result.right.quotedText},${result.right.charStart},${result.right.charEnd},${result.right.assertionText},${new Date().toISOString()})`.execute(transaction);
+        });
+        totals.aligned++;
+      } else await outcome('VALIDATED',result);
+      totals.validated++;
     }
     return totals;
   }
@@ -1271,7 +1283,7 @@ export class LiveSemanticProductionService {
     let memberRows: ReviewMember[] = [];
     let pairRows: ReviewPair[] = [];
     let claimPairRows: ReviewClaimPair[] = [];
-    let jointScopeRows: {groupId:string; leftArticleId:string; rightArticleId:string; outcome:string; result:unknown}[] = [];
+    let jointScopeRows: {groupId:string; attemptId:string; leftArticleId:string; rightArticleId:string; outcome:string; result:unknown; claims:unknown}[] = [];
     if (groups.rows.length > 0) {
       const groupIdFilter = sql.join(
         groups.rows.map((group) => sql`${group.id}::dialektik_ulid`),
@@ -1317,9 +1329,13 @@ export class LiveSemanticProductionService {
           where pair.group_id in (${groupIdFilter}) and pair.config_sha256 in (${configSha},${stanceConfigSha256(configSha)})
           order by pair.group_id,pair.left_article_id,pair.left_claim_ordinal,
             pair.right_article_id,pair.right_claim_ordinal`.execute(database),
-        sql<{groupId:string; leftArticleId:string; rightArticleId:string; outcome:string; result:unknown}>`
-          select a.group_id::text as "groupId",a.left_article_id::text as "leftArticleId",
-            a.right_article_id::text as "rightArticleId",coalesce(o.outcome,'PENDING') as outcome,o.result
+        sql<{groupId:string; attemptId:string; leftArticleId:string; rightArticleId:string; outcome:string; result:unknown; claims:unknown}>`
+          select a.group_id::text as "groupId",a.id::text as "attemptId",a.left_article_id::text as "leftArticleId",
+            a.right_article_id::text as "rightArticleId",coalesce(o.outcome,'PENDING') as outcome,o.result,
+            coalesce((select jsonb_agg(jsonb_build_object('id',claim.id::text,'articleId',claim.article_id::text,
+              'side',claim.side,'quotedText',claim.quoted_text,'charStart',claim.char_start,'charEnd',claim.char_end,
+              'assertionText',claim.assertion_text) order by claim.side)
+              from public.live_semantic_joint_claims claim where claim.attempt_id=a.id),'[]'::jsonb) as claims
           from public.live_semantic_joint_scope_attempts a
           join public.live_semantic_excerpt_inputs li on li.article_id=a.left_article_id::text and li.input_sha256=a.left_input_sha256
           join public.live_semantic_excerpt_inputs ri on ri.article_id=a.right_article_id::text and ri.input_sha256=a.right_input_sha256
