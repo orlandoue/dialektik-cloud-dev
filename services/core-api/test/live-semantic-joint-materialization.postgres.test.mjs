@@ -1,0 +1,46 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { PGlite } from '@electric-sql/pglite';
+import { jointClaimMaterializationDdl } from '../../../packages/database/dist/migration/080_joint_claim_materialization.js';
+const id=n=>`01M4YDQK00EVART${String(n).padStart(11,'0')}`;
+test('joint claim B is materialized with its own provenance, never prior claim A',async()=>{
+ const db=new PGlite();try {
+ await db.exec(`create domain dialektik_ulid as text;create type span_location as enum ('headline','lede');
+ create role anon;create role authenticated;create role service_role;create role dialektik_moderation_writer;create role dialektik_core_app;create role dialektik_headline_ai_writer;
+ create schema extensions;create sequence ids start 100;
+ create function dialektik_generate_ulid() returns dialektik_ulid language sql as $$select ('01M4YDQK00EVART'||lpad(nextval('ids')::text,11,'0'))::dialektik_ulid$$;
+ create function dialektik_require_context_actor(dialektik_ulid) returns void language sql as $$select$$;
+ create function dialektik_set_audit_context(text,dialektik_ulid,dialektik_ulid,text,text) returns void language sql as $$select$$;
+ create function dialektik_live_semantic_route_allowed(dialektik_ulid,text,text,text) returns boolean language sql as $$select true$$;
+ create table users(id dialektik_ulid primary key,role text);create table editorial_single_editor_authorizations(editor_user_id dialektik_ulid,revoked_at timestamptz);
+ create table events(id dialektik_ulid primary key,origin text,merged_into dialektik_ulid,window_from timestamptz,window_to timestamptz);
+ create table articles(id dialektik_ulid primary key,event_id dialektik_ulid,origin text);
+ create table live_semantic_event_group_candidates(id dialektik_ulid primary key,proposed_event_key text);
+ create table prior_extractions(article_id dialektik_ulid,quoted_text text);
+ create table live_semantic_joint_scope_attempts(id dialektik_ulid primary key,group_id dialektik_ulid);
+ create table live_semantic_joint_scope_outcomes(attempt_id dialektik_ulid,outcome text,result jsonb);
+ create table live_semantic_joint_claims(id dialektik_ulid primary key,attempt_id dialektik_ulid,article_id dialektik_ulid,side text,input_sha256 text,quoted_text text,char_start int,char_end int,assertion_text text);
+ create table live_semantic_excerpt_inputs(article_id text,input_sha256 text,text_original text,headline text,url_canonical text);
+ create table claim_spans(id dialektik_ulid primary key,article_id dialektik_ulid,text_offset_start int,text_offset_end int,quoted_text text,location span_location,captured_at timestamptz);
+ create table assertions(id dialektik_ulid primary key,claim_span_id dialektik_ulid,ordinal int,is_principal boolean,assertion_type text,subject_ref text,temporal_scope jsonb,population_scope jsonb,comparison_base text,position_id dialektik_ulid,epistemic_class text,epistemic_reason text,extraction_confidence numeric,version int,supersedes_id dialektik_ulid,lineage_root_id dialektik_ulid,lifecycle_state text);
+ create table evidence(id dialektik_ulid primary key,anchor_span_id dialektik_ulid,scope_assertion_id dialektik_ulid,stance text,summary text,citable_source_url text,citable_source_title text,contributed_by dialektik_ulid,publication_state text,approved_by dialektik_ulid,approved_at timestamptz,relevance numeric);`);
+ await db.exec(jointClaimMaterializationDdl);
+ const [editor,event,article,group,attempt,left,right,corr]=[1,2,3,4,5,6,7,8].map(id),original='Titular. La cita anterior. La cita conjunta.';
+ await db.query("insert into users values($1,'editor')",[editor]);await db.query('insert into editorial_single_editor_authorizations values($1,null)',[editor]);
+ await db.query("insert into events values($1,'LIVE_REAL',null,now(),now())",[event]);await db.query("insert into articles values($1,$2,'LIVE_REAL')",[article,event]);
+ await db.query("insert into prior_extractions values($1,'La cita anterior.')",[article]);
+ await db.query("insert into live_semantic_event_group_candidates values($1,'hecho')",[group]);await db.query('insert into live_semantic_joint_scope_attempts values($1,$2)',[attempt,group]);
+ await db.query("insert into live_semantic_joint_scope_outcomes values($1,'VALIDATED',$2::jsonb)",[attempt,JSON.stringify({scopeAligned:true,status:'ALIGNED'})]);
+ const quote='La cita conjunta.',start=original.indexOf(quote);
+ await db.query("insert into live_semantic_joint_claims values($1,$2,$3,'left','hash',$4,$5,$6,'Afirmación conjunta')",[left,attempt,article,quote,start,start+quote.length]);
+ await db.query("insert into live_semantic_joint_claims values($1,$2,$3,'right','hash',$4,$5,$6,'Afirmación conjunta')",[right,attempt,article,quote,start,start+quote.length]);
+ await db.query("insert into live_semantic_excerpt_inputs values($1,'hash',$2,'Titular','https://ejemplo.cl')",[article,original]);
+ await db.query("insert into live_semantic_joint_editorial_decisions values($1,$2,$3,$4,$5,'Revisión editorial válida',false,now())",[attempt,left,right,editor,corr]);
+ await db.query("select set_config('dialektik.actor_type','editor',false)");
+ const out=await db.query('select public.dialektik_materialize_joint_claim($1,$2,$3,$4) as result',[left,event,editor,corr]);
+ const rows=await db.query('select s.quoted_text,s.text_offset_start,s.text_offset_end,e.summary,p.joint_claim_id from live_semantic_joint_claim_publications p join claim_spans s on s.id=p.claim_span_id join assertions a on a.id=p.assertion_id and a.claim_span_id=s.id join evidence e on e.id=p.evidence_id and e.anchor_span_id=s.id and e.scope_assertion_id=a.id');
+ assert.equal(out.rows[0].result.jointClaimId,left);assert.deepEqual(rows.rows[0],{quoted_text:quote,text_offset_start:start,text_offset_end:start+quote.length,summary:'Afirmación conjunta',joint_claim_id:left});
+ await db.query("update live_semantic_excerpt_inputs set text_original='Texto distinto'");
+ await assert.rejects(db.query('select public.dialektik_materialize_joint_claim($1,$2,$3,$4)',[right,event,editor,corr]),/JOINT_CLAIM_NOT_APPROVED_OR_STALE/);
+ }finally{await db.close()}
+});
