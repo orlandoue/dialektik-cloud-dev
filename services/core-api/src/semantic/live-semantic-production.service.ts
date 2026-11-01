@@ -29,8 +29,13 @@ import {
   LIVE_CLAIM_EXTRACTION_SCHEMA,
   LIVE_PAIR_ASSESSMENT_PROMPT,
   LIVE_PAIR_ASSESSMENT_SCHEMA,
+  LIVE_STANCE_PAIR_PROMPT,
+  LIVE_STANCE_PAIR_PROMPT_SHA256,
+  LIVE_STANCE_PAIR_VERSION,
+  LIVE_CASE_PAIR_VERSION,
   groundLiveClaims,
   validateLivePairAssessment,
+  validateLiveStancePairAssessment,
 } from "./live-semantic-production.contract.js";
 
 const MODEL = CLOUDFLARE_JSON_MODE_MODEL;
@@ -40,6 +45,9 @@ const SEGMENTATION_VERSION = "dialektik-live-excerpt-claim-v3";
 const MAX_BATCH = 5;
 const MAX_PAIR_ASSESSMENTS = 20;
 const MAX_CLAIM_PAIR_ASSESSMENTS = 95;
+const MAX_STANCE_PAIR_ASSESSMENTS = 8;
+const MAX_CASE_PAIR_ASSESSMENTS = 5;
+const MAX_ORIGINAL_CLAIM_PAIR_ASSESSMENTS = 12;
 const THRESHOLD_RULE =
   "review-only:same-event>=70;conflict>=50/comparable>=60;divergence>=50/comparable>=60";
 
@@ -76,6 +84,8 @@ interface ProposalRow {
   headline: string;
   publishedAt: Date;
   generationId: string;
+  eventId: string | null;
+  textOriginal: string;
   span: Record<string, unknown> | null;
 }
 
@@ -107,6 +117,18 @@ interface ReviewGroupRow {
 
 function sha256(value: string): string {
   return createHash("sha256").update(value, "utf8").digest("hex");
+}
+
+function stanceConfigSha256(extractionConfig: string): string {
+  if (sha256(LIVE_STANCE_PAIR_PROMPT) !== LIVE_STANCE_PAIR_PROMPT_SHA256)
+    throw new Error("LIVE_SEMANTIC_STANCE_PROMPT_VERSION_MISMATCH");
+  return sha256(`${extractionConfig}\n${LIVE_STANCE_PAIR_VERSION}`);
+}
+
+function caseConfigSha256(extractionConfig: string): string {
+  if (sha256(LIVE_STANCE_PAIR_PROMPT) !== LIVE_STANCE_PAIR_PROMPT_SHA256)
+    throw new Error("LIVE_SEMANTIC_STANCE_PROMPT_VERSION_MISMATCH");
+  return sha256(`${extractionConfig}\n${LIVE_CASE_PAIR_VERSION}`);
 }
 
 function safeDatabaseErrorCode(error: unknown): string | null {
@@ -311,6 +333,7 @@ export class LiveSemanticProductionService {
     const profile = this.config();
     let extractionTransport: CloudflareWorkersAITransport;
     let pairTransport: CloudflareWorkersAITransport;
+    let stanceTransport: CloudflareWorkersAITransport;
     try {
       extractionTransport = new CloudflareWorkersAITransport(
         profile,
@@ -323,6 +346,12 @@ export class LiveSemanticProductionService {
         undefined,
         process.env,
         LIVE_PAIR_ASSESSMENT_PROMPT,
+      );
+      stanceTransport = new CloudflareWorkersAITransport(
+        profile,
+        undefined,
+        process.env,
+        LIVE_STANCE_PAIR_PROMPT,
       );
     } catch {
       throw new ServiceUnavailableException(
@@ -363,9 +392,10 @@ export class LiveSemanticProductionService {
       pairAssessmentCount = await this.assessCurrentGroups(
         connection,
         runId,
+        requestedBy,
         targetDay,
         configSha,
-        pairTransport,
+        stanceTransport,
       );
       const claimPairAssessment = await this.assessGroupClaims(
         connection,
@@ -373,6 +403,9 @@ export class LiveSemanticProductionService {
         targetDay,
         configSha,
         pairTransport,
+      );
+      const stanceAssessment = await this.reassessClaimPairs(
+        connection, runId, requestedBy, targetDay, configSha, stanceTransport,
       );
       const processed = outcomes.filter((item) =>
         ["VALIDATED", "NO_CLAIM_WORTHY_CONTENT"].includes(item.outcome),
@@ -387,12 +420,13 @@ export class LiveSemanticProductionService {
       }>`
         select count(distinct g.id)::int as "eventGroups",
           count(distinct p.id) filter(where p.relation='CONTRADICTORY'
-            and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "conflictCandidates",
+            and p.ratio_conflicting>=55 and p.ratio_comparable>=60)::int as "conflictCandidates",
           count(distinct p.id) filter(where p.relation='DIVERGENT'
-            and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "divergentCandidates"
+            and p.ratio_conflicting between 35 and 54 and p.ratio_comparable>=60)::int as "divergentCandidates"
         from public.live_semantic_event_group_candidates g
         join public.live_semantic_event_group_members m on m.group_id=g.id
         left join public.live_semantic_claim_pair_assessments p on p.group_id=g.id and p.same_event
+          and p.config_sha256=${stanceConfigSha256(configSha)}
         where g.target_day=${targetDay}::date and g.config_sha256=${configSha}
           and not exists(select 1 from public.live_semantic_editorial_decisions decision where decision.group_id=g.id)
       `.execute(connection);
@@ -422,6 +456,7 @@ export class LiveSemanticProductionService {
         pairAssessments: pairAssessmentCount,
         claimPairAssessments: claimPairAssessment.count,
         claimPairAssessmentLimitReached: claimPairAssessment.limitReached,
+        stanceReassessment: stanceAssessment,
         windowDays: 2,
         eventGroupsForReview: reviewCounts.rows[0]?.eventGroups ?? 0,
         contradictionCandidatesForReview:
@@ -434,6 +469,7 @@ export class LiveSemanticProductionService {
     } finally {
       extractionTransport.dispose?.();
       pairTransport.dispose?.();
+      stanceTransport.dispose?.();
     }
   }
 
@@ -633,6 +669,7 @@ export class LiveSemanticProductionService {
   private async assessCurrentGroups(
     connection: Kysely<Database>,
     runId: string,
+    requestedBy: string,
     targetDay: string,
     configSha: string,
     transport: CloudflareWorkersAITransport,
@@ -640,6 +677,7 @@ export class LiveSemanticProductionService {
     const result = await sql<ProposalRow>`
       select i.article_id as "articleId",i.source_id as "sourceId",i.source_name as "sourceName",
         i.url_canonical as "canonicalUrl",i.headline,i.published_at as "publishedAt",
+        i.event_id as "eventId",i.text_original as "textOriginal",
         g.id::text as "generationId",g.proposal_payload->'spans'->0 as span
       from public.live_semantic_excerpt_inputs i
       join lateral(select generation.* from public.assertion_extraction_generations generation
@@ -667,21 +705,23 @@ export class LiveSemanticProductionService {
       targetDay,
     );
     const proposalById = new Map(proposals.map((row) => [row.articleId, row]));
+    const caseConfig = caseConfigSha256(configSha);
     let assessments = 0;
     for (const pair of pairs) {
-      if (assessments >= MAX_PAIR_ASSESSMENTS) break;
+      if (assessments >= MAX_CASE_PAIR_ASSESSMENTS) break;
       const left = proposalById.get(pair.left.articleId);
       const right = proposalById.get(pair.right.articleId);
       if (!left || !right || !left.span || !right.span) continue;
+      if (left.eventId !== null && left.eventId === right.eventId) continue;
       const existing = await sql<{ exists: boolean }>`select exists(
-        select 1 from public.live_semantic_pair_assessments
+        select 1 from public.live_semantic_case_pair_attempts
         where left_article_id=${left.articleId}::dialektik_ulid
           and right_article_id=${right.articleId}::dialektik_ulid
-          and config_sha256=${configSha}) as exists`.execute(connection);
+          and config_sha256=${caseConfig}) as exists`.execute(connection);
       if (existing.rows[0]?.exists) continue;
       const leftSpan = left.span;
       const rightSpan = right.span;
-      const groupKey = sha256(`${targetDay}\n${pair.clusterKey}\n${configSha}`);
+      const groupKey = sha256(`${targetDay}\n${pair.clusterKey}\n${caseConfig}`);
       const eventKey = normalizedEventKey(String(leftSpan.event_key ?? rightSpan.event_key ?? pair.clusterKey));
       const eventTitle = String(leftSpan.event_title || rightSpan.event_title || left.headline).slice(0, 240);
       const eventSummary = String(leftSpan.event_summary || rightSpan.event_summary || left.headline).slice(0, 500);
@@ -699,10 +739,29 @@ export class LiveSemanticProductionService {
         limit 1`.execute(connection);
       if (!group.rows[0]) continue;
       const groupId = group.rows[0].id;
+      const attemptId = generateUlid({ now: Date.now });
+      const attempt = await sql<{ id: string }>`insert into public.live_semantic_case_pair_attempts
+        (id,group_id,left_article_id,right_article_id,run_id,config_sha256,requested_by,requested_at)
+        values (${attemptId},${groupId}::dialektik_ulid,${left.articleId}::dialektik_ulid,${right.articleId}::dialektik_ulid,
+          ${runId}::dialektik_ulid,${caseConfig},${requestedBy}::dialektik_ulid,${new Date().toISOString()})
+        on conflict(left_article_id,right_article_id,config_sha256) do nothing returning id::text as id`.execute(connection);
+      if (!attempt.rows[0]) continue;
       assessments += 1;
+      const recordOutcome = async (outcome: string, assessmentId: string | null = null) => {
+        await sql`insert into public.live_semantic_case_pair_outcomes(attempt_id,outcome,assessment_id,recorded_at)
+          values (${attemptId}::dialektik_ulid,${outcome},${assessmentId}::dialektik_ulid,${new Date().toISOString()})`.execute(connection);
+      };
+      const literal = (span: Record<string, unknown>, text: string) =>
+        typeof span.quoted_text === "string" && Number.isInteger(span.start) && Number.isInteger(span.end) &&
+        Array.from(text).slice(Number(span.start), Number(span.end)).join("") === span.quoted_text;
+      if (!literal(leftSpan, left.textOriginal) || !literal(rightSpan, right.textOriginal)) {
+        await recordOutcome("INVALID_MODEL_RESPONSE");
+        continue;
+      }
       let assessment;
+      let generated;
       try {
-        const generated = await transport.generate(
+        generated = await transport.generate(
           "extraction",
           {
             left: {
@@ -712,6 +771,8 @@ export class LiveSemanticProductionService {
               eventKey: leftSpan.event_key,
               eventSummary: leftSpan.event_summary,
               assertion: leftSpan.assertion_text,
+              quote: leftSpan.quoted_text,
+              excerpt: left.textOriginal,
             },
             right: {
               headline: right.headline,
@@ -720,25 +781,40 @@ export class LiveSemanticProductionService {
               eventKey: rightSpan.event_key,
               eventSummary: rightSpan.event_summary,
               assertion: rightSpan.assertion_text,
+              quote: rightSpan.quoted_text,
+              excerpt: right.textOriginal,
             },
           },
           LIVE_PAIR_ASSESSMENT_SCHEMA,
           AbortSignal.timeout(32000),
         );
-        assessment = validateLivePairAssessment(generated.output);
       } catch {
+        await recordOutcome("PROVIDER_UNAVAILABLE");
         continue;
       }
-      await sql`insert into public.live_semantic_pair_assessments
+      try {
+        assessment = validateLiveStancePairAssessment(generated.output);
+      } catch {
+        await recordOutcome("INVALID_MODEL_RESPONSE");
+        continue;
+      }
+      const assessmentId = generateUlid({ now: Date.now });
+      try {
+        await sql`insert into public.live_semantic_pair_assessments
         (id,run_id,group_id,left_article_id,right_article_id,left_extraction_generation_id,
          right_extraction_generation_id,same_event,relation,ratio_conflicting,ratio_comparable,same_event_confidence,
          threshold_rule,provider_type,model_id,config_sha256,created_at)
-        values (${generateUlid({ now: Date.now })},${runId}::dialektik_ulid,
+        values (${assessmentId},${runId}::dialektik_ulid,
           ${groupId}::dialektik_ulid,${left.articleId}::dialektik_ulid,${right.articleId}::dialektik_ulid,
           ${left.generationId}::dialektik_ulid,${right.generationId}::dialektik_ulid,${assessment.sameEvent},
           ${assessment.relation},${assessment.ratioConflicting},${assessment.ratioComparable},
-          ${assessment.sameEventConfidence},${THRESHOLD_RULE},${PROVIDER},${MODEL},${configSha},
-          ${new Date().toISOString()}) on conflict(left_article_id,right_article_id,config_sha256) do nothing`.execute(connection);
+          ${assessment.sameEventConfidence},'case-v1:editorial-review',${PROVIDER},${MODEL},${caseConfig},
+          ${new Date().toISOString()})`.execute(connection);
+        await recordOutcome("VALIDATED", assessmentId);
+      } catch {
+        await recordOutcome("PERSISTENCE_FAILED");
+        continue;
+      }
       if (canJoinSemanticEventGroup(assessment)) {
         const existingMembers = await sql<{ articleId: string }>`select article_id::text as "articleId"
           from public.live_semantic_event_group_members where group_id=${groupId}::dialektik_ulid
@@ -748,7 +824,7 @@ export class LiveSemanticProductionService {
           rightArticleId: string;
         }>`select left_article_id::text as "leftArticleId",right_article_id::text as "rightArticleId"
           from public.live_semantic_pair_assessments where group_id=${groupId}::dialektik_ulid
-            and config_sha256=${configSha} and same_event and same_event_confidence>=70`.execute(connection);
+            and config_sha256=${caseConfig} and same_event and same_event_confidence>=70`.execute(connection);
         const confirmedPairs = new Set(
           confirmedRows.rows.map((row) => `${row.leftArticleId}\n${row.rightArticleId}`),
         );
@@ -804,6 +880,7 @@ export class LiveSemanticProductionService {
       groups.set(row.groupId, group);
     }
     let count = 0;
+    let attempted = 0;
     for (const [groupId, articles] of groups) {
       const claims = articles.flatMap((article) =>
         (Array.isArray(article.spans) ? article.spans : []).flatMap((span, index) =>
@@ -816,7 +893,7 @@ export class LiveSemanticProductionService {
         for (let rightIndex = leftIndex + 1; rightIndex < claims.length; rightIndex += 1) {
           const left = claims[leftIndex]!;
           const right = claims[rightIndex]!;
-          if (count >= MAX_CLAIM_PAIR_ASSESSMENTS)
+          if (attempted >= MAX_ORIGINAL_CLAIM_PAIR_ASSESSMENTS)
             return { count, limitReached: true };
           const exists = await sql<{ present: boolean }>`select exists(
             select 1 from public.live_semantic_claim_pair_assessments
@@ -827,6 +904,7 @@ export class LiveSemanticProductionService {
               and right_claim_ordinal=${right.ordinal}
               and config_sha256=${configSha}) as present`.execute(connection);
           if (exists.rows[0]?.present) continue;
+          attempted += 1;
           let assessment;
           try {
             const generated = await transport.generate(
@@ -886,6 +964,110 @@ export class LiveSemanticProductionService {
     return { count, limitReached: false };
   }
 
+  private async reassessClaimPairs(
+    connection: Kysely<Database>, runId: string, requestedBy: string, targetDay: string,
+    configSha: string, transport: CloudflareWorkersAITransport,
+  ): Promise<{ attempted: number; validated: number; invalid: number; unavailable: number }> {
+    type Input = {
+      id: string; groupId: string; leftArticleId: string; rightArticleId: string;
+      leftOrdinal: number; rightOrdinal: number; leftGenerationId: string; rightGenerationId: string;
+      leftHeadline: string | null; rightHeadline: string | null; leftSource: string | null; rightSource: string | null;
+      leftText: string | null; rightText: string | null; leftSpan: Record<string, unknown> | null; rightSpan: Record<string, unknown> | null;
+    };
+    const stanceConfig = stanceConfigSha256(configSha);
+    const rows = await sql<Input>`with pending as materialized (
+        select old.* from public.live_semantic_claim_pair_assessments old
+        join public.live_semantic_event_group_candidates group_row on group_row.id=old.group_id
+        where group_row.target_day=${targetDay}::date and group_row.config_sha256=${configSha}
+          and old.config_sha256=${configSha}
+          and not exists(select 1 from public.live_semantic_stance_pair_attempts attempt
+            where attempt.original_pair_id=old.id and attempt.config_sha256=${stanceConfig})
+        order by old.created_at,old.id limit ${MAX_STANCE_PAIR_ASSESSMENTS}
+      ) select old.id::text as id,old.group_id::text as "groupId",
+        old.left_article_id::text as "leftArticleId",old.right_article_id::text as "rightArticleId",
+        old.left_claim_ordinal as "leftOrdinal",old.right_claim_ordinal as "rightOrdinal",
+        old.left_extraction_generation_id::text as "leftGenerationId",old.right_extraction_generation_id::text as "rightGenerationId",
+        left_input.headline as "leftHeadline",right_input.headline as "rightHeadline",
+        left_input.source_name as "leftSource",right_input.source_name as "rightSource",
+        left_input.text_original as "leftText",right_input.text_original as "rightText",
+        left_generation.proposal_payload->'spans'->(old.left_claim_ordinal-1) as "leftSpan",
+        right_generation.proposal_payload->'spans'->(old.right_claim_ordinal-1) as "rightSpan"
+      from pending old
+      join public.assertion_extraction_generations left_generation on left_generation.id=old.left_extraction_generation_id
+      join public.assertion_extraction_generations right_generation on right_generation.id=old.right_extraction_generation_id
+      left join lateral (select input.* from public.live_semantic_excerpt_inputs input
+        where input.article_id=old.left_article_id::text and input.input_sha256=left_generation.input_hash
+          and left_generation.state='active' limit 1) left_input on true
+      left join lateral (select input.* from public.live_semantic_excerpt_inputs input
+        where input.article_id=old.right_article_id::text and input.input_sha256=right_generation.input_hash
+          and right_generation.state='active' limit 1) right_input on true
+      order by old.created_at,old.id`.execute(connection);
+    const totals = { attempted: 0, validated: 0, invalid: 0, unavailable: 0 };
+    for (const row of rows.rows) {
+      const attemptId = generateUlid({ now: Date.now });
+      const attempt = await sql<{ id: string }>`insert into public.live_semantic_stance_pair_attempts
+        (id,original_pair_id,run_id,config_sha256,requested_by,requested_at)
+        values (${attemptId},${row.id}::dialektik_ulid,${runId}::dialektik_ulid,${stanceConfig},
+          ${requestedBy}::dialektik_ulid,${new Date().toISOString()})
+        on conflict(original_pair_id,config_sha256) do nothing returning id::text as id`.execute(connection);
+      if (!attempt.rows[0]) continue;
+      totals.attempted += 1;
+      const recordOutcome = async (outcome: string, assessmentId: string | null = null) => {
+        await sql`insert into public.live_semantic_stance_pair_outcomes(attempt_id,outcome,assessment_id,recorded_at)
+          values (${attemptId}::dialektik_ulid,${outcome},${assessmentId}::dialektik_ulid,${new Date().toISOString()})`.execute(connection);
+      };
+      if (row.leftText === null || row.rightText === null || row.leftSpan === null || row.rightSpan === null) {
+        totals.unavailable += 1;
+        await recordOutcome("INPUT_UNAVAILABLE");
+        continue;
+      }
+      const literal = (span: Record<string, unknown>, text: string) =>
+        typeof span.quoted_text === "string" && Number.isInteger(span.start) && Number.isInteger(span.end) &&
+        Array.from(text).slice(Number(span.start), Number(span.end)).join("") === span.quoted_text;
+      if (!literal(row.leftSpan, row.leftText) || !literal(row.rightSpan, row.rightText)) {
+        totals.invalid += 1;
+        await recordOutcome("INVALID_MODEL_RESPONSE");
+        continue;
+      }
+      let output: unknown;
+      try {
+        output = (await transport.generate("extraction", {
+          left: { headline: row.leftHeadline, sourceName: row.leftSource, quote: row.leftSpan.quoted_text, excerpt: row.leftText },
+          right: { headline: row.rightHeadline, sourceName: row.rightSource, quote: row.rightSpan.quoted_text, excerpt: row.rightText },
+        }, LIVE_PAIR_ASSESSMENT_SCHEMA, AbortSignal.timeout(32000))).output;
+      } catch {
+        totals.unavailable += 1;
+        await recordOutcome("PROVIDER_UNAVAILABLE");
+        continue;
+      }
+      let assessment;
+      try { assessment = validateLiveStancePairAssessment(output); }
+      catch {
+        totals.invalid += 1;
+        await recordOutcome("INVALID_MODEL_RESPONSE");
+        continue;
+      }
+      const assessmentId = generateUlid({ now: Date.now });
+      try {
+        await sql`insert into public.live_semantic_claim_pair_assessments
+          (id,run_id,group_id,left_article_id,left_claim_ordinal,right_article_id,right_claim_ordinal,
+           left_extraction_generation_id,right_extraction_generation_id,same_event,relation,ratio_conflicting,
+           ratio_comparable,same_event_confidence,threshold_rule,provider_type,model_id,config_sha256,created_at)
+          values (${assessmentId},${runId}::dialektik_ulid,${row.groupId}::dialektik_ulid,
+            ${row.leftArticleId}::dialektik_ulid,${row.leftOrdinal},${row.rightArticleId}::dialektik_ulid,${row.rightOrdinal},
+            ${row.leftGenerationId}::dialektik_ulid,${row.rightGenerationId}::dialektik_ulid,${assessment.sameEvent},
+            ${assessment.relation},${assessment.ratioConflicting},${assessment.ratioComparable},${assessment.sameEventConfidence},
+            'stance-v1:contradictory>=55;divergent=35..54;comparable>=60;editor-review',${PROVIDER},${MODEL},${stanceConfig},${new Date().toISOString()})`.execute(connection);
+        await recordOutcome("VALIDATED", assessmentId);
+        totals.validated += 1;
+      } catch {
+        await recordOutcome("PERSISTENCE_FAILED");
+        totals.invalid += 1;
+      }
+    }
+    return totals;
+  }
+
   async listReview(authorization: string | undefined, rawDay: unknown) {
     this.ensureEnabled();
     await this.reviews.authorizeEditor(authorization);
@@ -942,9 +1124,9 @@ export class LiveSemanticProductionService {
         g.proposed_title as "proposedTitle",g.proposed_summary as "proposedSummary",
         count(distinct m.article_id)::int as "articleCount",count(distinct m.source_id)::int as "sourceCount",
         count(distinct p.id) filter(where p.same_event and p.relation='CONTRADICTORY'
-          and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "contradictionCount",
+          and p.ratio_conflicting>=55 and p.ratio_comparable>=60)::int as "contradictionCount",
         count(distinct p.id) filter(where p.same_event and p.relation='DIVERGENT'
-          and p.ratio_conflicting>=50 and p.ratio_comparable>=60)::int as "divergentCount",g.created_at as "createdAt",
+          and p.ratio_conflicting between 35 and 54 and p.ratio_comparable>=60)::int as "divergentCount",g.created_at as "createdAt",
         (select decision.decision from public.live_semantic_editorial_decisions decision
           where decision.group_id=g.id) as "editorialDecision",
         (select decision.reason from public.live_semantic_editorial_decisions decision
@@ -952,6 +1134,7 @@ export class LiveSemanticProductionService {
       from public.live_semantic_event_group_candidates g
       join public.live_semantic_event_group_members m on m.group_id=g.id
       left join public.live_semantic_claim_pair_assessments p on p.group_id=g.id
+        and p.config_sha256=${stanceConfigSha256(configSha)}
       where g.target_day=${rawDay}::date and g.config_sha256=${configSha}
       group by g.id order by g.created_at desc,g.id desc limit 50
     `.execute(database);
@@ -993,6 +1176,8 @@ export class LiveSemanticProductionService {
       ratioConflicting: number;
       ratioComparable: number;
       sameEventConfidence: number;
+      evaluationVersion: string;
+      previousRelation: string | null;
     };
     let memberRows: ReviewMember[] = [];
     let pairRows: ReviewPair[] = [];
@@ -1029,11 +1214,17 @@ export class LiveSemanticProductionService {
             right_input.source_name as "rightSourceName",right_input.headline as "rightHeadline",
             pair.same_event as "sameEvent",pair.relation,
             pair.ratio_conflicting as "ratioConflicting",pair.ratio_comparable as "ratioComparable",
-            pair.same_event_confidence as "sameEventConfidence"
+            pair.same_event_confidence as "sameEventConfidence",
+            case when pair.config_sha256=${configSha} then 'ORIGINAL' else ${LIVE_STANCE_PAIR_VERSION} end as "evaluationVersion",
+            (select original.relation from public.live_semantic_claim_pair_assessments original
+              where original.group_id=pair.group_id and original.left_article_id=pair.left_article_id
+                and original.right_article_id=pair.right_article_id and original.left_claim_ordinal=pair.left_claim_ordinal
+                and original.right_claim_ordinal=pair.right_claim_ordinal and original.config_sha256=${configSha}
+              limit 1) as "previousRelation"
           from public.live_semantic_claim_pair_assessments pair
           join public.live_semantic_excerpt_inputs left_input on left_input.article_id=pair.left_article_id::text
           join public.live_semantic_excerpt_inputs right_input on right_input.article_id=pair.right_article_id::text
-          where pair.group_id in (${groupIdFilter}) and pair.config_sha256=${configSha}
+          where pair.group_id in (${groupIdFilter}) and pair.config_sha256 in (${configSha},${stanceConfigSha256(configSha)})
           order by pair.group_id,pair.left_article_id,pair.left_claim_ordinal,
             pair.right_article_id,pair.right_claim_ordinal`.execute(database),
       ]);
@@ -1063,8 +1254,11 @@ export class LiveSemanticProductionService {
       ...group,
       members: membersByGroup.get(group.id) ?? [],
       pairAssessments: pairsByGroup.get(group.id) ?? [],
-      claimPairAssessments: claimPairsByGroup.get(group.id) ?? [],
+      claimPairAssessments: (claimPairsByGroup.get(group.id) ?? []).filter((pair) => pair.evaluationVersion === "ORIGINAL"),
+      stancePairAssessments: (claimPairsByGroup.get(group.id) ?? []).filter((pair) => pair.evaluationVersion === LIVE_STANCE_PAIR_VERSION),
     }));
+    const originalPairs = claimPairRows.filter((pair) => pair.evaluationVersion === "ORIGINAL");
+    const stancePairs = claimPairRows.filter((pair) => pair.evaluationVersion === LIVE_STANCE_PAIR_VERSION);
     return {
       targetDay: rawDay,
       windowDays: 2,
@@ -1083,10 +1277,18 @@ export class LiveSemanticProductionService {
         groups: details.length,
         pendingGroups: details.filter((group) => group.editorialDecision === null).length,
         claimPairAssessments: {
-          consistent: claimPairRows.filter((pair) => pair.relation === "CONSISTENT").length,
-          divergent: claimPairRows.filter((pair) => pair.relation === "DIVERGENT").length,
-          contradictory: claimPairRows.filter((pair) => pair.relation === "CONTRADICTORY").length,
-          notComparable: claimPairRows.filter((pair) => pair.relation === "NOT_COMPARABLE").length,
+          consistent: originalPairs.filter((pair) => pair.relation === "CONSISTENT").length,
+          divergent: originalPairs.filter((pair) => pair.relation === "DIVERGENT").length,
+          contradictory: originalPairs.filter((pair) => pair.relation === "CONTRADICTORY").length,
+          notComparable: originalPairs.filter((pair) => pair.relation === "NOT_COMPARABLE").length,
+        },
+        stancePairAssessments: {
+          consistent: stancePairs.filter((pair) => pair.relation === "CONSISTENT").length,
+          divergent: stancePairs.filter((pair) => pair.relation === "DIVERGENT").length,
+          contradictory: stancePairs.filter((pair) => pair.relation === "CONTRADICTORY").length,
+          notComparable: stancePairs.filter((pair) => pair.relation === "NOT_COMPARABLE").length,
+          changedToDivergent: stancePairs.filter((pair) => pair.relation === "DIVERGENT" && ["CONSISTENT", "NOT_COMPARABLE"].includes(pair.previousRelation ?? "")).length,
+          changedToContradictory: stancePairs.filter((pair) => pair.relation === "CONTRADICTORY" && ["CONSISTENT", "NOT_COMPARABLE"].includes(pair.previousRelation ?? "")).length,
         },
         contradictionCandidates: details.reduce(
           (total, group) => total + (group.editorialDecision === null ? group.contradictionCount : 0),
@@ -1140,6 +1342,37 @@ export class LiveSemanticProductionService {
     } catch (error) {
       if (error instanceof ModerationHttpError || error instanceof ConflictException)
         throw error;
+      throw semanticPromotionDatabaseError(error, "transaction");
+    }
+  }
+
+  async attach(authorization: string | undefined, raw: unknown) {
+    this.ensureEnabled();
+    const identity = await this.reviews.authorizeEditor(authorization);
+    const decision = parseSemanticPromotionDecision(raw);
+    const commandId = generateUlid({ now: Date.now });
+    try {
+      return await this.moderationWriter.database.transaction().execute(async (transaction) => {
+        await setTransactionAuditContext(transaction, {
+          action: "moderation_decision", actorId: identity.userId, actorType: "editor",
+          correlationId: commandId, reasonCode: "live_semantic_editorial_attachment",
+          metadata: { semantic_group_id: decision.groupId },
+        });
+        await sql`select public.dialektik_record_live_semantic_editorial_decision(
+          ${decision.groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid,
+          'APPROVED',${decision.reason},${decision.title},${JSON.stringify(decision.claims)}::jsonb,
+          ${JSON.stringify(decision.approvedConflictPairIds)}::jsonb
+        )`.execute(transaction);
+        const result = await sql<{ result: Record<string, unknown> }>`
+          select public.dialektik_attach_live_semantic_article(
+            ${decision.groupId}::dialektik_ulid,${identity.userId}::dialektik_ulid,${commandId}::dialektik_ulid
+          ) as result`.execute(transaction);
+        if (result.rows[0]?.result?.status !== "ATTACHED")
+          throw new ConflictException("SEMANTIC_ATTACHMENT_REQUIRES_FURTHER_EDITORIAL_REVIEW");
+        return result.rows[0].result;
+      });
+    } catch (error) {
+      if (error instanceof ModerationHttpError || error instanceof ConflictException) throw error;
       throw semanticPromotionDatabaseError(error, "transaction");
     }
   }

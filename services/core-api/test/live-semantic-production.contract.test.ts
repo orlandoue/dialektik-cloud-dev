@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import {
   groundLiveClaim,
   groundLiveClaims,
   validateLivePairAssessment,
+  validateLiveStancePairAssessment,
+  LIVE_STANCE_PAIR_PROMPT,
+  LIVE_STANCE_PAIR_PROMPT_SHA256,
 } from "../src/semantic/live-semantic-production.contract.js";
 
 const claim = (quotedText: string) => ({
@@ -102,5 +106,19 @@ describe("live semantic production grounding", () => {
       ratioConflicting: 65,
       ratioComparable: 80,
     });
+  });
+
+  it("enforces distinct comparable ranges for stance divergence and contradiction", () => {
+    const pair = { sameEvent: true, sameEventConfidence: 80, relation: "DIVERGENT", ratioConflicting: 40, ratioComparable: 75 };
+    expect(validateLiveStancePairAssessment(pair)).toEqual(pair);
+    expect(() => validateLiveStancePairAssessment({ ...pair, ratioConflicting: 55 })).toThrow();
+    expect(() => validateLiveStancePairAssessment({ ...pair, relation: "CONTRADICTORY", ratioConflicting: 54 })).toThrow();
+    expect(validateLiveStancePairAssessment({ ...pair, relation: "CONTRADICTORY", ratioConflicting: 55 }).relation).toBe("CONTRADICTORY");
+    expect(() => validateLiveStancePairAssessment({ ...pair, ratioComparable: 59 })).toThrow();
+    expect(() => validateLiveStancePairAssessment({ ...pair, relation: "NOT_COMPARABLE", ratioComparable: 80 })).toThrow();
+  });
+
+  it("binds the stance prompt to its declared version fingerprint", () => {
+    expect(createHash("sha256").update(LIVE_STANCE_PAIR_PROMPT).digest("hex")).toBe(LIVE_STANCE_PAIR_PROMPT_SHA256);
   });
 });

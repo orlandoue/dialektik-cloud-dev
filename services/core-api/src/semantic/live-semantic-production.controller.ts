@@ -32,6 +32,14 @@ export class LiveSemanticProductionController {
     return this.service.promote(authorization, body);
   }
 
+  @Post("attach")
+  attach(
+    @Headers("authorization") authorization: string | undefined,
+    @Body() body: unknown,
+  ) {
+    return this.service.attach(authorization, body);
+  }
+
   @Post("reject")
   reject(
     @Headers("authorization") authorization: string | undefined,

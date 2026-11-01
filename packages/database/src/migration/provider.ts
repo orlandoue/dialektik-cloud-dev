@@ -73,6 +73,8 @@ import { corporateLiveRightsGuardLockMigration } from './072_corporate_live_righ
 import { normalizeCorporateLiveRegistryKeysMigration } from './073_normalize_corporate_live_registry_keys';
 import { qualifyEphemeralArticleGuardDigestMigration } from './074_qualify_ephemeral_article_guard_digest';
 import { liveSemanticEditorialDecisionsMigration } from './075_live_semantic_editorial_decisions';
+import { liveStanceReassessmentMigration } from './076_live_stance_reassessment';
+import { liveSemanticEventAttachmentMigration } from './077_live_semantic_event_attachment';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -127,6 +129,8 @@ const migrations: Readonly<Record<string, Migration>> = {
   '073_normalize_corporate_live_registry_keys': normalizeCorporateLiveRegistryKeysMigration,
   '074_qualify_ephemeral_article_guard_digest': qualifyEphemeralArticleGuardDigestMigration,
   '075_live_semantic_editorial_decisions': liveSemanticEditorialDecisionsMigration,
+  '076_live_stance_reassessment': liveStanceReassessmentMigration,
+  '077_live_semantic_event_attachment': liveSemanticEventAttachmentMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,
