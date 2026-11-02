@@ -672,7 +672,9 @@ export class PublicApiRepository {
       select
         publication.id,
         publication.event_id,
-        event_row.title_descriptive as event_title,
+        case when publication.threshold_rule_at_publication='v1:editorial_focus_contrast'
+          then 'Contraste de enfoques: ' || event_row.title_descriptive
+          else event_row.title_descriptive end as event_title,
         position_a.id as position_a_id,
         position_a.neutral_rank as position_a_ordinal,
         position_a.title_text as position_a_title,
