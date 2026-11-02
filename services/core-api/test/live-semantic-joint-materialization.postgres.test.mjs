@@ -46,6 +46,9 @@ test('joint claim B is materialized with its own provenance, never prior claim A
  await db.query("update live_semantic_joint_scope_outcomes set result=jsonb_set(result,'{scopeAligned}','false')");
  await assert.rejects(decide(),/JOINT_SCOPE_OR_CLAIMS_INVALID/);
  await db.query("update live_semantic_joint_scope_outcomes set result=jsonb_set(result,'{scopeAligned}','true')");
+ await db.query("update live_semantic_joint_scope_outcomes set result=result-'ratioConflicting'");
+ await assert.rejects(decide(),/JOINT_CONFLICT_NOT_ELIGIBLE/);
+ await db.query("update live_semantic_joint_scope_outcomes set result=jsonb_set(result,'{ratioConflicting}','80')");
  await db.query("update live_semantic_excerpt_inputs set text_original='Texto distinto' where article_id=$1",[article]);
  await assert.rejects(decide(),/JOINT_SCOPE_OR_CLAIMS_INVALID/);
  await db.query('update live_semantic_excerpt_inputs set text_original=$2 where article_id=$1',[article,original]);

@@ -35,8 +35,8 @@ begin
     and public.dialektik_live_semantic_route_allowed(l.article_id,l.input_sha256,'llm_cloudflare_workers_ai','@cf/meta/llama-3.1-8b-instruct')
     and public.dialektik_live_semantic_route_allowed(r.article_id,r.input_sha256,'llm_cloudflare_workers_ai','@cf/meta/llama-3.1-8b-instruct');
   if not found then raise exception using errcode='23514',message='JOINT_SCOPE_OR_CLAIMS_INVALID'; end if;
-  if approve_conflict and not (pair_row.result->>'relation'='CONTRADICTORY'
-      and (pair_row.result->>'ratioConflicting')::integer>=55 and (pair_row.result->>'ratioComparable')::integer>=70)
+  if approve_conflict and (pair_row.result->>'relation'='CONTRADICTORY'
+      and (pair_row.result->>'ratioConflicting')::integer>=55 and (pair_row.result->>'ratioComparable')::integer>=70) is not true
     then raise exception using errcode='23514',message='JOINT_CONFLICT_NOT_ELIGIBLE'; end if;
   insert into public.live_semantic_joint_editorial_decisions
     (attempt_id,left_claim_id,right_claim_id,editor_user_id,correlation_id,reason,conflict_approved)
