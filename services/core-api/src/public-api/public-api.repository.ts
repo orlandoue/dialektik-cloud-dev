@@ -72,6 +72,13 @@ export interface PublicAssertionRow {
   readonly source_type: string;
 }
 
+export interface EventCoverageRow {
+  readonly position_id: string; readonly position_title: string;
+  readonly assertion_id: string; readonly assertion_text: string; readonly quoted_text: string;
+  readonly article_id: string; readonly article_title: string; readonly url: string;
+  readonly published_at: Date; readonly source_name: string;
+}
+
 export interface AttributionRow {
   readonly span_id: string;
   readonly order: number;
@@ -505,6 +512,42 @@ export class PublicApiRepository {
     return result.rows;
   }
 
+  public async listEventCoverage(eventId: string): Promise<readonly EventCoverageRow[]> {
+    const result = await sql<EventCoverageRow>`
+      select p.id::text as position_id,p.title_text as position_title,a.id::text as assertion_id,
+        ev.summary as assertion_text,span.quoted_text,article.id::text as article_id,
+        version.headline as article_title,article.url_canonical as url,
+        article.published_at,source.name as source_name
+      from public.positions p
+      join public.assertions a on a.position_id=p.id and a.lifecycle_state='active'
+        and not exists(select 1 from public.assertions successor where successor.supersedes_id=a.id)
+      join public.claim_spans span on span.id=a.claim_span_id and span.tombstone_id is null
+      join public.articles article on article.id=span.article_id and article.event_id=p.event_id and article.origin='LIVE_REAL'
+      join public.sources source on source.id=article.source_id and source.origin='LIVE_REAL'
+      join lateral (select v.* from public.live_article_versions v where v.article_id=article.id order by v.version_number desc limit 1) version on true
+      join lateral (select policy.* from public.live_source_policies policy where policy.source_id=article.source_id
+        order by policy.recorded_at desc,policy.id desc limit 1) policy on policy.active and policy.rights_class='LIVE_READY'
+        and policy.policy->>'rightsReviewStatus'='APPROVED' and nullif(policy.policy->>'authorizationReference','') is not null
+        and nullif(policy.policy->>'rightsEvidenceUrl','') is not null and nullif(policy.policy->>'endpoint','') is not null
+        and policy.policy->>'rightsEvidenceUrl' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
+        and policy.policy->>'endpoint' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
+      join lateral (select evidence.* from public.evidence evidence
+        where evidence.scope_assertion_id=a.id and evidence.anchor_span_id=span.id and evidence.publication_state='published'
+          and evidence.approved_by is not null and evidence.approved_at is not null
+          and evidence.citable_source_url=article.url_canonical
+          and not exists(select 1 from public.evidence next where next.supersedes_id=evidence.id)
+        order by evidence.approved_at desc,evidence.id desc limit 1) ev on true
+      where p.event_id=${eventId}::dialektik_ulid and p.publication_state='published' and p.status='active'
+        and exists(select 1 from public.live_acquisition_receipts receipt where receipt.source_id=article.source_id
+          and receipt.exclusion_id=article.live_exposure_id and receipt.disposition='PERSISTED')
+        and coalesce((select case when jsonb_typeof(q.policy->'quarantinedArticleIds')='array'
+          then not (q.policy->'quarantinedArticleIds' @> jsonb_build_array(article.id::text)) else false end
+          from public.live_source_policies q where q.source_id=article.source_id and q.policy ? 'quarantinedArticleIds'
+          order by q.recorded_at desc,q.id desc limit 1),true)
+      order by p.neutral_rank,source.name,article.id,a.id` .execute(this.databaseService.database);
+    return result.rows;
+  }
+
   public async listPositionAssertions(positionId: string): Promise<readonly PublicAssertionRow[]> {
     const result = await sql<PublicAssertionRow>`
       select
@@ -662,6 +705,7 @@ export class PublicApiRepository {
   public async listContradictions(input: {
     readonly cursor: PageCursor | null;
     readonly limit: number;
+    readonly eventId?: string;
   }): Promise<readonly ContradictionRow[]> {
     const cursorClause =
       input.cursor === null
@@ -693,6 +737,7 @@ export class PublicApiRepository {
       join positions position_b on position_b.id = publication.position_b_id
         and position_b.event_id = event_row.id
       where publication.publication_state in ('published', 'requires_review')
+        ${input.eventId === undefined ? sql`` : sql`and publication.event_id=${input.eventId}::dialektik_ulid`}
         and event_row.merged_into is null
         and event_row.analysis_state = 'PUBLISHED'
         and publication.confirmed_by is not null

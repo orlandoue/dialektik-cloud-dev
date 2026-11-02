@@ -164,14 +164,29 @@ export class PublicApiService {
     };
   }
 
-  public async event(id: string): Promise<PublicReadResult<EventDetailDto>> {
+  public async event(id: string, includeCoverage = false): Promise<PublicReadResult<EventDetailDto>> {
     const row = await this.#requireCurrentEvent(id);
     const primaryFacts = await this.repository.findPrimaryFacts(id);
     if (primaryFacts.length > 1) throw new TypeError('Event has more than one primary fact.');
     const primary = primaryFacts[0];
+    const coverage = includeCoverage && row.analysis_state === 'PUBLISHED'
+      ? await this.repository.listEventCoverage(id) : [];
+    const related = includeCoverage && row.analysis_state === 'PUBLISHED'
+      ? await this.repository.listContradictions({cursor:null,limit:100,eventId:id}) : [];
+    const positions = new Map<string, {id:string;title:string;assertions:{id:string;assertion_text:string;quoted_text:string;article_id:string;source_name:string}[]}>();
+    const articles = new Map<string, {id:string;title:string;source_name:string;published_at:string;url:string}>();
+    for (const item of coverage) {
+      const position=positions.get(item.position_id) ?? {id:item.position_id,title:item.position_title,assertions:[]};
+      position.assertions.push({id:item.assertion_id,assertion_text:item.assertion_text,quoted_text:item.quoted_text,article_id:item.article_id,source_name:item.source_name});
+      positions.set(item.position_id,position);
+      articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url});
+    }
     return {
       body: {
         ...eventCard(row),
+        ...(includeCoverage ? {positions:[...positions.values()],articles:[...articles.values()],
+          contrasts:related.map(item=>({id:item.id,position_a_id:item.position_a_id,position_b_id:item.position_b_id,
+            kind:item.threshold_rule==='v1:editorial_focus_contrast'?'contrast':'contradiction'}))} : {}),
         window: {
           from: iso(row.window_from),
           to: row.window_to === null ? null : iso(row.window_to),
