@@ -195,10 +195,16 @@ final class _MobileHeader extends StatelessWidget {
                     const SizedBox(width: DialektikSpacing.space1),
                   ],
                   Expanded(
-                    child: Text(
-                      'Dialektik',
-                      style: DialektikTypography.editorialBrand(
-                        color: DialektikColors.inkBlack,
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Dialektik',
+                        maxLines: 1,
+                        softWrap: false,
+                        style: DialektikTypography.editorialBrand(
+                          color: DialektikColors.inkBlack,
+                        ),
                       ),
                     ),
                   ),

@@ -11,6 +11,8 @@ import 'package:dialektik/features/consumer/presentation/widgets/event_card.dart
 import 'package:dialektik/features/consumer/presentation/widgets/filter_bar.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
 import 'package:flutter/material.dart';
+import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
+import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 
 final class FeedScreen extends StatefulWidget {
   const FeedScreen({
@@ -19,6 +21,7 @@ final class FeedScreen extends StatefulWidget {
     required this.onOpenContradictions,
     this.onOpenThreads,
     this.curatedEventPreviewLoader,
+    this.seismicRepository,
     this.navigationActions = const <Widget>[],
     super.key,
   });
@@ -28,6 +31,7 @@ final class FeedScreen extends StatefulWidget {
   final VoidCallback onOpenContradictions;
   final VoidCallback? onOpenThreads;
   final CuratedEventPreviewLoader? curatedEventPreviewLoader;
+  final SeismicObservationRepository? seismicRepository;
   final List<Widget> navigationActions;
 
   @override
@@ -114,11 +118,13 @@ final class _FeedScreenState extends State<FeedScreen> {
             FeedPhase.initial || FeedPhase.loading => _FeedListFrame(
               controller: _controller,
               preview: _editorialPreview,
+              seismicRepository: widget.seismicRepository,
               child: SystemStateView(message: strings.loading, isLoading: true),
             ),
             FeedPhase.error => _FeedListFrame(
               controller: _controller,
               preview: _editorialPreview,
+              seismicRepository: widget.seismicRepository,
               child: SystemStateView(
                 message: strings.errorForName(_controller.failure!.kind.name),
                 actionLabel: strings.retry,
@@ -128,11 +134,13 @@ final class _FeedScreenState extends State<FeedScreen> {
             FeedPhase.empty => _FeedListFrame(
               controller: _controller,
               preview: _editorialPreview,
+              seismicRepository: widget.seismicRepository,
               child: _emptyMessage(strings),
             ),
             FeedPhase.content => _FeedContent(
               controller: _controller,
               preview: _editorialPreview,
+              seismicRepository: widget.seismicRepository,
               onOpenEvent: widget.onOpenEvent,
             ),
           };
@@ -147,9 +155,11 @@ final class _FeedListFrame extends StatelessWidget {
     required this.controller,
     required this.child,
     this.preview,
+    this.seismicRepository,
   });
 
   final FeedController controller;
+  final SeismicObservationRepository? seismicRepository;
   final Widget child;
   final Widget? preview;
 
@@ -167,6 +177,10 @@ final class _FeedListFrame extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
+                if (seismicRepository case final SeismicObservationRepository seismic) ...<Widget>[
+                  ChileSeismicObservationsPanel(repository: seismic),
+                  const SizedBox(height: DialektikSpacing.space4),
+                ],
                 const _FeedHeading(),
                 const SizedBox(height: DialektikSpacing.space8),
                 FilterBar(
@@ -197,9 +211,11 @@ final class _FeedContent extends StatelessWidget {
     required this.controller,
     required this.onOpenEvent,
     this.preview,
+    this.seismicRepository,
   });
 
   final FeedController controller;
+  final SeismicObservationRepository? seismicRepository;
   final ValueChanged<String> onOpenEvent;
   final Widget? preview;
 
@@ -221,7 +237,11 @@ final class _FeedContent extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  const _FeedHeading(),
+                  if (seismicRepository case final SeismicObservationRepository seismic) ...<Widget>[
+                  ChileSeismicObservationsPanel(repository: seismic),
+                  const SizedBox(height: DialektikSpacing.space4),
+                ],
+                const _FeedHeading(),
                   const SizedBox(height: DialektikSpacing.space8),
                   FilterBar(
                     category: controller.category,

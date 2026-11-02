@@ -79,6 +79,7 @@ final class _ContradictionsScreenState extends State<ContradictionsScreen> {
                         ) ...<Widget>[
                           ContradictionCard(
                             contradiction: _controller.items[index],
+                            repository: widget.repository,
                             onOpenEvent: () => widget.onOpenEvent(
                               _controller.items[index].eventId,
                             ),
