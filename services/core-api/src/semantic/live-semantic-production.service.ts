@@ -1106,7 +1106,12 @@ export class LiveSemanticProductionService {
     const jointConfig = sha256(`${extractionConfig}\n${LIVE_JOINT_SCOPE_VERSION}\n${sha256(LIVE_JOINT_SCOPE_PROMPT)}`);
     const pairs = await sql<Pair>`select distinct g.id::text as "groupId", l.article_id::text as "leftId",r.article_id::text as "rightId",
       li.input_sha256 as "leftHash",ri.input_sha256 as "rightHash",li.text_original as "leftText",ri.text_original as "rightText",
-      li.headline as "leftHeadline",ri.headline as "rightHeadline",li.source_name as "leftSource",ri.source_name as "rightSource"
+      li.headline as "leftHeadline",ri.headline as "rightHeadline",li.source_name as "leftSource",ri.source_name as "rightSource",
+      case when lower(g.proposed_title) like '%primera b%' then 0
+        when exists(select 1 from public.live_semantic_claim_pair_assessments old
+          join public.live_semantic_stance_pair_attempts failed on failed.original_pair_id=old.id
+          join public.live_semantic_stance_pair_outcomes outcome on outcome.attempt_id=failed.id and outcome.outcome='INVALID_MODEL_RESPONSE'
+          where old.group_id=g.id and old.left_article_id=l.article_id and old.right_article_id=r.article_id) then 1 else 2 end as priority
       from public.live_semantic_event_group_candidates g
       join public.live_semantic_event_group_members l on l.group_id=g.id
       join public.live_semantic_event_group_members r on r.group_id=g.id and l.article_id<r.article_id and l.source_id<>r.source_id
@@ -1118,7 +1123,7 @@ export class LiveSemanticProductionService {
         and not exists(select 1 from public.live_semantic_joint_scope_attempts a where a.group_id=g.id
           and a.left_article_id=l.article_id and a.right_article_id=r.article_id and a.left_input_sha256=li.input_sha256
           and a.right_input_sha256=ri.input_sha256 and a.config_sha256=${jointConfig})
-      order by "groupId","leftId","rightId" limit ${maxModelCalls}`.execute(connection);
+      order by priority,"groupId","leftId","rightId" limit ${maxModelCalls}`.execute(connection);
     const totals = { attempted: 0, modelCalls: 0, validated: 0, invalidSchema: 0, invalidScope: 0, unavailable: 0, aligned: 0 };
     for (const pair of pairs.rows) {
       const attemptId = generateUlid({now:Date.now});

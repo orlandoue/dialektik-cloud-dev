@@ -14,7 +14,10 @@ test('joint review checks both grants, saves grounded result, and never resends 
     create table users(id dialektik_ulid primary key);create table articles(id dialektik_ulid primary key,text_original text);
     create schema extensions; create function extensions.digest(bytea,text) returns bytea language sql as $$ select decode(repeat('aa',32),'hex') $$;
     create table live_semantic_production_runs(id dialektik_ulid primary key);
-    create table live_semantic_event_group_candidates(id dialektik_ulid primary key,target_day date,config_sha256 text);
+    create table live_semantic_event_group_candidates(id dialektik_ulid primary key,target_day date,config_sha256 text,proposed_title text);
+    create table live_semantic_claim_pair_assessments(id dialektik_ulid primary key,group_id dialektik_ulid,left_article_id dialektik_ulid,right_article_id dialektik_ulid);
+    create table live_semantic_stance_pair_attempts(id dialektik_ulid primary key,original_pair_id dialektik_ulid);
+    create table live_semantic_stance_pair_outcomes(attempt_id dialektik_ulid,outcome text);
     create table live_semantic_event_group_members(group_id dialektik_ulid,article_id dialektik_ulid,source_id dialektik_ulid);
     create table live_semantic_pair_assessments(group_id dialektik_ulid,left_article_id dialektik_ulid,right_article_id dialektik_ulid,same_event boolean,same_event_confidence int);
     create table live_semantic_excerpt_inputs(article_id text,input_sha256 text,text_original text,headline text,source_name text);
@@ -24,7 +27,7 @@ test('joint review checks both grants, saves grounded result, and never resends 
   const hash='a'.repeat(64),left='Atacama 2026: el MOP informó 115 millones.',right='Atacama 2026: el MOP informó 130 millones.';
   await db.query('insert into users values($1);',[id(1)]);await db.query('insert into live_semantic_production_runs values($1)',[id(2)]);
   await db.query('insert into articles values($1,$3),($2,$4)',[id(3),id(4),left,right]);
-  await db.query("insert into live_semantic_event_group_candidates values($1,'2026-10-31',$2)",[id(5),hash]);
+  await db.query("insert into live_semantic_event_group_candidates values($1,'2026-10-31',$2,'Primera B')",[id(5),hash]);
   await db.query('insert into live_semantic_event_group_members values($1,$2,$4),($1,$3,$5)',[id(5),id(3),id(4),id(6),id(7)]);
   await db.query('insert into live_semantic_pair_assessments values($1,$2,$3,true,90)',[id(5),id(3),id(4)]);
   await db.query("insert into live_semantic_excerpt_inputs values($1,$3,$4,'Titular A','Fuente A'),($2,$3,$5,'Titular B','Fuente B')",[id(3),id(4),hash,left,right]);
@@ -41,5 +44,14 @@ test('joint review checks both grants, saves grounded result, and never resends 
     select $1,attempt_id,article_id,side,input_sha256,'cita alterada',char_start,char_end,assertion_text,now()
     from public.live_semantic_joint_claims where side='left'`,[id(90)]),/JOINT_CLAIM_PROVENANCE_INVALID/);
   const saved=await db.query('select outcome,result from public.live_semantic_joint_scope_outcomes');assert.equal(saved.rows[0].outcome,'VALIDATED');assert.equal(saved.rows[0].result.scopeAligned,true);
+  await db.query("insert into live_semantic_event_group_candidates values($1,'2026-10-31',$3,'Otro caso'),($2,'2026-10-31',$3,'Calendario de Primera B')",[id(20),id(21),hash]);
+  await db.query('insert into live_semantic_event_group_members values($1,$3,$5),($1,$4,$6),($2,$3,$5),($2,$4,$6)',[id(20),id(21),id(3),id(4),id(6),id(7)]);
+  await db.query('insert into live_semantic_pair_assessments values($1,$3,$4,true,90),($2,$3,$4,true,90)',[id(20),id(21),id(3),id(4)]);
+  await db.query('insert into live_semantic_claim_pair_assessments values($1,$2,$3,$4)',[id(22),id(20),id(3),id(4)]);
+  await db.query('insert into live_semantic_stance_pair_attempts values($1,$2)',[id(23),id(22)]);
+  await db.query("insert into live_semantic_stance_pair_outcomes values($1,'INVALID_MODEL_RESPONSE')",[id(23)]);
+  assert.equal((await service.assessJointScope(database,id(2),id(1),'2026-10-31',hash,transport,1)).attempted,1);
+  const priority=await db.query('select group_id from live_semantic_joint_scope_attempts where group_id in ($1,$2)',[id(20),id(21)]);
+  assert.deepEqual(priority.rows,[{group_id:id(21)}]);
  } finally {if(database)await database.destroy();await db.close()}
 });
