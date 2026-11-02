@@ -135,6 +135,7 @@ final class PublicApiClient
     PublicRequestToken? requestToken,
   }) => _get<EventDetailDto>(
     '/v1/events/${Uri.encodeComponent(eventId)}',
+    query: const {'include': 'coverage'},
     decoder: EventDetailDto.fromJson,
     refresh: refresh,
     requestToken: requestToken,

@@ -5,13 +5,11 @@ import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
 import 'package:dialektik/features/live/data/candidate_source_registry.dart';
-import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/data/registered_source_directory.dart';
-import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_vocabulary.dart';
@@ -31,6 +29,22 @@ bool isChileBetaPublisher(LiveSourceDto source) =>
 
 enum LiveDateFilter { all, today, yesterday, week }
 enum LiveNewsFormatFilter { all, press, videos }
+enum LiveNewsTopic { politica, justicia, economia, seguridad, deportes, sociedad }
+
+bool matchesLiveNewsTopic(LiveNewsItemDto item, LiveNewsTopic? topic) {
+  if (topic == null) return true;
+  final text = '${item.headline} ${item.excerpt ?? ''}'.toLowerCase();
+  final pattern = switch (topic) {
+    LiveNewsTopic.politica => r'polític|politic|gobierno|presidente|ministro|congreso|diputad|senador|elecci|alcald|partido republican',
+    LiveNewsTopic.justicia => r'justicia|judicial|tribunal|corte|juez|jueza|fiscal|condena|acusación constitucional|acusacion constitucional|querella',
+    LiveNewsTopic.economia => r'econom|inflación|inflacion|empleo|desempleo|pensión|pension|afp|banco|peso|dólar|dolar|codelco|empresa|salario|sueldo',
+    LiveNewsTopic.seguridad => r'seguridad|delito|polic|carabinero|crimen|robo|asalto|homicid|detenido|balacera|siniestro',
+    LiveNewsTopic.deportes => r'deporte|fútbol|futbol|tenis|partido|campeonato|selección|seleccion|liga|gol|jugador|atleta',
+    LiveNewsTopic.sociedad => r'sociedad|salud|educación|educacion|colegio|escuela|vivienda|familia|niñez|ninez|cultura|mujer|medio ambiente',
+  };
+  return RegExp(pattern, caseSensitive: false).hasMatch(text);
+}
+
 
 typedef LiveClock = DateTime Function();
 
@@ -86,6 +100,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   String? _sourceId;
   LiveDateFilter _date = LiveDateFilter.all;
   LiveNewsFormatFilter _format = LiveNewsFormatFilter.all;
+  LiveNewsTopic? _topic;
   String? _nextCursor;
   bool _loading = true;
   bool _addingPage = false;
@@ -98,9 +113,11 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       _query.text.trim().isNotEmpty ||
       _sourceId != null ||
       _date != LiveDateFilter.all ||
-      _format != LiveNewsFormatFilter.all;
+      _format != LiveNewsFormatFilter.all ||
+      _topic != null;
   List<LiveNewsItemDto> get _visibleItems => _items
       .where((LiveNewsItemDto item) {
+        if (!matchesLiveNewsTopic(item, _topic)) return false;
         final bool video =
             item.source.canonicalDomain.toLowerCase() == 'youtube.com';
         return switch (_format) {
@@ -141,6 +158,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     _sourceId = null;
     _date = LiveDateFilter.all;
     _format = LiveNewsFormatFilter.all;
+    _topic = null;
     setState(() => _selectedCountry = code);
     unawaited(_loadSources());
     unawaited(_load(refresh: true));
@@ -256,6 +274,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     _sourceId = null;
     _date = LiveDateFilter.all;
     _format = LiveNewsFormatFilter.all;
+    _topic = null;
     unawaited(_load());
   }
 
@@ -431,6 +450,21 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               () => _format = value ?? LiveNewsFormatFilter.all,
             ),
           ),
+          const SizedBox(height: DialektikSpacing.space3),
+          Text('Tema', style: Theme.of(context).textTheme.titleMedium),
+          HorizontalChoiceStrip<LiveNewsTopic>(
+            semanticsLabel: 'Filtrar noticias cargadas por tema',
+            allLabel: 'Todos', selectedValue: _topic, keyPrefix: 'live-topic-filter',
+            options: const <HorizontalChoiceOption<LiveNewsTopic>>[
+              HorizontalChoiceOption(value: LiveNewsTopic.politica, label: 'Política'),
+              HorizontalChoiceOption(value: LiveNewsTopic.justicia, label: 'Justicia'),
+              HorizontalChoiceOption(value: LiveNewsTopic.economia, label: 'Economía'),
+              HorizontalChoiceOption(value: LiveNewsTopic.seguridad, label: 'Seguridad'),
+              HorizontalChoiceOption(value: LiveNewsTopic.deportes, label: 'Deportes'),
+              HorizontalChoiceOption(value: LiveNewsTopic.sociedad, label: 'Sociedad'),
+            ],
+            onSelected: (value) => setState(() => _topic = value),
+          ),
           if (_selectedCountry != 'CL') ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             const EditorialEmptyState(
@@ -438,12 +472,6 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               description: 'El selector está preparado, pero aún no existe un feed de este país verificado. No mostraremos noticias chilenas como si fueran locales.',
             ),
           ] else ...<Widget>[
-          if (widget.repository is SeismicObservationRepository) ...<Widget>[
-            ChileSeismicObservationsPanel(
-              repository: widget.repository as SeismicObservationRepository,
-            ),
-            const SizedBox(height: DialektikSpacing.space4),
-          ],
           if (widget.govUkPreviewLoader != null) ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             Card(
@@ -680,14 +708,19 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                   ? 'No hay noticias con estos filtros.'
                   : 'Todavía no hay noticias recientes disponibles.',
               description: _hasFilters
-                  ? 'Puedes ampliar la búsqueda o cambiar la fuente y la fecha.'
+                  ? 'El filtro por tema y formato se aplica a las noticias cargadas. Puedes ampliar la búsqueda o cambiar la fuente y la fecha.'
                   : 'Vuelve a consultar más tarde; aquí aparecerán publicaciones con su fuente y enlace originales.',
-              action: _hasFilters
+              action: _nextCursor != null && !_addingPage
                   ? EditorialTextButton(
-                      onPressed: _clearFilters,
-                      child: const Text('Limpiar filtros'),
+                      onPressed: () => unawaited(_load(append: true)),
+                      child: const Text('Buscar en más noticias'),
                     )
-                  : null,
+                  : _hasFilters
+                      ? EditorialTextButton(
+                          onPressed: _clearFilters,
+                          child: const Text('Limpiar filtros'),
+                        )
+                      : null,
             )
           else ...<Widget>[
             LiveLeadCard(

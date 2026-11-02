@@ -85,6 +85,9 @@ final class EventDetailDto extends EventCardDto {
     required super.positionCount,
     required this.window,
     required this.primaryFact,
+    this.coveragePositions = const [],
+    this.articles = const [],
+    this.contrasts = const [],
   });
 
   factory EventDetailDto.fromJson(Object? value) {
@@ -100,7 +103,7 @@ final class EventDetailDto extends EventCardDto {
           'window',
           'primary_fact',
           'merged_into',
-        });
+        }, optional: const {'positions', 'articles', 'contrasts'});
     if (json.raw('merged_into') != null) {
       throw const FormatException('EventDetail.merged_into must be null.');
     }
@@ -124,6 +127,9 @@ final class EventDetailDto extends EventCardDto {
         from: window.dateTime('from'),
         to: window.nullableDateTime('to'),
       ),
+      coveragePositions: json.raw('positions') == null ? const [] : json.list('positions', EventCoveragePositionDto.fromJson),
+      articles: json.raw('articles') == null ? const [] : json.list('articles', EventCoverageArticleDto.fromJson),
+      contrasts: json.raw('contrasts') == null ? const [] : json.list('contrasts', EventContrastDto.fromJson),
       primaryFact: json.raw('primary_fact') == null
           ? null
           : PrimaryFactDto.fromJson(json.raw('primary_fact')),
@@ -132,6 +138,48 @@ final class EventDetailDto extends EventCardDto {
 
   final EventWindowDto window;
   final PrimaryFactDto? primaryFact;
+  final List<EventCoveragePositionDto> coveragePositions;
+  final List<EventCoverageArticleDto> articles;
+  final List<EventContrastDto> contrasts;
+}
+
+final class EventCoverageArticleDto {
+  const EventCoverageArticleDto(this.id, this.title, this.sourceName, this.publishedAt, this.url);
+  factory EventCoverageArticleDto.fromJson(Object? value) {
+    final json = _JsonObject.read(value, 'EventArticle', const {'id', 'title', 'source_name', 'published_at', 'url'});
+    return EventCoverageArticleDto(json.string('id'), json.string('title'), json.string('source_name'), json.dateTime('published_at'), json.uri('url'));
+  }
+  final String id, title, sourceName;
+  final DateTime publishedAt;
+  final Uri url;
+}
+
+final class EventCoverageAssertionDto {
+  const EventCoverageAssertionDto(this.id, this.assertionText, this.quotedText, this.articleId, this.sourceName);
+  factory EventCoverageAssertionDto.fromJson(Object? value) {
+    final json = _JsonObject.read(value, 'EventAssertion', const {'id', 'assertion_text', 'quoted_text', 'article_id', 'source_name'});
+    return EventCoverageAssertionDto(json.string('id'), json.string('assertion_text'), json.string('quoted_text'), json.string('article_id'), json.string('source_name'));
+  }
+  final String id, assertionText, quotedText, articleId, sourceName;
+}
+
+final class EventCoveragePositionDto {
+  const EventCoveragePositionDto(this.id, this.title, this.assertions);
+  factory EventCoveragePositionDto.fromJson(Object? value) {
+    final json = _JsonObject.read(value, 'EventPosition', const {'id', 'title', 'assertions'});
+    return EventCoveragePositionDto(json.string('id'), json.string('title'), json.list('assertions', EventCoverageAssertionDto.fromJson));
+  }
+  final String id, title;
+  final List<EventCoverageAssertionDto> assertions;
+}
+
+final class EventContrastDto {
+  const EventContrastDto(this.id, this.positionAId, this.positionBId, this.kind);
+  factory EventContrastDto.fromJson(Object? value) {
+    final json = _JsonObject.read(value, 'EventContrast', const {'id', 'position_a_id', 'position_b_id', 'kind'});
+    return EventContrastDto(json.string('id'), json.string('position_a_id'), json.string('position_b_id'), json.string('kind'));
+  }
+  final String id, positionAId, positionBId, kind;
 }
 
 final class EventWindowDto {
@@ -755,7 +803,7 @@ PositionListItemDto _positionBase(_JsonObject json) => PositionListItemDto(
   title: json.string('title'),
   publishedAt: json.dateTime('published_at'),
   assertionCount: json.integer('assertion_count', minimum: 1),
-  formedByCount: json.integer('formed_by_count', minimum: 1),
+  formedByCount: json.integer('formed_by_count', minimum: 0),
   evidenceAbsence: json
       .nullableEnumValue('evidence_absence', const <String, EvidenceAbsence>{
         'no_evidence_yet': EvidenceAbsence.noEvidenceYet,

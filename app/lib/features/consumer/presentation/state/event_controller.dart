@@ -126,6 +126,22 @@ final class EventController extends ChangeNotifier {
             requestToken: token,
           );
           analysisUnavailable = false;
+          positionDetails.clear();
+          failedPositionIds.clear();
+          await Future.wait(positions.map((position) async {
+            try {
+              final detail = await _repository.getPosition(
+                position.id, refresh: refresh, requestToken: token,
+              );
+              if (generation == _generation && !token.isCancelled) {
+                positionDetails[position.id] = detail;
+              }
+            } on PublicApiFailure {
+              if (generation == _generation && !token.isCancelled) {
+                failedPositionIds.add(position.id);
+              }
+            }
+          }));
         } on PublicApiFailure catch (error) {
           // Do not render structurally incomplete published positions as
           // verified analysis. The event summary remains available, but its

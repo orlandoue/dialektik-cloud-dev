@@ -6,11 +6,7 @@ import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/state/event_controller.dart';
-import 'package:dialektik/features/consumer/presentation/widgets/analysis_pending_panel.dart';
-import 'package:dialektik/features/consumer/presentation/widgets/claim_row.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
-import 'package:dialektik/features/consumer/presentation/widgets/position_card.dart';
-import 'package:dialektik/features/consumer/presentation/widgets/relationship_indicator.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
 import 'package:flutter/material.dart';
 
@@ -104,216 +100,113 @@ final class _EventDetailScreenState extends State<EventDetailScreen> {
 }
 
 final class _EventContent extends StatelessWidget {
-  const _EventContent({
-    required this.controller,
-    required this.onOpenArticle,
-    required this.onOpenSource,
-  });
-
+  const _EventContent({required this.controller, required this.onOpenArticle, required this.onOpenSource});
   final EventController controller;
   final ValueChanged<Uri> onOpenArticle;
   final ValueChanged<String> onOpenSource;
 
   @override
   Widget build(BuildContext context) {
-    final ConsumerStrings strings = ConsumerStrings.of(context);
-    final EventDetailDto event = controller.event!;
+    final strings = ConsumerStrings.of(context);
+    final event = controller.event!;
+    final assertions = <PublicAssertionDto>[
+      for (final position in controller.positions)
+        ...?controller.positionDetails[position.id]?.assertions,
+    ];
+    final articles = <String, PublicAssertionDto>{};
+    for (final assertion in assertions) {
+      articles.putIfAbsent(assertion.span.article.id, () => assertion);
+    }
     return RefreshIndicator(
       onRefresh: controller.refresh,
       child: ListView(
         key: const Key('event-detail-list'),
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(DialektikSpacing.space6),
-        children: <Widget>[
-          Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(
-                maxWidth: DialektikSizing.maxReadingWidth,
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: <Widget>[
-                  if (controller.isRefreshing)
-                    LinearProgressIndicator(semanticsLabel: strings.refreshing),
-                  if (controller.transientFailure != null) ...<Widget>[
-                    const SizedBox(height: DialektikSpacing.space4),
-                    OperationalNotice(
-                      kind: OperationalNoticeKind.warning,
-                      message: strings.errorForName(
-                        controller.transientFailure!.kind.name,
-                      ),
-                    ),
-                  ],
-                  Text(
-                    strings.categoryName(event.category),
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: DialektikSpacing.space2),
-                  Text(
-                    event.titleDescriptive,
-                    style: Theme.of(context).textTheme.headlineMedium,
-                  ),
-                  const SizedBox(height: DialektikSpacing.space4),
-                  Text(strings.detected(event.detectedAt)),
-                  Text(strings.window(event.window.from, event.window.to)),
-                  Text(strings.sourceCount(event.sourceCount)),
-                  const SizedBox(height: DialektikSpacing.space8),
-                  if (event.primaryFact
-                      case final PrimaryFactDto fact) ...<Widget>[
-                    _PrimaryFact(
-                      fact: fact,
-                      onOpenArticle: onOpenArticle,
-                      onOpenSource: onOpenSource,
-                    ),
-                    const SizedBox(height: DialektikSpacing.space8),
-                  ],
-                  if (event.analysisState == AnalysisState.analysisPending ||
-                      controller.analysisUnavailable) ...<Widget>[
-                    const AnalysisPendingPanel(),
-                    const SizedBox(height: DialektikSpacing.space8),
-                    Text(
-                      strings.assertions,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: DialektikSpacing.space4),
-                    if (controller.assertions.isEmpty)
-                      Text(strings.noAssertions)
-                    else
-                      for (
-                        var index = 0;
-                        index < controller.assertions.length;
-                        index += 1
-                      ) ...<Widget>[
-                        ClaimRow(
-                          assertion: controller.assertions[index],
-                          onOpenArticle: onOpenArticle,
-                          onOpenSource: onOpenSource,
-                        ),
-                        if (index < controller.assertions.length - 1)
-                          const SizedBox(
-                            height: DialektikSpacing.evidenceItemGap,
-                          ),
-                      ],
-                  ] else ...<Widget>[
-                    Text(
-                      strings.positions,
-                      style: Theme.of(context).textTheme.headlineSmall,
-                    ),
-                    const SizedBox(height: DialektikSpacing.space4),
-                    if (controller.positions.isEmpty)
-                      Text(strings.noPositions)
-                    else
-                      for (
-                        var index = 0;
-                        index < controller.positions.length;
-                        index += 1
-                      ) ...<Widget>[
-                        PositionCard(
-                          position: controller.positions[index],
-                          expanded:
-                              controller.expandedPositionId ==
-                              controller.positions[index].id,
-                          loading: controller.loadingPositionIds.contains(
-                            controller.positions[index].id,
-                          ),
-                          failed: controller.failedPositionIds.contains(
-                            controller.positions[index].id,
-                          ),
-                          detail: controller
-                              .positionDetails[controller.positions[index].id],
-                          onToggle: () => unawaited(
-                            controller.togglePosition(
-                              controller.positions[index].id,
-                            ),
-                          ),
-                          onRetry: () => unawaited(
-                            controller.retryPosition(
-                              controller.positions[index].id,
-                            ),
-                          ),
-                          onOpenArticle: onOpenArticle,
-                          onOpenSource: onOpenSource,
-                        ),
-                        if (index < controller.positions.length - 1)
-                          const SizedBox(
-                            height: DialektikSpacing.positionStackGap,
-                          ),
-                      ],
-                  ],
-                  const SizedBox(height: DialektikSpacing.space8),
-                  Text(
-                    strings.relationships,
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: DialektikSpacing.space4),
-                  if (controller.relationships.isEmpty)
-                    Text(strings.noRelationships)
-                  else
-                    for (
-                      var index = 0;
-                      index < controller.relationships.length;
-                      index += 1
-                    ) ...<Widget>[
-                      RelationshipIndicator(
-                        relationship: controller.relationships[index],
-                      ),
-                      if (index < controller.relationships.length - 1)
-                        const SizedBox(height: DialektikSpacing.space4),
-                    ],
-                ],
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-final class _PrimaryFact extends StatelessWidget {
-  const _PrimaryFact({
-    required this.fact,
-    required this.onOpenArticle,
-    required this.onOpenSource,
-  });
-
-  final PrimaryFactDto fact;
-  final ValueChanged<Uri> onOpenArticle;
-  final ValueChanged<String> onOpenSource;
-
-  @override
-  Widget build(BuildContext context) {
-    final ConsumerStrings strings = ConsumerStrings.of(context);
-    return DialektikSurface(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            strings.primaryFact,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: DialektikSpacing.space3),
-          Text(fact.statement),
-          const SizedBox(height: DialektikSpacing.space3),
-          Wrap(
-            spacing: DialektikSpacing.space3,
-            runSpacing: DialektikSpacing.space2,
-            children: <Widget>[
-              TextButton.icon(
-                onPressed: () => onOpenArticle(fact.primaryPublicationUrl),
-                icon: const DialektikIcon(
-                  icon: DialektikFunctionalIcon.externalLink,
-                  size: DialektikIconSize.small,
-                ),
-                label: Text(strings.openOriginal),
-              ),
-              TextButton(
-                onPressed: () => onOpenSource(fact.primarySource.id),
-                child: Text('${strings.source}: ${fact.primarySource.name}'),
-              ),
+        children: [Center(child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: DialektikSizing.maxReadingWidth),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            if (controller.isRefreshing) const LinearProgressIndicator(),
+            Text(strings.categoryName(event.category), style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(height: DialektikSpacing.space2),
+            Text(event.titleDescriptive, style: Theme.of(context).textTheme.headlineMedium),
+            const SizedBox(height: DialektikSpacing.space4),
+            Text(strings.detected(event.detectedAt)),
+            Text(strings.sourceCount(event.sourceCount)),
+            if (event.primaryFact != null) ...[
+              Text(event.primaryFact!.statement),
+              TextButton(onPressed: () => onOpenSource(event.primaryFact!.primarySource.id),
+                child: Text('Fuente: ${event.primaryFact!.primarySource.name}')),
+              TextButton(onPressed: () => onOpenArticle(event.primaryFact!.primaryPublicationUrl),
+                child: const Text('Abrir publicación original')),
             ],
-          ),
-        ],
+            if (event.analysisState == AnalysisState.analysisPending)
+              for (final assertion in controller.assertions)
+                Card(child: Padding(padding: const EdgeInsets.all(16),
+                  child: Text('“${assertion.span.quotedText}”'))),
+            const SizedBox(height: DialektikSpacing.space8),
+            Text('Posturas por medio', style: Theme.of(context).textTheme.headlineSmall),
+            const SizedBox(height: DialektikSpacing.space4),
+            if (event.coveragePositions.isNotEmpty)
+              for (final position in event.coveragePositions)
+                for (final assertion in position.assertions)
+                  Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(assertion.sourceName, style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8), Text(position.title),
+                      const SizedBox(height: 8), Text(assertion.assertionText),
+                      const SizedBox(height: 8), Text('“${assertion.quotedText}”'),
+                    ],
+                  )))
+            else if (controller.analysisUnavailable)
+              const Text('No se pudieron cargar las posturas. Vuelve a intentarlo.')
+            else if (event.analysisState == AnalysisState.analysisPending)
+              const Text('Las posturas aún no están disponibles.')
+            else if (controller.positions.isEmpty)
+              const Text('No hay posturas disponibles.')
+            else
+              for (final position in controller.positions) ...[
+                if (controller.failedPositionIds.contains(position.id))
+                  TextButton(onPressed: () => unawaited(controller.retryPosition(position.id)),
+                    child: const Text('Reintentar postura'))
+                else for (final assertion in controller.positionDetails[position.id]?.assertions ?? <PublicAssertionDto>[])
+                  Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(assertion.span.article.source.name, style: Theme.of(context).textTheme.titleMedium),
+                      const SizedBox(height: 8), Text(position.title),
+                      const SizedBox(height: 8), Text('“${assertion.span.quotedText}”'),
+                    ],
+                  ))),
+              ],
+            if (event.contrasts.isNotEmpty) ...[
+              const SizedBox(height: DialektikSpacing.space8),
+              for (final contrast in event.contrasts)
+                Text(contrast.kind == 'contrast' ? 'Contraste de enfoques' : 'Contradicción',
+                  style: Theme.of(context).textTheme.titleMedium),
+            ],
+            if (event.articles.isNotEmpty) ...[
+              const SizedBox(height: DialektikSpacing.space8),
+              Text('Noticias originales', style: Theme.of(context).textTheme.headlineSmall),
+              for (final article in event.articles)
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${article.sourceName} · ${article.title}'),
+                  TextButton.icon(onPressed: () => onOpenArticle(article.url),
+                    icon: const Icon(Icons.open_in_new), label: const Text('Abrir noticia original ↗')),
+                ]),
+            ] else if (articles.isNotEmpty) ...[
+              const SizedBox(height: DialektikSpacing.space8),
+              Text('Noticias originales', style: Theme.of(context).textTheme.headlineSmall),
+              for (final assertion in articles.values)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(assertion.span.article.source.name),
+                  subtitle: Text('“${assertion.span.quotedText}”'),
+                  trailing: const Icon(Icons.open_in_new),
+                  onTap: () => onOpenArticle(assertion.span.article.urlCanonical),
+                ),
+            ],
+          ]),
+        ))],
       ),
     );
   }

@@ -6,6 +6,7 @@ import 'package:dialektik/features/consumer/presentation/screens/event_detail_sc
 import 'package:dialektik/features/consumer/presentation/screens/feed_screen.dart';
 import 'package:dialektik/features/consumer/presentation/screens/source_screen.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_navigation_action.dart';
+import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/govuk_preview.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
@@ -322,6 +323,8 @@ final class ConsumerRouteFactory {
           settings,
           FeedScreen(
             repository: repository,
+            seismicRepository: liveNewsRepository is SeismicObservationRepository
+                ? liveNewsRepository as SeismicObservationRepository : null,
             curatedEventPreviewLoader: curatedEventPreviewLoader,
             navigationActions: navigationActions,
             onOpenThreads: null,
@@ -519,6 +522,8 @@ final class ConsumerRouteFactory {
         settings,
         FeedScreen(
           repository: repository,
+          seismicRepository: liveNewsRepository is SeismicObservationRepository
+              ? liveNewsRepository as SeismicObservationRepository : null,
           navigationActions: additionalNavigationActions,
           onOpenThreads: semantic == null
               ? null
@@ -573,6 +578,7 @@ final class ConsumerRouteFactory {
       settings,
       FeedScreen(
         repository: repository,
+        seismicRepository: liveNewsRepository is SeismicObservationRepository ? liveNewsRepository as SeismicObservationRepository : null,
         navigationActions: additionalNavigationActions,
         onOpenEvent: (String id) =>
             _navigatorKey.currentState?.pushNamed(ConsumerRoutes.event(id)),
