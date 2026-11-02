@@ -38,6 +38,8 @@ import {
   validateLiveStancePairAssessment,
 } from "./live-semantic-production.contract.js";
 
+import { LIVE_JOINT_SCOPE_PROMPT, LIVE_JOINT_SCOPE_SCHEMA, LIVE_JOINT_SCOPE_VERSION, validateJointScope } from "./live-semantic-scope.contract.js";
+
 const MODEL = CLOUDFLARE_JSON_MODE_MODEL;
 const PROVIDER = "llm_cloudflare_workers_ai";
 const EXTRACTION_SCHEMA_VERSION = "live-claim-extraction-v3";
@@ -285,6 +287,33 @@ export class LiveSemanticProductionService {
           connection,
         );
       }
+    });
+  }
+
+  async runJointClusterOnly(authorization: string | undefined, raw: unknown) {
+    this.ensureEnabled();
+    const identity = await this.reviews.authorizeEditor(authorization);
+    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) throw new ModerationHttpError(400,"MOD_INVALID_REQUEST");
+    const value = raw as Record<string, unknown>;
+    if (Object.keys(value).some(key => !["targetDay","maxModelCalls"].includes(key))) throw new ModerationHttpError(400,"MOD_INVALID_REQUEST");
+    const {targetDay} = exactBody({targetDay:value.targetDay,limit:1});
+    const maxModelCalls = value.maxModelCalls ?? 40;
+    if (!Number.isInteger(maxModelCalls) || Number(maxModelCalls)<1 || Number(maxModelCalls)>40) throw new ModerationHttpError(400,"MOD_INVALID_REQUEST");
+    const configSha=this.configSha256();
+    const transport=new CloudflareWorkersAITransport(this.config(),undefined,process.env,LIVE_JOINT_SCOPE_PROMPT);
+    return this.writer.database.connection().execute(async connection => {
+      const leaseName=`dialektik-live-semantic:${targetDay}`;
+      const lock=await sql<{locked:boolean}>`select pg_try_advisory_lock(hashtextextended(${leaseName},0)) as locked`.execute(connection);
+      if(!lock.rows[0]?.locked) throw new ConflictException("SEMANTIC_BATCH_ALREADY_RUNNING");
+      const runId=generateUlid({now:Date.now});
+      try {
+        await sql`insert into public.live_semantic_production_runs
+          (id,requested_by,target_day,provider_type,model_id,config_sha256,requested_count,processed_count,pair_assessment_count,started_at,completed_at)
+          values (${runId},${identity.userId}::dialektik_ulid,${targetDay}::date,${PROVIDER},${MODEL},${configSha},${Number(maxModelCalls)},0,0,${new Date().toISOString()},null)`.execute(connection);
+        const results=await this.assessJointScope(connection,runId,identity.userId,targetDay,configSha,transport,Number(maxModelCalls));
+        await sql`update public.live_semantic_production_runs set processed_count=${results.validated},pair_assessment_count=${results.attempted},completed_at=${new Date().toISOString()} where id=${runId}`.execute(connection);
+        return {status:"COMPLETED_FOR_EDITORIAL_REVIEW",runId,targetDay,jointClusterOnly:true,modelCallsCount:results.modelCalls,maxModelCalls:Number(maxModelCalls),results};
+      } finally { await sql`select pg_advisory_unlock(hashtextextended(${leaseName},0))`.execute(connection); }
     });
   }
 
@@ -1068,6 +1097,83 @@ export class LiveSemanticProductionService {
     return totals;
   }
 
+  private async assessJointScope(
+    connection: Kysely<Database>, runId: string, requestedBy: string, targetDay: string,
+    extractionConfig: string, transport: CloudflareWorkersAITransport, maxModelCalls = 2,
+  ) {
+    type Pair = { groupId: string; leftId: string; rightId: string; leftHash: string; rightHash: string;
+      leftText: string; rightText: string; leftHeadline: string; rightHeadline: string; leftSource: string; rightSource: string };
+    const jointConfig = sha256(`${extractionConfig}\n${LIVE_JOINT_SCOPE_VERSION}\n${sha256(LIVE_JOINT_SCOPE_PROMPT)}`);
+    const pairs = await sql<Pair>`select distinct g.id::text as "groupId", l.article_id::text as "leftId",r.article_id::text as "rightId",
+      li.input_sha256 as "leftHash",ri.input_sha256 as "rightHash",li.text_original as "leftText",ri.text_original as "rightText",
+      li.headline as "leftHeadline",ri.headline as "rightHeadline",li.source_name as "leftSource",ri.source_name as "rightSource",
+      case when lower(g.proposed_title) like '%primera b%' then 0
+        when exists(select 1 from public.live_semantic_claim_pair_assessments old
+          join public.live_semantic_stance_pair_attempts failed on failed.original_pair_id=old.id
+          join public.live_semantic_stance_pair_outcomes outcome on outcome.attempt_id=failed.id and outcome.outcome='INVALID_MODEL_RESPONSE'
+          where old.group_id=g.id and old.left_article_id=l.article_id and old.right_article_id=r.article_id) then 1 else 2 end as priority
+      from public.live_semantic_event_group_candidates g
+      join public.live_semantic_event_group_members l on l.group_id=g.id
+      join public.live_semantic_event_group_members r on r.group_id=g.id and l.article_id<r.article_id and l.source_id<>r.source_id
+      join public.live_semantic_excerpt_inputs li on li.article_id=l.article_id::text
+      join public.live_semantic_excerpt_inputs ri on ri.article_id=r.article_id::text
+      where g.target_day=${targetDay}::date and g.config_sha256=${extractionConfig}
+        and exists(select 1 from public.live_semantic_pair_assessments p where p.group_id=g.id
+          and p.left_article_id=l.article_id and p.right_article_id=r.article_id and p.same_event and p.same_event_confidence>=70)
+        and not exists(select 1 from public.live_semantic_joint_scope_attempts a where a.group_id=g.id
+          and a.left_article_id=l.article_id and a.right_article_id=r.article_id and a.left_input_sha256=li.input_sha256
+          and a.right_input_sha256=ri.input_sha256 and a.config_sha256=${jointConfig})
+      order by priority,"groupId","leftId","rightId" limit ${maxModelCalls}`.execute(connection);
+    const totals = { attempted: 0, modelCalls: 0, validated: 0, invalidSchema: 0, invalidScope: 0, unavailable: 0, aligned: 0 };
+    for (const pair of pairs.rows) {
+      const attemptId = generateUlid({now:Date.now});
+      const inserted = await sql<{id:string}>`insert into public.live_semantic_joint_scope_attempts
+        (id,group_id,run_id,requested_by,left_article_id,right_article_id,left_input_sha256,right_input_sha256,config_sha256,requested_at)
+        values (${attemptId},${pair.groupId}::dialektik_ulid,${runId}::dialektik_ulid,${requestedBy}::dialektik_ulid,
+          ${pair.leftId}::dialektik_ulid,${pair.rightId}::dialektik_ulid,${pair.leftHash},${pair.rightHash},${jointConfig},${new Date().toISOString()})
+        on conflict(group_id,left_article_id,right_article_id,left_input_sha256,right_input_sha256,config_sha256) do nothing returning id::text as id`.execute(connection);
+      if (!inserted.rows[0]) continue;
+      totals.attempted++;
+      const outcome = async (status: string, result: unknown = null) => {
+        await sql`insert into public.live_semantic_joint_scope_outcomes(attempt_id,outcome,result,recorded_at)
+          values(${attemptId}::dialektik_ulid,${status},${result === null ? null : JSON.stringify(result)}::jsonb,${new Date().toISOString()})`.execute(connection);
+      };
+      const allowed = await sql<{allowed:boolean}>`select public.dialektik_live_semantic_route_allowed(${pair.leftId}::dialektik_ulid,${pair.leftHash},${PROVIDER},${MODEL})
+        and public.dialektik_live_semantic_route_allowed(${pair.rightId}::dialektik_ulid,${pair.rightHash},${PROVIDER},${MODEL}) as allowed`.execute(connection);
+      if (allowed.rows[0]?.allowed !== true) { totals.unavailable++; await outcome('INPUT_UNAVAILABLE'); continue; }
+      let output:unknown;
+      try {
+        totals.modelCalls++;
+        output = (await transport.generate('extraction', {
+          left:{headline:pair.leftHeadline,source:pair.leftSource,textOriginal:pair.leftText},
+          right:{headline:pair.rightHeadline,source:pair.rightSource,textOriginal:pair.rightText},
+        }, LIVE_JOINT_SCOPE_SCHEMA, AbortSignal.timeout(32000))).output;
+      } catch { totals.unavailable++; await outcome('PROVIDER_UNAVAILABLE'); break; }
+      let result: ReturnType<typeof validateJointScope>;
+      try { result=validateJointScope(output,pair.leftText,pair.rightText); }
+      catch(error) {
+        if(error instanceof Error && (error.message==='JOINT_SCOPE_NOT_GROUNDED' || error.message==='JOINT_RELATION_INVALID')) {
+          totals.invalidScope++; await outcome('INVALID_SCOPE');
+        } else { totals.invalidSchema++; await outcome('INVALID_SCHEMA'); }
+        continue;
+      }
+      if (result.scopeAligned) {
+        const leftId=generateUlid({now:Date.now}),rightId=generateUlid({now:Date.now});
+        await connection.transaction().execute(async transaction => {
+          await sql`insert into public.live_semantic_joint_scope_outcomes(attempt_id,outcome,result,recorded_at)
+            values(${attemptId}::dialektik_ulid,'VALIDATED',${JSON.stringify(result)}::jsonb,${new Date().toISOString()})`.execute(transaction);
+          await sql`insert into public.live_semantic_joint_claims
+            (id,attempt_id,article_id,side,input_sha256,quoted_text,char_start,char_end,assertion_text,created_at)
+            values (${leftId},${attemptId}::dialektik_ulid,${pair.leftId}::dialektik_ulid,'left',${pair.leftHash},${result.left.quotedText},${result.left.charStart},${result.left.charEnd},${result.left.assertionText},${new Date().toISOString()}),
+              (${rightId},${attemptId}::dialektik_ulid,${pair.rightId}::dialektik_ulid,'right',${pair.rightHash},${result.right.quotedText},${result.right.charStart},${result.right.charEnd},${result.right.assertionText},${new Date().toISOString()})`.execute(transaction);
+        });
+        totals.aligned++;
+      } else await outcome('VALIDATED',result);
+      totals.validated++;
+    }
+    return totals;
+  }
+
   async listReview(authorization: string | undefined, rawDay: unknown) {
     this.ensureEnabled();
     await this.reviews.authorizeEditor(authorization);
@@ -1182,11 +1288,12 @@ export class LiveSemanticProductionService {
     let memberRows: ReviewMember[] = [];
     let pairRows: ReviewPair[] = [];
     let claimPairRows: ReviewClaimPair[] = [];
+    let jointScopeRows: {groupId:string; attemptId:string; leftArticleId:string; rightArticleId:string; outcome:string; result:unknown; claims:unknown}[] = [];
     if (groups.rows.length > 0) {
       const groupIdFilter = sql.join(
         groups.rows.map((group) => sql`${group.id}::dialektik_ulid`),
       );
-      const [members, pairs, claimPairs] = await Promise.all([
+      const [members, pairs, claimPairs, jointScopes] = await Promise.all([
         sql<ReviewMember>`select m.group_id::text as "groupId",m.article_id::text as "articleId",
             m.extraction_generation_id::text as "generationId",i.source_name as "sourceName",
             i.headline,i.url_canonical as "canonicalUrl",
@@ -1227,10 +1334,23 @@ export class LiveSemanticProductionService {
           where pair.group_id in (${groupIdFilter}) and pair.config_sha256 in (${configSha},${stanceConfigSha256(configSha)})
           order by pair.group_id,pair.left_article_id,pair.left_claim_ordinal,
             pair.right_article_id,pair.right_claim_ordinal`.execute(database),
+        sql<{groupId:string; attemptId:string; leftArticleId:string; rightArticleId:string; outcome:string; result:unknown; claims:unknown}>`
+          select a.group_id::text as "groupId",a.id::text as "attemptId",a.left_article_id::text as "leftArticleId",
+            a.right_article_id::text as "rightArticleId",coalesce(o.outcome,'PENDING') as outcome,o.result,
+            coalesce((select jsonb_agg(jsonb_build_object('id',claim.id::text,'articleId',claim.article_id::text,
+              'side',claim.side,'quotedText',claim.quoted_text,'charStart',claim.char_start,'charEnd',claim.char_end,
+              'assertionText',claim.assertion_text) order by claim.side)
+              from public.live_semantic_joint_claims claim where claim.attempt_id=a.id),'[]'::jsonb) as claims
+          from public.live_semantic_joint_scope_attempts a
+          join public.live_semantic_excerpt_inputs li on li.article_id=a.left_article_id::text and li.input_sha256=a.left_input_sha256
+          join public.live_semantic_excerpt_inputs ri on ri.article_id=a.right_article_id::text and ri.input_sha256=a.right_input_sha256
+          left join public.live_semantic_joint_scope_outcomes o on o.attempt_id=a.id
+          where a.group_id in (${groupIdFilter}) order by a.group_id,a.requested_at,a.id`.execute(database),
       ]);
       memberRows = members.rows;
       pairRows = pairs.rows;
       claimPairRows = claimPairs.rows;
+      jointScopeRows = jointScopes.rows;
     }
     const membersByGroup = new Map<string, ReviewMember[]>();
     const pairsByGroup = new Map<string, ReviewPair[]>();
@@ -1256,6 +1376,7 @@ export class LiveSemanticProductionService {
       pairAssessments: pairsByGroup.get(group.id) ?? [],
       claimPairAssessments: (claimPairsByGroup.get(group.id) ?? []).filter((pair) => pair.evaluationVersion === "ORIGINAL"),
       stancePairAssessments: (claimPairsByGroup.get(group.id) ?? []).filter((pair) => pair.evaluationVersion === LIVE_STANCE_PAIR_VERSION),
+      jointScopeAssessments: jointScopeRows.filter((row) => row.groupId === group.id),
     }));
     const originalPairs = claimPairRows.filter((pair) => pair.evaluationVersion === "ORIGINAL");
     const stancePairs = claimPairRows.filter((pair) => pair.evaluationVersion === LIVE_STANCE_PAIR_VERSION);

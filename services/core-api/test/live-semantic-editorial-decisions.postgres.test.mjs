@@ -4,6 +4,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { liveSemanticEditorialDecisionsDdl } from '../../../packages/database/dist/migration/075_live_semantic_editorial_decisions.js';
 import { liveStanceReassessmentDdl } from '../../../packages/database/dist/migration/076_live_stance_reassessment.js';
 import { liveSemanticEventAttachmentDdl } from '../../../packages/database/dist/migration/077_live_semantic_event_attachment.js';
+import { liveJointScopeReviewDdl, liveJointScopeReviewDecisionDdl } from '../../../packages/database/dist/migration/078_live_joint_scope_review.js';
 
 const id = (n) => `01M4YDQK00EVART${String(n).padStart(11, '0')}`;
 const editor = id(1), group = id(2), rejectedGroup = id(3), noDecisionGroup = id(4);
@@ -122,6 +123,29 @@ test('editorial decisions require an editor and an explicit current claim select
     const rejectedAttachment = await db.query(`select public.dialektik_attach_live_semantic_article(
       $1::dialektik_ulid,$2::dialektik_ulid,$3::dialektik_ulid) as result`, [rejectedGroup,editor,id(32)]);
     assert.equal(rejectedAttachment.rows[0].result.reason, 'TWO_CLAIMS_AND_EDITORIAL_DECISION_REQUIRED');
+    await db.exec('reset role');
+    await db.exec('alter table articles add column text_original text');
+    await db.query("insert into articles(id,text_original) values($1,'one two'),($2,'one two')", [articleA,articleB]);
+    await db.exec(liveJointScopeReviewDdl);
+    await db.exec(liveJointScopeReviewDecisionDdl);
+    const gatedGroup=id(40),gatedPair=id(41),runId=id(42),attemptId=id(43);
+    await db.query("insert into live_semantic_event_group_candidates values($1,'REVIEW_REQUIRED','config')", [gatedGroup]);
+    await db.query('insert into live_semantic_production_runs values($1)', [runId]);
+    await db.query(`insert into live_semantic_event_group_members values($1,$2,$4,$6),($1,$3,$5,$7)`,
+      [gatedGroup,articleA,articleB,sourceA,sourceB,generationA,generationB]);
+    await db.query(`insert into live_semantic_claim_pair_assessments values
+      ($1,$2,$3,2,$4,1,$5,$6,true,90,'DIVERGENT',40,80,$7)`,
+      [gatedPair,gatedGroup,articleA,articleB,generationA,generationB,'aa'.repeat(32)]);
+    await db.exec('set role dialektik_moderation_writer');
+    const selection=[{articleId:articleA,ordinal:2},{articleId:articleB,ordinal:1}];
+    await assert.rejects(decide(gatedGroup,'APPROVED',selection,[gatedPair],id(44)),/CONFLICT_SELECTION_INVALID/);
+    await db.exec('reset role');
+    await db.query(`insert into live_semantic_joint_scope_attempts values($1,$2,$3,$4,$5,$6,$7,$7,$7,now())`,
+      [attemptId,gatedGroup,runId,editor,articleA,articleB,'aa'.repeat(32)]);
+    await db.query(`insert into live_semantic_joint_scope_outcomes values($1,'VALIDATED',$2::jsonb,now())`,
+      [attemptId,JSON.stringify({status:'ALIGNED',scopeAligned:true,relation:'DIVERGENT',ratioComparable:80,ratioConflicting:40,left:{quotedText:'two'},right:{quotedText:'one'}})]);
+    await db.exec('set role dialektik_moderation_writer');
+    assert.equal((await decide(gatedGroup,'APPROVED',selection,[gatedPair],id(44))).rows[0].result.status,'APPROVED');
   } finally {
     await db.close();
   }
