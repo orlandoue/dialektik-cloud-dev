@@ -133,6 +133,17 @@ final class _EventContent extends StatelessWidget {
             const SizedBox(height: DialektikSpacing.space4),
             Text(strings.detected(event.detectedAt)),
             Text(strings.sourceCount(event.sourceCount)),
+            if (event.primaryFact != null) ...[
+              Text(event.primaryFact!.statement),
+              TextButton(onPressed: () => onOpenSource(event.primaryFact!.primarySource.id),
+                child: Text('Fuente: ${event.primaryFact!.primarySource.name}')),
+              TextButton(onPressed: () => onOpenArticle(event.primaryFact!.primaryPublicationUrl),
+                child: const Text('Abrir publicación original')),
+            ],
+            if (event.analysisState == AnalysisState.analysisPending)
+              for (final assertion in controller.assertions)
+                Card(child: Padding(padding: const EdgeInsets.all(16),
+                  child: Text('“${assertion.span.quotedText}”'))),
             const SizedBox(height: DialektikSpacing.space8),
             Text('Posturas por medio', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: DialektikSpacing.space4),

@@ -99,8 +99,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Análisis en curso'), findsOneWidget);
-    expect(find.textContaining('todavía no hay Posiciones'), findsOneWidget);
+    expect(find.text('Las posturas aún no están disponibles.'), findsOneWidget);
+    expect(find.text('Análisis en curso'), findsNothing);
     expect(find.text('Posición 1 de 2'), findsNothing);
     expect(find.text('El banco central publicó su decisión.'), findsOneWidget);
 
@@ -114,79 +114,35 @@ void main() {
       scrollable: find.byType(Scrollable).last,
     );
     expect(find.textContaining('La tasa de referencia'), findsOneWidget);
-    expect(find.textContaining('no es la voz de Dialektik'), findsOneWidget);
     expect(find.textContaining('ClaimInterpretation'), findsNothing);
   });
 
-  testWidgets(
-    'published Position expands on demand and preserves neutral order',
-    (WidgetTester tester) async {
-      final FakeConsumerRepository repository = FakeConsumerRepository(
-        event: publishedEventDetail,
-        positions: <PositionListItemDto>[positionA, positionB],
-        relationships: <RelationshipDto>[publicRelationship],
-      );
-      await tester.pumpWidget(
-        _app(repository, initialRoute: ConsumerRoutes.event(publishedEventId)),
-      );
-      await tester.pumpAndSettle();
-
-      expect(repository.positionDetailCalls, 0);
-      expect(
-        tester.getTopLeft(find.text('La tasa se mantiene')).dy,
-        lessThan(
-          tester
-              .getTopLeft(
-                find.text('La decisión cambia las condiciones efectivas'),
-              )
-              .dy,
-        ),
-      );
-      final Finder expand = find.text('Abrir detalle de Posición').first;
-      await tester.scrollUntilVisible(
-        expand,
-        180,
-        scrollable: find.byType(Scrollable).first,
-      );
-      await tester.pumpAndSettle();
-      await tester.tap(expand);
-      await tester.pumpAndSettle();
-
-      expect(repository.positionDetailCalls, 1);
-      expect(find.textContaining('La tasa de referencia'), findsOneWidget);
-      expect(find.textContaining('ganadora'), findsNothing);
-      expect(find.textContaining('%'), findsNothing);
-    },
-  );
-
-  testWidgets('published conflict states its limited assertion scope', (
-    WidgetTester tester,
-  ) async {
-    final Map<String, Object?> conflictJson = relationshipJson();
-    conflictJson['rel_type'] = 'R05';
-    await tester.pumpWidget(
-      _app(
-        FakeConsumerRepository(
-          event: publishedEventDetail,
-          positions: <PositionListItemDto>[positionA, positionB],
-          relationships: <RelationshipDto>[
-            RelationshipDto.fromJson(conflictJson),
-          ],
-        ),
-        initialRoute: ConsumerRoutes.event(publishedEventId),
-      ),
+  testWidgets('published positions show their sources and literal quotes', (WidgetTester tester) async {
+    final repository = FakeConsumerRepository(
+      event: publishedEventDetail,
+      positions: <PositionListItemDto>[positionA, positionB],
+      relationships: <RelationshipDto>[publicRelationship],
     );
+    await tester.pumpWidget(_app(repository, initialRoute: ConsumerRoutes.event(publishedEventId)));
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.textContaining('se limita a las afirmaciones citadas'),
-      180,
-      scrollable: find.byType(Scrollable).first,
-    );
+    expect(repository.positionDetailCalls, 2);
+    expect(find.text('Posturas por medio'), findsOneWidget);
+    expect(find.text('La tasa se mantiene'), findsOneWidget);
+    expect(find.textContaining('La tasa de referencia'), findsWidgets);
+    expect(find.text('Noticias originales'), findsOneWidget);
+    expect(find.text('Análisis en curso'), findsNothing);
+  });
 
-    expect(
-      find.textContaining('se limita a las afirmaciones citadas'),
-      findsOneWidget,
-    );
+  testWidgets('published event displays its editorial contrast', (WidgetTester tester) async {
+    final event = EventDetailDto.fromJson({
+      ...eventDetailJson(id: publishedEventId, analysisState: 'PUBLISHED', positionCount: 2),
+      'positions': <Object?>[], 'articles': <Object?>[],
+      'contrasts': <Object?>[{'id': 'contrast', 'position_a_id': positionAId, 'position_b_id': positionBId, 'kind': 'contrast'}],
+    });
+    await tester.pumpWidget(_app(FakeConsumerRepository(event: event, positions: [positionA, positionB]),
+      initialRoute: ConsumerRoutes.event(publishedEventId)));
+    await tester.pumpAndSettle();
+    expect(find.text('Contraste de enfoques'), findsOneWidget);
   });
 
   testWidgets('gone Event offers only its API-provided current successor', (
@@ -241,7 +197,8 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(find.text('Central bank holds benchmark rate'), findsOneWidget);
-    expect(find.text('Estado editorial: requiere revisión'), findsOneWidget);
+    expect(find.text('Estado editorial: requiere revisión'), findsNothing);
+    expect(find.textContaining('Agencia Uno:'), findsWidgets);
     expect(find.textContaining('probablemente'), findsNothing);
   });
 

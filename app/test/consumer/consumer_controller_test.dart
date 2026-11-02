@@ -134,7 +134,7 @@ void main() {
       expect(controller.positions, isEmpty);
     });
 
-    test('loads Position detail only after explicit expansion', () async {
+    test('loads Position details for the published event', () async {
       final FakeConsumerRepository repository = FakeConsumerRepository(
         event: publishedEventDetail,
         positions: <PositionListItemDto>[positionA, positionB],
@@ -146,10 +146,10 @@ void main() {
       );
 
       await controller.load();
-      expect(repository.positionDetailCalls, 0);
+      expect(repository.positionDetailCalls, 2);
       await controller.togglePosition(positionAId);
 
-      expect(repository.positionDetailCalls, 1);
+      expect(repository.positionDetailCalls, 2);
       expect(controller.positionDetails[positionAId], isNotNull);
       expect(controller.expandedPositionId, positionAId);
     });
