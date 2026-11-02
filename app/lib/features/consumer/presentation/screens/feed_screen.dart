@@ -10,9 +10,9 @@ import 'package:dialektik/features/consumer/presentation/widgets/curated_event_p
 import 'package:dialektik/features/consumer/presentation/widgets/event_card.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/filter_bar.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
-import 'package:flutter/material.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
+import 'package:flutter/material.dart';
 
 final class FeedScreen extends StatefulWidget {
   const FeedScreen({
