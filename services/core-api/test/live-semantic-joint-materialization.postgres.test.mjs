@@ -28,6 +28,8 @@ test('joint claim B is materialized with its own provenance, never prior claim A
  create table evidence(id dialektik_ulid primary key,anchor_span_id dialektik_ulid,scope_assertion_id dialektik_ulid,stance text,summary text,citable_source_url text,citable_source_title text,contributed_by dialektik_ulid,publication_state text,approved_by dialektik_ulid,approved_at timestamptz,relevance numeric);`);
  await db.exec(jointClaimMaterializationDdl);
  await db.exec(jointEditorialDecisionDdl);
+ const privilege=await db.query("select has_function_privilege('dialektik_moderation_writer','public.dialektik_record_joint_editorial_decision(dialektik_ulid,dialektik_ulid,dialektik_ulid,dialektik_ulid,dialektik_ulid,text,boolean)','execute') as allowed");
+ assert.equal(privilege.rows[0].allowed,false);
  const [editor,event,article,group,attempt,left,right,corr]=[1,2,3,4,5,6,7,8].map(id),original='Titular. La cita anterior. La cita conjunta.';
  await db.query("insert into users values($1,'editor')",[editor]);await db.query('insert into editorial_single_editor_authorizations values($1,null)',[editor]);
  await db.query("insert into events values($1,'LIVE_REAL',null,now(),now())",[event]);await db.query("insert into articles values($1,$2,'LIVE_REAL')",[article,event]);

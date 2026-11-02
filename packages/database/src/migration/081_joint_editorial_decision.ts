@@ -45,9 +45,8 @@ begin
     'leftClaimId',left_identity::text,'rightClaimId',right_identity::text,'conflictApproved',approve_conflict);
 end $$;
 revoke all on function public.dialektik_record_joint_editorial_decision(dialektik_ulid,dialektik_ulid,dialektik_ulid,dialektik_ulid,dialektik_ulid,text,boolean)
-  from public,anon,authenticated,service_role,dialektik_core_app,dialektik_headline_ai_writer;
-grant execute on function public.dialektik_record_joint_editorial_decision(dialektik_ulid,dialektik_ulid,dialektik_ulid,dialektik_ulid,dialektik_ulid,text,boolean)
-  to dialektik_moderation_writer;
+  from public,anon,authenticated,service_role,dialektik_core_app,dialektik_headline_ai_writer,dialektik_moderation_writer;
+-- Only the owner-executed promotion transaction may record the decision.
 `;
 export const jointEditorialDecisionMigration: Migration = {
   async up(database) { await sql.raw(jointEditorialDecisionDdl).execute(database); },
