@@ -28,6 +28,7 @@ import {
   fetchYouTubeDataApiItems,
   YouTubeDataApiError,
   youtubeDataApiRssPayload,
+  youtubeApiKey,
 } from '../live/youtube-data-api.js';
 import {
   FROZEN_NORMALIZATION_VERSION,
@@ -1095,8 +1096,8 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
     const row = current.rows[0];
     if (!row) throw new NotFoundException('SOURCE_NOT_FOUND');
     const youtubeSource = row.canonical_domain === 'youtube.com';
-    const youtubeApiKey = process.env.YOUTUBE_API_KEY?.trim();
-    if (youtubeSource && !youtubeApiKey) {
+    const configuredYouTubeApiKey = youtubeApiKey();
+    if (youtubeSource && !configuredYouTubeApiKey) {
       return {
         source_id: row.id,
         skipped: true,
@@ -1198,7 +1199,7 @@ export class PersonalOwnerOperationalService implements OnModuleInit, OnModuleDe
             feedEndpoint: row.endpoint,
             publisherName: row.name,
           },
-          youtubeApiKey!,
+          configuredYouTubeApiKey!,
         );
         feedResult = {
           status: 200,

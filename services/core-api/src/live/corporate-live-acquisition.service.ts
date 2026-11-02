@@ -14,6 +14,7 @@ import {
   fetchYouTubeDataApiItems,
   YouTubeDataApiError,
   youtubeDataApiRssPayload,
+  youtubeApiKey,
 } from './youtube-data-api.js';
 
 const CORPORATE_EDITOR_OWNER = 'orlandoue';
@@ -309,7 +310,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   private async markPollScheduled(): Promise<void> {
-    const youtubeApiConfigured = Boolean(process.env.YOUTUBE_API_KEY?.trim());
+    const youtubeApiConfigured = Boolean(youtubeApiKey());
     await sql`update public.corporate_live_source_poll_state state
       set last_status='POLL_SCHEDULED',last_polled_at=clock_timestamp(),updated_at=clock_timestamp()
       where state.source_id=(select pending.source_id from public.corporate_live_source_poll_state pending
@@ -331,7 +332,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   }
 
   private async claimDueSource(): Promise<string | null> {
-    const youtubeApiConfigured = Boolean(process.env.YOUTUBE_API_KEY?.trim());
+    const youtubeApiConfigured = Boolean(youtubeApiKey());
     return this.database.transaction().execute(async (transaction) => {
       const rows = await sql<{ sourceId: string }>`
         with due as (
@@ -606,7 +607,8 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
         await this.recordSkip(sourceId, 'SOURCE_RIGHTS_NOT_AUTHORIZED');
         return;
       }
-      if (row.discoveryChannel === 'youtube_data_api_v3' && !process.env.YOUTUBE_API_KEY?.trim()) {
+      const apiKey = youtubeApiKey();
+      if (row.discoveryChannel === 'youtube_data_api_v3' && apiKey === null) {
         await this.recordSkip(sourceId, 'YOUTUBE_API_KEY_MISSING');
         return;
       }
@@ -624,7 +626,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
             feedEndpoint: row.endpoint,
             publisherName: row.sourceName,
           },
-          process.env.YOUTUBE_API_KEY!.trim(),
+          apiKey!,
         );
         feed = {
           status: 200,
