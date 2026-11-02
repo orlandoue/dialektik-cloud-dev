@@ -78,6 +78,7 @@ import { liveSemanticEventAttachmentMigration } from './077_live_semantic_event_
 import { liveJointScopeReviewMigration } from './078_live_joint_scope_review';
 import { jointClaimProvenanceMigration } from './079_joint_claim_provenance';
 import { jointClaimMaterializationMigration } from './080_joint_claim_materialization';
+import { jointEditorialDecisionMigration } from './081_joint_editorial_decision';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
@@ -137,6 +138,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '078_live_joint_scope_review': liveJointScopeReviewMigration,
   '079_joint_claim_provenance': jointClaimProvenanceMigration,
   '080_joint_claim_materialization': jointClaimMaterializationMigration,
+  '081_joint_editorial_decision': jointEditorialDecisionMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,
