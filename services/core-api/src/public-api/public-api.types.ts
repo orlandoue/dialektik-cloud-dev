@@ -19,6 +19,11 @@ export interface EventDetailDto extends EventCardDto {
   readonly window: Readonly<{ from: string; to: string | null }>;
   readonly primary_fact: PrimaryFactDto | null;
   readonly merged_into: null;
+  readonly positions?: readonly Readonly<{ id: string; title: string; assertions: readonly Readonly<{
+    id: string; assertion_text: string; quoted_text: string; article_id: string; source_name: string;
+  }>[] }>[];
+  readonly articles?: readonly Readonly<{ id: string; title: string; source_name: string; published_at: string; url: string }>[];
+  readonly contrasts?: readonly Readonly<{ id: string; position_a_id: string; position_b_id: string; kind: string }>[];
 }
 
 export interface PrimaryFactDto {

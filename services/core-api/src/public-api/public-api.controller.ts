@@ -1,4 +1,4 @@
-import { Controller, Get, Inject, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Inject, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { sendPublicRead } from './public-api.cache.js';
@@ -79,8 +79,11 @@ export class PublicApiController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     this.rateLimit.assertAllowed(request.ip);
-    assertExactQueryKeys(query, []);
-    return sendPublicRead(request, reply, await this.publicApi.event(parseUlidParameter(eventId)));
+    assertExactQueryKeys(query, ['include']);
+    if (query.include !== undefined && query.include !== 'coverage') {
+      throw new BadRequestException('Unsupported event include');
+    }
+    return sendPublicRead(request, reply, await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage'));
   }
 
   @Get('events/:eventId/positions')
