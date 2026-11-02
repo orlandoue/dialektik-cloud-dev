@@ -171,6 +171,8 @@ export class PublicApiService {
     const primary = primaryFacts[0];
     const coverage = includeCoverage && row.analysis_state === 'PUBLISHED'
       ? await this.repository.listEventCoverage(id) : [];
+    const linkedArticles = includeCoverage && row.analysis_state === 'PUBLISHED'
+      ? await this.repository.listEventArticles(id) : [];
     const related = includeCoverage && row.analysis_state === 'PUBLISHED'
       ? await this.repository.listContradictions({cursor:null,limit:100,eventId:id}) : [];
     const positions = new Map<string, {id:string;title:string;assertions:{id:string;assertion_text:string;quoted_text:string;article_id:string;source_name:string}[]}>();
@@ -179,6 +181,9 @@ export class PublicApiService {
       const position=positions.get(item.position_id) ?? {id:item.position_id,title:item.position_title,assertions:[]};
       position.assertions.push({id:item.assertion_id,assertion_text:item.assertion_text,quoted_text:item.quoted_text,article_id:item.article_id,source_name:item.source_name});
       positions.set(item.position_id,position);
+      articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url});
+    }
+    for (const item of linkedArticles) {
       articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url});
     }
     return {

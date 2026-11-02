@@ -548,6 +548,30 @@ export class PublicApiRepository {
     return result.rows;
   }
 
+  public async listEventArticles(eventId: string): Promise<readonly Pick<EventCoverageRow, 'article_id' | 'article_title' | 'source_name' | 'published_at' | 'url'>[]> {
+    const result = await sql<Pick<EventCoverageRow, 'article_id' | 'article_title' | 'source_name' | 'published_at' | 'url'>>`
+      select article.id::text as article_id, version.headline as article_title,
+        source.name as source_name, article.published_at, article.url_canonical as url
+      from public.articles article
+      join public.sources source on source.id=article.source_id and source.origin='LIVE_REAL'
+      join lateral (select v.* from public.live_article_versions v where v.article_id=article.id order by v.version_number desc limit 1) version on true
+      join lateral (select p.* from public.live_source_policies p where p.source_id=article.source_id
+        order by p.recorded_at desc,p.id desc limit 1) policy on policy.active and policy.rights_class='LIVE_READY'
+        and policy.policy->>'rightsReviewStatus'='APPROVED' and nullif(policy.policy->>'authorizationReference','') is not null
+        and nullif(policy.policy->>'rightsEvidenceUrl','') is not null and nullif(policy.policy->>'endpoint','') is not null
+        and policy.policy->>'rightsEvidenceUrl' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
+        and policy.policy->>'endpoint' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
+      where article.event_id=${eventId}::dialektik_ulid and article.origin='LIVE_REAL'
+        and exists(select 1 from public.live_acquisition_receipts r where r.source_id=article.source_id
+          and r.exclusion_id=article.live_exposure_id and r.disposition='PERSISTED')
+        and coalesce((select case when jsonb_typeof(q.policy->'quarantinedArticleIds')='array'
+          then not (q.policy->'quarantinedArticleIds' @> jsonb_build_array(article.id::text)) else false end
+          from public.live_source_policies q where q.source_id=article.source_id and q.policy ? 'quarantinedArticleIds'
+          order by q.recorded_at desc,q.id desc limit 1),true)
+      order by article.published_at desc,article.id`.execute(this.databaseService.database);
+    return result.rows;
+  }
+
   public async listPositionAssertions(positionId: string): Promise<readonly PublicAssertionRow[]> {
     const result = await sql<PublicAssertionRow>`
       select

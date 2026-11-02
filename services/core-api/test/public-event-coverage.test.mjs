@@ -9,6 +9,7 @@ test('event coverage returns the approved citation and original article while pr
   const service = new PublicApiService({
     async findEvent() { return event; }, async findPrimaryFacts() { return []; },
     async listEventCoverage() { calls++; return [{position_id:'position',position_title:'Postura',assertion_id:'assertion',assertion_text:'Resumen',quoted_text:'Cita literal',article_id:'article',article_title:'Titular',source_name:'Medio',published_at:now,url:'https://example.org/article'}]; },
+    async listEventArticles() { return []; },
     async listContradictions() { return [{id:'contrast',position_a_id:'position',position_b_id:'other',threshold_rule:'v1:editorial_focus_contrast'}]; },
   });
   const legacy = await service.event('event');
