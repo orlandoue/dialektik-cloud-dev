@@ -1,9 +1,15 @@
 import { createHash } from "node:crypto";
+import { decodeCommonHtmlEntities } from "./html-entities.js";
 
 const API_ROOT = "https://www.googleapis.com/youtube/v3";
 const CHANNEL_ID = /^UC[A-Za-z0-9_-]{22}$/u;
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/u;
 const MAX_DESCRIPTION_CHARACTERS = 700;
+
+/** Prefer the dedicated key; accept the Google key used by corporate deployments. */
+export function youtubeApiKey(env: NodeJS.ProcessEnv = process.env): string | null {
+  return env.YOUTUBE_API_KEY?.trim() || env.GOOGLE_API_KEY?.trim() || null;
+}
 
 export interface YouTubeApiChannel {
   readonly sourceId: string;
@@ -192,7 +198,7 @@ export async function fetchYouTubeDataApiItems(
       return [];
 
     const description =
-      typeof data.description === "string" ? data.description.trim() : "";
+      typeof data.description === "string" ? decodeCommonHtmlEntities(data.description).trim() : "";
     const excerpt =
       Array.from(description).slice(0, MAX_DESCRIPTION_CHARACTERS).join("") ||
       null;
@@ -206,7 +212,7 @@ export async function fetchYouTubeDataApiItems(
       {
         canonicalUrl,
         discoveredUrl: endpoint,
-        headline: data.title.trim(),
+        headline: decodeCommonHtmlEntities(data.title).trim(),
         excerpt,
         author,
         language: "es",

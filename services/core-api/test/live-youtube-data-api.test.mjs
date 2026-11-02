@@ -4,6 +4,7 @@ import {
   fetchYouTubeDataApiItems,
   YouTubeDataApiError,
   youtubePlaylistId,
+  youtubeApiKey,
   youtubeDataApiRssPayload,
 } from "../dist/live/youtube-data-api.js";
 
@@ -115,4 +116,19 @@ test("rejects missing keys and malformed channel identifiers without leaking cre
     () => youtubePlaylistId("UCbad"),
     (error) => error.code === "CHANNEL_ID_INVALID",
   );
+});
+
+
+test("resolves either configured key, preferring the dedicated key", () => {
+  assert.equal(youtubeApiKey({ YOUTUBE_API_KEY: "  a  ", GOOGLE_API_KEY: "b" }), "a");
+  assert.equal(youtubeApiKey({ YOUTUBE_API_KEY: " ", GOOGLE_API_KEY: " b " }), "b");
+  assert.equal(youtubeApiKey({}), null);
+});
+
+test("decodes entities in YouTube titles and bounded descriptions", async () => {
+  const result = await fetchYouTubeDataApiItems(source, "test-key", async () => jsonResponse({
+    items: [item("abcdefghijk", { title: "Noticias &#34;Chile&#34; &amp; más", description: "Una &#39;cita&#39; &ndash; hoy" })],
+  }));
+  assert.equal(result.items[0].headline, 'Noticias "Chile" & más');
+  assert.equal(result.items[0].excerpt, "Una 'cita' – hoy");
 });
