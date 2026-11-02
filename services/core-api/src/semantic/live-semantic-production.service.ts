@@ -164,11 +164,11 @@ function semanticPromotionDatabaseError(
   return new ModerationHttpError(500, "MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE", diagnostic);
 }
 
-function exactBody(raw: unknown): { targetDay: string; limit: number } {
+export function parseSemanticBatchBody(raw: unknown): { targetDay: string; limit: number; articleIds: string[] } {
   if (typeof raw !== "object" || raw === null || Array.isArray(raw))
     throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
   const value = raw as Record<string, unknown>;
-  if (Object.keys(value).some((key) => !["targetDay", "limit"].includes(key)))
+  if (Object.keys(value).some((key) => !["targetDay", "limit", "articleIds"].includes(key)))
     throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
   if (
     typeof value.targetDay !== "string" ||
@@ -185,7 +185,12 @@ function exactBody(raw: unknown): { targetDay: string; limit: number } {
     Number(limit) > MAX_BATCH
   )
     throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
-  return { targetDay: value.targetDay, limit: Number(limit) };
+  const articleIds = value.articleIds === undefined ? [] : value.articleIds;
+  if (!Array.isArray(articleIds) || articleIds.length > MAX_BATCH ||
+      articleIds.some((id) => typeof id !== "string" || !/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(id)) ||
+      new Set(articleIds).size !== articleIds.length)
+    throw new ModerationHttpError(400, "MOD_INVALID_REQUEST");
+  return { targetDay: value.targetDay, limit: Number(limit), articleIds: articleIds as string[] };
 }
 
 function proposalSpan(payload: unknown): Record<string, unknown> | null {
@@ -260,7 +265,7 @@ export class LiveSemanticProductionService {
   async runBatch(authorization: string | undefined, raw: unknown) {
     this.ensureEnabled();
     const identity = await this.reviews.authorizeEditor(authorization);
-    const { targetDay, limit } = exactBody(raw);
+    const { targetDay, limit, articleIds } = parseSemanticBatchBody(raw);
     const database = this.writer.database;
     const configSha = this.configSha256();
     return database.connection().execute(async (connection) => {
@@ -279,6 +284,7 @@ export class LiveSemanticProductionService {
           targetDay,
           limit,
           configSha,
+          articleIds,
         );
       } finally {
         await sql`select pg_advisory_unlock(hashtextextended(${leaseName},0))`.execute(
@@ -294,6 +300,7 @@ export class LiveSemanticProductionService {
     targetDay: string,
     limit: number,
     configSha: string,
+    articleIds: string[],
   ) {
     const pending = await sql<LiveExcerptInput>`
       select i.article_id as "articleId",i.source_id as "sourceId",i.event_id as "eventId",
@@ -302,6 +309,7 @@ export class LiveSemanticProductionService {
         i.policy_id as "policyId",i.input_sha256 as "inputSha256"
       from public.live_semantic_excerpt_inputs i
       where (i.published_at at time zone 'America/Santiago')::date>=${targetDay}::date
+        and (${articleIds.length}::int=0 or i.article_id=any(${articleIds}::text[]))
         and (i.published_at at time zone 'America/Santiago')::date<${targetDay}::date+2
         and not exists(select 1 from public.assertion_extraction_generations g
           where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256
@@ -320,6 +328,7 @@ export class LiveSemanticProductionService {
     const eligible = await sql<{ count: number }>`
       select count(*)::int as count from public.live_semantic_excerpt_inputs i
       where (i.published_at at time zone 'America/Santiago')::date>=${targetDay}::date
+        and (${articleIds.length}::int=0 or i.article_id=any(${articleIds}::text[]))
         and (i.published_at at time zone 'America/Santiago')::date<${targetDay}::date+2
         and exists(select 1 from public.assertion_extraction_generations g
           where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256
@@ -396,6 +405,7 @@ export class LiveSemanticProductionService {
         targetDay,
         configSha,
         stanceTransport,
+        articleIds,
       );
       const claimPairAssessment = await this.assessGroupClaims(
         connection,
@@ -403,9 +413,10 @@ export class LiveSemanticProductionService {
         targetDay,
         configSha,
         pairTransport,
+        articleIds,
       );
       const stanceAssessment = await this.reassessClaimPairs(
-        connection, runId, requestedBy, targetDay, configSha, stanceTransport,
+        connection, runId, requestedBy, targetDay, configSha, stanceTransport, articleIds,
       );
       const processed = outcomes.filter((item) =>
         ["VALIDATED", "NO_CLAIM_WORTHY_CONTENT"].includes(item.outcome),
@@ -673,6 +684,7 @@ export class LiveSemanticProductionService {
     targetDay: string,
     configSha: string,
     transport: CloudflareWorkersAITransport,
+    articleIds: string[],
   ): Promise<number> {
     const result = await sql<ProposalRow>`
       select i.article_id as "articleId",i.source_id as "sourceId",i.source_name as "sourceName",
@@ -708,6 +720,7 @@ export class LiveSemanticProductionService {
     const caseConfig = caseConfigSha256(configSha);
     let assessments = 0;
     for (const pair of pairs) {
+      if (articleIds.length > 0 && !articleIds.includes(pair.left.articleId) && !articleIds.includes(pair.right.articleId)) continue;
       if (assessments >= MAX_CASE_PAIR_ASSESSMENTS) break;
       const left = proposalById.get(pair.left.articleId);
       const right = proposalById.get(pair.right.articleId);
@@ -855,6 +868,7 @@ export class LiveSemanticProductionService {
     targetDay: string,
     configSha: string,
     transport: CloudflareWorkersAITransport,
+    articleIds: string[],
   ): Promise<{ count: number; limitReached: boolean }> {
     const rows = await sql<ClaimPairRow & { groupId: string }>`
       select group_row.id::text as "groupId",member.article_id::text as "articleId",
@@ -866,6 +880,7 @@ export class LiveSemanticProductionService {
       join public.live_semantic_excerpt_inputs input on input.article_id=member.article_id::text
       join public.assertion_extraction_generations generation on generation.id=member.extraction_generation_id
       where group_row.target_day=${targetDay}::date and group_row.config_sha256=${configSha}
+        and (${articleIds.length}::int=0 or exists(select 1 from public.live_semantic_event_group_members selected where selected.group_id=group_row.id and selected.article_id::text=any(${articleIds}::text[])))
         and group_row.review_state='REVIEW_REQUIRED'
         and not exists(select 1 from public.live_semantic_editorial_decisions decision
           where decision.group_id=group_row.id)
@@ -966,7 +981,7 @@ export class LiveSemanticProductionService {
 
   private async reassessClaimPairs(
     connection: Kysely<Database>, runId: string, requestedBy: string, targetDay: string,
-    configSha: string, transport: CloudflareWorkersAITransport,
+    configSha: string, transport: CloudflareWorkersAITransport, articleIds: string[],
   ): Promise<{ attempted: number; validated: number; invalid: number; unavailable: number }> {
     type Input = {
       id: string; groupId: string; leftArticleId: string; rightArticleId: string;
@@ -979,6 +994,7 @@ export class LiveSemanticProductionService {
         select old.* from public.live_semantic_claim_pair_assessments old
         join public.live_semantic_event_group_candidates group_row on group_row.id=old.group_id
         where group_row.target_day=${targetDay}::date and group_row.config_sha256=${configSha}
+          and (${articleIds.length}::int=0 or exists(select 1 from public.live_semantic_event_group_members selected where selected.group_id=group_row.id and selected.article_id::text=any(${articleIds}::text[])))
           and old.config_sha256=${configSha}
           and not exists(select 1 from public.live_semantic_stance_pair_attempts attempt
             where attempt.original_pair_id=old.id and attempt.config_sha256=${stanceConfig})
