@@ -708,14 +708,19 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                   ? 'No hay noticias con estos filtros.'
                   : 'Todavía no hay noticias recientes disponibles.',
               description: _hasFilters
-                  ? 'Puedes ampliar la búsqueda o cambiar la fuente y la fecha.'
+                  ? 'El filtro por tema y formato se aplica a las noticias cargadas. Puedes ampliar la búsqueda o cambiar la fuente y la fecha.'
                   : 'Vuelve a consultar más tarde; aquí aparecerán publicaciones con su fuente y enlace originales.',
-              action: _hasFilters
+              action: _nextCursor != null && !_addingPage
                   ? EditorialTextButton(
-                      onPressed: _clearFilters,
-                      child: const Text('Limpiar filtros'),
+                      onPressed: () => unawaited(_load(append: true)),
+                      child: const Text('Buscar en más noticias'),
                     )
-                  : null,
+                  : _hasFilters
+                      ? EditorialTextButton(
+                          onPressed: _clearFilters,
+                          child: const Text('Limpiar filtros'),
+                        )
+                      : null,
             )
           else ...<Widget>[
             LiveLeadCard(
