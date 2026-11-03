@@ -51,17 +51,20 @@ void main() {
     await tester.pumpWidget(MaterialApp(theme: DialektikTheme.offWhite(loadInterFromDependency:false), home: LiveSourceListScreen(
       repository: repo, onOpenSource: (_) {},
     )));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
     expect(find.text('Canal de prueba'), findsOneWidget);
     final button = find.text('+ Seguir').first;
     await tester.ensureVisible(button);
     await tester.tap(button);
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Siguiendo ✓'), findsOneWidget);
     await tester.ensureVisible(find.text('Canales de YouTube'));
     await tester.tap(find.text('Canales de YouTube'));
-    await tester.pumpAndSettle();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Canal de prueba'), findsOneWidget);
     expect(find.text('Editorial de pruebas · sintético'), findsNothing);
   });
