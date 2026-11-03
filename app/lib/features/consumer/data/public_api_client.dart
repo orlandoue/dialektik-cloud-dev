@@ -102,6 +102,7 @@ final class PublicApiClient
 
   @override
   Future<Set<String>> listFollowedSources() async {
+    final version = _followingVersion.value;
     final result = await _get<Set<String>>(
     '/v1/sources/following', decoder: (Object? value) {
       if (value is! Map<String, Object?> || value['source_ids'] is! List<Object?>) {
@@ -112,6 +113,7 @@ final class PublicApiClient
       return ids.cast<String>().toSet();
     }, refresh: true, requestToken: null,
     );
+    if (version != _followingVersion.value) return listFollowedSources();
     _cachedFollowedSources = Set.of(result);
     return result;
   }
