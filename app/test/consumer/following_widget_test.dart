@@ -34,7 +34,7 @@ final class _FollowingFeedRepository extends Fake implements ConsumerRepository,
   @override bool get followingAvailable => true;
   @override Listenable get followingChanges => changes;
   @override Future<Set<String>> listFollowedSources() async => {'source-a','source-b'};
-  @override Future<void> setFollowing(String sourceId, {required bool following}) async => changes.value += 1;
+  @override Future<void> setFollowing(String sourceId, {required bool following}) async { changes.value += 1; }
   @override Future<BlindspotsResult> listBlindspots() async => BlindspotsResult(
     followedSourceCount:2, total:1, items:[EventCardDto.fromJson(eventCardJson(id:publishedEventId, title:'Tema no cubierto'))]);
   @override Future<PublicPage<EventCardDto>> listFeed({String? category, String? topic, String? cursor,
@@ -74,8 +74,8 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('En tus fuentes'), findsOneWidget);
-    expect(find.text('Punto ciego: 1 acontecimientos sin cobertura de tus medios'), findsOneWidget);
-    await tester.tap(find.text('Punto ciego: 1 acontecimientos sin cobertura de tus medios'));
+    expect(find.text('Punto ciego: 1 acontecimiento sin cobertura de tus medios'), findsOneWidget);
+    await tester.tap(find.text('Punto ciego: 1 acontecimiento sin cobertura de tus medios'));
     await tester.pumpAndSettle();
     expect(find.text('Tema no cubierto'), findsOneWidget);
   });

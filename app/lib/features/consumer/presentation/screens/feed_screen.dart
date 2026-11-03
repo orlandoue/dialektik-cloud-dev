@@ -77,7 +77,7 @@ final class _FeedScreenState extends State<FeedScreen> {
     final result = _blindspots;
     if (result == null || result.followedSourceCount < 2) return null;
     return Card(child: ExpansionTile(
-      title: Text('Punto ciego: ${result.total} acontecimientos sin cobertura de tus medios'),
+      title: Text('Punto ciego: ${result.total} ${result.total == 1 ? 'acontecimiento' : 'acontecimientos'} sin cobertura de tus medios'),
       subtitle: const Text('Acontecimientos que tus fuentes seguidas no están cubriendo'),
       children: [for (final event in result.items)
         ListTile(title: Text(event.titleDescriptive), onTap: () => widget.onOpenEvent(event.id))],
