@@ -142,12 +142,16 @@ export class PublicApiService {
     readonly category?: string;
     readonly topic?: string;
     readonly page: PageRequest;
+    readonly followedSourceIds?: readonly string[];
+    readonly blindspots?: boolean;
   }): Promise<PublicReadResult<PublicPage<EventCardDto>>> {
     const rows = await this.repository.listFeed({
       ...(input.category === undefined ? {} : { category: input.category }),
       ...(input.topic === undefined ? {} : { topic: input.topic }),
       cursor: input.page.cursor,
       limit: input.page.limit,
+      ...(input.followedSourceIds === undefined ? {} : {followedSourceIds: input.followedSourceIds}),
+      ...(input.blindspots ? {blindspots:true} : {}),
     });
     const visible = rows.slice(0, input.page.limit);
     const last = visible.at(-1);
@@ -156,7 +160,7 @@ export class PublicApiService {
         ? encodeCursor('feed', input.page.filterFingerprint, last.detected_at, last.id)
         : null;
     return {
-      body: { items: visible.map(eventCard), next_cursor: nextCursor },
+      body: { items: visible.map((row) => ({...eventCard(row), ...(input.followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true})})), next_cursor: nextCursor },
       lastModified:
         visible.length === 0
           ? new Date(0)
@@ -164,31 +168,40 @@ export class PublicApiService {
     };
   }
 
-  public async event(id: string, includeCoverage = false): Promise<PublicReadResult<EventDetailDto>> {
+  public async countBlindspots(followedSourceIds: readonly string[]): Promise<number> {
+    return this.repository.countBlindspots(followedSourceIds);
+  }
+
+  public async event(id: string, includeCoverage = false, followedSourceIds?: readonly string[]): Promise<PublicReadResult<EventDetailDto>> {
     const row = await this.#requireCurrentEvent(id);
     const primaryFacts = await this.repository.findPrimaryFacts(id);
     if (primaryFacts.length > 1) throw new TypeError('Event has more than one primary fact.');
     const primary = primaryFacts[0];
+    const followedMatch = followedSourceIds === undefined ? undefined : await this.repository.eventHasFollowedSources(id, followedSourceIds);
     const coverage = includeCoverage && row.analysis_state === 'PUBLISHED'
       ? await this.repository.listEventCoverage(id) : [];
     const linkedArticles = includeCoverage && row.analysis_state === 'PUBLISHED'
       ? await this.repository.listEventArticles(id) : [];
     const related = includeCoverage && row.analysis_state === 'PUBLISHED'
       ? await this.repository.listContradictions({cursor:null,limit:100,eventId:id}) : [];
-    const positions = new Map<string, {id:string;title:string;assertions:{id:string;assertion_text:string;quoted_text:string;article_id:string;source_name:string}[]}>();
-    const articles = new Map<string, {id:string;title:string;source_name:string;published_at:string;url:string}>();
+    const positions = new Map<string, {id:string;title:string;assertions:{id:string;assertion_text:string;quoted_text:string;article_id:string;source_name:string;source_id?:string;is_followed?:boolean}[]}>();
+    const articles = new Map<string, {id:string;title:string;source_name:string;published_at:string;url:string;source_id?:string;is_followed?:boolean}>();
     for (const item of coverage) {
       const position=positions.get(item.position_id) ?? {id:item.position_id,title:item.position_title,assertions:[]};
-      position.assertions.push({id:item.assertion_id,assertion_text:item.assertion_text,quoted_text:item.quoted_text,article_id:item.article_id,source_name:item.source_name});
+      position.assertions.push({id:item.assertion_id,assertion_text:item.assertion_text,quoted_text:item.quoted_text,article_id:item.article_id,source_name:item.source_name,
+        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)})});
       positions.set(item.position_id,position);
-      articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url});
+      articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url,
+        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)})});
     }
     for (const item of linkedArticles) {
-      articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url});
+      articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url,
+        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)})});
     }
     return {
       body: {
         ...eventCard(row),
+        ...(followedSourceIds === undefined ? {} : {is_followed_source_match:followedMatch === true}),
         ...(includeCoverage ? {positions:[...positions.values()],articles:[...articles.values()],
           contrasts:related.map(item=>({id:item.id,position_a_id:item.position_a_id,position_b_id:item.position_b_id,
             kind:item.threshold_rule==='v1:editorial_focus_contrast'?'contrast':'contradiction'}))} : {}),
@@ -329,10 +342,12 @@ export class PublicApiService {
 
   public async contradictions(
     page: PageRequest,
+    followedSourceIds?: readonly string[],
   ): Promise<PublicReadResult<PublicPage<ContradictionDto>>> {
     const rows = await this.repository.listContradictions({
       cursor: page.cursor,
       limit: page.limit,
+      ...(followedSourceIds === undefined ? {} : {followedSourceIds}),
     });
     const visible = rows.slice(0, page.limit);
     const last = visible.at(-1);
@@ -344,6 +359,7 @@ export class PublicApiService {
       body: {
         items: visible.map((row) => ({
           id: row.id,
+          ...(followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true}),
           event_id: row.event_id,
           event_title: row.event_title,
           position_a: {

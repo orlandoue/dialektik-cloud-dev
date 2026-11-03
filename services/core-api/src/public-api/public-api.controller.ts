@@ -5,7 +5,8 @@ import { sendPublicRead } from './public-api.cache.js';
 import { PUBLIC_OPENAPI_DOCUMENT } from './public-api.openapi.js';
 import { PublicApiService } from './public-api.service.js';
 import { PublicRateLimitService } from './public-rate-limit.service.js';
-import { PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
+import { FollowedSourcesService } from './followed-sources.service.js';
+import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import {
   assertExactQueryKeys,
   parseOptionalFilter,
@@ -21,6 +22,7 @@ export class PublicApiController {
   public constructor(
     @Inject(PublicApiService) private readonly publicApi: PublicApiService,
     @Inject(PublicRateLimitService) private readonly rateLimit: PublicRateLimitService,
+    @Inject(FollowedSourcesService) private readonly follows: FollowedSourcesService,
   ) {}
 
   @Get('openapi.json')
@@ -44,10 +46,17 @@ export class PublicApiController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     this.rateLimit.assertAllowed(request.ip);
-    assertExactQueryKeys(query, ['category', 'topic', 'cursor', 'limit']);
+    assertExactQueryKeys(query, ['category', 'topic', 'cursor', 'limit', 'personalized']);
+    if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
     const category = parseOptionalFilter(query.category);
     const topic = parseOptionalFilter(query.topic);
-    const page = parsePageRequest(query, 'feed', { category, topic });
+    const userId = query.personalized === '1' ? betaUserId(request) : undefined;
+    const followedSourceIds = userId === undefined ? undefined : await this.follows.list(userId);
+    const page = parsePageRequest(query, 'feed', { category, topic, ...(userId === undefined ? {} : {user: userId, follows: followedSourceIds!.join(',')}) });
+    if (followedSourceIds !== undefined) {
+      void reply.header('cache-control','private, no-store');
+      return (await this.publicApi.feed({ ...(category === undefined ? {} : {category}), ...(topic === undefined ? {} : {topic}), page, followedSourceIds })).body;
+    }
     return sendPublicRead(
       request,
       reply,
@@ -66,9 +75,29 @@ export class PublicApiController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     this.rateLimit.assertAllowed(request.ip);
-    assertExactQueryKeys(query, ['cursor', 'limit']);
-    const page = parsePageRequest(query, 'contradictions', {});
+    assertExactQueryKeys(query, ['cursor', 'limit', 'personalized']);
+    if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
+    const userId = query.personalized === '1' ? betaUserId(request) : undefined;
+    const followed = userId === undefined ? undefined : await this.follows.list(userId);
+    const page = parsePageRequest(query, 'contradictions', userId === undefined ? {} : {user:userId,follows:followed!.join(',')});
+    if (followed !== undefined) {
+      void reply.header('cache-control','private, no-store');
+      return (await this.publicApi.contradictions(page, followed)).body;
+    }
     return sendPublicRead(request, reply, await this.publicApi.contradictions(page));
+  }
+
+  @Get('feed/blindspots')
+  public async blindspots(@Query() query: PublicQuery, @Req() request: FastifyRequest, @Res({passthrough:true}) reply: FastifyReply) {
+    this.rateLimit.assertAllowed(request.ip);
+    assertExactQueryKeys(query, ['cursor','limit']);
+    const userId=betaUserId(request);
+    const followedSourceIds=await this.follows.list(userId);
+    const page=parsePageRequest(query,'feed',{user:userId,follows:followedSourceIds.join(','),blindspots:'1'});
+    void reply.header('cache-control','private, no-store');
+    if (followedSourceIds.length === 0) return {items:[],next_cursor:null,followed_source_count:0,total:0};
+    const result=await this.publicApi.feed({page,followedSourceIds,blindspots:true});
+    return {...result.body,followed_source_count:followedSourceIds.length,total:await this.publicApi.countBlindspots(followedSourceIds)};
   }
 
   @Get('events/:eventId')
@@ -79,9 +108,15 @@ export class PublicApiController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     this.rateLimit.assertAllowed(request.ip);
-    assertExactQueryKeys(query, ['include']);
+    assertExactQueryKeys(query, ['include','personalized']);
+    if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
     if (query.include !== undefined && query.include !== 'coverage') {
       throw new BadRequestException('Unsupported event include');
+    }
+    if (query.personalized === '1') {
+      const followed = await this.follows.list(betaUserId(request));
+      void reply.header('cache-control','private, no-store');
+      return (await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage',followed)).body;
     }
     return sendPublicRead(request, reply, await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage'));
   }

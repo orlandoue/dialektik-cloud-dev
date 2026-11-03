@@ -13,6 +13,7 @@ export interface FeedRow {
   readonly source_count: number;
   readonly position_count: number;
   readonly representation_updated_at: Date;
+  readonly is_followed_source_match?: boolean;
 }
 
 export interface EventRow extends FeedRow {
@@ -76,7 +77,7 @@ export interface EventCoverageRow {
   readonly position_id: string; readonly position_title: string;
   readonly assertion_id: string; readonly assertion_text: string; readonly quoted_text: string;
   readonly article_id: string; readonly article_title: string; readonly url: string;
-  readonly published_at: Date; readonly source_name: string;
+  readonly published_at: Date; readonly source_name: string; readonly source_id: string;
 }
 
 export interface AttributionRow {
@@ -109,6 +110,7 @@ export interface RelationshipEndpointRow {
 }
 
 export interface ContradictionRow {
+  readonly is_followed_source_match?: boolean;
   readonly id: string;
   readonly event_id: string;
   readonly event_title: string;
@@ -283,6 +285,8 @@ export class PublicApiRepository {
     readonly topic?: string;
     readonly cursor: PageCursor | null;
     readonly limit: number;
+    readonly followedSourceIds?: readonly string[];
+    readonly blindspots?: boolean;
   }): Promise<readonly FeedRow[]> {
     const categoryClause =
       input.category === undefined ? sql`` : sql`and category_row.slug = ${input.category}`;
@@ -298,11 +302,20 @@ export class PublicApiRepository {
               and topic_row.status = 'active'
               and topic_row.canonical_slug = ${input.topic}
           )`;
-    const cursorClause =
-      input.cursor === null
-        ? sql``
-        : sql`and (event_row.detected_at, event_row.id) <
-            (${input.cursor.timestamp}, ${input.cursor.id}::dialektik_ulid)`;
+    const follows = input.followedSourceIds;
+    const match = follows === undefined ? sql`false` : sql`exists(select 1 from public.articles followed_article
+      where followed_article.event_id=event_row.id and followed_article.origin='LIVE_REAL'
+        and followed_article.source_id::text=any(${follows}::text[]))`;
+    const cursorMatch = input.cursor === null || follows === undefined ? sql`false` : sql`exists(select 1 from public.articles followed_cursor
+      where followed_cursor.event_id=${input.cursor.id}::dialektik_ulid and followed_cursor.origin='LIVE_REAL'
+        and followed_cursor.source_id::text=any(${follows}::text[]))`;
+    const cursorClause = input.cursor === null ? sql`` : follows === undefined
+      ? sql`and (event_row.detected_at,event_row.id)<(${input.cursor.timestamp},${input.cursor.id}::dialektik_ulid)`
+      : sql`and ((${match})::int,event_row.detected_at,event_row.id)<((${cursorMatch})::int,${input.cursor.timestamp},${input.cursor.id}::dialektik_ulid)`;
+    const blindspotClause = !input.blindspots ? sql`` : sql`and event_row.analysis_state='PUBLISHED' and not (${match})
+      and ((select count(distinct a.source_id) from public.articles a where a.event_id=event_row.id and a.origin='LIVE_REAL') >= 2
+        or exists(select 1 from public.contradiction_publications c where c.event_id=event_row.id
+          and c.publication_state='published' and c.confirmed_at is not null and c.confirmed_by is not null))`;
     const result = await sql<FeedRow>`
       select
         event_row.id,
@@ -310,6 +323,7 @@ export class PublicApiRepository {
         category_row.slug as category,
         event_row.detected_at,
         event_row.analysis_state,
+        ${match} as is_followed_source_match,
         (
           select count(distinct article_row.source_id)::integer
           from articles article_row
@@ -346,11 +360,34 @@ export class PublicApiRepository {
         and ${groundedEvent}
         ${categoryClause}
         ${topicClause}
+        ${blindspotClause}
         ${cursorClause}
-      order by event_row.detected_at desc, event_row.id desc
+      order by ${follows === undefined ? sql`` : sql`(${match})::int desc,`} event_row.detected_at desc, event_row.id desc
       limit ${input.limit + 1}
     `.execute(this.databaseService.database);
     return result.rows;
+  }
+
+  public async eventHasFollowedSources(eventId: string, followedSourceIds: readonly string[]): Promise<boolean> {
+    if (followedSourceIds.length === 0) return false;
+    const result = await sql<{matched:boolean}>`select exists(select 1 from public.articles a
+      where a.event_id=${eventId}::dialektik_ulid and a.origin='LIVE_REAL'
+        and a.source_id::text=any(${followedSourceIds}::text[])) as matched`.execute(this.databaseService.database);
+    return result.rows[0]?.matched === true;
+  }
+
+  public async countBlindspots(followedSourceIds: readonly string[]): Promise<number> {
+    if (followedSourceIds.length === 0) return 0;
+    const result = await sql<{count:number}>`select count(*)::int as count from events event_row
+      join categories category_row on category_row.id=event_row.category_id
+      where event_row.merged_into is null and category_row.is_active and event_row.analysis_state='PUBLISHED'
+        and ${groundedEvent}
+        and not exists(select 1 from public.articles a where a.event_id=event_row.id and a.origin='LIVE_REAL'
+          and a.source_id::text=any(${followedSourceIds}::text[]))
+        and ((select count(distinct a.source_id) from public.articles a where a.event_id=event_row.id and a.origin='LIVE_REAL') >= 2
+          or exists(select 1 from public.contradiction_publications c where c.event_id=event_row.id
+            and c.publication_state='published' and c.confirmed_at is not null and c.confirmed_by is not null))`.execute(this.databaseService.database);
+    return result.rows[0]?.count ?? 0;
   }
 
   public async findEvent(id: string): Promise<EventRow | undefined> {
@@ -517,7 +554,7 @@ export class PublicApiRepository {
       select p.id::text as position_id,p.title_text as position_title,a.id::text as assertion_id,
         ev.summary as assertion_text,span.quoted_text,article.id::text as article_id,
         version.headline as article_title,article.url_canonical as url,
-        article.published_at,source.name as source_name
+        article.published_at,source.name as source_name,source.id::text as source_id
       from public.positions p
       join public.assertions a on a.position_id=p.id and a.lifecycle_state='active'
         and not exists(select 1 from public.assertions successor where successor.supersedes_id=a.id)
@@ -548,10 +585,10 @@ export class PublicApiRepository {
     return result.rows;
   }
 
-  public async listEventArticles(eventId: string): Promise<readonly Pick<EventCoverageRow, 'article_id' | 'article_title' | 'source_name' | 'published_at' | 'url'>[]> {
-    const result = await sql<Pick<EventCoverageRow, 'article_id' | 'article_title' | 'source_name' | 'published_at' | 'url'>>`
+  public async listEventArticles(eventId: string): Promise<readonly Pick<EventCoverageRow, 'article_id' | 'article_title' | 'source_name' | 'source_id' | 'published_at' | 'url'>[]> {
+    const result = await sql<Pick<EventCoverageRow, 'article_id' | 'article_title' | 'source_name' | 'source_id' | 'published_at' | 'url'>>`
       select article.id::text as article_id, version.headline as article_title,
-        source.name as source_name, article.published_at, article.url_canonical as url
+        source.name as source_name, source.id::text as source_id, article.published_at, article.url_canonical as url
       from public.articles article
       join public.sources source on source.id=article.source_id and source.origin='LIVE_REAL'
       join lateral (select v.* from public.live_article_versions v where v.article_id=article.id order by v.version_number desc limit 1) version on true
@@ -730,16 +767,25 @@ export class PublicApiRepository {
     readonly cursor: PageCursor | null;
     readonly limit: number;
     readonly eventId?: string;
+    readonly followedSourceIds?: readonly string[];
   }): Promise<readonly ContradictionRow[]> {
-    const cursorClause =
-      input.cursor === null
-        ? sql``
-        : sql`and (publication.confirmed_at, publication.id) <
-            (${input.cursor.timestamp}, ${input.cursor.id}::dialektik_ulid)`;
+    const follows=input.followedSourceIds;
+    const match=follows===undefined ? sql`false` : sql`exists(select 1 from public.articles followed_article
+      where followed_article.event_id=event_row.id and followed_article.origin='LIVE_REAL'
+        and followed_article.source_id::text=any(${follows}::text[]))`;
+    const cursorMatch=input.cursor===null || follows===undefined ? sql`false` : sql`exists(select 1
+      from public.contradiction_publications cursor_publication join public.articles cursor_article
+        on cursor_article.event_id=cursor_publication.event_id and cursor_article.origin='LIVE_REAL'
+      where cursor_publication.id=${input.cursor.id}::dialektik_ulid
+        and cursor_article.source_id::text=any(${follows}::text[]))`;
+    const cursorClause=input.cursor===null ? sql`` : follows===undefined
+      ? sql`and (publication.confirmed_at,publication.id)<(${input.cursor.timestamp},${input.cursor.id}::dialektik_ulid)`
+      : sql`and ((${match})::int,publication.confirmed_at,publication.id)<((${cursorMatch})::int,${input.cursor.timestamp},${input.cursor.id}::dialektik_ulid)`;
     const result = await sql<ContradictionRow>`
       select
         publication.id,
         publication.event_id,
+        ${match} as is_followed_source_match,
         case when publication.threshold_rule_at_publication='v1:editorial_focus_contrast'
           then 'Contraste de enfoques: ' || event_row.title_descriptive
           else event_row.title_descriptive end as event_title,
@@ -801,7 +847,7 @@ export class PublicApiRepository {
             and claim.tombstone_id is null
         )
         ${cursorClause}
-      order by publication.confirmed_at desc, publication.id desc
+      order by ${follows === undefined ? sql`` : sql`(${match})::int desc,`} publication.confirmed_at desc, publication.id desc
       limit ${input.limit + 1}
     `.execute(this.databaseService.database);
     return result.rows;
