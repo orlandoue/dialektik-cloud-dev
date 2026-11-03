@@ -22,6 +22,7 @@ test('reassesses a current literal pair once and retains the original classifica
       create table articles(id dialektik_ulid primary key);
       create table live_semantic_production_runs(id dialektik_ulid primary key);
       create table live_semantic_event_group_candidates(id dialektik_ulid primary key,target_day date,config_sha256 text);
+      create table live_semantic_event_group_members(group_id dialektik_ulid,article_id dialektik_ulid);
       create table live_semantic_pair_assessments(id dialektik_ulid primary key);
       create table assertion_extraction_generations(id dialektik_ulid primary key,input_hash text,state text,proposal_payload jsonb);
       create table live_semantic_excerpt_inputs(article_id text,headline text,source_name text,text_original text,input_sha256 text);
@@ -62,6 +63,7 @@ test('reassesses a current literal pair once and retains the original classifica
     const run = () => service.reassessClaimPairs(database,id(2),id(1),'2026-10-29',originalConfig,transport);
     assert.deepEqual(await run(), { attempted: 1, validated: 1, invalid: 0, unavailable: 0 });
     assert.deepEqual(await run(), { attempted: 0, validated: 0, invalid: 0, unavailable: 0 });
+    assert.deepEqual(await service.reassessClaimPairs(database,id(2),id(1),'2026-10-29',originalConfig,transport,null), { attempted: 0, validated: 0, invalid: 0, unavailable: 0 });
     assert.equal(calls, 1);
     const rows = await db.query('select relation,config_sha256 from live_semantic_claim_pair_assessments order by config_sha256');
     assert.deepEqual(new Set(rows.rows.map((row) => `${row.relation}:${row.config_sha256}`)),

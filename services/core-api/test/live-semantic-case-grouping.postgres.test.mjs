@@ -62,6 +62,7 @@ test('groups a confirmed case with non-comparable claims without inventing a con
     const run = () => service.assessCurrentGroups(database,id(2),id(1),'2026-10-29',config,transport);
     assert.equal(await run(), 1);
     assert.equal(await run(), 0);
+    assert.equal(await service.assessCurrentGroups(database,id(2),id(1),'2026-10-29',config,transport,null), 0);
     assert.equal(calls, 1);
     const members = await db.query('select count(*)::int as count from live_semantic_event_group_members');
     const pairs = await db.query('select same_event,relation from live_semantic_pair_assessments');
