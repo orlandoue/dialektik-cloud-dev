@@ -133,7 +133,12 @@ final class PublicApiClient
     }
     _cache.clear();
     _cachedMirrorNews = null;
-    _cachedFollowedSources = null;
+    final cached = _cachedFollowedSources;
+    if (cached != null) {
+      _cachedFollowedSources = <String>{...cached};
+      if (following) { _cachedFollowedSources!.add(sourceId); }
+      else { _cachedFollowedSources!.remove(sourceId); }
+    }
     _followingVersion.value += 1;
   }
 

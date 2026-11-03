@@ -49,7 +49,12 @@ class _MirrorScreenState extends State<MirrorScreen> {
     } else { unawaited(_reload()); }
   }
   @override void dispose() { following?.followingChanges.removeListener(_changed); super.dispose(); }
-  void _changed() => unawaited(_reload());
+  void _changed() {
+    final memory = widget.repository is MirrorNewsMemory ? widget.repository as MirrorNewsMemory : null;
+    final latest = memory?.cachedFollowedSources;
+    if (latest != null && mounted) setState(() => followed=latest);
+    unawaited(_reload());
+  }
   Future<void> _reload() async {
     final run = ++generation;
     setState(() { loading = true; error = null; cursor = null; });
