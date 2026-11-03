@@ -11,15 +11,21 @@ import 'package:flutter_test/flutter_test.dart';
 import '../live/live_fixtures.dart';
 import '../support/public_api_fixtures.dart';
 
-class _MirrorRepo extends Fake implements LiveNewsRepository, ScopedLiveNewsRepository, FollowingRepository {
+class _MirrorRepo extends Fake implements LiveNewsRepository, ScopedLiveNewsRepository, FollowingRepository, MirrorNewsMemory {
   final ValueNotifier<int> changes=ValueNotifier<int>(0);
   final Set<String> ids={};
+  LiveNewsPageDto? cached;
+  int requests=0;
+  @override LiveNewsPageDto? get cachedMirrorNews=>cached;
+  @override Set<String>? get cachedFollowedSources=>cached == null ? null : Set.of(ids);
+  @override Future<void> prefetchMirrorNews() async {}
   @override bool get followingAvailable=>true;
   @override Listenable get followingChanges=>changes;
   @override Future<Set<String>> listFollowedSources() async=>Set.of(ids);
   @override Future<void> setFollowing(String sourceId,{required bool following}) async {if(following){ids.add(sourceId);}else{ids.remove(sourceId);}changes.value++;}
   @override Future<BlindspotsResult> listBlindspots() async=>const BlindspotsResult(items:[],total:0,followedSourceCount:0);
   @override Future<LiveNewsPageDto> listScopedLiveNews({required String scope,String? cursor,String? format,String? topic,String? query,String? sourceId,DateTime? publishedFrom,DateTime? publishedTo,bool refresh=false,PublicRequestToken? requestToken}) async {
+    requests++;
     final item=liveTestArticle();
     return LiveNewsPageDto.fromJson({'origin':'LIVE_REAL','semantic_mode':'unassigned','items':ids.contains(liveTestSourceId)?<Object?>[]:<Object?>[item],'next_cursor':null});
   }
@@ -29,19 +35,25 @@ void main(){
     final repo=_MirrorRepo();addTearDown(repo.changes.dispose);
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),home:MirrorScreen(repository:repo,onOpenArticle:(_){},onOpenSources:(){})));
     await tester.pumpAndSettle();
-    expect(find.text('ANTÍTESIS · FUERA DE TU ALGORITMO'),findsOneWidget);
     expect(find.textContaining('FUERA DE TUS FUENTES'),findsOneWidget);
-    await tester.tap(find.text('+ Seguir medio'));
+    await tester.tap(find.text('Seguir medio'));
     await tester.pumpAndSettle();
     expect(repo.ids,contains(liveTestSourceId));
     expect(find.textContaining('FUERA DE TUS FUENTES'),findsNothing);
+  });
+  testWidgets('mirror displays the shared cached page immediately', (tester) async {
+    final repo=_MirrorRepo(); addTearDown(repo.changes.dispose);
+    repo.cached=LiveNewsPageDto.fromJson({'origin':'LIVE_REAL','semantic_mode':'unassigned','items':<Object?>[liveTestArticle()],'next_cursor':null});
+    await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),home:MirrorScreen(repository:repo,onOpenArticle:(_){},onOpenSources:(){})));
+    expect(find.textContaining('FUERA DE TUS FUENTES'),findsOneWidget);
+    expect(repo.requests,0);
   });
   testWidgets('synthesis combines published events and contrast filters', (tester) async {
     final repo=FakeConsumerRepository(feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
       home:SynthesisScreen(repository:repo,onOpenEvent:(_){})));
     await tester.pumpAndSettle();
-    expect(find.text('CONTRASTE DETECTADO · 2 POSTURAS'),findsOneWidget);
+    expect(find.text('CONTRASTE DE ENFOQUES · 2 POSTURAS'),findsOneWidget);
     await tester.tap(find.text('Con contraste (1)'));
     await tester.pumpAndSettle();
     expect(find.text(publishedEventCard.titleDescriptive),findsOneWidget);

@@ -111,7 +111,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Noticias recientes'), findsOneWidget);
+      expect(find.text('Noticias recientes'), findsNothing);
       expect(find.text(article.headline), findsOneWidget);
       expect(find.text('LIVE · SHADOW'), findsNothing);
       expect(find.text('DEMO'), findsNothing);

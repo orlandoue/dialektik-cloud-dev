@@ -1,6 +1,12 @@
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 
+abstract interface class MirrorNewsMemory {
+  LiveNewsPageDto? get cachedMirrorNews;
+  Set<String>? get cachedFollowedSources;
+  Future<void> prefetchMirrorNews();
+}
+
 abstract interface class ScopedLiveNewsRepository {
   Future<LiveNewsPageDto> listScopedLiveNews({required String scope, String? cursor,
     String? format, String? topic, String? query, String? sourceId, DateTime? publishedFrom,

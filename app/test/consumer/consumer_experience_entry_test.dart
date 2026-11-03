@@ -207,9 +207,12 @@ void main() {
         find.text('No hay acontecimientos en este filtro.'),
         findsOneWidget,
       );
+      await _tap(tester, find.text('Actualidad'));
+      expect(liveRepository.pendingSourceLoads, hasLength(1));
+      await _tap(tester, find.text('Síntesis'));
       await _tapAndResolveSources(tester, liveRepository);
       await _tap(tester, find.text('Espejo'));
-      expect(find.text('ANTÍTESIS · FUERA DE TU ALGORITMO'), findsOneWidget);
+      expect(find.textContaining('Elige al menos 2 medios'), findsOneWidget);
       await _tap(tester, find.text('Actualidad'));
       expect(
         find.text('Noticia escrita para pruebas: océano & atmósfera — señales'),

@@ -103,9 +103,16 @@ final class ConsumerRouteFactory {
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>(
     debugLabel: 'consumer-navigator',
   );
+  final ValueNotifier<String> _selectedTab = ValueNotifier<String>(ConsumerRoutes.liveNews);
+  bool _buildingTab = false;
+  int _activeTabHosts = 0;
+  static const _mainTabs = <String>{ConsumerRoutes.liveNews, ConsumerRoutes.mirror, ConsumerRoutes.feed, ConsumerRoutes.liveSources};
 
   Route<dynamic> generate(RouteSettings settings) {
     final Uri uri = Uri.parse(settings.name ?? ConsumerRoutes.feed);
+    if (liveNewsRepository != null && !_buildingTab && _mainTabs.contains(uri.path) && uri.queryParameters.isEmpty) {
+      return _page(settings, _PersistentReaderTabs(factory:this, initialTab:uri.path));
+    }
     final List<String> segments = uri.pathSegments;
     final PersonalOwnerStatusRepository? ownerStatus =
         personalOwnerStatusRepository;
@@ -649,9 +656,48 @@ final class ConsumerRouteFactory {
   }
 
   void _openSection(String route) {
+    if (_mainTabs.contains(route) && _activeTabHosts > 0) {
+      _selectedTab.value = route;
+      _navigatorKey.currentState?.popUntil((candidate) => candidate.isFirst || _mainTabs.contains(Uri.parse(candidate.settings.name ?? '').path));
+      return;
+    }
     _navigatorKey.currentState?.pushNamedAndRemoveUntil(
       route,
       (Route<dynamic> candidate) => candidate.isFirst,
     );
   }
+
+  Widget _tabWidget(String route) {
+    _buildingTab = true;
+    try {
+      final page = generate(RouteSettings(name:route)) as MaterialPageRoute<void>;
+      return Builder(builder:page.builder);
+    } finally { _buildingTab = false; }
+  }
+}
+
+class _PersistentReaderTabs extends StatefulWidget {
+  const _PersistentReaderTabs({required this.factory,required this.initialTab});
+  final ConsumerRouteFactory factory;
+  final String initialTab;
+  @override State<_PersistentReaderTabs> createState()=>_PersistentReaderTabsState();
+}
+class _PersistentReaderTabsState extends State<_PersistentReaderTabs> {
+  final Map<String,Widget> _pages = {};
+  @override void initState() {
+    super.initState();
+    widget.factory._activeTabHosts++;
+    widget.factory._selectedTab.value=widget.initialTab;
+    widget.factory.publisherMarketSelection?.addListener(_marketChanged);
+  }
+  void _marketChanged() { if(mounted) setState(() { _pages.removeWhere((route,_) => route != ConsumerRoutes.liveNews); }); }
+  @override void dispose() { widget.factory._activeTabHosts--;widget.factory.publisherMarketSelection?.removeListener(_marketChanged);super.dispose(); }
+  @override Widget build(BuildContext context) => ValueListenableBuilder<String>(
+    valueListenable:widget.factory._selectedTab,
+    builder:(context,selected,_) {
+      _pages.putIfAbsent(selected,()=>widget.factory._tabWidget(selected));
+      final routes=_pages.keys.toList(growable:false);
+      return IndexedStack(index:routes.indexOf(selected),children:[for(final route in routes) KeyedSubtree(key:ValueKey(route),child:TickerMode(enabled:route==selected,child:_pages[route]!)),]);
+    },
+  );
 }

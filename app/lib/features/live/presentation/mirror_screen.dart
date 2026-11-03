@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_responsive_shell.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:flutter/material.dart';
@@ -14,10 +15,10 @@ class MirrorScreen extends StatefulWidget {
   @override State<MirrorScreen> createState() => _MirrorScreenState();
 }
 class _MirrorScreenState extends State<MirrorScreen> {
-  static const background = Color(0xff111622);
-  static const panel = Color(0xff1a2234);
-  static const ivory = Color(0xfff9f7f1);
-  static const gold = Color(0xffd4a359);
+  static const background = Color(0xfffaf8f3);
+  static const panel = Color(0xffffffff);
+  static const ivory = Color(0xff1a1a1a);
+  static const gold = Color(0xffc85a32);
   Set<String> followed = {};
   List<LiveNewsItemDto> items = [];
   String? cursor, format, topic;
@@ -36,9 +37,24 @@ class _MirrorScreenState extends State<MirrorScreen> {
     }
     return result;
   }
-  @override void initState() { super.initState(); following?.followingChanges.addListener(_changed); unawaited(_reload()); }
+  @override void initState() {
+    super.initState();
+    following?.followingChanges.addListener(_changed);
+    final memory = widget.repository is MirrorNewsMemory ? widget.repository as MirrorNewsMemory : null;
+    final cached = memory?.cachedMirrorNews;
+    final ids = memory?.cachedFollowedSources;
+    if (cached != null && ids != null) {
+      followed=ids; items=ids.isEmpty ? _diverse(cached.items) : cached.items;
+      cursor=cached.nextCursor; loading=false;
+    } else { unawaited(_reload()); }
+  }
   @override void dispose() { following?.followingChanges.removeListener(_changed); super.dispose(); }
-  void _changed() => unawaited(_reload());
+  void _changed() {
+    final memory = widget.repository is MirrorNewsMemory ? widget.repository as MirrorNewsMemory : null;
+    final latest = memory?.cachedFollowedSources;
+    if (latest != null && mounted) setState(() => followed=latest);
+    unawaited(_reload());
+  }
   Future<void> _reload() async {
     final run = ++generation;
     setState(() { loading = true; error = null; cursor = null; });
@@ -63,39 +79,44 @@ class _MirrorScreenState extends State<MirrorScreen> {
     finally { if (mounted && run==generation) setState(() => busy=false); }
   }
   Future<void> _follow(String id) async {
-    try { await following!.setFollowing(id,following:true); }
+    try { await following!.setFollowing(id,following:true); if(mounted) setState(()=>followed={...followed,id}); }
     on Exception { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No se pudo seguir esta fuente.'))); }
   }
   @override Widget build(BuildContext context) => ConsumerResponsiveShell(
     title:'Dialektik', location:'Espejo', navigationActions:widget.navigationActions,
-    body: ColoredBox(color:background, child: Theme(data:ThemeData.dark().copyWith(
-      colorScheme:const ColorScheme.dark(primary:gold, surface:panel),
-      textTheme:ThemeData.dark().textTheme.apply(bodyColor:ivory,displayColor:ivory),
-    ), child: ListView(padding:const EdgeInsets.all(20), children:[
-      const Text('ANTÍTESIS · FUERA DE TU ALGORITMO', style:TextStyle(color:gold)),
-      const SizedBox(height:12),
+    body: ColoredBox(color:background, child: RefreshIndicator(onRefresh:_reload,child:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,24), children:[
       if (followed.length < 2) ...[
         const Text('Elige al menos 2 medios en Fuentes para personalizar tu espejo. Aquí puedes explorar otras publicaciones.'),
         TextButton(onPressed:widget.onOpenSources, child:const Text('Elegir fuentes')),
       ],
-      SingleChildScrollView(scrollDirection:Axis.horizontal, child:Row(children:[
-        for (final choice in const [(null,'Todo'),('press','Prensa'),('videos','Videos')])
-          Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice.$2),selected:format==choice.$1,onSelected:(_) {format=choice.$1;unawaited(_reload());})),
-      ])),
-      SingleChildScrollView(scrollDirection:Axis.horizontal, child:Row(children:[
-        for (final choice in const [(null,'Todos'),('politica','Política'),('justicia','Justicia'),('economia','Economía'),('seguridad','Seguridad'),('deportes','Deportes'),('sociedad','Sociedad')])
-          Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice.$2),selected:topic==choice.$1,onSelected:(_) {topic=choice.$1;unawaited(_reload());})),
-      ])),
-      if (loading) const Center(child:CircularProgressIndicator())
+      HorizontalChoiceStrip<String>(semanticsLabel:'Filtrar por formato', allLabel:'Todo', selectedValue:format,
+        options:const [HorizontalChoiceOption(value:'press',label:'Prensa'),HorizontalChoiceOption(value:'videos',label:'Videos')],
+        onSelected:(value){format=value;items=[];unawaited(_reload());}),
+      const SizedBox(height:8),
+      HorizontalChoiceStrip<String>(semanticsLabel:'Filtrar por tema', allLabel:'Todos', selectedValue:topic,
+        options:const [HorizontalChoiceOption(value:'politica',label:'Política'),HorizontalChoiceOption(value:'justicia',label:'Justicia'),HorizontalChoiceOption(value:'economia',label:'Economía'),HorizontalChoiceOption(value:'seguridad',label:'Seguridad'),HorizontalChoiceOption(value:'deportes',label:'Deportes'),HorizontalChoiceOption(value:'sociedad',label:'Sociedad')],
+        onSelected:(value){topic=value;items=[];unawaited(_reload());}),
+      const SizedBox(height:8),
+      if (loading && items.isEmpty) const Center(child:CircularProgressIndicator())
       else if (error != null && items.isEmpty) TextButton(onPressed:_reload,child:const Text('No se pudo cargar Espejo. Reintentar'))
       else if (items.isEmpty) const Text('No hay publicaciones con estos filtros.')
       else ...[
-        for (final item in items) Card(color:panel, child:Padding(padding:const EdgeInsets.all(16), child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Text('${item.source.name.toUpperCase()} · FUERA DE TUS FUENTES',style:const TextStyle(color:gold)),
-          const SizedBox(height:8),
-          Text(item.headline,style:const TextStyle(color:ivory,fontFamily:'serif',fontSize:20)),
-          Row(children:[TextButton(onPressed:()=>widget.onOpenArticle(item.id),child:const Text('Abrir noticia')), TextButton(onPressed:()=>_follow(item.source.id),child:const Text('+ Seguir medio'))]),
-        ]))),
+        for (final item in items.where((item)=>!followed.contains(item.source.id)))
+          Container(margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:panel,border:Border.all(color:const Color(0xffe5e0d5)),borderRadius:BorderRadius.circular(12)),
+            child:IntrinsicHeight(child:Row(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+              Container(width:3.5,decoration:const BoxDecoration(color:gold,borderRadius:BorderRadius.horizontal(left:Radius.circular(12)))),
+              Expanded(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:const Color(0xfffff7ed),borderRadius:BorderRadius.circular(6)),
+                  child:Text('FUERA DE TUS FUENTES · ${item.source.name.toUpperCase()}',style:const TextStyle(color:Color(0xff9a3412),fontSize:11,fontWeight:FontWeight.w700))),
+                const SizedBox(height:8),
+                Text(item.headline,style:const TextStyle(color:ivory,fontFamily:'serif',fontSize:20,height:1.3)),
+                const SizedBox(height:8),
+                Wrap(alignment:WrapAlignment.spaceBetween,spacing:8,runSpacing:4,children:[
+                  TextButton(onPressed:()=>widget.onOpenArticle(item.id),child:const Text('Abrir noticia ↗')),
+                  OutlinedButton.icon(onPressed:()=>_follow(item.source.id),icon:const Icon(Icons.add,size:16),label:const Text('Seguir medio')),
+                ]),
+              ]))),
+            ]))),
         if (cursor != null) TextButton(onPressed:busy ? null : _more,child:const Text('Ver más noticias')),
         if (error != null) TextButton(onPressed:_more,child:const Text('Reintentar')),
       ],

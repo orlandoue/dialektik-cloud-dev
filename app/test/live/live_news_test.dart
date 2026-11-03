@@ -618,6 +618,7 @@ void main() {
     (WidgetTester tester) async {
       final List<Uri> calls = <Uri>[];
       await mountLive(tester, liveTestClient(calls: calls));
+      await tapLive(tester, find.text('Filtros'));
       await tester.enterText(find.byType(TextField), 'océano');
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
@@ -690,6 +691,7 @@ void main() {
     );
     expect(find.text('Video verificado de seguridad en Meganoticias'), findsOneWidget);
 
+    await tapLive(tester, find.text('Filtros'));
     await tapLive(tester, find.text('Prensa'));
     expect(calls.last.queryParameters['format'], 'press');
     expect(
@@ -753,6 +755,7 @@ void main() {
         },
       );
       await mountLive(tester, client);
+      await tapLive(tester, find.text('Filtros'));
       await tester.enterText(find.byType(TextField), 'océano');
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pumpAndSettle();
@@ -779,6 +782,7 @@ void main() {
         },
       );
       await mountLive(tester, client);
+      await tapLive(tester, find.text('Filtros'));
       await tester.enterText(find.byType(TextField), 'anterior');
       await tester.pump(const Duration(milliseconds: 350));
       await tester.pump();

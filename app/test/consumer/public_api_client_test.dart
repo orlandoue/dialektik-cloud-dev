@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
@@ -13,6 +14,25 @@ import '../support/public_api_fixtures.dart';
 
 void main() {
   group('PublicApiClient', () {
+    test('does not restore a stale following list after a follow change', () async {
+      final started=Completer<void>();
+      final stale=Completer<http.Response>();
+      var reads=0;
+      final client=PublicApiClient(configuration:ApiConfiguration.fromBaseUrl('https://api.example.test'),
+        authorizationTokenProvider:() async=>'test-token',httpClient:MockClient((request) async {
+          if(request.method=='POST') return _jsonResponse({'following':true});
+          if(reads++==0) { started.complete(); return stale.future; }
+          return _jsonResponse({'source_ids':<String>['new-source']});
+        }));
+      final pending=client.listFollowedSources();
+      await started.future;
+      await client.setFollowing('new-source',following:true);
+      stale.complete(_jsonResponse({'source_ids':<String>[]}));
+      expect(await pending,{'new-source'});
+      expect(client.cachedFollowedSources,{'new-source'});
+      expect(reads,2);
+      client.close();
+    });
     test('uses exact feed filters and preserves an opaque cursor', () async {
       late Uri requested;
       final PublicApiClient client = _client((http.Request request) async {

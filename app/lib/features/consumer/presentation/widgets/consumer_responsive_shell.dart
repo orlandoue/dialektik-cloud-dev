@@ -197,7 +197,10 @@ final class _MobileHeader extends StatelessWidget {
                     const SizedBox(width: DialektikSpacing.space1),
                   ],
                   Expanded(
-                    child: FittedBox(
+                    child: Semantics(
+                      label: location == null ? null : 'Ubicación actual: $location',
+                      explicitChildNodes: true,
+                      child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -208,23 +211,9 @@ final class _MobileHeader extends StatelessWidget {
                           color: DialektikColors.inkBlack,
                         ),
                       ),
-                    ),
-                  ),
-                  if (location != null && location != 'Dialektik')
-                    Flexible(
-                      child: Semantics(
-                        label: 'Ubicación actual: $location',
-                        excludeSemantics: true,
-                        child: Text(
-                          location!,
-                          softWrap: true,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: DialektikColors.correctedCoolGray,
-                              ),
-                        ),
                       ),
                     ),
+                  ),
                   ...utilityActions,
                   if (secondary.isNotEmpty) _MoreTab(actions:secondary, selected:secondary.any((action)=>action.selected)),
                 ],
