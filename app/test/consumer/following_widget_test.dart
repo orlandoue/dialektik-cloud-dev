@@ -1,5 +1,6 @@
 import 'package:dialektik/app/dialektik_app.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
+import 'package:dialektik/design_system/theme/dialektik_theme.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
@@ -47,7 +48,7 @@ void main() {
   testWidgets('sources can be followed and filtered without hiding other sources', (tester) async {
     final repo = _FollowingLiveRepository();
     addTearDown(repo.changes.dispose);
-    await tester.pumpWidget(MaterialApp(home: LiveSourceListScreen(
+    await tester.pumpWidget(MaterialApp(theme: DialektikTheme.offWhite(loadInterFromDependency:false), home: LiveSourceListScreen(
       repository: repo, onOpenSource: (_) {},
     )));
     await tester.pumpAndSettle();
