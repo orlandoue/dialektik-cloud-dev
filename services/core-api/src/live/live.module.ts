@@ -11,6 +11,7 @@ import { assertLiveDatabase } from './live.sync.js';
 import { CorporateLiveAcquisitionService } from './corporate-live-acquisition.service.js';
 import { CorporateLiveAcquisitionController } from './corporate-live-acquisition.controller.js';
 import { CorporateLiveAcquisitionDatabaseService } from './corporate-live-acquisition-database.service.js';
+import { FollowedSourcesService } from '../public-api/followed-sources.service.js';
 
 @Module({})
 export class LiveModule {
@@ -46,7 +47,7 @@ export class LiveModule {
           PrivateBetaLiveController,
           ...(config.ownershipMode === 'corporate' ? [CorporateLiveAcquisitionController] : []),
         ],
-        providers: [...providers, ...corporateAcquisitionProviders],
+        providers: [...providers, FollowedSourcesService, ...corporateAcquisitionProviders],
       };
     }
 

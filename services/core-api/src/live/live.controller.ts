@@ -19,7 +19,7 @@ function queryDate(value: unknown): Date | undefined {
 export class LiveController {
   constructor(@Inject(LiveApplicationService) private readonly service: LiveApplicationService) {}
   @Get('news')
-  news(@Query() query: Readonly<Record<string, unknown>>) {
+  news(@Query() query: Readonly<Record<string, unknown>>, personalization?: {sourceScope:'following'|'outside'; followedSourceIds:readonly string[]}) {
     assertExactQueryKeys(query, [
       'cursor',
       'limit',
@@ -56,6 +56,7 @@ export class LiveController {
     if (publishedFrom !== undefined && publishedTo !== undefined && publishedFrom >= publishedTo)
       throw new BadRequestException('Invalid date interval.');
     return this.service.list({
+      ...personalization,
       limit: query.limit === undefined ? 25 : Number(query.limit),
       market: parsePublisherMarket(query.country),
       ...(query.format === undefined ? {} : { format: query.format as 'press' | 'videos' }),

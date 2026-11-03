@@ -1,5 +1,7 @@
-import { Controller, Get, Inject, NotFoundException, ServiceUnavailableException, UseGuards } from '@nestjs/common';
-import { PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
+import { BadRequestException, Controller, Get, Inject, NotFoundException, Query, Req, Res, ServiceUnavailableException, UseGuards } from '@nestjs/common';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
+import { FollowedSourcesService } from '../public-api/followed-sources.service.js';
 import { LiveApplicationService } from './live.service.js';
 import { LiveController } from './live.controller.js';
 import { acquireGovUkRshMetadataOnce, acquireGovUkRshPreviewBatch, type GovUkRshPreviewMetadata } from './govuk-product-acquisition.js';
@@ -58,8 +60,19 @@ export function toGovUkReadOnlyPreviewItems(items: readonly GovUkRshPreviewMetad
 @Controller('live')
 @UseGuards(PrivateBetaAuthGuard)
 export class PrivateBetaLiveController extends LiveController {
-  constructor(@Inject(LiveApplicationService) service: LiveApplicationService) {
+  constructor(@Inject(LiveApplicationService) service: LiveApplicationService,
+    @Inject(FollowedSourcesService) private readonly follows: FollowedSourcesService) {
     super(service);
+  }
+
+  @Get('news/personalized')
+  async personalizedNews(@Query() query: Readonly<Record<string, unknown>>, @Req() request: FastifyRequest,
+    @Res({passthrough:true}) reply: FastifyReply) {
+    const {scope, ...filters} = query;
+    if (scope !== 'following' && scope !== 'outside') throw new BadRequestException('Invalid source scope.');
+    const followedSourceIds = await this.follows.list(betaUserId(request));
+    void reply.header('cache-control','private, no-store');
+    return super.news(filters, {sourceScope:scope, followedSourceIds});
   }
 
   /**

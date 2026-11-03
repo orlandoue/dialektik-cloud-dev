@@ -72,6 +72,8 @@ export interface LiveNewsQuery {
   readonly market?: PublisherMarket;
   readonly format?: 'press' | 'videos';
   readonly topic?: LiveNewsTopic;
+  readonly sourceScope?: 'following' | 'outside';
+  readonly followedSourceIds?: readonly string[];
 }
 
 export class LiveRepository {
@@ -135,6 +137,7 @@ export class LiveRepository {
       where ${cursor}
         and canonical_domain in (${marketFilter})
         and ${publisherIdentityFilter(market, 'source_id')}
+        and ${query.sourceScope === undefined ? sql`true` : query.sourceScope === 'following' ? sql`source_id::text = any(${query.followedSourceIds ?? []}::text[])` : sql`not (source_id::text = any(${query.followedSourceIds ?? []}::text[]))`}
         and ${query.format === undefined ? sql`true` : query.format === 'videos' ? sql`canonical_domain = 'youtube.com'` : sql`canonical_domain <> 'youtube.com'`}
         and ${query.topic === undefined ? sql`true` : sql`(headline || ' ' || coalesce(excerpt, '')) ~* ${LIVE_NEWS_TOPIC_PATTERNS[query.topic]}`}
         and ${query.q === undefined ? sql`true` : sql`position(lower(${query.q}) in lower(headline || ' ' || coalesce(excerpt, ''))) > 0`}
