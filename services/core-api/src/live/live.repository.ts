@@ -52,6 +52,16 @@ export interface LiveRegisteredSourceRow {
   staged_record_count: number;
 }
 
+export const LIVE_NEWS_TOPIC_PATTERNS = {
+  politica: 'polític|politic|gobierno|presidente|ministro|congreso|diputad|senador|elecci|alcald|partido republican',
+  justicia: 'justicia|judicial|tribunal|corte|juez|jueza|fiscal|condena|acusación constitucional|acusacion constitucional|querella',
+  economia: 'econom|inflación|inflacion|empleo|desempleo|pensión|pension|afp|banco|peso|dólar|dolar|codelco|empresa|salario|sueldo',
+  seguridad: 'seguridad|delito|polic|carabinero|crimen|robo|asalto|homicid|detenido|balacera|siniestro',
+  deportes: 'deporte|fútbol|futbol|tenis|partido|campeonato|selección|seleccion|liga|gol|jugador|atleta',
+  sociedad: 'sociedad|salud|educación|educacion|colegio|escuela|vivienda|familia|niñez|ninez|cultura|mujer|medio ambiente',
+} as const;
+export type LiveNewsTopic = keyof typeof LIVE_NEWS_TOPIC_PATTERNS;
+
 export interface LiveNewsQuery {
   readonly cursor?: Ulid;
   readonly limit: number;
@@ -60,6 +70,8 @@ export interface LiveNewsQuery {
   readonly publishedFrom?: Date;
   readonly publishedTo?: Date;
   readonly market?: PublisherMarket;
+  readonly format?: 'press' | 'videos';
+  readonly topic?: LiveNewsTopic;
 }
 
 export class LiveRepository {
@@ -123,6 +135,8 @@ export class LiveRepository {
       where ${cursor}
         and canonical_domain in (${marketFilter})
         and ${publisherIdentityFilter(market, 'source_id')}
+        and ${query.format === undefined ? sql`true` : query.format === 'videos' ? sql`canonical_domain = 'youtube.com'` : sql`canonical_domain <> 'youtube.com'`}
+        and ${query.topic === undefined ? sql`true` : sql`(headline || ' ' || coalesce(excerpt, '')) ~* ${LIVE_NEWS_TOPIC_PATTERNS[query.topic]}`}
         and ${query.q === undefined ? sql`true` : sql`position(lower(${query.q}) in lower(headline || ' ' || coalesce(excerpt, ''))) > 0`}
         and ${query.sourceId === undefined ? sql`true` : sql`source_id = ${query.sourceId}`}
         and ${query.publishedFrom === undefined ? sql`true` : sql`published_at >= ${query.publishedFrom}`}

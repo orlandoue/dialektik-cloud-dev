@@ -4,6 +4,7 @@ import { assertExactQueryKeys, parseUlidParameter } from '../public-api/public-a
 import { LiveApplicationService } from './live.service.js';
 import { parseLiveTimestamp } from './live.adapter.js';
 import { parsePublisherMarket, publisherMarketsStatus } from './live.publisher-market.js';
+import { LIVE_NEWS_TOPIC_PATTERNS, type LiveNewsTopic } from './live.repository.js';
 
 function queryDate(value: unknown): Date | undefined {
   if (value === undefined) return undefined;
@@ -27,6 +28,8 @@ export class LiveController {
       'published_from',
       'published_to',
       'country',
+      'format',
+      'topic',
     ]);
     if (
       query.limit !== undefined &&
@@ -43,6 +46,11 @@ export class LiveController {
       (query.source_id !== undefined && typeof query.source_id !== 'string')
     )
       throw new BadRequestException('Invalid identity filter.');
+    if (query.format !== undefined && query.format !== 'press' && query.format !== 'videos')
+      throw new BadRequestException('Invalid news format.');
+    if (query.topic !== undefined && (typeof query.topic !== 'string' ||
+      !Object.hasOwn(LIVE_NEWS_TOPIC_PATTERNS, query.topic)))
+      throw new BadRequestException('Invalid news topic.');
     const publishedFrom = queryDate(query.published_from);
     const publishedTo = queryDate(query.published_to);
     if (publishedFrom !== undefined && publishedTo !== undefined && publishedFrom >= publishedTo)
@@ -50,6 +58,8 @@ export class LiveController {
     return this.service.list({
       limit: query.limit === undefined ? 25 : Number(query.limit),
       market: parsePublisherMarket(query.country),
+      ...(query.format === undefined ? {} : { format: query.format as 'press' | 'videos' }),
+      ...(query.topic === undefined ? {} : { topic: query.topic as LiveNewsTopic }),
       ...(query.cursor === undefined
         ? {}
         : { cursor: parseUlid(parseUlidParameter(query.cursor)) }),
