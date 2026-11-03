@@ -37,6 +37,7 @@ class EventCardDto {
     required this.analysisState,
     required this.sourceCount,
     required this.positionCount,
+    this.isFollowedSourceMatch = false,
   });
 
   factory EventCardDto.fromJson(Object? value) {
@@ -49,7 +50,7 @@ class EventCardDto {
           'analysis_state',
           'source_count',
           'position_count',
-        });
+        }, optional: const {'is_followed_source_match'});
     return EventCardDto(
       id: json.string('id'),
       titleDescriptive: json.string('title_descriptive'),
@@ -62,6 +63,7 @@ class EventCardDto {
           }),
       sourceCount: json.integer('source_count', minimum: 0),
       positionCount: json.nullableInteger('position_count', minimum: 1),
+      isFollowedSourceMatch: json.raw('is_followed_source_match') == null ? false : json.boolean('is_followed_source_match'),
     );
   }
 
@@ -72,6 +74,7 @@ class EventCardDto {
   final AnalysisState analysisState;
   final int sourceCount;
   final int? positionCount;
+  final bool isFollowedSourceMatch;
 }
 
 final class EventDetailDto extends EventCardDto {
@@ -83,6 +86,7 @@ final class EventDetailDto extends EventCardDto {
     required super.analysisState,
     required super.sourceCount,
     required super.positionCount,
+    super.isFollowedSourceMatch,
     required this.window,
     required this.primaryFact,
     this.coveragePositions = const [],
@@ -103,7 +107,7 @@ final class EventDetailDto extends EventCardDto {
           'window',
           'primary_fact',
           'merged_into',
-        }, optional: const {'positions', 'articles', 'contrasts'});
+        }, optional: const {'positions', 'articles', 'contrasts', 'is_followed_source_match'});
     if (json.raw('merged_into') != null) {
       throw const FormatException('EventDetail.merged_into must be null.');
     }
@@ -123,6 +127,7 @@ final class EventDetailDto extends EventCardDto {
           }),
       sourceCount: json.integer('source_count', minimum: 0),
       positionCount: json.nullableInteger('position_count', minimum: 1),
+      isFollowedSourceMatch: json.raw('is_followed_source_match') == null ? false : json.boolean('is_followed_source_match'),
       window: EventWindowDto(
         from: window.dateTime('from'),
         to: window.nullableDateTime('to'),
@@ -144,23 +149,27 @@ final class EventDetailDto extends EventCardDto {
 }
 
 final class EventCoverageArticleDto {
-  const EventCoverageArticleDto(this.id, this.title, this.sourceName, this.publishedAt, this.url);
+  const EventCoverageArticleDto(this.id, this.title, this.sourceName, this.publishedAt, this.url, {this.sourceId, this.isFollowed = false});
   factory EventCoverageArticleDto.fromJson(Object? value) {
-    final json = _JsonObject.read(value, 'EventArticle', const {'id', 'title', 'source_name', 'published_at', 'url'});
-    return EventCoverageArticleDto(json.string('id'), json.string('title'), json.string('source_name'), json.dateTime('published_at'), json.uri('url'));
+    final json = _JsonObject.read(value, 'EventArticle', const {'id', 'title', 'source_name', 'published_at', 'url'}, optional: const {'source_id', 'is_followed'});
+    return EventCoverageArticleDto(json.string('id'), json.string('title'), json.string('source_name'), json.dateTime('published_at'), json.uri('url'), sourceId: json.nullableString('source_id'), isFollowed: json.raw('is_followed') == null ? false : json.boolean('is_followed'));
   }
   final String id, title, sourceName;
   final DateTime publishedAt;
   final Uri url;
+  final String? sourceId;
+  final bool isFollowed;
 }
 
 final class EventCoverageAssertionDto {
-  const EventCoverageAssertionDto(this.id, this.assertionText, this.quotedText, this.articleId, this.sourceName);
+  const EventCoverageAssertionDto(this.id, this.assertionText, this.quotedText, this.articleId, this.sourceName, {this.sourceId, this.isFollowed = false});
   factory EventCoverageAssertionDto.fromJson(Object? value) {
-    final json = _JsonObject.read(value, 'EventAssertion', const {'id', 'assertion_text', 'quoted_text', 'article_id', 'source_name'});
-    return EventCoverageAssertionDto(json.string('id'), json.string('assertion_text'), json.string('quoted_text'), json.string('article_id'), json.string('source_name'));
+    final json = _JsonObject.read(value, 'EventAssertion', const {'id', 'assertion_text', 'quoted_text', 'article_id', 'source_name'}, optional: const {'source_id', 'is_followed'});
+    return EventCoverageAssertionDto(json.string('id'), json.string('assertion_text'), json.string('quoted_text'), json.string('article_id'), json.string('source_name'), sourceId: json.nullableString('source_id'), isFollowed: json.raw('is_followed') == null ? false : json.boolean('is_followed'));
   }
   final String id, assertionText, quotedText, articleId, sourceName;
+  final String? sourceId;
+  final bool isFollowed;
 }
 
 final class EventCoveragePositionDto {
@@ -616,6 +625,7 @@ final class ContradictionDto {
     required this.thresholdRule,
     required this.confirmedAt,
     required this.needsReview,
+    this.isFollowedSourceMatch = false,
   });
 
   factory ContradictionDto.fromJson(Object? value) {
@@ -630,7 +640,7 @@ final class ContradictionDto {
           'threshold_rule',
           'confirmed_at',
           'needs_review',
-        });
+        }, optional: const {'is_followed_source_match'});
     final _JsonObject ratio = json.object('ratio', const <String>{
       'conflicting',
       'comparable',
@@ -646,6 +656,7 @@ final class ContradictionDto {
       thresholdRule: json.string('threshold_rule'),
       confirmedAt: json.dateTime('confirmed_at'),
       needsReview: json.boolean('needs_review'),
+      isFollowedSourceMatch: json.raw('is_followed_source_match') == null ? false : json.boolean('is_followed_source_match'),
     );
   }
 
@@ -659,6 +670,7 @@ final class ContradictionDto {
   final String thresholdRule;
   final DateTime confirmedAt;
   final bool needsReview;
+  final bool isFollowedSourceMatch;
 }
 
 final class PositionReferenceDto {

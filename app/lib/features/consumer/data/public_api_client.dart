@@ -3,6 +3,7 @@ import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
+import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
@@ -23,6 +24,7 @@ import 'package:dialektik/features/semantic_shadow/data/semantic_graph_models.da
 import 'package:dialektik/features/semantic_shadow/data/semantic_graph_repository.dart';
 import 'package:dialektik/features/semantic_shadow/data/semantic_shadow_models.dart';
 import 'package:dialektik/features/semantic_shadow/data/semantic_shadow_repository.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
 typedef JsonDecoder<T> = T Function(Object? value);
@@ -33,6 +35,7 @@ typedef AuthorizationRejectedHandler = void Function();
 final class PublicApiClient
     implements
         ConsumerRepository,
+        FollowingRepository,
         SemanticRepository,
         LiveNewsRepository,
         ChileRssChronologyRepository,
@@ -76,6 +79,58 @@ final class PublicApiClient
   bool get _otherMarket =>
       publisherMarketSelection != null && publisherMarketSelection!.value != 'CL';
   String? get _marketQuery => publisherMarketSelection?.value;
+  final ValueNotifier<int> _followingVersion = ValueNotifier<int>(0);
+  @override
+  Listenable get followingChanges => _followingVersion;
+  bool get _personalizationEnabled => authorizationTokenProvider != null;
+  @override
+  bool get followingAvailable => _personalizationEnabled;
+
+  @override
+  Future<Set<String>> listFollowedSources() => _get<Set<String>>(
+    '/v1/sources/following', decoder: (Object? value) {
+      if (value is! Map<String, Object?> || value['source_ids'] is! List<Object?>) {
+        throw const FormatException('Invalid followed sources.');
+      }
+      final ids = value['source_ids']! as List<Object?>;
+      if (ids.any((id) => id is! String)) throw const FormatException('Invalid source ID.');
+      return ids.cast<String>().toSet();
+    }, refresh: true, requestToken: null,
+  );
+
+  @override
+  Future<void> setFollowing(String sourceId, {required bool following}) async {
+    final token = await authorizationTokenProvider?.call();
+    if (token == null || token.isEmpty) throw const PublicApiFailure(kind: PublicFailureKind.unauthorized);
+    final uri = _configuration.resolve('/v1/sources/${Uri.encodeComponent(sourceId)}/follow');
+    final headers = <String,String>{'accept':'application/json','authorization':'Bearer $token'};
+    late http.Response response;
+    try {
+      response = await (following ? _httpClient.post(uri, headers: headers) : _httpClient.delete(uri, headers: headers)).timeout(timeout);
+    } on TimeoutException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+      on http.ClientException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode == 401) onAuthorizationRejected?.call();
+      throw _decodeFailure(response);
+    }
+    _cache.clear();
+    _followingVersion.value += 1;
+  }
+
+  @override
+  Future<BlindspotsResult> listBlindspots() => _get<BlindspotsResult>(
+    '/v1/feed/blindspots', query: const {'limit':'20'}, decoder: (Object? value) {
+      if (value is! Map<String,Object?> || value['items'] is! List<Object?> ||
+          value['total'] is! int || value['followed_source_count'] is! int) {
+        throw const FormatException('Invalid blindspots.');
+      }
+      return BlindspotsResult(
+        items: (value['items']! as List<Object?>).map(EventCardDto.fromJson).toList(growable:false),
+        total: value['total']! as int, followedSourceCount: value['followed_source_count']! as int,
+      );
+    }, refresh:true, requestToken:null,
+  );
+
   final Map<String, _CacheEntry<Object>> _cache =
       <String, _CacheEntry<Object>>{};
 
@@ -96,6 +151,7 @@ final class PublicApiClient
     return _get<PublicPage<EventCardDto>>(
       '/v1/feed',
       query: <String, String>{
+        if (_personalizationEnabled) 'personalized': '1',
         'category': ?category,
         'topic': ?topic,
         'cursor': ?cursor,
@@ -121,7 +177,7 @@ final class PublicApiClient
     }
     return _get<PublicPage<ContradictionDto>>(
       '/v1/contradictions',
-      query: <String, String>{'cursor': ?cursor, 'limit': '$limit'},
+      query: <String, String>{if (_personalizationEnabled) 'personalized': '1', 'cursor': ?cursor, 'limit': '$limit'},
       decoder: (Object? value) => _page(value, ContradictionDto.fromJson),
       refresh: refresh,
       requestToken: requestToken,
@@ -135,7 +191,7 @@ final class PublicApiClient
     PublicRequestToken? requestToken,
   }) => _get<EventDetailDto>(
     '/v1/events/${Uri.encodeComponent(eventId)}',
-    query: const {'include': 'coverage'},
+    query: {'include': 'coverage', if (_personalizationEnabled) 'personalized': '1'},
     decoder: EventDetailDto.fromJson,
     refresh: refresh,
     requestToken: requestToken,
@@ -581,11 +637,15 @@ final class PublicApiClient
 
     try {
       final T result = decoder(jsonDecode(utf8.decode(response.bodyBytes)));
-      _cache[cacheKey] = _CacheEntry<Object>(
-        value: result as Object,
-        etag: response.headers['etag'],
-        lastModified: response.headers['last-modified'],
-      );
+      if (response.headers['cache-control']?.contains('no-store') == true) {
+        _cache.remove(cacheKey);
+      } else {
+        _cache[cacheKey] = _CacheEntry<Object>(
+          value: result as Object,
+          etag: response.headers['etag'],
+          lastModified: response.headers['last-modified'],
+        );
+      }
       return result;
     } on FormatException {
       throw const PublicApiFailure(kind: PublicFailureKind.invalidResponse);
@@ -628,6 +688,7 @@ final class PublicApiClient
   }
 
   void close() {
+    _followingVersion.dispose();
     if (_ownsClient) _httpClient.close();
   }
 }

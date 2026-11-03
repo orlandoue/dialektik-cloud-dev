@@ -39,6 +39,7 @@ final class _ContradictionCardState extends State<ContradictionCard> {
     final item = widget.contradiction;
     final strings = ConsumerStrings.of(context);
     return DialektikSurface(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      if (item.isFollowedSourceMatch) const Text('En tus fuentes'),
       Text(item.eventTitle, style: Theme.of(context).textTheme.titleLarge),
       const SizedBox(height: DialektikSpacing.space3),
       FutureBuilder<List<PositionDetailDto>>(

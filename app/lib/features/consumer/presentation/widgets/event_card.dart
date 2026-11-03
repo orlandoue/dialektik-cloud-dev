@@ -31,6 +31,7 @@ final class EventCard extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              if (event.isFollowedSourceMatch) const Text('En tus fuentes'),
               Text(
                 strings.categoryName(event.category),
                 style: Theme.of(context).textTheme.bodySmall,

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dialektik/design_system/design_system.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
+import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/state/feed_controller.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
@@ -40,6 +41,9 @@ final class FeedScreen extends StatefulWidget {
 
 final class _FeedScreenState extends State<FeedScreen> {
   Future<CuratedEventPreview>? _curatedPreviewFuture;
+  BlindspotsResult? _blindspots;
+  FollowingRepository? get _following => widget.repository is FollowingRepository &&
+      (widget.repository as FollowingRepository).followingAvailable ? widget.repository as FollowingRepository : null;
   late final FeedController _controller = FeedController(
     repository: widget.repository,
   );
@@ -51,10 +55,38 @@ final class _FeedScreenState extends State<FeedScreen> {
       refresh: true,
     );
     unawaited(_controller.loadInitial());
+    _following?.followingChanges.addListener(_onFollowingChanged);
+    unawaited(_loadBlindspots());
+  }
+
+  void _onFollowingChanged() {
+    unawaited(_controller.refresh());
+    unawaited(_loadBlindspots());
+  }
+  Future<void> _loadBlindspots() async {
+    final repository = _following;
+    if (repository == null) return;
+    try {
+      final result = await repository.listBlindspots();
+      if (mounted) setState(() => _blindspots = result);
+    } on Exception {
+      if (mounted) setState(() => _blindspots = null);
+    }
+  }
+  Widget? get _blindspotPanel {
+    final result = _blindspots;
+    if (result == null || result.followedSourceCount < 2 || result.total == 0) return null;
+    return Card(child: ExpansionTile(
+      title: Text('Punto ciego: ${result.total} acontecimientos sin cobertura de tus medios'),
+      subtitle: const Text('Acontecimientos que tus fuentes seguidas no están cubriendo'),
+      children: [for (final event in result.items)
+        ListTile(title: Text(event.titleDescriptive), onTap: () => widget.onOpenEvent(event.id))],
+    ));
   }
 
   @override
   void dispose() {
+    _following?.followingChanges.removeListener(_onFollowingChanged);
     _controller.dispose();
     super.dispose();
   }
@@ -118,12 +150,14 @@ final class _FeedScreenState extends State<FeedScreen> {
             FeedPhase.initial || FeedPhase.loading => _FeedListFrame(
               controller: _controller,
               preview: _editorialPreview,
+              blindspot: _blindspotPanel,
               seismicRepository: widget.seismicRepository,
               child: SystemStateView(message: strings.loading, isLoading: true),
             ),
             FeedPhase.error => _FeedListFrame(
               controller: _controller,
               preview: _editorialPreview,
+              blindspot: _blindspotPanel,
               seismicRepository: widget.seismicRepository,
               child: SystemStateView(
                 message: strings.errorForName(_controller.failure!.kind.name),
@@ -134,12 +168,14 @@ final class _FeedScreenState extends State<FeedScreen> {
             FeedPhase.empty => _FeedListFrame(
               controller: _controller,
               preview: _editorialPreview,
+              blindspot: _blindspotPanel,
               seismicRepository: widget.seismicRepository,
               child: _emptyMessage(strings),
             ),
             FeedPhase.content => _FeedContent(
               controller: _controller,
               preview: _editorialPreview,
+              blindspot: _blindspotPanel,
               seismicRepository: widget.seismicRepository,
               onOpenEvent: widget.onOpenEvent,
             ),
@@ -155,6 +191,7 @@ final class _FeedListFrame extends StatelessWidget {
     required this.controller,
     required this.child,
     this.preview,
+    this.blindspot,
     this.seismicRepository,
   });
 
@@ -162,6 +199,7 @@ final class _FeedListFrame extends StatelessWidget {
   final SeismicObservationRepository? seismicRepository;
   final Widget child;
   final Widget? preview;
+  final Widget? blindspot;
 
   @override
   Widget build(BuildContext context) {
@@ -181,6 +219,7 @@ final class _FeedListFrame extends StatelessWidget {
                   ChileSeismicObservationsPanel(repository: seismic),
                   const SizedBox(height: DialektikSpacing.space4),
                 ],
+                if (blindspot != null) blindspot!,
                 const _FeedHeading(),
                 const SizedBox(height: DialektikSpacing.space8),
                 FilterBar(
@@ -211,6 +250,7 @@ final class _FeedContent extends StatelessWidget {
     required this.controller,
     required this.onOpenEvent,
     this.preview,
+    this.blindspot,
     this.seismicRepository,
   });
 
@@ -218,6 +258,7 @@ final class _FeedContent extends StatelessWidget {
   final SeismicObservationRepository? seismicRepository;
   final ValueChanged<String> onOpenEvent;
   final Widget? preview;
+  final Widget? blindspot;
 
   @override
   Widget build(BuildContext context) {
@@ -241,6 +282,7 @@ final class _FeedContent extends StatelessWidget {
                   ChileSeismicObservationsPanel(repository: seismic),
                   const SizedBox(height: DialektikSpacing.space4),
                 ],
+                if (blindspot != null) blindspot!,
                 const _FeedHeading(),
                   const SizedBox(height: DialektikSpacing.space8),
                   FilterBar(
