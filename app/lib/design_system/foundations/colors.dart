@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 /// success/error semantic by ordinary dependency injection.
 abstract final class DialektikColors {
   static const Color offWhite = Color(0xFFF8F5EF);
-  static const Color triadCream = Color(0xFFF9F7F1);
+  static const Color triadCream = Color(0xFFFAF8F3);
   static const Color inkBlack = Color(0xFF070B18);
   static const Color electricViolet = Color(0xFF5B3BFF);
   static const Color correctedCoolGray = Color(0xFF667085);

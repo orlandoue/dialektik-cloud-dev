@@ -163,6 +163,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     if (repository == null) return;
     try {
       final ids = await repository.listFollowedSources();
+      if (widget.repository case final MirrorNewsMemory memory) unawaited(memory.prefetchMirrorNews());
       if (mounted) {
         final changed = !_followed.containsAll(ids) || !ids.containsAll(_followed);
         setState(() => _followed = ids);
@@ -381,7 +382,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   @override
   Widget build(BuildContext context) {
     return LiveReaderScaffold(
-      title: 'Noticias recientes',
+      title: 'Dialektik',
       backgroundColor: DialektikColors.triadCream,
       isRoot: true,
       scrollKey: const PageStorageKey<String>('live-news'),
@@ -389,7 +390,6 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          const Text('TESIS · TU ALGORITMO Y MEDIOS SEGUIDOS'),
           if (_followed.isNotEmpty) Wrap(spacing:8, children: [
             ChoiceChip(label:const Text('Siguiendo'), selected:!_allSources, onSelected: (_) {
               setState(() => _allSources = false); unawaited(_load(refresh:true));
@@ -398,7 +398,9 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               setState(() => _allSources = true); unawaited(_load(refresh:true));
             }),
           ]),
-          const SizedBox(height: DialektikSpacing.space4),
+          TextButton.icon(onPressed:()=>setState(()=>_filtersExpanded=!_filtersExpanded),
+            icon:const Icon(Icons.tune), label:Text(_filtersExpanded ? 'Ocultar filtros' : 'Filtros')),
+          if (_filtersExpanded) ...<Widget>[
           Semantics(
             header: true,
             child: Text('País', style: Theme.of(context).textTheme.titleMedium),
@@ -497,6 +499,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             },
           ),
           const SizedBox(height: DialektikSpacing.space3),
+          ],
           Text('Tema', style: Theme.of(context).textTheme.titleMedium),
           HorizontalChoiceStrip<LiveNewsTopic>(
             semanticsLabel: 'Filtrar noticias por tema',
@@ -634,6 +637,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             ),
             const SizedBox(height: DialektikSpacing.space4),
           ],
+          if (_filtersExpanded) ...<Widget>[
           const SizedBox(height: DialektikSpacing.space4),
           Row(
             children: <Widget>[
@@ -671,17 +675,6 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               return Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  if (compact)
-                    TextButton.icon(
-                      onPressed: () =>
-                          setState(() => _filtersExpanded = !_filtersExpanded),
-                      icon: Icon(
-                        _filtersExpanded ? Icons.expand_less : Icons.tune,
-                      ),
-                      label: Text(
-                        _filtersExpanded ? 'Ocultar filtros' : 'Filtros',
-                      ),
-                    ),
                   if (!compact || _filtersExpanded) ...<Widget>[
                     const SizedBox(height: DialektikSpacing.space4),
                     LayoutBuilder(
@@ -723,20 +716,13 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               );
             },
           ),
+          ],
           if (_sourceError)
             EditorialTextButton(
               onPressed: () => unawaited(_loadSources()),
               child: const Text('Reintentar la lista de fuentes'),
             ),
           const SizedBox(height: DialektikSpacing.space4),
-          Semantics(
-            child: Text(
-              'Más recientes por fecha de publicación.',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: context.surfaceColors.muted,
-              ),
-            ),
-          ),
           const SizedBox(height: DialektikSpacing.space3),
           if (_loading)
             const EditorialLoading(label: 'Cargando noticias…')
@@ -997,6 +983,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
   @override
   Widget build(BuildContext context) => LiveReaderScaffold(
     title: 'Fuentes',
+    backgroundColor: DialektikColors.triadCream,
     location: 'Fuentes',
     isRoot: true,
     navigationActions: widget.navigationActions,

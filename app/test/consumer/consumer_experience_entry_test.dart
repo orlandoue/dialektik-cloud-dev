@@ -209,7 +209,7 @@ void main() {
       );
       await _tapAndResolveSources(tester, liveRepository);
       await _tap(tester, find.text('Espejo'));
-      expect(find.text('ANTÍTESIS · FUERA DE TU ALGORITMO'), findsOneWidget);
+      expect(find.textContaining('Elige al menos 2 medios'), findsOneWidget);
       await _tap(tester, find.text('Actualidad'));
       expect(
         find.text('Noticia escrita para pruebas: océano & atmósfera — señales'),

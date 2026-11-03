@@ -48,18 +48,17 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
       'blind'=>followingCount>0 && !e.isFollowedSourceMatch && (e.sourceCount>=2 || contrasts.containsKey(e.id)),
       _=>true,
     }).toList();
-    return ConsumerScaffold(title:'Síntesis',navigationActions:widget.navigationActions,body:ListView(padding:const EdgeInsets.all(20),children:[
-      const Text('SÍNTESIS · ACONTECIMIENTOS Y CONTRASTES ENTRE MEDIOS'),
-      SingleChildScrollView(scrollDirection:Axis.horizontal,child:Row(children:[
+    return ConsumerScaffold(title:'Síntesis',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:ListView(padding:const EdgeInsets.all(20),children:[
+      SingleChildScrollView(scrollDirection:Axis.horizontal, padding:const EdgeInsets.symmetric(horizontal:16), clipBehavior:Clip.none, child:Row(children:[
         for(final choice in [('all','Todo (${events.length})'),('contrast','Con contraste (${contrasts.length})'),('followed','En tus fuentes'),('blind','Punto ciego')])
           Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice.$2),selected:filter==choice.$1,onSelected:(_)=>setState(()=>filter=choice.$1))),
       ])),
-      if(widget.seismicRepository case final SeismicObservationRepository seismic) ChileSeismicObservationsPanel(repository:seismic),
+      if(filter != 'contrast') if(widget.seismicRepository case final SeismicObservationRepository seismic) ChileSeismicObservationsPanel(repository:seismic),
       if(loading) const Center(child:CircularProgressIndicator())
       else if(error!=null) TextButton(onPressed:_reload,child:const Text('No se pudieron cargar los acontecimientos. Reintentar'))
       else if(filtered.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('No hay acontecimientos en este filtro.'))
       else for(final event in filtered) _SynthesisCard(event:event, contrast:contrasts[event.id],repository:widget.repository,onOpen:()=>widget.onOpenEvent(event.id)),
-    ]));
+    ])));
   }
 }
 class _SynthesisCard extends StatefulWidget {
@@ -70,16 +69,36 @@ class _SynthesisCard extends StatefulWidget {
 class _SynthesisCardState extends State<_SynthesisCard> {
   late Future<EventDetailDto> detail=widget.repository.getEvent(widget.event.id);
   @override void didUpdateWidget(covariant _SynthesisCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event.id!=widget.event.id)detail=widget.repository.getEvent(widget.event.id);}
+  Widget badge(String text, Color background, Color foreground) => Container(
+    padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),
+    decoration:BoxDecoration(color:background,borderRadius:BorderRadius.circular(6)),
+    child:Text(text,style:TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:foreground)),
+  );
   @override Widget build(BuildContext context)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Text(widget.contrast==null ? 'COBERTURA · ${widget.event.sourceCount} MEDIOS' : 'CONTRASTE DETECTADO · 2 POSTURAS'),
-    if(widget.event.isFollowedSourceMatch) const Text('En tus fuentes'),
+    Wrap(spacing:6,runSpacing:6,children:[
+      if(widget.contrast!=null) badge('CONTRASTE DE ENFOQUES · 2 POSTURAS',const Color(0xfffff3cd),const Color(0xff7a4f08))
+      else badge('COBERTURA · ${widget.event.sourceCount} MEDIOS',const Color(0xffedf2f7),const Color(0xff2d3748)),
+      if(widget.event.isFollowedSourceMatch) badge('En tus fuentes',const Color(0xffe8e5ff),const Color(0xff312e81)),
+    ]),
+    const SizedBox(height:8),
     Text(widget.event.titleDescriptive,style:Theme.of(context).textTheme.titleLarge),
+    const SizedBox(height:10),
     FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
       final data=snapshot.data;if(data==null)return const SizedBox.shrink();
-      if(widget.contrast==null)return Text(data.articles.map((a)=>a.sourceName).toSet().join(' · '));
+      if(widget.contrast==null) return Wrap(spacing:8,runSpacing:4,children:[
+        for(final name in data.articles.map((a)=>a.sourceName).toSet())
+          Text(name.contains('(YouTube)') ? '${name.replaceAll('(YouTube)', '').trim()} · ▶ Video' : name),
+      ]);
       final c=widget.contrast!;
       final selected=data.coveragePositions.where((p)=>p.id==c.positionA.id || p.id==c.positionB.id);
-      return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[for(final p in selected) Text('${p.assertions.map((a)=>a.sourceName).toSet().join(', ')}: ${p.title}')]);
+      return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[for(final p in selected)
+        Container(margin:const EdgeInsets.only(bottom:8),padding:const EdgeInsets.all(10),
+          decoration:const BoxDecoration(color:Color(0xfff7f5ee),border:Border(left:BorderSide(color:Color(0xffcbd5e1),width:3),top:BorderSide(color:Color(0xffe2dec9)),right:BorderSide(color:Color(0xffe2dec9)),bottom:BorderSide(color:Color(0xffe2dec9)))),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            Text(p.assertions.map((a)=>a.sourceName.replaceAll('(YouTube)', '').trim()).toSet().join(', '),style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:Color(0xff1e293b))),
+            Text(p.title,style:const TextStyle(fontSize:13.5,color:Color(0xff334155),height:1.35)),
+          ])),
+      ]);
     }),
     TextButton(onPressed:widget.onOpen,child:const Text('Ver síntesis y noticias originales →')),
   ])));

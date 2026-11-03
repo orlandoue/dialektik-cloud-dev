@@ -210,21 +210,6 @@ final class _MobileHeader extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (location != null && location != 'Dialektik')
-                    Flexible(
-                      child: Semantics(
-                        label: 'Ubicación actual: $location',
-                        excludeSemantics: true,
-                        child: Text(
-                          location!,
-                          softWrap: true,
-                          style: Theme.of(context).textTheme.bodySmall
-                              ?.copyWith(
-                                color: DialektikColors.correctedCoolGray,
-                              ),
-                        ),
-                      ),
-                    ),
                   ...utilityActions,
                   if (secondary.isNotEmpty) _MoreTab(actions:secondary, selected:secondary.any((action)=>action.selected)),
                 ],

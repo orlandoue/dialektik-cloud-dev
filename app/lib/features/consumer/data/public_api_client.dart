@@ -39,6 +39,7 @@ final class PublicApiClient
         SemanticRepository,
         LiveNewsRepository,
         ScopedLiveNewsRepository,
+        MirrorNewsMemory,
         ChileRssChronologyRepository,
         ChileRssLinkedNewsRepository,
         ChileRssLinksRepository,
@@ -86,9 +87,22 @@ final class PublicApiClient
   bool get _personalizationEnabled => authorizationTokenProvider != null;
   @override
   bool get followingAvailable => _personalizationEnabled;
+  LiveNewsPageDto? _cachedMirrorNews;
+  Set<String>? _cachedFollowedSources;
+  @override LiveNewsPageDto? get cachedMirrorNews => _cachedMirrorNews;
+  @override Set<String>? get cachedFollowedSources => _cachedFollowedSources == null ? null : Set.of(_cachedFollowedSources!);
+  @override Future<void> prefetchMirrorNews() async {
+    if (!_personalizationEnabled || _otherMarket || _cachedMirrorNews != null) return;
+    final version = _followingVersion.value;
+    try {
+      final page = await listScopedLiveNews(scope:'outside',refresh:true);
+      if (version == _followingVersion.value) _cachedMirrorNews = page;
+    } on Exception { /* A failed prefetch does not block the news feed. */ }
+  }
 
   @override
-  Future<Set<String>> listFollowedSources() => _get<Set<String>>(
+  Future<Set<String>> listFollowedSources() async {
+    final result = await _get<Set<String>>(
     '/v1/sources/following', decoder: (Object? value) {
       if (value is! Map<String, Object?> || value['source_ids'] is! List<Object?>) {
         throw const FormatException('Invalid followed sources.');
@@ -97,7 +111,10 @@ final class PublicApiClient
       if (ids.any((id) => id is! String)) throw const FormatException('Invalid source ID.');
       return ids.cast<String>().toSet();
     }, refresh: true, requestToken: null,
-  );
+    );
+    _cachedFollowedSources = Set.of(result);
+    return result;
+  }
 
   @override
   Future<void> setFollowing(String sourceId, {required bool following}) async {
@@ -115,6 +132,8 @@ final class PublicApiClient
       throw _decodeFailure(response);
     }
     _cache.clear();
+    _cachedMirrorNews = null;
+    _cachedFollowedSources = null;
     _followingVersion.value += 1;
   }
 
