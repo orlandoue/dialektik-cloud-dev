@@ -219,7 +219,7 @@ final class _FeedListFrame extends StatelessWidget {
                   ChileSeismicObservationsPanel(repository: seismic),
                   const SizedBox(height: DialektikSpacing.space4),
                 ],
-                if (blindspot != null) blindspot!,
+                ?blindspot,
                 const _FeedHeading(),
                 const SizedBox(height: DialektikSpacing.space8),
                 FilterBar(
@@ -282,7 +282,7 @@ final class _FeedContent extends StatelessWidget {
                   ChileSeismicObservationsPanel(repository: seismic),
                   const SizedBox(height: DialektikSpacing.space4),
                 ],
-                if (blindspot != null) blindspot!,
+                ?blindspot,
                 const _FeedHeading(),
                   const SizedBox(height: DialektikSpacing.space8),
                   FilterBar(
