@@ -21,7 +21,7 @@ export class PrivateBetaAuthorizationService {
     private readonly testers: PrivateBetaTesterRepository,
   ) {}
 
-  async authorize(token: string): Promise<void> {
+  async authorize(token: string): Promise<string> {
     const identity = await this.verifier.verify(token);
     let allowed: boolean;
     try {
@@ -30,6 +30,7 @@ export class PrivateBetaAuthorizationService {
       throw new ServiceUnavailableException('Private beta authorization is unavailable.');
     }
     if (!allowed) throw new InvalidSupabaseAccessTokenError();
+    return identity.sub;
   }
 }
 
@@ -49,7 +50,8 @@ export class PrivateBetaAuthGuard implements CanActivate {
         : null;
     if (match?.[1] === undefined) throw new UnauthorizedException('Authentication required.');
     try {
-      await this.authorization.authorize(match[1]);
+      const userId = await this.authorization.authorize(match[1]);
+      (request as FastifyRequest & { betaUserId: string }).betaUserId = userId;
       return true;
     } catch (error) {
       if (error instanceof ServiceUnavailableException) throw error;
@@ -62,4 +64,10 @@ export class PrivateBetaAuthGuard implements CanActivate {
       throw new ServiceUnavailableException('Private beta authorization is unavailable.');
     }
   }
+}
+
+export function betaUserId(request: FastifyRequest): string {
+  const id = (request as FastifyRequest & { betaUserId?: string }).betaUserId;
+  if (!id) throw new UnauthorizedException('Authentication required.');
+  return id;
 }

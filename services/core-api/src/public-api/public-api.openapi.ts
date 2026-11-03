@@ -35,6 +35,8 @@ const pageParameters = [
   },
 ] as const;
 
+const personalizedParameter = { name: 'personalized', in: 'query', required: false, description: 'Use authenticated source follows for ordering and badges.', schema: { type: 'string', enum: ['1'] } } as const;
+
 const idParameter = (name: string, description: string) => ({
   name,
   in: 'path',
@@ -81,9 +83,9 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
     '/v1/feed': {
       get: {
         operationId: 'listEventFeed',
-        summary: 'List current Events in fixed chronological order.',
+        summary: 'List current Events, optionally prioritizing followed sources.',
         description:
-          'The only order is detected_at descending with Event ID as a stable tie-breaker. Category and topic are discovery filters, never epistemic rankings.',
+          'Without personalization Events are chronological. When enabled, followed sources are prioritized while all eligible Events remain visible.',
         security: [],
         parameters: [
           {
@@ -98,6 +100,7 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
             required: false,
             schema: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,79}$' },
           },
+          personalizedParameter,
           ...pageParameters,
         ],
         responses: {
@@ -114,9 +117,9 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
         operationId: 'listContradictions',
         summary: 'List human-published contradiction records chronologically.',
         description:
-          'Only published or requires-review ContradictionPublication records appear. No derived projection is public by itself and no alternate sort exists.',
+          'Published or requires-review ContradictionPublication records are ordered chronologically or by followed source match.',
         security: [],
-        parameters: pageParameters,
+        parameters: [personalizedParameter, ...pageParameters],
         responses: {
           '200': success(reference('ContradictionPage'), 'A deterministic publication page.'),
           '304': { description: 'The cached page remains current.', headers: cachedHeaders },
@@ -131,7 +134,7 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
         operationId: 'getEvent',
         summary: 'Read a current Event.',
         security: [],
-        parameters: [idParameter('eventId', 'Canonical Event ULID.')],
+        parameters: [idParameter('eventId', 'Canonical Event ULID.'), {name:'include',in:'query',required:false,schema:{type:'string',enum:['coverage']}}, personalizedParameter],
         responses: {
           '200': success(reference('EventDetail'), 'The Event read model.'),
           '304': { description: 'The cached Event remains current.', headers: cachedHeaders },
@@ -227,6 +230,19 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
         },
       },
     },
+    '/v1/feed/blindspots': {
+      get: { operationId:'listBlindspots', summary:'List published multi-source events outside followed-source coverage.',
+        security:[{BearerAuth:[]}], parameters:pageParameters,
+        responses: { '200':success({type:'object',required:['items','next_cursor','total','followed_source_count'],properties:{items:arrayOf(reference('EventCard')),next_cursor:{type:['string','null']},total:{type:'integer'},followed_source_count:{type:'integer'}}},'Personalized blind spots.'), '400':standardErrors['400'] } },
+    },
+    '/v1/sources/following': {
+      get: { operationId:'listFollowedSources', summary:'List the authenticated user’s followed source IDs.',
+        security:[{BearerAuth:[]}], responses:{'200':success({type:'object',required:['source_ids'],properties:{source_ids:arrayOf({type:'string'})}},'Followed source IDs.')} },
+    },
+    '/v1/sources/{sourceId}/follow': {
+      post: {operationId:'followSource',summary:'Follow an operational source.',security:[{BearerAuth:[]}],parameters:[idParameter('sourceId','Canonical Source ULID.')],responses:{'201':success({type:'object'},'Source followed.'),'404':standardErrors['404']}},
+      delete: {operationId:'unfollowSource',summary:'Unfollow an operational source.',security:[{BearerAuth:[]}],parameters:[idParameter('sourceId','Canonical Source ULID.')],responses:{'200':success({type:'object'},'Source unfollowed.')}},
+    },
     '/v1/sources/{sourceId}': {
       get: {
         operationId: 'getSource',
@@ -245,6 +261,7 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
     },
   },
   components: {
+    securitySchemes: { BearerAuth: { type:'http', scheme:'bearer', bearerFormat:'JWT' } },
     schemas: {
       PublicErrorBase: {
         type: 'object',
@@ -327,6 +344,7 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
           analysis_state: { type: 'string', enum: ['ANALYSIS_PENDING', 'PUBLISHED'] },
           source_count: { type: 'integer', minimum: 0 },
           position_count: { type: ['integer', 'null'], minimum: 1 },
+          is_followed_source_match: { type: 'boolean' },
         },
         examples: [
           {
@@ -387,6 +405,9 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
               },
               primary_fact: { oneOf: [reference('PrimaryFact'), { type: 'null' }] },
               merged_into: { type: 'null' },
+              positions: arrayOf({type:'object'}),
+              articles: arrayOf({type:'object'}),
+              contrasts: arrayOf({type:'object'}),
             },
           },
         ],
@@ -615,6 +636,7 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
           threshold_rule: { type: 'string' },
           confirmed_at: { type: 'string', format: 'date-time' },
           needs_review: { type: 'boolean' },
+          is_followed_source_match: { type: 'boolean' },
         },
       },
       ContradictionPage: {
