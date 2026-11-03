@@ -22,6 +22,7 @@ test('reassesses a current literal pair once and retains the original classifica
       create table articles(id dialektik_ulid primary key);
       create table live_semantic_production_runs(id dialektik_ulid primary key);
       create table live_semantic_event_group_candidates(id dialektik_ulid primary key,target_day date,config_sha256 text);
+      create table live_semantic_event_group_members(group_id dialektik_ulid,article_id dialektik_ulid);
       create table live_semantic_pair_assessments(id dialektik_ulid primary key);
       create table assertion_extraction_generations(id dialektik_ulid primary key,input_hash text,state text,proposal_payload jsonb);
       create table live_semantic_excerpt_inputs(article_id text,headline text,source_name text,text_original text,input_sha256 text);
