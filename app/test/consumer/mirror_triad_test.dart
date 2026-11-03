@@ -6,6 +6,7 @@ import 'package:dialektik/features/consumer/presentation/screens/synthesis_scree
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/presentation/mirror_screen.dart';
+import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../live/live_fixtures.dart';
@@ -48,6 +49,21 @@ void main(){
     expect(find.textContaining('FUERA DE TUS FUENTES'),findsOneWidget);
     expect(repo.requests,0);
   });
+  testWidgets('mirror opens YouTube videos directly', (tester) async {
+    final repo=_MirrorRepo();addTearDown(repo.changes.dispose);
+    final article={...liveTestArticle(),'canonical_url':'https://www.youtube.com/watch?v=aB3_deF-123'};
+    repo.cached=LiveNewsPageDto.fromJson({'origin':'LIVE_REAL','semantic_mode':'unassigned','items':<Object?>[article],'next_cursor':null});
+    Uri? opened;
+    await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),home:MirrorScreen(repository:repo,onOpenArticle:(_){fail('Video opened in article screen');},onOpenSources:(){},externalLinkOpener:(uri) async {opened=uri;return true;})));
+    await tester.pump();
+    expect(find.byType(YouTubeThumbnail),findsOneWidget);
+    final title=find.text('Noticia escrita para pruebas: océano & atmósfera — señales');
+    await tester.ensureVisible(title);
+    await tester.pump();
+    await tester.tap(title);
+    await tester.pump();
+    expect(opened.toString(),'https://www.youtube.com/watch?v=aB3_deF-123');
+  });
   testWidgets('synthesis combines published events and contrast filters', (tester) async {
     final repo=FakeConsumerRepository(feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
@@ -62,5 +78,23 @@ void main(){
     await tester.tap(find.text('Punto ciego'));
     await tester.pumpAndSettle();
     expect(find.text('No hay acontecimientos en este filtro.'),findsOneWidget);
+  });
+  testWidgets('synthesis shows compact video coverage and opens the original', (tester) async {
+    final event=EventDetailDto.fromJson({...eventDetailJson(id:publishedEventId,analysisState:'PUBLISHED',positionCount:2),
+      'positions':<Object?>[], 'contrasts':<Object?>[], 'articles':<Object?>[
+        {'id':'video','title':'Entrevista en video','source_name':'Canal (YouTube)',
+          'published_at':'2026-10-30T12:00:00Z','url':'https://youtu.be/aB3_deF-123'},
+      ]});
+    final repo=FakeConsumerRepository(event:event,feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
+    Uri? opened;
+    await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
+      home:SynthesisScreen(repository:repo,onOpenEvent:(_){},externalLinkOpener:(uri) async {opened=uri;return true;})));
+    await tester.pump();await tester.pump(const Duration(milliseconds:200));
+    final preview=tester.widget<YouTubeThumbnail>(find.byType(YouTubeThumbnail));
+    expect(preview.compact,isTrue);
+    await tester.ensureVisible(find.byType(YouTubeThumbnail));
+    await tester.tap(find.byType(YouTubeThumbnail));
+    await tester.pump();
+    expect(opened.toString(),'https://youtu.be/aB3_deF-123');
   });
 }

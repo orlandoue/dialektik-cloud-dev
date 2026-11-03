@@ -11,7 +11,9 @@ import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/data/registered_source_directory.dart';
+import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
+import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_vocabulary.dart';
 import 'package:flutter/material.dart';
@@ -72,6 +74,7 @@ final class LiveNewsScreen extends StatefulWidget {
     required this.repository,
     required this.onOpenArticle,
     this.initialSourceId,
+    this.externalLinkOpener = openExternalHttpLink,
     this.govUkPreviewLoader,
     this.publisherMarketSelection,
     this.clock = DateTime.now,
@@ -81,6 +84,7 @@ final class LiveNewsScreen extends StatefulWidget {
   final LiveNewsRepository repository;
   final ValueChanged<String> onOpenArticle;
   final String? initialSourceId;
+  final ExternalLinkOpener externalLinkOpener;
   final GovUkPreviewLoader? govUkPreviewLoader;
   final PublisherMarketSelection? publisherMarketSelection;
   final LiveClock clock;
@@ -378,6 +382,12 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       ),
     ],
   );
+
+  void _openNews(LiveNewsItemDto item) {
+    if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null) {
+      unawaited(widget.externalLinkOpener(item.canonicalUrl));
+    } else { widget.onOpenArticle(item.id); }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -761,7 +771,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             LiveLeadCard(
               article: _visibleItems.first,
               isFollowed: _followed.contains(_visibleItems.first.source.id),
-              onPressed: () => widget.onOpenArticle(_visibleItems.first.id),
+              onPressed: () => _openNews(_visibleItems.first),
             ),
             if (_visibleItems.length > 1) ...<Widget>[
               const SizedBox(height: EditorialLayout.sectionGap),
@@ -791,7 +801,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                           child: LiveNewsCard(
                             article: article,
                             isFollowed: _followed.contains(article.source.id),
-                            onPressed: () => widget.onOpenArticle(article.id),
+                            onPressed: () => _openNews(article),
                           ),
                         ),
                     ],
@@ -1207,7 +1217,10 @@ final class LiveLeadCard extends StatelessWidget {
   final bool isFollowed;
 
   @override
-  Widget build(BuildContext context) => Semantics(
+  Widget build(BuildContext context) => extractYouTubeVideoId(article.canonicalUrl.toString()) != null
+      ? YouTubeNewsCard(videoId:extractYouTubeVideoId(article.canonicalUrl.toString())!,title:article.headline,source:article.source.name,
+          published:liveLocalDate(article.publishedAt),followed:isFollowed,onTap:onPressed)
+      : Semantics(
     button: true,
     label:
         'Abrir noticia más reciente: ${article.headline}. ${article.source.name}. Publicada ${liveLocalDate(article.publishedAt)}',
@@ -1351,7 +1364,10 @@ final class LiveNewsCard extends StatelessWidget {
   final VoidCallback onPressed;
   final bool isFollowed;
   @override
-  Widget build(BuildContext context) => EditorialActionCard(
+  Widget build(BuildContext context) => extractYouTubeVideoId(article.canonicalUrl.toString()) != null
+      ? YouTubeNewsCard(videoId:extractYouTubeVideoId(article.canonicalUrl.toString())!,title:article.headline,source:article.source.name,
+          published:liveLocalDate(article.publishedAt),followed:isFollowed,onTap:onPressed)
+      : EditorialActionCard(
     onTap: onPressed,
     semanticLabel:
         'Ver noticia: ${article.headline}. ${article.source.name}. Publicada ${liveLocalDate(article.publishedAt)}',

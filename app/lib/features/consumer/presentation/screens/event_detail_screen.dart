@@ -8,6 +8,8 @@ import 'package:dialektik/features/consumer/presentation/localization/consumer_s
 import 'package:dialektik/features/consumer/presentation/state/event_controller.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
+import 'package:dialektik/features/live/data/youtube_video.dart';
+import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter/material.dart';
 
 final class EventDetailScreen extends StatefulWidget {
@@ -204,7 +206,9 @@ final class _EventContent extends StatelessWidget {
               Text('Noticias originales', style: Theme.of(context).textTheme.headlineSmall),
               for (final article in event.articles)
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${article.sourceName} · ${article.title}'),
+                  if (extractYouTubeVideoId(article.url.toString()) case final String id)
+                    Row(children:[SizedBox(width:96,child:YouTubeThumbnail(videoId:id,compact:true,onTap:()=>onOpenArticle(article.url))), const SizedBox(width:10), Expanded(child:TextButton(onPressed:()=>onOpenArticle(article.url),child:Text('${article.sourceName.replaceAll('(YouTube)', '').trim()} · ${article.title}')))])
+                  else Text('${article.sourceName} · ${article.title}'),
                   TextButton.icon(onPressed: () => onOpenArticle(article.url),
                     icon: const Icon(Icons.open_in_new), label: const Text('Abrir noticia original ↗')),
                 ]),
@@ -212,7 +216,12 @@ final class _EventContent extends StatelessWidget {
               const SizedBox(height: DialektikSpacing.space8),
               Text('Noticias originales', style: Theme.of(context).textTheme.headlineSmall),
               for (final assertion in articles.values)
-                ListTile(
+                if (extractYouTubeVideoId(assertion.span.article.urlCanonical.toString()) case final String id)
+                  Row(children:[SizedBox(width:96,child:YouTubeThumbnail(videoId:id,compact:true,onTap:()=>onOpenArticle(assertion.span.article.urlCanonical))),
+                    const SizedBox(width:10),Expanded(child:ListTile(contentPadding:EdgeInsets.zero,
+                      title:Text(assertion.span.article.source.name),subtitle:Text('“${assertion.span.quotedText}”'),
+                      onTap:()=>onOpenArticle(assertion.span.article.urlCanonical)))])
+                else ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(assertion.span.article.source.name),
                   subtitle: Text('“${assertion.span.quotedText}”'),
