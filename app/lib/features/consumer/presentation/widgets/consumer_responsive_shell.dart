@@ -17,6 +17,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
     this.scrollBody = false,
     this.scrollKey,
     this.showBack = false,
+    this.backgroundColor = DialektikColors.offWhite,
     super.key,
   });
 
@@ -30,6 +31,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
   final bool scrollBody;
   final Key? scrollKey;
   final bool showBack;
+  final Color backgroundColor;
 
   List<ConsumerNavigationAction> get _sections => navigationActions
       .whereType<ConsumerNavigationAction>()
@@ -52,7 +54,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         if (constraints.maxWidth >= desktopBreakpoint) {
           return Scaffold(
-            backgroundColor: DialektikColors.offWhite,
+            backgroundColor: backgroundColor,
             body: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
@@ -69,7 +71,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
           );
         }
         return Scaffold(
-          backgroundColor: DialektikColors.offWhite,
+          backgroundColor: backgroundColor,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[

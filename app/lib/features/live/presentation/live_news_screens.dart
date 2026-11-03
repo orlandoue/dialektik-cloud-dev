@@ -382,6 +382,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   Widget build(BuildContext context) {
     return LiveReaderScaffold(
       title: 'Noticias recientes',
+      backgroundColor: DialektikColors.triadCream,
       isRoot: true,
       scrollKey: const PageStorageKey<String>('live-news'),
       navigationActions: widget.navigationActions,
