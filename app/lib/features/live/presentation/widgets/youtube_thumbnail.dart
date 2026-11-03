@@ -17,7 +17,7 @@ class YouTubeThumbnail extends StatelessWidget {
         child:Icon(Icons.play_arrow_rounded,color:Colors.white,size:compact ? 20 : 34))),
       if(!compact) Positioned(left:10,bottom:10,child:DecoratedBox(decoration:BoxDecoration(color:const Color(0xcc0f172a),borderRadius:BorderRadius.circular(6)),child:const Padding(padding:EdgeInsets.symmetric(horizontal:8,vertical:4),child:Row(mainAxisSize:MainAxisSize.min,children:[Icon(Icons.play_circle_fill,color:Color(0xffff0000),size:16),SizedBox(width:5),Text('Ver en YouTube',style:TextStyle(color:Colors.white,fontSize:12))])))),
     ])));
-    return onTap == null ? artwork : Semantics(button:true,label:'Abrir video en YouTube',child:InkWell(onTap:onTap,child:artwork));
+    return onTap == null ? artwork : Semantics(button:true,label:'Abrir video en YouTube',onTap:onTap,excludeSemantics:true,child:InkWell(onTap:onTap,child:artwork));
   }
 }
 
