@@ -9,7 +9,7 @@ import 'live_fixtures.dart';
 void main(){
   test('extracts only valid YouTube URLs and builds official thumbnails',(){
     const id='aB3_deF-123';
-    for(final url in ['https://youtube.com/watch?v=$id&x=1','https://youtu.be/$id','https://m.youtube.com/live/$id','https://www.youtube.com/shorts/$id','https://www.youtube.com/embed/$id']){
+    for(final url in ['https://youtube.com/watch?v=$id&x=1','https://youtu.be/$id','https://youtu.be/$id/','https://m.youtube.com/live/$id','https://www.youtube.com/shorts/$id','https://www.youtube.com/embed/$id/']){
       expect(extractYouTubeVideoId(url),id);
     }
     for(final url in [null,'','https://youtube.com.evil.test/watch?v=$id','https://example.test/?v=$id','https://youtu.be/${id}x','javascript:youtube.com/watch?v=$id','https://youtube.com/watch?v=$id&v=bbbbbbbbbbb']){
