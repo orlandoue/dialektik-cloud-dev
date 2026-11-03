@@ -7,6 +7,8 @@ abstract interface class LiveNewsRepository {
     int limit = 25,
     String? query,
     String? sourceId,
+    String? format,
+    String? topic,
     DateTime? publishedFrom,
     DateTime? publishedTo,
     bool refresh = false,

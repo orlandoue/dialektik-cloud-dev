@@ -662,10 +662,11 @@ void main() {
   testWidgets('format filters show press and YouTube items from one feed', (
     WidgetTester tester,
   ) async {
+    final List<Uri> calls = <Uri>[];
     final Map<String, Object?> responses = liveTestResponses();
     final Map<String, Object?> video = <String, Object?>{
       ...liveTestArticle(id: liveTestArticleId2),
-      'headline': 'Video verificado de Meganoticias',
+      'headline': 'Video verificado de seguridad en Meganoticias',
       'canonical_url': 'https://www.youtube.com/watch?v=video-test-1',
       'source': <String, Object?>{
         ...liveTestSource(),
@@ -681,24 +682,30 @@ void main() {
         video,
       ],
     );
-    await mountLive(tester, liveTestClient(responses: responses));
+    await mountLive(tester, liveTestClient(responses: responses, calls: calls));
 
     expect(
       find.text('Noticia escrita para pruebas: océano & atmósfera — señales'),
       findsOneWidget,
     );
-    expect(find.text('Video verificado de Meganoticias'), findsOneWidget);
+    expect(find.text('Video verificado de seguridad en Meganoticias'), findsOneWidget);
 
     await tapLive(tester, find.text('Prensa'));
+    expect(calls.last.queryParameters['format'], 'press');
     expect(
       find.text('Noticia escrita para pruebas: océano & atmósfera — señales'),
       findsOneWidget,
     );
-    expect(find.text('Video verificado de Meganoticias'), findsNothing);
+    expect(find.text('Video verificado de seguridad en Meganoticias'), findsNothing);
 
     await tapLive(tester, find.text('Videos'));
+    expect(calls.last.queryParameters['format'], 'videos');
     expect(find.text('Noticia escrita para pruebas: océano & atmósfera — señales'), findsNothing);
-    expect(find.text('Video verificado de Meganoticias'), findsOneWidget);
+    expect(find.text('Video verificado de seguridad en Meganoticias'), findsOneWidget);
+    await tapLive(tester, find.text('Seguridad'));
+    expect(calls.last.queryParameters['format'], 'videos');
+    expect(calls.last.queryParameters['topic'], 'seguridad');
+    expect(find.text('Video verificado de seguridad en Meganoticias'), findsOneWidget);
   });
 
   testWidgets('mobile news filters open on request and retain exact filters', (

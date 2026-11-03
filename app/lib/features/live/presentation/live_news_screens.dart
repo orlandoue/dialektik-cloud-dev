@@ -219,6 +219,12 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
         cursor: cursor,
         query: query.isEmpty ? null : query,
         sourceId: _sourceId,
+        format: switch (_format) {
+          LiveNewsFormatFilter.all => null,
+          LiveNewsFormatFilter.press => 'press',
+          LiveNewsFormatFilter.videos => 'videos',
+        },
+        topic: _topic?.name,
         publishedFrom: bounds.$1,
         publishedTo: bounds.$2,
         refresh: refresh,
@@ -446,14 +452,15 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                 label: 'Videos',
               ),
             ],
-            onSelected: (LiveNewsFormatFilter? value) => setState(
-              () => _format = value ?? LiveNewsFormatFilter.all,
-            ),
+            onSelected: (LiveNewsFormatFilter? value) {
+              setState(() => _format = value ?? LiveNewsFormatFilter.all);
+              unawaited(_load());
+            },
           ),
           const SizedBox(height: DialektikSpacing.space3),
           Text('Tema', style: Theme.of(context).textTheme.titleMedium),
           HorizontalChoiceStrip<LiveNewsTopic>(
-            semanticsLabel: 'Filtrar noticias cargadas por tema',
+            semanticsLabel: 'Filtrar noticias por tema',
             allLabel: 'Todos', selectedValue: _topic, keyPrefix: 'live-topic-filter',
             options: const <HorizontalChoiceOption<LiveNewsTopic>>[
               HorizontalChoiceOption(value: LiveNewsTopic.politica, label: 'Política'),
@@ -463,7 +470,10 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               HorizontalChoiceOption(value: LiveNewsTopic.deportes, label: 'Deportes'),
               HorizontalChoiceOption(value: LiveNewsTopic.sociedad, label: 'Sociedad'),
             ],
-            onSelected: (value) => setState(() => _topic = value),
+            onSelected: (value) {
+              setState(() => _topic = value);
+              unawaited(_load());
+            },
           ),
           if (_selectedCountry != 'CL') ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
@@ -708,7 +718,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                   ? 'No hay noticias con estos filtros.'
                   : 'Todavía no hay noticias recientes disponibles.',
               description: _hasFilters
-                  ? 'El filtro por tema y formato se aplica a las noticias cargadas. Puedes ampliar la búsqueda o cambiar la fuente y la fecha.'
+                  ? 'Puedes ampliar la búsqueda o cambiar la fuente y la fecha.'
                   : 'Vuelve a consultar más tarde; aquí aparecerán publicaciones con su fuente y enlace originales.',
               action: _nextCursor != null && !_addingPage
                   ? EditorialTextButton(
