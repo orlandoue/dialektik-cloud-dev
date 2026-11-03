@@ -57,7 +57,10 @@ void main(){
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),home:MirrorScreen(repository:repo,onOpenArticle:(_){fail('Video opened in article screen');},onOpenSources:(){},externalLinkOpener:(uri) async {opened=uri;return true;})));
     await tester.pump();
     expect(find.byType(YouTubeThumbnail),findsOneWidget);
-    await tester.tap(find.text('Noticia escrita para pruebas: océano & atmósfera — señales'));
+    final title=find.text('Noticia escrita para pruebas: océano & atmósfera — señales');
+    await tester.ensureVisible(title);
+    await tester.pump();
+    await tester.tap(title);
     await tester.pump();
     expect(opened.toString(),'https://www.youtube.com/watch?v=aB3_deF-123');
   });
