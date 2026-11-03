@@ -520,7 +520,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
               description: 'El selector está preparado, pero aún no existe un feed de este país verificado. No mostraremos noticias chilenas como si fueran locales.',
             ),
           ] else ...<Widget>[
-          if (widget.govUkPreviewLoader != null) ...<Widget>[
+          if (widget.govUkPreviewLoader != null && (_allSources || _followed.isEmpty)) ...<Widget>[
             const SizedBox(height: DialektikSpacing.space4),
             Card(
               key: const Key('govuk-official-preview'),
