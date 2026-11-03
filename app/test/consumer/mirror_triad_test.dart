@@ -45,6 +45,8 @@ void main(){
     await tester.tap(find.text('Con contraste (1)'));
     await tester.pumpAndSettle();
     expect(find.text(publishedEventCard.titleDescriptive),findsOneWidget);
+    await tester.ensureVisible(find.text('Punto ciego'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Punto ciego'));
     await tester.pumpAndSettle();
     expect(find.text('No hay acontecimientos en este filtro.'),findsOneWidget);
