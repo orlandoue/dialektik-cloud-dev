@@ -333,6 +333,7 @@ final class ConsumerRouteFactory {
         return _page(
           settings,
           SynthesisScreen(
+            externalLinkOpener: externalLinkOpener,
             repository: repository,
             seismicRepository: liveNewsRepository is SeismicObservationRepository
                 ? liveNewsRepository as SeismicObservationRepository : null,
@@ -343,7 +344,7 @@ final class ConsumerRouteFactory {
         );
       }
       if (uri.path == ConsumerRoutes.mirror) {
-        return _page(settings, MirrorScreen(repository:live, onOpenArticle:openLiveNews,
+        return _page(settings, MirrorScreen(repository:live, externalLinkOpener:externalLinkOpener, onOpenArticle:openLiveNews,
           onOpenSources:()=>_openSection(ConsumerRoutes.liveSources), navigationActions:navigationActions));
       }
       if (uri.path == ConsumerRoutes.contradictions) {
@@ -440,6 +441,7 @@ final class ConsumerRouteFactory {
       return _page(
         settings,
         LiveNewsScreen(
+          externalLinkOpener:externalLinkOpener,
           repository: live,
           publisherMarketSelection: publisherMarketSelection,
           govUkPreviewLoader: govUkPreviewLoader,

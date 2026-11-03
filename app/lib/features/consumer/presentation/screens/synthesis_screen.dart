@@ -2,16 +2,20 @@ import 'dart:async';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
+import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
+import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter/material.dart';
 
 class SynthesisScreen extends StatefulWidget {
-  const SynthesisScreen({required this.repository, required this.onOpenEvent, this.seismicRepository, this.navigationActions=const [], super.key});
+  const SynthesisScreen({required this.repository, required this.onOpenEvent, this.seismicRepository, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], super.key});
   final ConsumerRepository repository;
   final ValueChanged<String> onOpenEvent;
   final SeismicObservationRepository? seismicRepository;
+  final ExternalLinkOpener externalLinkOpener;
   final List<Widget> navigationActions;
   @override State<SynthesisScreen> createState()=>_SynthesisScreenState();
 }
@@ -57,13 +61,13 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
       if(loading) const Center(child:CircularProgressIndicator())
       else if(error!=null) TextButton(onPressed:_reload,child:const Text('No se pudieron cargar los acontecimientos. Reintentar'))
       else if(filtered.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('No hay acontecimientos en este filtro.'))
-      else for(final event in filtered) _SynthesisCard(event:event, contrast:contrasts[event.id],repository:widget.repository,onOpen:()=>widget.onOpenEvent(event.id)),
+      else for(final event in filtered) _SynthesisCard(event:event, contrast:contrasts[event.id],repository:widget.repository,externalLinkOpener:widget.externalLinkOpener,onOpen:()=>widget.onOpenEvent(event.id)),
     ])));
   }
 }
 class _SynthesisCard extends StatefulWidget {
-  const _SynthesisCard({required this.event,required this.contrast,required this.repository,required this.onOpen});
-  final EventCardDto event; final ContradictionDto? contrast; final ConsumerRepository repository;final VoidCallback onOpen;
+  const _SynthesisCard({required this.event,required this.contrast,required this.repository,required this.externalLinkOpener,required this.onOpen});
+  final EventCardDto event; final ContradictionDto? contrast; final ConsumerRepository repository;final ExternalLinkOpener externalLinkOpener;final VoidCallback onOpen;
   @override State<_SynthesisCard> createState()=>_SynthesisCardState();
 }
 class _SynthesisCardState extends State<_SynthesisCard> {
@@ -85,13 +89,18 @@ class _SynthesisCardState extends State<_SynthesisCard> {
     const SizedBox(height:10),
     FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
       final data=snapshot.data;if(data==null)return const SizedBox.shrink();
-      if(widget.contrast==null) { return Wrap(spacing:8,runSpacing:4,children:[
-        for(final name in data.articles.map((a)=>a.sourceName).toSet())
+      final videos=data.articles.where((a)=>extractYouTubeVideoId(a.url.toString())!=null).toList();
+      final videoRows=<Widget>[for(final article in videos) Padding(padding:const EdgeInsets.symmetric(vertical:6),child:Row(children:[
+        SizedBox(width:96,child:YouTubeThumbnail(videoId:extractYouTubeVideoId(article.url.toString())!,compact:true,onTap:()=>unawaited(widget.externalLinkOpener(article.url)))),
+        const SizedBox(width:10),Expanded(child:TextButton(onPressed:()=>unawaited(widget.externalLinkOpener(article.url)),child:Text('${article.sourceName.replaceAll('(YouTube)', '').trim()} · ${article.title}'))),
+      ]))];
+      if(widget.contrast==null) { return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[...videoRows, Wrap(spacing:8,runSpacing:4,children:[
+        for(final name in data.articles.where((a)=>extractYouTubeVideoId(a.url.toString())==null).map((a)=>a.sourceName).toSet())
           Text(name.contains('(YouTube)') ? '${name.replaceAll('(YouTube)', '').trim()} · ▶ Video' : name),
-      ]); }
+      ])]); }
       final c=widget.contrast!;
       final selected=data.coveragePositions.where((p)=>p.id==c.positionA.id || p.id==c.positionB.id);
-      return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[for(final p in selected)
+      return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[...videoRows,for(final p in selected)
         Container(margin:const EdgeInsets.only(bottom:8),padding:const EdgeInsets.all(10),
           decoration:const BoxDecoration(color:Color(0xfff7f5ee),border:Border(left:BorderSide(color:Color(0xffcbd5e1),width:3),top:BorderSide(color:Color(0xffe2dec9)),right:BorderSide(color:Color(0xffe2dec9)),bottom:BorderSide(color:Color(0xffe2dec9)))),
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[

@@ -1,16 +1,20 @@
 import 'dart:async';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
+import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_responsive_shell.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/youtube_video.dart';
+import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter/material.dart';
 
 class MirrorScreen extends StatefulWidget {
-  const MirrorScreen({required this.repository, required this.onOpenArticle, required this.onOpenSources, this.navigationActions=const [], super.key});
+  const MirrorScreen({required this.repository, required this.onOpenArticle, required this.onOpenSources, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], super.key});
   final LiveNewsRepository repository;
   final ValueChanged<String> onOpenArticle;
   final VoidCallback onOpenSources;
+  final ExternalLinkOpener externalLinkOpener;
   final List<Widget> navigationActions;
   @override State<MirrorScreen> createState() => _MirrorScreenState();
 }
@@ -82,6 +86,10 @@ class _MirrorScreenState extends State<MirrorScreen> {
     try { await following!.setFollowing(id,following:true); if(mounted) setState(()=>followed={...followed,id}); }
     on Exception { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No se pudo seguir esta fuente.'))); }
   }
+  void _openItem(LiveNewsItemDto item) {
+    if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null) { unawaited(widget.externalLinkOpener(item.canonicalUrl)); }
+    else { widget.onOpenArticle(item.id); }
+  }
   @override Widget build(BuildContext context) => ConsumerResponsiveShell(
     title:'Dialektik', location:'Espejo', navigationActions:widget.navigationActions,
     body: ColoredBox(color:background, child: RefreshIndicator(onRefresh:_reload,child:ListView(padding:const EdgeInsets.fromLTRB(16,8,16,24), children:[
@@ -109,10 +117,14 @@ class _MirrorScreenState extends State<MirrorScreen> {
                 Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:const Color(0xfffff7ed),borderRadius:BorderRadius.circular(6)),
                   child:Text('FUERA DE TUS FUENTES · ${item.source.name.toUpperCase()}',style:const TextStyle(color:Color(0xff9a3412),fontSize:11,fontWeight:FontWeight.w700))),
                 const SizedBox(height:8),
-                Text(item.headline,style:const TextStyle(color:ivory,fontFamily:'serif',fontSize:20,height:1.3)),
+                if (extractYouTubeVideoId(item.canonicalUrl.toString()) case final String id) ...[
+                  YouTubeThumbnail(videoId:id,onTap:()=>_openItem(item)), const SizedBox(height:8),
+                ],
+                GestureDetector(onTap:()=>_openItem(item),child:Text(item.headline,style:const TextStyle(color:ivory,fontFamily:'serif',fontSize:20,height:1.3))),
+                Text('${item.source.name} · ${item.publishedAt.toLocal().toString().substring(0,16)}'),
                 const SizedBox(height:8),
                 Wrap(alignment:WrapAlignment.spaceBetween,spacing:8,runSpacing:4,children:[
-                  TextButton(onPressed:()=>widget.onOpenArticle(item.id),child:const Text('Abrir noticia ↗')),
+                  TextButton(onPressed:()=>_openItem(item),child:const Text('Abrir noticia ↗')),
                   OutlinedButton.icon(onPressed:()=>_follow(item.source.id),icon:const Icon(Icons.add,size:16),label:const Text('Seguir medio')),
                 ]),
               ]))),
