@@ -15,10 +15,13 @@ export class FollowedSourcesService {
     });
   }
   async change(userId: string, sourceId: string, follow: boolean): Promise<void> {
+    let stage = 'BEGIN';
     try {
     await this.db.database.transaction().execute(async (tx) => {
+      stage = 'IDENTITY';
       await sql`select set_config('dialektik.follow_user',${userId},true)`.execute(tx);
       if (follow) {
+        stage = 'ELIGIBILITY';
         const domains=publisherDomainsForMarket('CL');
         const eligible=await sql<{ok:boolean}>`select exists(select 1 from public.sources s
           join lateral(select p.* from public.live_source_policies p where p.source_id=s.id
@@ -32,20 +35,22 @@ export class FollowedSourcesService {
             and p.policy->>'rightsEvidenceUrl' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
             and p.policy->>'endpoint' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')) as ok`.execute(tx);
         if (!eligible.rows[0]?.ok) throw new NotFoundException('Source not found.');
+        stage = 'INSERT';
         await sql`insert into public.user_followed_sources(user_id,source_id) values (${userId}::uuid,${sourceId}::dialektik_ulid)
           on conflict (user_id,source_id) do nothing`.execute(tx);
       } else {
+        stage = 'DELETE';
         await sql`delete from public.user_followed_sources where user_id=${userId}::uuid and source_id=${sourceId}::dialektik_ulid`.execute(tx);
       }
+      stage = 'COMMIT';
     });
     } catch (error) {
       if (error instanceof HttpException) throw error;
       const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
-      const safeCode = code === '42501' ? 'PUBLIC_FOLLOW_PERMISSION' :
-        code === '23503' ? 'PUBLIC_FOLLOW_REFERENCE' :
-        code === '23505' ? 'PUBLIC_FOLLOW_CONFLICT' :
-        code === '23514' ? 'PUBLIC_FOLLOW_CONSTRAINT' :
-        error instanceof TypeError ? 'PUBLIC_FOLLOW_TYPE' : 'PUBLIC_FOLLOW_OTHER';
+      const errorCode = typeof code === 'string' && /^[A-Z0-9]{5}$/.test(code)
+        ? code.replace(/[0-9]/g, (digit) => 'ABCDEFGHIJ'[Number(digit)]!) : 'UNKNOWN';
+      const errorType = error instanceof Error ? error.name.toUpperCase().replace(/[^A-Z]/g,'').slice(0,20) : 'UNKNOWN';
+      const safeCode = `PUBLIC_FOLLOW_${stage}_${errorType}_${errorCode}`;
       throw new HttpException({code:safeCode},503);
     }
   }
