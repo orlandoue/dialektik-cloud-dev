@@ -76,4 +76,22 @@ void main(){
     await tester.pumpAndSettle();
     expect(find.text('No hay acontecimientos en este filtro.'),findsOneWidget);
   });
+  testWidgets('synthesis shows compact video coverage and opens the original', (tester) async {
+    final event=EventDetailDto.fromJson({...eventDetailJson(id:publishedEventId,analysisState:'PUBLISHED',positionCount:2),
+      'positions':<Object?>[], 'contrasts':<Object?>[], 'articles':<Object?>[
+        {'id':'video','title':'Entrevista en video','source_name':'Canal (YouTube)',
+          'published_at':'2026-10-30T12:00:00Z','url':'https://youtu.be/aB3_deF-123'},
+      ]});
+    final repo=FakeConsumerRepository(event:event,feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
+    Uri? opened;
+    await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
+      home:SynthesisScreen(repository:repo,onOpenEvent:(_){},externalLinkOpener:(uri) async {opened=uri;return true;})));
+    await tester.pump();await tester.pump(const Duration(milliseconds:200));
+    final preview=tester.widget<YouTubeThumbnail>(find.byType(YouTubeThumbnail));
+    expect(preview.compact,isTrue);
+    await tester.ensureVisible(find.byType(YouTubeThumbnail));
+    await tester.tap(find.byType(YouTubeThumbnail));
+    await tester.pump();
+    expect(opened.toString(),'https://youtu.be/aB3_deF-123');
+  });
 }

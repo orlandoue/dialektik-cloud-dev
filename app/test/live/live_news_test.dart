@@ -710,6 +710,20 @@ void main() {
     expect(find.text('Video verificado de seguridad en Meganoticias'), findsOneWidget);
   });
 
+  testWidgets('tapping a video title opens the original YouTube URL', (tester) async {
+    final responses=liveTestResponses();
+    final video=<String,Object?>{...liveTestArticle(),
+      'headline':'Video de prueba', 'canonical_url':'https://youtu.be/aB3_deF-123',
+      'source':<String,Object?>{...liveTestSource(),'canonical_domain':'youtube.com'}};
+    responses['/live/news']=liveTestPage(items:<Object?>[video]);
+    Uri? opened;
+    await mountLive(tester,liveTestClient(responses:responses),opener:(uri) async {opened=uri;return true;});
+    await tester.ensureVisible(find.text('Video de prueba'));
+    await tester.tap(find.text('Video de prueba'));
+    await tester.pump();
+    expect(opened.toString(),'https://youtu.be/aB3_deF-123');
+  });
+
   testWidgets('mobile news filters open on request and retain exact filters', (
     WidgetTester tester,
   ) async {

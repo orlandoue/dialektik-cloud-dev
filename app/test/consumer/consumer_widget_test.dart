@@ -4,6 +4,7 @@ import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/navigation/consumer_routes.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/event_card.dart';
+import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -143,6 +144,23 @@ void main() {
       initialRoute: ConsumerRoutes.event(publishedEventId)));
     await tester.pumpAndSettle();
     expect(find.text('Contraste de enfoques'), findsOneWidget);
+  });
+
+  testWidgets('event coverage opens compact YouTube preview directly', (tester) async {
+    final event=EventDetailDto.fromJson({...eventDetailJson(id:publishedEventId,analysisState:'PUBLISHED',positionCount:2),
+      'positions':<Object?>[], 'contrasts':<Object?>[], 'articles':<Object?>[
+        {'id':'video','title':'Entrevista en video','source_name':'Canal (YouTube)',
+          'published_at':'2026-10-30T12:00:00Z','url':'https://youtu.be/aB3_deF-123'},
+      ]});
+    Uri? opened;
+    await tester.pumpWidget(_app(FakeConsumerRepository(event:event),initialRoute:ConsumerRoutes.event(publishedEventId),
+      externalLinkOpener:(uri) async {opened=uri;return true;}));
+    await tester.pump();await tester.pump(const Duration(milliseconds:200));
+    final preview=find.byType(YouTubeThumbnail);
+    await tester.ensureVisible(preview);await tester.pump();
+    expect(tester.widget<YouTubeThumbnail>(preview).compact,isTrue);
+    await tester.tap(preview);await tester.pump();
+    expect(opened.toString(),'https://youtu.be/aB3_deF-123');
   });
 
   testWidgets('followed coverage is highlighted while the other source stays visible', (WidgetTester tester) async {
