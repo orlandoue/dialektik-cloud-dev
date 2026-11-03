@@ -105,6 +105,7 @@ final class ConsumerRouteFactory {
   );
   final ValueNotifier<String> _selectedTab = ValueNotifier<String>(ConsumerRoutes.liveNews);
   bool _buildingTab = false;
+  int _activeTabHosts = 0;
   static const _mainTabs = <String>{ConsumerRoutes.liveNews, ConsumerRoutes.mirror, ConsumerRoutes.feed, ConsumerRoutes.liveSources};
 
   Route<dynamic> generate(RouteSettings settings) {
@@ -655,7 +656,7 @@ final class ConsumerRouteFactory {
   }
 
   void _openSection(String route) {
-    if (_mainTabs.contains(route) && _selectedTab.hasListeners) {
+    if (_mainTabs.contains(route) && _activeTabHosts > 0) {
       _selectedTab.value = route;
       _navigatorKey.currentState?.popUntil((candidate) => candidate.isFirst || _mainTabs.contains(Uri.parse(candidate.settings.name ?? '').path));
       return;
@@ -685,11 +686,12 @@ class _PersistentReaderTabsState extends State<_PersistentReaderTabs> {
   final Map<String,Widget> _pages = {};
   @override void initState() {
     super.initState();
+    widget.factory._activeTabHosts++;
     widget.factory._selectedTab.value=widget.initialTab;
     widget.factory.publisherMarketSelection?.addListener(_marketChanged);
   }
   void _marketChanged() { if(mounted) setState(() { _pages.removeWhere((route,_) => route != ConsumerRoutes.liveNews); }); }
-  @override void dispose() { widget.factory.publisherMarketSelection?.removeListener(_marketChanged);super.dispose(); }
+  @override void dispose() { widget.factory._activeTabHosts--;widget.factory.publisherMarketSelection?.removeListener(_marketChanged);super.dispose(); }
   @override Widget build(BuildContext context) => ValueListenableBuilder<String>(
     valueListenable:widget.factory._selectedTab,
     builder:(context,selected,_) {
