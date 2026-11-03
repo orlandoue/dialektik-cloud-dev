@@ -197,7 +197,10 @@ final class _MobileHeader extends StatelessWidget {
                     const SizedBox(width: DialektikSpacing.space1),
                   ],
                   Expanded(
-                    child: FittedBox(
+                    child: Semantics(
+                      label: location == null ? null : 'Ubicación actual: $location',
+                      explicitChildNodes: true,
+                      child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -207,6 +210,7 @@ final class _MobileHeader extends StatelessWidget {
                         style: DialektikTypography.editorialBrand(
                           color: DialektikColors.inkBlack,
                         ),
+                      ),
                       ),
                     ),
                   ),
