@@ -216,7 +216,12 @@ final class _EventContent extends StatelessWidget {
               const SizedBox(height: DialektikSpacing.space8),
               Text('Noticias originales', style: Theme.of(context).textTheme.headlineSmall),
               for (final assertion in articles.values)
-                ListTile(
+                if (extractYouTubeVideoId(assertion.span.article.urlCanonical.toString()) case final String id)
+                  Row(children:[SizedBox(width:96,child:YouTubeThumbnail(videoId:id,compact:true,onTap:()=>onOpenArticle(assertion.span.article.urlCanonical))),
+                    const SizedBox(width:10),Expanded(child:ListTile(contentPadding:EdgeInsets.zero,
+                      title:Text(assertion.span.article.source.name),subtitle:Text('“${assertion.span.quotedText}”'),
+                      onTap:()=>onOpenArticle(assertion.span.article.urlCanonical)))])
+                else ListTile(
                   contentPadding: EdgeInsets.zero,
                   title: Text(assertion.span.article.source.name),
                   subtitle: Text('“${assertion.span.quotedText}”'),
