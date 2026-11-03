@@ -127,7 +127,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Acontecimientos remains the consumer root in personal mode', (
+  testWidgets('Síntesis remains the consumer root in personal mode', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
@@ -151,7 +151,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('No hay eventos públicos disponibles por ahora.'),
+      find.text('No hay acontecimientos en este filtro.'),
       findsOneWidget,
     );
     expect(find.text('Administración · estado local'), findsNothing);
