@@ -202,14 +202,14 @@ void main() {
       expect(find.text('Administración'), findsNothing);
       expect(find.byTooltip('Más opciones'), findsOneWidget);
 
-      await _tap(tester, find.text('Acontecimientos'));
+      await _tap(tester, find.text('Síntesis'));
       expect(
-        find.text('No hay eventos públicos disponibles por ahora.'),
+        find.text('No hay acontecimientos en este filtro.'),
         findsOneWidget,
       );
       await _tapAndResolveSources(tester, liveRepository);
-      await _tap(tester, find.text('Contradicciones'));
-      expect(find.text('Contradicciones publicadas'), findsOneWidget);
+      await _tap(tester, find.text('Espejo'));
+      expect(find.text('ANTÍTESIS · FUERA DE TU ALGORITMO'), findsOneWidget);
       await _tap(tester, find.text('Actualidad'));
       expect(
         find.text('Noticia escrita para pruebas: océano & atmósfera — señales'),

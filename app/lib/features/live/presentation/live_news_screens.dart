@@ -103,6 +103,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   LiveNewsFormatFilter _format = LiveNewsFormatFilter.all;
   LiveNewsTopic? _topic;
   Set<String> _followed = <String>{};
+  bool _allSources = false;
   FollowingRepository? get _following => widget.repository is FollowingRepository &&
       (widget.repository as FollowingRepository).followingAvailable ? widget.repository as FollowingRepository : null;
   String? _nextCursor;
@@ -162,7 +163,11 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     if (repository == null) return;
     try {
       final ids = await repository.listFollowedSources();
-      if (mounted) setState(() => _followed = ids);
+      if (mounted) {
+        final changed = !_followed.containsAll(ids) || !ids.containsAll(_followed);
+        setState(() => _followed = ids);
+        if (changed && !_allSources) unawaited(_load(refresh: true));
+      }
     } on Exception { /* The feed remains complete if personalization is unavailable. */ }
   }
 
@@ -232,15 +237,22 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       }
     });
     try {
-      final LiveNewsPageDto page = await widget.repository.listLiveNews(
+      final format = switch (_format) {
+        LiveNewsFormatFilter.all => null,
+        LiveNewsFormatFilter.press => 'press',
+        LiveNewsFormatFilter.videos => 'videos',
+      };
+      final scoped = widget.repository is ScopedLiveNewsRepository && _followed.isNotEmpty && !_allSources;
+      final LiveNewsPageDto page = scoped
+        ? await (widget.repository as ScopedLiveNewsRepository).listScopedLiveNews(
+          scope:'following', cursor:cursor, query:query.isEmpty ? null : query, sourceId:_sourceId,
+          format:format, topic:_topic?.name, publishedFrom:bounds.$1, publishedTo:bounds.$2,
+          refresh:refresh, requestToken:token)
+        : await widget.repository.listLiveNews(
         cursor: cursor,
         query: query.isEmpty ? null : query,
         sourceId: _sourceId,
-        format: switch (_format) {
-          LiveNewsFormatFilter.all => null,
-          LiveNewsFormatFilter.press => 'press',
-          LiveNewsFormatFilter.videos => 'videos',
-        },
+        format: format,
         topic: _topic?.name,
         publishedFrom: bounds.$1,
         publishedTo: bounds.$2,
@@ -376,6 +388,15 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          const Text('TESIS · TU ALGORITMO Y MEDIOS SEGUIDOS'),
+          if (_followed.isNotEmpty) Wrap(spacing:8, children: [
+            ChoiceChip(label:const Text('Siguiendo'), selected:!_allSources, onSelected: (_) {
+              setState(() => _allSources = false); unawaited(_load(refresh:true));
+            }),
+            ChoiceChip(label:const Text('Ver todo'), selected:_allSources, onSelected: (_) {
+              setState(() => _allSources = true); unawaited(_load(refresh:true));
+            }),
+          ]),
           const SizedBox(height: DialektikSpacing.space4),
           Semantics(
             header: true,
@@ -981,6 +1002,7 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
+        const Text('FUENTES · CONFIGURA TU TESIS Y TU ESPEJO'),
         const Text('Consulta quién publica cada noticia y su sitio original.'),
         const SizedBox(height: DialektikSpacing.space6),
         SectionHeading(title: 'Fuentes operativas · ${_sources.length}'),

@@ -4,6 +4,7 @@ import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/screens/contradictions_screen.dart';
 import 'package:dialektik/features/consumer/presentation/screens/event_detail_screen.dart';
 import 'package:dialektik/features/consumer/presentation/screens/feed_screen.dart';
+import 'package:dialektik/features/consumer/presentation/screens/synthesis_screen.dart';
 import 'package:dialektik/features/consumer/presentation/screens/source_screen.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_navigation_action.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
@@ -12,6 +13,7 @@ import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
 import 'package:dialektik/features/live/presentation/live_news_screens.dart';
+import 'package:dialektik/features/live/presentation/mirror_screen.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_operational.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_status.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_test_shadow.dart';
@@ -33,6 +35,7 @@ import 'package:flutter/material.dart';
 abstract final class ConsumerRoutes {
   static const String feed = '/';
   static const String liveNews = '/live/news';
+  static const String mirror = '/mirror';
   static const String liveSources = '/live/sources';
   static const String semanticShadow = '/shadow/semantic';
   static const String ephemeralSemantic = '/shadow/semantic/content';
@@ -197,6 +200,7 @@ final class ConsumerRouteFactory {
       final String marketCode = publisherMarketSelection?.value ?? 'CL';
       final bool sectionRequiresCoverage =
           uri.path == ConsumerRoutes.feed ||
+          uri.path == ConsumerRoutes.mirror ||
           uri.path == ConsumerRoutes.liveSources ||
           uri.path == ConsumerRoutes.contradictions ||
           uri.path.startsWith('/events/') ||
@@ -321,20 +325,19 @@ final class ConsumerRouteFactory {
       if (uri.path == ConsumerRoutes.feed) {
         return _page(
           settings,
-          FeedScreen(
+          SynthesisScreen(
             repository: repository,
             seismicRepository: liveNewsRepository is SeismicObservationRepository
                 ? liveNewsRepository as SeismicObservationRepository : null,
-            curatedEventPreviewLoader: curatedEventPreviewLoader,
             navigationActions: navigationActions,
-            onOpenThreads: null,
             onOpenEvent: (String id) =>
                 _navigatorKey.currentState?.pushNamed(ConsumerRoutes.event(id)),
-            onOpenContradictions: () => _navigatorKey.currentState?.pushNamed(
-              ConsumerRoutes.contradictions,
-            ),
           ),
         );
+      }
+      if (uri.path == ConsumerRoutes.mirror) {
+        return _page(settings, MirrorScreen(repository:live, onOpenArticle:openLiveNews,
+          onOpenSources:()=>_openSection(ConsumerRoutes.liveSources), navigationActions:navigationActions));
       }
       if (uri.path == ConsumerRoutes.contradictions) {
         return _page(
@@ -609,8 +612,8 @@ final class ConsumerRouteFactory {
     final List<({String label, String route})> sections =
         <({String label, String route})>[
           (label: 'Actualidad', route: ConsumerRoutes.liveNews),
-          (label: 'Acontecimientos', route: ConsumerRoutes.feed),
-          (label: 'Contradicciones', route: ConsumerRoutes.contradictions),
+          (label: 'Espejo', route: ConsumerRoutes.mirror),
+          (label: 'Síntesis', route: ConsumerRoutes.feed),
           (label: 'Fuentes', route: ConsumerRoutes.liveSources),
           if (personalOwnerStatusRepository != null)
             (label: 'Administración', route: ConsumerRoutes.personalOwner),
@@ -630,14 +633,15 @@ final class ConsumerRouteFactory {
 
   String _sectionForPath(String path) {
     if (path == ConsumerRoutes.feed || path.startsWith('/events/')) {
-      return 'Acontecimientos';
+      return 'Síntesis';
     }
     if (path == ConsumerRoutes.liveSources ||
         path.startsWith('/sources/') ||
         path.startsWith('/live/sources/')) {
       return 'Fuentes';
     }
-    if (path == ConsumerRoutes.contradictions) return 'Contradicciones';
+    if (path == ConsumerRoutes.contradictions) return 'Síntesis';
+    if (path == ConsumerRoutes.mirror) return 'Espejo';
     if (path.startsWith('/personal/owner/official-votes/')) {
       return 'Administración';
     }

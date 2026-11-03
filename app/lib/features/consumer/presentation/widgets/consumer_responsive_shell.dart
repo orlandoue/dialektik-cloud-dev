@@ -153,9 +153,9 @@ final class _MobileHeader extends StatelessWidget {
         .where(
           (ConsumerNavigationAction action) => const <String>{
             'Actualidad',
-            'Acontecimientos',
+            'Espejo',
+            'Síntesis',
             'Fuentes',
-            'Contradicciones',
             'Historias',
           }.contains(action.label),
         )
@@ -224,6 +224,7 @@ final class _MobileHeader extends StatelessWidget {
                       ),
                     ),
                   ...utilityActions,
+                  if (secondary.isNotEmpty) _MoreTab(actions:secondary, selected:secondary.any((action)=>action.selected)),
                 ],
               ),
             ),
@@ -265,20 +266,11 @@ final class _MobilePrimaryNavigation extends StatelessWidget {
   final List<ConsumerNavigationAction> secondary;
 
   @override
-  Widget build(BuildContext context) => Wrap(
+  Widget build(BuildContext context) => Row(
     key: const Key('consumer-primary-navigation-scroll'),
     children: <Widget>[
       for (final ConsumerNavigationAction action in primary)
-        IntrinsicWidth(child: _PrimaryTab(action: action)),
-      if (secondary.isNotEmpty)
-        IntrinsicWidth(
-          child: _MoreTab(
-            actions: secondary,
-            selected: secondary.any(
-              (ConsumerNavigationAction action) => action.selected,
-            ),
-          ),
-        ),
+        Expanded(child: _PrimaryTab(action: action)),
     ],
   );
 }
@@ -313,7 +305,9 @@ final class _PrimaryTab extends StatelessWidget {
         alignment: Alignment.center,
         child: Text(
           action.label,
-          softWrap: true,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: DialektikColors.inkBlack,
@@ -448,6 +442,8 @@ final class _SidebarEntry extends StatelessWidget {
 
   IconData get _icon => switch (action.label) {
     'Actualidad' => Icons.home_outlined,
+    'Espejo' => Icons.flip_outlined,
+    'Síntesis' => Icons.account_balance_outlined,
     'Acontecimientos' => Icons.account_balance_outlined,
     'Fuentes' => Icons.source_outlined,
     'Contradicciones' => Icons.compare_arrows_outlined,

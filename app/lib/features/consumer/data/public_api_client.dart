@@ -38,6 +38,7 @@ final class PublicApiClient
         FollowingRepository,
         SemanticRepository,
         LiveNewsRepository,
+        ScopedLiveNewsRepository,
         ChileRssChronologyRepository,
         ChileRssLinkedNewsRepository,
         ChileRssLinksRepository,
@@ -457,6 +458,15 @@ final class PublicApiClient
     refresh: refresh,
     requestToken: requestToken,
   );
+
+  @override
+  Future<LiveNewsPageDto> listScopedLiveNews({required String scope, String? cursor,
+    String? format, String? topic, String? query, String? sourceId, DateTime? publishedFrom,
+    DateTime? publishedTo, bool refresh = false, PublicRequestToken? requestToken}) => _get(
+      '/live/news/personalized', query: <String,String>{'scope':scope, 'country': ?_marketQuery,
+        'cursor': ?cursor, 'format': ?format, 'topic': ?topic, 'q': ?query, 'source_id': ?sourceId,
+        'published_from': ?publishedFrom?.toUtc().toIso8601String(), 'published_to': ?publishedTo?.toUtc().toIso8601String()},
+      decoder: LiveNewsPageDto.fromJson, refresh:refresh, requestToken:requestToken);
 
   @override
   Future<RegisteredSourceDirectory> loadRegisteredSources({bool refresh = false}) =>
