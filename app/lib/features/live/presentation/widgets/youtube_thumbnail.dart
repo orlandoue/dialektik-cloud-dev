@@ -26,7 +26,7 @@ class YouTubeNewsCard extends StatelessWidget {
   final String videoId,title,source,published;
   final bool followed;
   final VoidCallback onTap;
-  @override Widget build(BuildContext context)=>Semantics(button:true,label:'Abrir video en YouTube: $title. $source. Publicado $published',child:Card(clipBehavior:Clip.antiAlias,child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+  @override Widget build(BuildContext context)=>Semantics(button:true,onTap:onTap,excludeSemantics:true,label:'Abrir video en YouTube: $title. $source. Publicado $published',child:Card(clipBehavior:Clip.antiAlias,child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     YouTubeThumbnail(videoId:videoId), const SizedBox(height:10),
     if(followed) const Text('En tus fuentes'),
     Text(source,style:Theme.of(context).textTheme.labelLarge),const SizedBox(height:4),

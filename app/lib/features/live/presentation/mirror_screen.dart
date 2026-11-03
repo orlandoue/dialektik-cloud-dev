@@ -121,7 +121,8 @@ class _MirrorScreenState extends State<MirrorScreen> {
                   YouTubeThumbnail(videoId:id,onTap:()=>_openItem(item)), const SizedBox(height:8),
                 ],
                 GestureDetector(onTap:()=>_openItem(item),child:Text(item.headline,style:const TextStyle(color:ivory,fontFamily:'serif',fontSize:20,height:1.3))),
-                Text('${item.source.name} · ${item.publishedAt.toLocal().toString().substring(0,16)}'),
+                if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null)
+                  Text('${item.source.name} · ${item.publishedAt.toLocal().toString().substring(0,16)}'),
                 const SizedBox(height:8),
                 Wrap(alignment:WrapAlignment.spaceBetween,spacing:8,runSpacing:4,children:[
                   TextButton(onPressed:()=>_openItem(item),child:const Text('Abrir noticia ↗')),
