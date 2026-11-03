@@ -1222,7 +1222,7 @@ final class LiveLeadCard extends StatelessWidget {
                       letterSpacing: 0.7,
                     ),
                   ),
-                  if (isFollowed) const Text('En tus fuentes', style: TextStyle(color: Colors.white)),
+                  if (isFollowed) const Text('En tus fuentes', style: TextStyle(color: DialektikColors.nocturneText)),
                   const SizedBox(height: DialektikSpacing.space4),
                   Text(
                     article.headline,

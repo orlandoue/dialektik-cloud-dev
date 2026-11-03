@@ -6,6 +6,7 @@ import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/presentation/live_news_screens.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -46,11 +47,9 @@ void main() {
   testWidgets('sources can be followed and filtered without hiding other sources', (tester) async {
     final repo = _FollowingLiveRepository();
     addTearDown(repo.changes.dispose);
-    await tester.pumpWidget(DialektikApp(
-      environment: AppEnvironment.test, loadInterFromDependency:false,
-      consumerRepository: FakeConsumerRepository(), liveNewsRepository: repo,
-      initialRoute:'/live/sources', locale:const Locale('es'),
-    ));
+    await tester.pumpWidget(MaterialApp(home: LiveSourceListScreen(
+      repository: repo, onOpenSource: (_) {},
+    )));
     await tester.pumpAndSettle();
     expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
     expect(find.text('Canal de prueba'), findsOneWidget);
