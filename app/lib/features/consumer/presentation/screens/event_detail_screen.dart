@@ -105,6 +105,17 @@ final class _EventContent extends StatelessWidget {
   final ValueChanged<Uri> onOpenArticle;
   final ValueChanged<String> onOpenSource;
 
+  Widget _coverageCard(BuildContext context, EventCoveragePositionDto position, EventCoverageAssertionDto assertion) =>
+      Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (assertion.isFollowed) const Text('En tus fuentes'),
+          Text(assertion.sourceName, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 8), Text(position.title),
+          const SizedBox(height: 8), Text(assertion.assertionText),
+          const SizedBox(height: 8), Text('“${assertion.quotedText}”'),
+        ],
+      )));
+
   @override
   Widget build(BuildContext context) {
     final strings = ConsumerStrings.of(context);
@@ -113,6 +124,10 @@ final class _EventContent extends StatelessWidget {
       for (final position in controller.positions)
         ...?controller.positionDetails[position.id]?.assertions,
     ];
+    final coverage = [for (final position in event.coveragePositions)
+      for (final assertion in position.assertions) (position, assertion)];
+    final followedCoverage = coverage.where((entry) => entry.$2.isFollowed).toList();
+    final otherCoverage = coverage.where((entry) => !entry.$2.isFollowed).toList();
     final articles = <String, PublicAssertionDto>{};
     for (final assertion in assertions) {
       articles.putIfAbsent(assertion.span.article.id, () => assertion);
@@ -147,17 +162,17 @@ final class _EventContent extends StatelessWidget {
             const SizedBox(height: DialektikSpacing.space8),
             Text('Posturas por medio', style: Theme.of(context).textTheme.headlineSmall),
             const SizedBox(height: DialektikSpacing.space4),
-            if (event.coveragePositions.isNotEmpty)
-              for (final position in event.coveragePositions)
-                for (final assertion in position.assertions)
-                  Card(child: Padding(padding: const EdgeInsets.all(16), child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      Text(assertion.sourceName, style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 8), Text(position.title),
-                      const SizedBox(height: 8), Text(assertion.assertionText),
-                      const SizedBox(height: 8), Text('“${assertion.quotedText}”'),
-                    ],
-                  )))
+            if (event.coveragePositions.isNotEmpty) ...[
+              for (final entry in followedCoverage)
+                _coverageCard(context, entry.$1, entry.$2),
+              if (followedCoverage.isNotEmpty && otherCoverage.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(event.contrasts.isNotEmpty ? 'Contraste detectado' : 'Otras coberturas',
+                  style: Theme.of(context).textTheme.titleMedium),
+              ],
+              for (final entry in otherCoverage)
+                _coverageCard(context, entry.$1, entry.$2),
+            ]
             else if (controller.analysisUnavailable)
               const Text('No se pudieron cargar las posturas. Vuelve a intentarlo.')
             else if (event.analysisState == AnalysisState.analysisPending)

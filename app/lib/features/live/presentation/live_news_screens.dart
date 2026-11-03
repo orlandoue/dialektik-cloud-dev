@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dialektik/design_system/design_system.dart';
+import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
@@ -101,6 +102,9 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   LiveDateFilter _date = LiveDateFilter.all;
   LiveNewsFormatFilter _format = LiveNewsFormatFilter.all;
   LiveNewsTopic? _topic;
+  Set<String> _followed = <String>{};
+  FollowingRepository? get _following => widget.repository is FollowingRepository &&
+      (widget.repository as FollowingRepository).followingAvailable ? widget.repository as FollowingRepository : null;
   String? _nextCursor;
   bool _loading = true;
   bool _addingPage = false;
@@ -136,10 +140,13 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     _govUkPreviewFuture = widget.govUkPreviewLoader?.call(refresh: true);
     unawaited(_loadSources());
     unawaited(_load());
+    _following?.followingChanges.addListener(_onFollowingChanged);
+    unawaited(_loadFollowing());
   }
 
   @override
   void dispose() {
+    _following?.followingChanges.removeListener(_onFollowingChanged);
     widget.publisherMarketSelection?.removeListener(_onMarketChanged);
     _newsToken?.cancel();
     _sourceToken?.cancel();
@@ -147,6 +154,16 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     _query.dispose();
     _countryScroll.dispose();
     super.dispose();
+  }
+
+  void _onFollowingChanged() => unawaited(_loadFollowing());
+  Future<void> _loadFollowing() async {
+    final repository = _following;
+    if (repository == null) return;
+    try {
+      final ids = await repository.listFollowedSources();
+      if (mounted) setState(() => _followed = ids);
+    } on Exception { /* The feed remains complete if personalization is unavailable. */ }
   }
 
   void _onMarketChanged() {
@@ -735,6 +752,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
           else ...<Widget>[
             LiveLeadCard(
               article: _visibleItems.first,
+              isFollowed: _followed.contains(_visibleItems.first.source.id),
               onPressed: () => widget.onOpenArticle(_visibleItems.first.id),
             ),
             if (_visibleItems.length > 1) ...<Widget>[
@@ -764,6 +782,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                           width: cardWidth,
                           child: LiveNewsCard(
                             article: article,
+                            isFollowed: _followed.contains(article.source.id),
                             onPressed: () => widget.onOpenArticle(article.id),
                           ),
                         ),
@@ -833,6 +852,12 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
   Object? _candidateError;
   bool _loading = true;
   bool _candidatesLoading = true;
+  Set<String> _followed = <String>{};
+  final Set<String> _followBusy = <String>{};
+  String _sourceFormat = 'all';
+  FollowingRepository? get _following => widget.repository is FollowingRepository &&
+      (widget.repository as FollowingRepository).followingAvailable
+      ? widget.repository as FollowingRepository : null;
 
   @override
   void initState() {
@@ -840,6 +865,33 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
     unawaited(_load());
     unawaited(_loadRegistered());
     unawaited(_loadCandidates());
+    unawaited(_loadFollowing());
+  }
+
+  Future<void> _loadFollowing() async {
+    final repository = _following;
+    if (repository == null) return;
+    try {
+      final ids = await repository.listFollowedSources();
+      if (mounted) setState(() => _followed = ids);
+    } on Exception {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudieron cargar tus fuentes seguidas.')));
+    }
+  }
+
+  Future<void> _toggleFollow(String id) async {
+    final repository = _following;
+    if (repository == null || _followBusy.contains(id)) return;
+    final next = !_followed.contains(id);
+    setState(() => _followBusy.add(id));
+    try {
+      await repository.setFollowing(id, following: next);
+      if (mounted) setState(() { if (next) { _followed.add(id); } else { _followed.remove(id); } });
+    } on Exception {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo actualizar el seguimiento.')));
+    } finally {
+      if (mounted) setState(() => _followBusy.remove(id));
+    }
   }
 
   @override
@@ -932,6 +984,11 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
         const Text('Consulta quién publica cada noticia y su sitio original.'),
         const SizedBox(height: DialektikSpacing.space6),
         SectionHeading(title: 'Fuentes operativas · ${_sources.length}'),
+        Wrap(spacing: 8, children: [
+          for (final entry in const [('all','Todas'),('press','Prensa'),('videos','Canales de YouTube')])
+            ChoiceChip(label: Text(entry.$2), selected: _sourceFormat == entry.$1,
+              onSelected: (_) => setState(() => _sourceFormat = entry.$1)),
+        ]),
         EditorialTextButton(
           onPressed: () => unawaited(_load(refresh: true)),
           child: const Text('Actualizar fuentes'),
@@ -956,19 +1013,28 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
             description: 'No se han activado fuentes de noticias para la beta.',
           )
         else ...<Widget>[
-          for (final LiveSourceDto source in _sources) ...<Widget>[
+          for (final LiveSourceDto source in _sources.where((source) => _sourceFormat == 'all' ||
+            (_sourceFormat == 'videos' ? source.canonicalDomain == 'youtube.com' : source.canonicalDomain != 'youtube.com'))) ...<Widget>[
             EditorialActionCard(
               onTap: () => widget.onOpenSource(source.id),
               semanticLabel:
                   'Consultar fuente ${source.name}, ${source.canonicalDomain}',
-              child: SourceIdentity(
-                name: source.name,
-                domain: source.canonicalDomain,
-                publisherType: liveSourceType(source.sourceType),
-                header: true,
-                stacked: false,
-              ),
+              child: Row(children: [
+                CircleAvatar(child: Text(source.name.isEmpty ? '?' : source.name.characters.first.toUpperCase())),
+                const SizedBox(width: 12),
+                Expanded(child: SourceIdentity(
+                  name: source.name,
+                  domain: source.canonicalDomain,
+                  publisherType: '${liveSourceType(source.sourceType)} · Chile',
+                  header: true,
+                  stacked: false,
+                )),
+              ]),
             ),
+            if (_following != null) Align(alignment: Alignment.centerRight, child: TextButton(
+              onPressed: _followBusy.contains(source.id) ? null : () => unawaited(_toggleFollow(source.id)),
+              child: Text(_followed.contains(source.id) ? 'Siguiendo ✓' : '+ Seguir'),
+            )),
             const SizedBox(height: EditorialLayout.cardGap),
           ],
         ],
@@ -1122,11 +1188,13 @@ final class LiveLeadCard extends StatelessWidget {
   const LiveLeadCard({
     required this.article,
     required this.onPressed,
+    this.isFollowed = false,
     super.key,
   });
 
   final LiveNewsItemDto article;
   final VoidCallback onPressed;
+  final bool isFollowed;
 
   @override
   Widget build(BuildContext context) => Semantics(
@@ -1154,6 +1222,7 @@ final class LiveLeadCard extends StatelessWidget {
                       letterSpacing: 0.7,
                     ),
                   ),
+                  if (isFollowed) const Text('En tus fuentes', style: TextStyle(color: DialektikColors.nocturneText)),
                   const SizedBox(height: DialektikSpacing.space4),
                   Text(
                     article.headline,
@@ -1265,10 +1334,12 @@ final class LiveNewsCard extends StatelessWidget {
   const LiveNewsCard({
     required this.article,
     required this.onPressed,
+    this.isFollowed = false,
     super.key,
   });
   final LiveNewsItemDto article;
   final VoidCallback onPressed;
+  final bool isFollowed;
   @override
   Widget build(BuildContext context) => EditorialActionCard(
     onTap: onPressed,
@@ -1279,6 +1350,7 @@ final class LiveNewsCard extends StatelessWidget {
         final Widget metadata = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
+            if (isFollowed) const Text('En tus fuentes'),
             Text(
               article.source.name,
               style: Theme.of(context).textTheme.bodyMedium,

@@ -271,6 +271,9 @@ void main() {
         }),
         apiClient: MockClient((http.Request request) async {
           coreRequests.add(request);
+          if (request.url.path == '/v1/feed/blindspots' && testerEnabled) {
+            return http.Response('{"items":[],"next_cursor":null,"total":0,"followed_source_count":0}', 200);
+          }
           if ((request.url.path == '/v1/feed' || request.url.path == '/live/observations/chile/seismic') && testerEnabled) {
             return _emptyPage();
           }

@@ -145,6 +145,26 @@ void main() {
     expect(find.text('Contraste de enfoques'), findsOneWidget);
   });
 
+  testWidgets('followed coverage is highlighted while the other source stays visible', (WidgetTester tester) async {
+    final event = EventDetailDto.fromJson({
+      ...eventDetailJson(id: publishedEventId, analysisState: 'PUBLISHED', positionCount: 2),
+      'is_followed_source_match': true,
+      'positions': <Object?>[
+        {'id':positionAId, 'title':'Visión seguida', 'assertions':[{'id':'a', 'article_id':'a1', 'assertion_text':'Texto seguido', 'quoted_text':'Cita seguida', 'source_name':'Medio seguido', 'source_id':sourceAId, 'is_followed':true}]},
+        {'id':positionBId, 'title':'Otra visión', 'assertions':[{'id':'b', 'article_id':'b1', 'assertion_text':'Texto alternativo', 'quoted_text':'Cita alternativa', 'source_name':'Medio alternativo', 'source_id':sourceBId, 'is_followed':false}]},
+      ],
+      'articles': <Object?>[],
+      'contrasts': <Object?>[{'id':'contrast', 'position_a_id':positionAId, 'position_b_id':positionBId, 'kind':'contrast'}],
+    });
+    await tester.pumpWidget(_app(FakeConsumerRepository(event:event, positions:[positionA,positionB]), initialRoute:ConsumerRoutes.event(publishedEventId)));
+    await tester.pumpAndSettle();
+    expect(find.text('En tus fuentes'), findsOneWidget);
+    expect(find.text('Medio seguido'), findsOneWidget);
+    expect(find.text('Medio alternativo'), findsOneWidget);
+    expect(find.text('Contraste detectado'), findsOneWidget);
+    expect(tester.getTopLeft(find.text('Medio seguido')).dy, lessThan(tester.getTopLeft(find.text('Medio alternativo')).dy));
+  });
+
   testWidgets('gone Event offers only its API-provided current successor', (
     WidgetTester tester,
   ) async {

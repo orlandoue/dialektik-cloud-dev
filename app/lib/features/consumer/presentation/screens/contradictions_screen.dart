@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dialektik/design_system/design_system.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
+import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/state/contradictions_controller.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
@@ -35,10 +36,18 @@ final class _ContradictionsScreenState extends State<ContradictionsScreen> {
   void initState() {
     super.initState();
     unawaited(_controller.load());
+    if (widget.repository case final FollowingRepository following) {
+      if (following.followingAvailable) following.followingChanges.addListener(_onFollowingChanged);
+    }
   }
+
+  void _onFollowingChanged() => unawaited(_controller.retry());
 
   @override
   void dispose() {
+    if (widget.repository case final FollowingRepository following) {
+      if (following.followingAvailable) following.followingChanges.removeListener(_onFollowingChanged);
+    }
     _controller.dispose();
     super.dispose();
   }
