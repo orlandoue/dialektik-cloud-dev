@@ -241,6 +241,8 @@ final class _HorizontalChoiceStripState<T>
                             key: Key('${widget.keyPrefix}-scroll'),
                             controller: _controller,
                             scrollDirection: Axis.horizontal,
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            clipBehavior: Clip.none,
                             child: Row(children: choices.skip(1).toList()),
                           ),
                         ),
