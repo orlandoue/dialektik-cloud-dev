@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { HttpException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { sql } from 'kysely';
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { publisherDomainsForMarket } from '../live/live.publisher-market.js';
@@ -15,6 +15,7 @@ export class FollowedSourcesService {
     });
   }
   async change(userId: string, sourceId: string, follow: boolean): Promise<void> {
+    try {
     await this.db.database.transaction().execute(async (tx) => {
       await sql`select set_config('dialektik.follow_user',${userId},true)`.execute(tx);
       if (follow) {
@@ -37,5 +38,15 @@ export class FollowedSourcesService {
         await sql`delete from public.user_followed_sources where user_id=${userId}::uuid and source_id=${sourceId}::dialektik_ulid`.execute(tx);
       }
     });
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      const code = typeof error === 'object' && error !== null && 'code' in error ? error.code : undefined;
+      const safeCode = code === '42501' ? 'PUBLIC_FOLLOW_PERMISSION' :
+        code === '23503' ? 'PUBLIC_FOLLOW_REFERENCE' :
+        code === '23505' ? 'PUBLIC_FOLLOW_CONFLICT' :
+        code === '23514' ? 'PUBLIC_FOLLOW_CONSTRAINT' :
+        error instanceof TypeError ? 'PUBLIC_FOLLOW_TYPE' : 'PUBLIC_FOLLOW_OTHER';
+      throw new HttpException({code:safeCode},503);
+    }
   }
 }
