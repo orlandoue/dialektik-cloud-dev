@@ -291,7 +291,7 @@ final class _PrimaryTab extends StatelessWidget {
       onTap: action.onPressed,
       child: Container(
         constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -303,7 +303,7 @@ final class _PrimaryTab extends StatelessWidget {
           ),
         ),
         alignment: Alignment.center,
-        child: Text(
+        child: FittedBox(fit: BoxFit.scaleDown, child: Text(
           action.label,
           maxLines: 1,
           softWrap: false,
@@ -315,7 +315,7 @@ final class _PrimaryTab extends StatelessWidget {
             fontSize: 13,
             letterSpacing: 0.1,
           ),
-        ),
+        )),
       ),
     ),
   );
