@@ -684,8 +684,9 @@ export class LiveSemanticProductionService {
     targetDay: string,
     configSha: string,
     transport: CloudflareWorkersAITransport,
-    articleIds: string[] = [],
+    articleIds: string[] | null = [],
   ): Promise<number> {
+    articleIds ??= [];
     const result = await sql<ProposalRow>`
       select i.article_id as "articleId",i.source_id as "sourceId",i.source_name as "sourceName",
         i.url_canonical as "canonicalUrl",i.headline,i.published_at as "publishedAt",
@@ -981,8 +982,9 @@ export class LiveSemanticProductionService {
 
   private async reassessClaimPairs(
     connection: Kysely<Database>, runId: string, requestedBy: string, targetDay: string,
-    configSha: string, transport: CloudflareWorkersAITransport, articleIds: string[] = [],
+    configSha: string, transport: CloudflareWorkersAITransport, articleIds: string[] | null = [],
   ): Promise<{ attempted: number; validated: number; invalid: number; unavailable: number }> {
+    articleIds ??= [];
     type Input = {
       id: string; groupId: string; leftArticleId: string; rightArticleId: string;
       leftOrdinal: number; rightOrdinal: number; leftGenerationId: string; rightGenerationId: string;

@@ -63,6 +63,7 @@ test('reassesses a current literal pair once and retains the original classifica
     const run = () => service.reassessClaimPairs(database,id(2),id(1),'2026-10-29',originalConfig,transport);
     assert.deepEqual(await run(), { attempted: 1, validated: 1, invalid: 0, unavailable: 0 });
     assert.deepEqual(await run(), { attempted: 0, validated: 0, invalid: 0, unavailable: 0 });
+    assert.deepEqual(await service.reassessClaimPairs(database,id(2),id(1),'2026-10-29',originalConfig,transport,null), { attempted: 0, validated: 0, invalid: 0, unavailable: 0 });
     assert.equal(calls, 1);
     const rows = await db.query('select relation,config_sha256 from live_semantic_claim_pair_assessments order by config_sha256');
     assert.deepEqual(new Set(rows.rows.map((row) => `${row.relation}:${row.config_sha256}`)),
