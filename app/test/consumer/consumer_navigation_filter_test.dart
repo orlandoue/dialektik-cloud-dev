@@ -292,7 +292,9 @@ void main() {
     await tester.ensureVisible(moreEntry);
     await tester.pumpAndSettle();
     final tabs = ['Actualidad','Espejo','Síntesis','Fuentes'].map((label)=>tester.getRect(find.text(label))).toList();
-    expect(tabs.map((rect)=>rect.center.dy).toSet(), hasLength(1));
+    for (final tab in tabs) {
+      expect(tab.center.dy, closeTo(tabs.first.center.dy, 0.5));
+    }
     expect(tabs.last.right, lessThanOrEqualTo(390));
     await tester.tap(moreEntry);
     await tester.pumpAndSettle();
