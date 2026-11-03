@@ -85,10 +85,10 @@ class _SynthesisCardState extends State<_SynthesisCard> {
     const SizedBox(height:10),
     FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
       final data=snapshot.data;if(data==null)return const SizedBox.shrink();
-      if(widget.contrast==null) return Wrap(spacing:8,runSpacing:4,children:[
+      if(widget.contrast==null) { return Wrap(spacing:8,runSpacing:4,children:[
         for(final name in data.articles.map((a)=>a.sourceName).toSet())
           Text(name.contains('(YouTube)') ? '${name.replaceAll('(YouTube)', '').trim()} · ▶ Video' : name),
-      ]);
+      ]); }
       final c=widget.contrast!;
       final selected=data.coveragePositions.where((p)=>p.id==c.positionA.id || p.id==c.positionB.id);
       return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[for(final p in selected)

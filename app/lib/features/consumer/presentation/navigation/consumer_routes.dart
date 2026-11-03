@@ -695,7 +695,7 @@ class _PersistentReaderTabsState extends State<_PersistentReaderTabs> {
     builder:(context,selected,_) {
       _pages.putIfAbsent(selected,()=>widget.factory._tabWidget(selected));
       final routes=_pages.keys.toList(growable:false);
-      return IndexedStack(index:routes.indexOf(selected),children:[for(final route in routes) _pages[route]!]);
+      return IndexedStack(index:routes.indexOf(selected),children:[for(final route in routes) KeyedSubtree(key:ValueKey(route),child:_pages[route]!),]);
     },
   );
 }
