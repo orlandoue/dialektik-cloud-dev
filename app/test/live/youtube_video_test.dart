@@ -21,7 +21,6 @@ void main(){
   testWidgets('thumbnail shows a 16:9 play target and handles image failure', (tester) async {
     var clicked=false;
     final semantics=tester.ensureSemantics();
-    addTearDown(semantics.dispose);
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:YouTubeThumbnail(videoId:'aB3_deF-123',onTap:()=>clicked=true))));
     await tester.pump();
     expect(tester.widget<AspectRatio>(find.byType(AspectRatio)).aspectRatio,16/9);
@@ -30,6 +29,7 @@ void main(){
     expect(clicked,isTrue);
     await tester.pump(const Duration(seconds:1));
     expect(tester.takeException(),isNull);
+    semantics.dispose();
   });
   testWidgets('lead and ordinary video cards open the video target', (tester) async {
     var opened=0;
