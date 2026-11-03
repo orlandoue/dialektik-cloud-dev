@@ -18,7 +18,7 @@ class _MirrorRepo extends Fake implements LiveNewsRepository, ScopedLiveNewsRepo
   @override Future<BlindspotsResult> listBlindspots() async=>const BlindspotsResult(items:[],total:0,followedSourceCount:0);
   @override Future<LiveNewsPageDto> listScopedLiveNews({required String scope,String? cursor,String? format,String? topic,String? query,String? sourceId,DateTime? publishedFrom,DateTime? publishedTo,bool refresh=false,PublicRequestToken? requestToken}) async {
     final item=liveTestArticle();
-    return LiveNewsPageDto.fromJson({'origin':'LIVE_REAL','semantic_mode':'unassigned','items':ids.contains(liveTestSourceId)?[]:[item],'next_cursor':null});
+    return LiveNewsPageDto.fromJson({'origin':'LIVE_REAL','semantic_mode':'unassigned','items':ids.contains(liveTestSourceId)?<Object?>[]:<Object?>[item],'next_cursor':null});
   }
 }
 void main(){

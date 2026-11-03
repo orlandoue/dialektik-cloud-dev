@@ -29,7 +29,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
     final groups=<String,List<LiveNewsItemDto>>{};
     for(final item in news) { groups.putIfAbsent(item.source.id,()=>[]).add(item); }
     final result=<LiveNewsItemDto>[];
-    while(groups.isNotNotEmpty) {
+    while(groups.isNotEmpty) {
       for(final key in groups.keys.toList()) {
         final group=groups[key]!; result.add(group.removeAt(0)); if(group.isEmpty)groups.remove(key);
       }
