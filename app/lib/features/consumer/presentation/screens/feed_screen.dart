@@ -75,7 +75,7 @@ final class _FeedScreenState extends State<FeedScreen> {
   }
   Widget? get _blindspotPanel {
     final result = _blindspots;
-    if (result == null || result.followedSourceCount < 2 || result.total == 0) return null;
+    if (result == null || result.followedSourceCount < 2) return null;
     return Card(child: ExpansionTile(
       title: Text('Punto ciego: ${result.total} acontecimientos sin cobertura de tus medios'),
       subtitle: const Text('Acontecimientos que tus fuentes seguidas no están cubriendo'),
