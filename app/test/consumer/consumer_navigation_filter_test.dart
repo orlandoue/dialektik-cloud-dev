@@ -268,8 +268,8 @@ void main() {
           navigationActions: <Widget>[
             for (final String label in <String>[
               'Actualidad',
-              'Acontecimientos',
-              'Contradicciones',
+              'Espejo',
+              'Síntesis',
               'Fuentes',
             ])
               ConsumerNavigationAction(
@@ -291,12 +291,11 @@ void main() {
     final Finder moreEntry = find.text('Más');
     await tester.ensureVisible(moreEntry);
     await tester.pumpAndSettle();
-    final Rect viewport = tester.getRect(
-      find.byKey(const Key('consumer-primary-navigation-scroll')),
-    );
-    final Rect more = tester.getRect(moreEntry);
-    expect(more.left, greaterThanOrEqualTo(viewport.left));
-    expect(more.right, lessThanOrEqualTo(viewport.right));
+    final tabs = ['Actualidad','Espejo','Síntesis','Fuentes'].map((label)=>tester.getRect(find.text(label))).toList();
+    for (final tab in tabs) {
+      expect(tab.center.dy, closeTo(tabs.first.center.dy, 0.5));
+    }
+    expect(tabs.last.right, lessThanOrEqualTo(390));
     await tester.tap(moreEntry);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Administración'));

@@ -18,6 +18,7 @@ final class LiveReaderScaffold extends StatelessWidget {
     this.location,
     this.scrollKey,
     this.navigationActions = const <Widget>[],
+    this.backgroundColor,
     super.key,
   });
   final String title;
@@ -26,9 +27,11 @@ final class LiveReaderScaffold extends StatelessWidget {
   final String? location;
   final Key? scrollKey;
   final List<Widget> navigationActions;
+  final Color? backgroundColor;
   @override
   Widget build(BuildContext context) => ConsumerResponsiveShell(
     title: title,
+    backgroundColor: backgroundColor ?? DialektikColors.offWhite,
     body: child,
     location: location,
     navigationActions: navigationActions,

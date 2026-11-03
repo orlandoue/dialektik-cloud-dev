@@ -17,6 +17,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
     this.scrollBody = false,
     this.scrollKey,
     this.showBack = false,
+    this.backgroundColor = DialektikColors.offWhite,
     super.key,
   });
 
@@ -30,6 +31,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
   final bool scrollBody;
   final Key? scrollKey;
   final bool showBack;
+  final Color backgroundColor;
 
   List<ConsumerNavigationAction> get _sections => navigationActions
       .whereType<ConsumerNavigationAction>()
@@ -52,7 +54,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
       builder: (BuildContext context, BoxConstraints constraints) {
         if (constraints.maxWidth >= desktopBreakpoint) {
           return Scaffold(
-            backgroundColor: DialektikColors.offWhite,
+            backgroundColor: backgroundColor,
             body: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
@@ -69,7 +71,7 @@ final class ConsumerResponsiveShell extends StatelessWidget {
           );
         }
         return Scaffold(
-          backgroundColor: DialektikColors.offWhite,
+          backgroundColor: backgroundColor,
           body: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
@@ -153,9 +155,9 @@ final class _MobileHeader extends StatelessWidget {
         .where(
           (ConsumerNavigationAction action) => const <String>{
             'Actualidad',
-            'Acontecimientos',
+            'Espejo',
+            'Síntesis',
             'Fuentes',
-            'Contradicciones',
             'Historias',
           }.contains(action.label),
         )
@@ -224,6 +226,7 @@ final class _MobileHeader extends StatelessWidget {
                       ),
                     ),
                   ...utilityActions,
+                  if (secondary.isNotEmpty) _MoreTab(actions:secondary, selected:secondary.any((action)=>action.selected)),
                 ],
               ),
             ),
@@ -265,20 +268,11 @@ final class _MobilePrimaryNavigation extends StatelessWidget {
   final List<ConsumerNavigationAction> secondary;
 
   @override
-  Widget build(BuildContext context) => Wrap(
+  Widget build(BuildContext context) => Row(
     key: const Key('consumer-primary-navigation-scroll'),
     children: <Widget>[
       for (final ConsumerNavigationAction action in primary)
-        IntrinsicWidth(child: _PrimaryTab(action: action)),
-      if (secondary.isNotEmpty)
-        IntrinsicWidth(
-          child: _MoreTab(
-            actions: secondary,
-            selected: secondary.any(
-              (ConsumerNavigationAction action) => action.selected,
-            ),
-          ),
-        ),
+        Expanded(child: _PrimaryTab(action: action)),
     ],
   );
 }
@@ -299,7 +293,7 @@ final class _PrimaryTab extends StatelessWidget {
       onTap: action.onPressed,
       child: Container(
         constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(
@@ -311,9 +305,11 @@ final class _PrimaryTab extends StatelessWidget {
           ),
         ),
         alignment: Alignment.center,
-        child: Text(
+        child: FittedBox(fit: BoxFit.scaleDown, child: Text(
           action.label,
-          softWrap: true,
+          maxLines: 1,
+          softWrap: false,
+          overflow: TextOverflow.ellipsis,
           textAlign: TextAlign.center,
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
             color: DialektikColors.inkBlack,
@@ -321,7 +317,7 @@ final class _PrimaryTab extends StatelessWidget {
             fontSize: 13,
             letterSpacing: 0.1,
           ),
-        ),
+        )),
       ),
     ),
   );
@@ -448,6 +444,8 @@ final class _SidebarEntry extends StatelessWidget {
 
   IconData get _icon => switch (action.label) {
     'Actualidad' => Icons.home_outlined,
+    'Espejo' => Icons.flip_outlined,
+    'Síntesis' => Icons.account_balance_outlined,
     'Acontecimientos' => Icons.account_balance_outlined,
     'Fuentes' => Icons.source_outlined,
     'Contradicciones' => Icons.compare_arrows_outlined,

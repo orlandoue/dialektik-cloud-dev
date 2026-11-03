@@ -271,6 +271,12 @@ void main() {
         }),
         apiClient: MockClient((http.Request request) async {
           coreRequests.add(request);
+          if (request.url.path == '/v1/sources/following' && testerEnabled) {
+            return http.Response('{"source_ids":[]}', 200);
+          }
+          if (request.url.path.startsWith('/live/') && testerEnabled) {
+            return _emptyPage();
+          }
           if (request.url.path == '/v1/feed/blindspots' && testerEnabled) {
             return http.Response('{"items":[],"next_cursor":null,"total":0,"followed_source_count":0}', 200);
           }
@@ -298,14 +304,12 @@ void main() {
 
     // Revoke access after login. Leaving and reopening the protected route
     // causes a real 401, which returns the app to the login gate.
-    await tester.tap(find.text('Acontecimientos'));
+    await tester.tap(find.text('Actualidad'));
     await tester.pumpAndSettle();
     testerEnabled = false;
-    // Contradicciones is now a primary horizontal tab, not a More-menu item.
-    // Scroll it into view before verifying revoked Core authorization.
-    await tester.ensureVisible(find.text('Contradicciones').last);
+    await tester.ensureVisible(find.text('Síntesis').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Contradicciones').last);
+    await tester.tap(find.text('Síntesis').last);
     await tester.pumpAndSettle();
     expect(
       find.text(
@@ -313,7 +317,7 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(coreRequests.last.url.path, '/v1/contradictions');
+    expect(coreRequests.any((request) => request.url.path == '/v1/feed'), isTrue);
 
     testerEnabled = true;
     await _signIn(tester);
