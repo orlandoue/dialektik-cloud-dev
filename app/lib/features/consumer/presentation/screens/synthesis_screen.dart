@@ -98,7 +98,7 @@ class _SynthesisCardState extends State<_SynthesisCard> {
         SizedBox(width:96,child:YouTubeThumbnail(videoId:extractYouTubeVideoId(article.url.toString())!,compact:true,onTap:()=>unawaited(widget.externalLinkOpener(article.url)))),
         const SizedBox(width:10),Expanded(child:TextButton(onPressed:()=>unawaited(widget.externalLinkOpener(article.url)),child:Text('${article.sourceName.replaceAll('(YouTube)', '').trim()} · ${article.title}'))),
       ]))];
-      if(widget.contrast==null) { return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[...videoRows, Wrap(spacing:8,runSpacing:4,children:[
+      if(widget.contrast==null || (widget.event.synthesisRelation != 'CONTRADICTION' && widget.event.synthesisRelation != 'DIFFERENT_FOCUS')) { return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[...videoRows, Wrap(spacing:8,runSpacing:4,children:[
         for(final name in data.articles.where((a)=>extractYouTubeVideoId(a.url.toString())==null).map((a)=>a.sourceName).toSet())
           Text(name.contains('(YouTube)') ? '${name.replaceAll('(YouTube)', '').trim()} · ▶ Video' : name),
       ])]); }
