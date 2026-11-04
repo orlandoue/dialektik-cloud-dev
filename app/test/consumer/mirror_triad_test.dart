@@ -104,6 +104,23 @@ void main(){
     await tester.pumpAndSettle();
     expect(find.text('No hay acontecimientos en este filtro.'),findsOneWidget);
   });
+  testWidgets('synthesis refreshes on return and on pull to refresh', (tester) async {
+    final repo=FakeConsumerRepository(feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
+    final selected=ValueNotifier<String>('feed'); addTearDown(selected.dispose);
+    await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),home:SynthesisScreen(
+      repository:repo,onOpenEvent:(_){},refreshSignal:selected,isVisible:()=>selected.value=='feed')));
+    await tester.pumpAndSettle();
+    expect(repo.feedCalls,1);
+    selected.value='other';
+    await tester.pumpAndSettle();
+    expect(repo.feedCalls,1);
+    selected.value='feed';
+    await tester.pumpAndSettle();
+    expect(repo.feedCalls,2);
+    await tester.widget<RefreshIndicator>(find.byType(RefreshIndicator)).onRefresh();
+    await tester.pumpAndSettle();
+    expect(repo.feedCalls,3);
+  });
   testWidgets('synthesis shows compact video coverage and opens the original', (tester) async {
     final event=EventDetailDto.fromJson({...eventDetailJson(id:publishedEventId,analysisState:'PUBLISHED',positionCount:2),
       'positions':<Object?>[], 'contrasts':<Object?>[], 'articles':<Object?>[

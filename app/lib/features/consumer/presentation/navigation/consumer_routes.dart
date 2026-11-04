@@ -335,6 +335,8 @@ final class ConsumerRouteFactory {
           SynthesisScreen(
             externalLinkOpener: externalLinkOpener,
             repository: repository,
+            refreshSignal: _selectedTab,
+            isVisible: () => _selectedTab.value == ConsumerRoutes.feed,
             seismicRepository: liveNewsRepository is SeismicObservationRepository
                 ? liveNewsRepository as SeismicObservationRepository : null,
             navigationActions: navigationActions,
