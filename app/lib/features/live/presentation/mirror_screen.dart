@@ -86,6 +86,15 @@ class _MirrorScreenState extends State<MirrorScreen> {
     try { await following!.setFollowing(id,following:true); if(mounted) setState(()=>followed={...followed,id}); }
     on Exception { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No se pudo seguir esta fuente.'))); }
   }
+  String _explanation(LiveNewsItemDto item) {
+    if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null) {
+      return 'Video de un canal que no sigues';
+    }
+    final category = (item.source.category ?? '').toLowerCase();
+    if (category.contains('investig')) return 'Cobertura de investigación de una fuente que no sigues';
+    if (category.contains('regional')) return 'Cobertura regional de una fuente que no sigues';
+    return 'Cobertura de un medio que no sigues';
+  }
   void _openItem(LiveNewsItemDto item) {
     if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null) { unawaited(widget.externalLinkOpener(item.canonicalUrl)); }
     else { widget.onOpenArticle(item.id); }
@@ -124,6 +133,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
                 if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null)
                   Text('${item.source.name} · ${item.publishedAt.toLocal().toString().substring(0,16)}'),
                 const SizedBox(height:8),
+                Text(_explanation(item),style:const TextStyle(color:Color(0xff475569),fontSize:12)),
                 Wrap(alignment:WrapAlignment.spaceBetween,spacing:8,runSpacing:4,children:[
                   TextButton(onPressed:()=>_openItem(item),child:const Text('Abrir noticia ↗')),
                   OutlinedButton.icon(onPressed:()=>_follow(item.source.id),icon:const Icon(Icons.add,size:16),label:const Text('Seguir medio')),
