@@ -17,10 +17,16 @@ class StorySnapshot {
 
 /// Preferences are local to a device and separated by the signed-in account.
 class StoryFollowStore extends ChangeNotifier {
-  StoryFollowStore._(this.repository);
+  StoryFollowStore._(this.repository) : _testUserId=null, _read=storage.readStories, _write=storage.writeStories;
+  @visibleForTesting
+  StoryFollowStore.forTesting({required String userId,required Future<String?> Function(String) read,required Future<void> Function(String,String) write})
+      : repository=null, _testUserId=userId, _read=read, _write=write;
   static final Expando<StoryFollowStore> _stores = Expando<StoryFollowStore>();
   static StoryFollowStore forRepository(ConsumerRepository repository) => _stores[repository] ??= StoryFollowStore._(repository);
-  final ConsumerRepository repository;
+  final ConsumerRepository? repository;
+  final String? _testUserId;
+  final Future<String?> Function(String) _read;
+  final Future<void> Function(String,String) _write;
   final Map<String,StorySnapshot> _items = {};
   Future<void>? _loading;
   Future<void> _writes = Future<void>.value();
@@ -30,16 +36,20 @@ class StoryFollowStore extends ChangeNotifier {
   StorySnapshot? snapshot(String id) => _items[id];
   Future<void> load() => _loading ??= _load();
   Future<void> _load() async {
-    if (repository is! PublicApiClient) return;
-    final token = await (repository as PublicApiClient).authorizationTokenProvider?.call();
-    if (token == null) return;
-    final parts = token.split('.');
-    if (parts.length != 3) return;
-    final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
-    final id = payload is Map ? payload['sub'] : null;
-    if (id is! String || !RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(id)) return;
+    var id = _testUserId;
+    if (id == null) {
+      if (repository is! PublicApiClient) return;
+      final token = await (repository as PublicApiClient).authorizationTokenProvider?.call();
+      if (token == null) return;
+      final parts = token.split('.');
+      if (parts.length != 3) return;
+      final payload = jsonDecode(utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))));
+      final subject = payload is Map ? payload['sub'] : null;
+      if (subject is! String || !RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(subject)) return;
+      id=subject;
+    }
     _userId=id;
-    final raw = await storage.readStories(id);
+    final raw = await _read(id);
     if (raw != null) {
       final data = jsonDecode(raw);
       if (data is Map<String,dynamic>) {
@@ -74,7 +84,7 @@ class StoryFollowStore extends ChangeNotifier {
   Future<void> _persist() {
     final user = _userId!;
     final json = jsonEncode(_items.map((key,value) => MapEntry(key,value.toJson())));
-    _writes = _writes.catchError((Object _) {}).then((_) => storage.writeStories(user,json));
+    _writes = _writes.catchError((Object _) {}).then((_) => _write(user,json));
     return _writes;
   }
 }
