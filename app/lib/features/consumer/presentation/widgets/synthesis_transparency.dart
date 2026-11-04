@@ -23,7 +23,13 @@ class SynthesisTransparency extends StatelessWidget {
       _ => 'Consulta las fuentes para conocer sus enfoques.',
     };
     return ExpansionTile(title:const Text('¿Cómo se construyó esta síntesis?'),children:[
-      Padding(padding:const EdgeInsets.all(12),child:Text('$sources medios distintos · $types\nCobertura: ${date(articles.first.publishedAt)} – ${date(articles.last.publishedAt)}\n$description\nLas citas y enlaces originales están en el detalle.')),
+      Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text('$sources medios distintos · $types\nCobertura: ${date(articles.first.publishedAt)} – ${date(articles.last.publishedAt)}\n$description'),
+        for (final position in event.coveragePositions)
+          if (position.assertions.isNotEmpty)
+            Text('${position.assertions.map((assertion)=>assertion.sourceName).toSet().join(', ')}: ${position.title}'),
+        const Text('Las citas y enlaces originales están en el detalle.'),
+      ])),
     ]);
   }
 }
