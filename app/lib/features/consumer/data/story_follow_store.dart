@@ -41,7 +41,10 @@ class StoryFollowStore extends ChangeNotifier {
   bool get available => _userId != null;
   bool contains(String id) => _items.containsKey(id);
   StorySnapshot? snapshot(String id) => _items[id];
-  Future<void> load() => _loading ??= _load();
+  Future<void> load() => _loading ??= _load().catchError((Object error, StackTrace stack) {
+    _loading=null;
+    Error.throwWithStackTrace(error,stack);
+  });
   Future<void> _load() async {
     var id = _testUserId;
     if (id == null) {
@@ -55,7 +58,6 @@ class StoryFollowStore extends ChangeNotifier {
       if (subject is! String || !RegExp(r'^[0-9a-fA-F-]{36}$').hasMatch(subject)) return;
       id=subject;
     }
-    _userId=id;
     final raw = await _read(id);
     if (raw != null) {
       final data = jsonDecode(raw);
@@ -65,6 +67,7 @@ class StoryFollowStore extends ChangeNotifier {
         }
       }
     }
+    _userId=id;
     notifyListeners();
   }
   Future<void> setFollowing(EventDetailDto event, {required bool following}) async {
@@ -83,10 +86,15 @@ class StoryFollowStore extends ChangeNotifier {
   }
   Future<void> markSeen(EventDetailDto event) async {
     await load();
-    if (!_items.containsKey(event.id)) return;
+    final previous = _items[event.id];
+    if (previous == null) return;
     _items[event.id] = StorySnapshot(seenAt:DateTime.now(),sourceCount:event.sourceCount,articleCount:event.articles.length);
+    try { await _persist(); } on Object {
+      _items[event.id] = previous;
+      notifyListeners();
+      rethrow;
+    }
     notifyListeners();
-    await _persist();
   }
   Future<void> _persist() {
     final user = _userId!;
