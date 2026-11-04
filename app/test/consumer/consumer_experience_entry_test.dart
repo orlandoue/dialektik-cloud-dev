@@ -8,7 +8,7 @@ import 'package:dialektik/features/consumer/presentation/navigation/consumer_rou
 import 'package:dialektik/features/live/data/candidate_source_registry.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
-import 'package:flutter/widgets.dart' show Locale;
+import 'package:flutter/widgets.dart' show Key, Locale;
 import 'package:flutter_test/flutter_test.dart';
 
 import '../live/live_fixtures.dart';
