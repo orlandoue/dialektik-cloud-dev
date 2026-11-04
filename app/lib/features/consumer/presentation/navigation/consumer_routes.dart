@@ -443,6 +443,8 @@ final class ConsumerRouteFactory {
         LiveNewsScreen(
           externalLinkOpener:externalLinkOpener,
           repository: live,
+          briefingRepository: repository,
+          onOpenEvent: (id) => _navigatorKey.currentState?.pushNamed(ConsumerRoutes.event(id)),
           publisherMarketSelection: publisherMarketSelection,
           govUkPreviewLoader: govUkPreviewLoader,
           initialSourceId: uri.queryParameters['source_id'],

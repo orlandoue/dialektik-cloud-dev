@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:dialektik/design_system/design_system.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
+import 'package:dialektik/features/consumer/data/consumer_repository.dart';
+import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
@@ -73,6 +75,8 @@ final class LiveNewsScreen extends StatefulWidget {
   const LiveNewsScreen({
     required this.repository,
     required this.onOpenArticle,
+    this.briefingRepository,
+    this.onOpenEvent,
     this.initialSourceId,
     this.externalLinkOpener = openExternalHttpLink,
     this.govUkPreviewLoader,
@@ -83,6 +87,8 @@ final class LiveNewsScreen extends StatefulWidget {
   });
   final LiveNewsRepository repository;
   final ValueChanged<String> onOpenArticle;
+  final ConsumerRepository? briefingRepository;
+  final ValueChanged<String>? onOpenEvent;
   final String? initialSourceId;
   final ExternalLinkOpener externalLinkOpener;
   final GovUkPreviewLoader? govUkPreviewLoader;
@@ -94,6 +100,7 @@ final class LiveNewsScreen extends StatefulWidget {
 }
 
 final class _LiveNewsScreenState extends State<LiveNewsScreen> {
+  late final Future<PublicPage<EventCardDto>>? _briefing = widget.briefingRepository?.listFeed(limit:50);
   Future<GovUkPreview>? _govUkPreviewFuture;
   final TextEditingController _query = TextEditingController();
   final ScrollController _countryScroll = ScrollController();
@@ -400,6 +407,21 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (_briefing != null) FutureBuilder<PublicPage<EventCardDto>>(
+            future:_briefing, builder:(context,snapshot) {
+              final now=widget.clock().toLocal();
+              final events=(snapshot.data?.items ?? <EventCardDto>[]).where((event) {
+                final date=event.detectedAt.toLocal();
+                return date.year==now.year && date.month==now.month && date.day==now.day;
+              }).take(5).toList();
+              if (events.isEmpty) return const SizedBox.shrink();
+              return Card(child:ExpansionTile(initiallyExpanded:true,title:const Text('Resumen de hoy · En 3 minutos'),children:[
+                for(final event in events) ListTile(dense:true,
+                  title:Text(event.titleDescriptive,maxLines:1,overflow:TextOverflow.ellipsis),
+                  subtitle:Text('${switch(event.synthesisRelation) { 'CONTRADICTION' => 'Contradicción', 'DIFFERENT_FOCUS' => 'Distinto enfoque', 'DEVELOPING' => 'En desarrollo', 'TREND' => 'Tendencia', _ => 'Cobertura' }} · ${event.sourceCount} medios'),
+                  onTap:widget.onOpenEvent == null ? null : () => widget.onOpenEvent!(event.id)),
+              ]));
+            }),
           if (_followed.isNotEmpty) Wrap(spacing:8, children: [
             ChoiceChip(label:const Text('Siguiendo'), selected:!_allSources, onSelected: (_) {
               setState(() => _allSources = false); unawaited(_load(refresh:true));
