@@ -15,12 +15,14 @@ import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.d
 import 'package:flutter/material.dart';
 
 class SynthesisScreen extends StatefulWidget {
-  const SynthesisScreen({required this.repository, required this.onOpenEvent, this.seismicRepository, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], super.key});
+  const SynthesisScreen({required this.repository, required this.onOpenEvent, this.seismicRepository, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], this.refreshSignal, this.isVisible, super.key});
   final ConsumerRepository repository;
   final ValueChanged<String> onOpenEvent;
   final SeismicObservationRepository? seismicRepository;
   final ExternalLinkOpener externalLinkOpener;
   final List<Widget> navigationActions;
+  final Listenable? refreshSignal;
+  final bool Function()? isVisible;
   @override State<SynthesisScreen> createState()=>_SynthesisScreenState();
 }
 class _SynthesisScreenState extends State<SynthesisScreen> {
@@ -31,9 +33,10 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
   bool loading=true;
   Object? error;
   int generation=0;
-  @override void initState(){super.initState();stories.addListener(_storyChanged);unawaited(stories.load().catchError((Object _) {}));unawaited(_load());}
+  @override void initState(){super.initState();stories.addListener(_storyChanged);widget.refreshSignal?.addListener(_tabChanged);unawaited(stories.load().catchError((Object _) {}));unawaited(_load());}
+  void _tabChanged(){if(widget.isVisible?.call() == true) unawaited(_load());}
   void _storyChanged(){if(mounted)setState((){});}
-  @override void dispose(){stories.removeListener(_storyChanged);super.dispose();}
+  @override void dispose(){widget.refreshSignal?.removeListener(_tabChanged);stories.removeListener(_storyChanged);super.dispose();}
   void _reload()=>unawaited(_load());
   Future<void> _load() async {
     final run=++generation;setState((){loading=true;error=null;});
@@ -51,17 +54,17 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
   }
   @override Widget build(BuildContext context){
     final filtered=events.where((e)=>filter=='all' || (filter=='FOLLOWING' ? stories.contains(e.id) : e.synthesisRelation==filter)).toList();
-    return ConsumerScaffold(title:'Síntesis',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:ListView(padding:const EdgeInsets.all(20),children:[
+    return ConsumerScaffold(title:'Síntesis',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:RefreshIndicator(onRefresh:_load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(20),children:[
       SingleChildScrollView(scrollDirection:Axis.horizontal, padding:const EdgeInsets.symmetric(horizontal:16), clipBehavior:Clip.none, child:Row(children:[
         for(final choice in [('all','Todo'),('CONTRADICTION','Contradicción'),('DIFFERENT_FOCUS','Distinto enfoque'),('DEVELOPING','En desarrollo'),('TREND','Tendencia'),('FOLLOWING','Siguiendo')])
           Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice.$2),selected:filter==choice.$1,onSelected:(_)=>setState(()=>filter=choice.$1))),
       ])),
       if(widget.seismicRepository case final SeismicObservationRepository seismic) ChileSeismicObservationsPanel(repository:seismic),
-      if(loading) const Center(child:CircularProgressIndicator())
-      else if(error!=null) TextButton(onPressed:_reload,child:const Text('No se pudieron cargar los acontecimientos. Reintentar'))
+      if(loading && events.isEmpty) const Center(child:CircularProgressIndicator())
+      else if(error!=null && events.isEmpty) TextButton(onPressed:_reload,child:const Text('No se pudieron cargar los acontecimientos. Reintentar'))
       else if(filtered.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('No hay acontecimientos en este filtro.'))
       else for(final event in filtered) _SynthesisCard(event:event, contrast:contrasts[event.id],repository:widget.repository,externalLinkOpener:widget.externalLinkOpener,onOpen:()=>widget.onOpenEvent(event.id)),
-    ])));
+    ]))));
   }
 }
 class _SynthesisCard extends StatefulWidget {
@@ -71,7 +74,7 @@ class _SynthesisCard extends StatefulWidget {
 }
 class _SynthesisCardState extends State<_SynthesisCard> {
   late Future<EventDetailDto> detail=widget.repository.getEvent(widget.event.id);
-  @override void didUpdateWidget(covariant _SynthesisCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event.id!=widget.event.id)detail=widget.repository.getEvent(widget.event.id);}
+  @override void didUpdateWidget(covariant _SynthesisCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=widget.repository.getEvent(widget.event.id,refresh:true);}
   Widget badge(String text, Color background, Color foreground) => Container(
     padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),
     decoration:BoxDecoration(color:background,borderRadius:BorderRadius.circular(6)),
