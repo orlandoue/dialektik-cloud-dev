@@ -72,34 +72,42 @@ class StoryFollowStore extends ChangeNotifier {
   }
   Future<void> setFollowing(EventDetailDto event, {required bool following}) async {
     await load();
-    if (_userId == null) throw StateError('No hay una sesión disponible.');
-    final previous = _items[event.id];
-    if (following) {
-      _items[event.id] = StorySnapshot(seenAt:DateTime.now(),sourceCount:event.sourceCount,articleCount:event.articles.length);
-    } else { _items.remove(event.id); }
-    try { await _persist(); } on Object {
-      if (previous == null) { _items.remove(event.id); } else { _items[event.id] = previous; }
+    await _enqueue(() async {
+      if (_userId == null) throw StateError('No hay una sesión disponible.');
+      final previous = _items[event.id];
+      if (following) {
+        _items[event.id] = StorySnapshot(seenAt:DateTime.now(),sourceCount:event.sourceCount,articleCount:event.articles.length);
+      } else { _items.remove(event.id); }
+      try { await _persist(); } on Object {
+        if (previous == null) { _items.remove(event.id); } else { _items[event.id] = previous; }
+        notifyListeners();
+        rethrow;
+      }
       notifyListeners();
-      rethrow;
-    }
-    notifyListeners();
+    });
   }
   Future<void> markSeen(EventDetailDto event) async {
     await load();
-    final previous = _items[event.id];
-    if (previous == null) return;
-    _items[event.id] = StorySnapshot(seenAt:DateTime.now(),sourceCount:event.sourceCount,articleCount:event.articles.length);
-    try { await _persist(); } on Object {
-      _items[event.id] = previous;
+    await _enqueue(() async {
+      final previous = _items[event.id];
+      if (previous == null) return;
+      _items[event.id] = StorySnapshot(seenAt:DateTime.now(),sourceCount:event.sourceCount,articleCount:event.articles.length);
+      try { await _persist(); } on Object {
+        _items[event.id] = previous;
+        notifyListeners();
+        rethrow;
+      }
       notifyListeners();
-      rethrow;
-    }
-    notifyListeners();
+    });
+  }
+  Future<void> _enqueue(Future<void> Function() operation) {
+    final next = _writes.catchError((Object _) {}).then((_) => operation());
+    _writes=next;
+    return next;
   }
   Future<void> _persist() {
-    final user = _userId!;
     final json = jsonEncode(_items.map((key,value) => MapEntry(key,value.toJson())));
-    _writes = _writes.catchError((Object _) {}).then((_) => _write(user,json));
-    return _writes;
+    return _write(_userId!,json);
   }
+
 }

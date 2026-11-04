@@ -25,4 +25,30 @@ void main() {
     await restored.setFollowing(event,following:false);
     expect(restored.contains(event.id),isFalse);
   });
+  test('a failed save cannot leak a follow into another concurrent save', () async {
+    String? saved;
+    var writes=0;
+    Future<String?> read(String id) async => saved;
+    Future<void> write(String id,String value) async {
+      writes++;
+      if (writes==1) throw StateError('write failed');
+      saved=value;
+    }
+    EventDetailDto event(String id) => EventDetailDto.fromJson({
+      ...eventDetailJson(id:id,analysisState:'PUBLISHED',positionCount:2),
+      'positions':<Object?>[], 'contrasts':<Object?>[], 'articles':<Object?>[],
+    });
+    final first=event(publishedEventId);
+    final second=event('01K4W4M7R0B000000000000003');
+    final store=StoryFollowStore.forTesting(userId:'account-a',read:read,write:write);
+    final failed=expectLater(store.setFollowing(first,following:true),throwsStateError);
+    final succeeding=store.setFollowing(second,following:true);
+    await failed;
+    await succeeding;
+    final restored=StoryFollowStore.forTesting(userId:'account-a',read:read,write:write);
+    await restored.load();
+    expect(restored.contains(first.id),isFalse);
+    expect(restored.contains(second.id),isTrue);
+  });
+
 }
