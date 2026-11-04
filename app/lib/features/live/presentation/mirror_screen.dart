@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
+import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_responsive_shell.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
@@ -43,6 +44,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
       final seen=<String>{};
       do {
         final page=await repo.listFeed(cursor:cursor,limit:50);
+        StoryFollowStore.forRepository(repo).rememberRelations(page.items);
         for (final event in page.items) {
           try {
             final detail=await repo.getEvent(event.id);
