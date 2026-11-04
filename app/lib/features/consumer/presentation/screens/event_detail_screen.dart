@@ -1,3 +1,4 @@
+import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
 import 'dart:async';
 
 import 'package:dialektik/design_system/design_system.dart';
@@ -147,6 +148,8 @@ final class _EventContent extends StatelessWidget {
             Text(strings.categoryName(event.category), style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: DialektikSpacing.space2),
             Text(event.titleDescriptive, style: Theme.of(context).textTheme.headlineMedium),
+            TextButton.icon(onPressed: () => showSynthesisSharePreview(context,event,relation:event.synthesisRelation),
+              icon:const Icon(Icons.share_outlined), label:const Text('Compartir síntesis')),
             const SizedBox(height: DialektikSpacing.space4),
             Text(strings.detected(event.detectedAt)),
             Text(strings.sourceCount(event.sourceCount)),

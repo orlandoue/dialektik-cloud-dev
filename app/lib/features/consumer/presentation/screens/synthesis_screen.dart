@@ -8,6 +8,7 @@ import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter/material.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
 
 class SynthesisScreen extends StatefulWidget {
   const SynthesisScreen({required this.repository, required this.onOpenEvent, this.seismicRepository, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], super.key});
@@ -113,6 +114,9 @@ class _SynthesisCardState extends State<_SynthesisCard> {
           ])),
       ]);
     }),
+    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) => TextButton.icon(
+      onPressed:snapshot.hasData ? () => showSynthesisSharePreview(context,snapshot.data!,relation:widget.event.synthesisRelation) : null,
+      icon:const Icon(Icons.share_outlined),label:const Text('Compartir síntesis'))),
     TextButton(onPressed:widget.onOpen,child:const Text('Ver síntesis y noticias originales →')),
   ])));
 }
