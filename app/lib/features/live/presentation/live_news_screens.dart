@@ -1000,7 +1000,6 @@ final class _LiveSourceListScreenState extends State<LiveSourceListScreen> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        const Text('FUENTES · CONFIGURA TU TESIS Y TU ESPEJO'),
         const Text('Consulta quién publica cada noticia y su sitio original.'),
         const SizedBox(height: DialektikSpacing.space6),
         SectionHeading(title: 'Fuentes operativas · ${_sources.length}'),

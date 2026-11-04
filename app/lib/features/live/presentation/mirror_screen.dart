@@ -22,7 +22,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
   static const background = Color(0xfffaf8f3);
   static const panel = Color(0xffffffff);
   static const ivory = Color(0xff1a1a1a);
-  static const gold = Color(0xffc85a32);
+  static const gold = Color(0xff3b49df);
   Set<String> followed = {};
   List<LiveNewsItemDto> items = [];
   String? cursor, format, topic;
@@ -112,10 +112,10 @@ class _MirrorScreenState extends State<MirrorScreen> {
         for (final item in items.where((item)=>!followed.contains(item.source.id)))
           Container(margin:const EdgeInsets.only(bottom:12),decoration:BoxDecoration(color:panel,border:Border.all(color:const Color(0xffe5e0d5)),borderRadius:BorderRadius.circular(12)),
             child:IntrinsicHeight(child:Row(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-              Container(width:3.5,decoration:const BoxDecoration(color:gold,borderRadius:BorderRadius.horizontal(left:Radius.circular(12)))),
+              Container(width:3,decoration:const BoxDecoration(color:gold,borderRadius:BorderRadius.horizontal(left:Radius.circular(12)))),
               Expanded(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-                Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:const Color(0xfffff7ed),borderRadius:BorderRadius.circular(6)),
-                  child:Text('FUERA DE TUS FUENTES · ${item.source.name.toUpperCase()}',style:const TextStyle(color:Color(0xff9a3412),fontSize:11,fontWeight:FontWeight.w700))),
+                Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:const Color(0xffe6e4f8),borderRadius:BorderRadius.circular(6)),
+                  child:Text('FUERA DE TUS FUENTES · ${item.source.name.toUpperCase()}',style:const TextStyle(color:Color(0xff162032),fontSize:11,fontWeight:FontWeight.w700))),
                 const SizedBox(height:8),
                 if (extractYouTubeVideoId(item.canonicalUrl.toString()) case final String id) ...[
                   YouTubeThumbnail(videoId:id,onTap:()=>_openItem(item)), const SizedBox(height:8),

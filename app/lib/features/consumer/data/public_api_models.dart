@@ -38,6 +38,7 @@ class EventCardDto {
     required this.sourceCount,
     required this.positionCount,
     this.isFollowedSourceMatch = false,
+    this.synthesisRelation,
   });
 
   factory EventCardDto.fromJson(Object? value) {
@@ -50,7 +51,7 @@ class EventCardDto {
           'analysis_state',
           'source_count',
           'position_count',
-        }, optional: const {'is_followed_source_match'});
+        }, optional: const {'is_followed_source_match', 'synthesis_relation'});
     return EventCardDto(
       id: json.string('id'),
       titleDescriptive: json.string('title_descriptive'),
@@ -64,6 +65,7 @@ class EventCardDto {
       sourceCount: json.integer('source_count', minimum: 0),
       positionCount: json.nullableInteger('position_count', minimum: 1),
       isFollowedSourceMatch: json.raw('is_followed_source_match') == null ? false : json.boolean('is_followed_source_match'),
+      synthesisRelation: json.raw('synthesis_relation') as String?,
     );
   }
 
@@ -75,6 +77,7 @@ class EventCardDto {
   final int sourceCount;
   final int? positionCount;
   final bool isFollowedSourceMatch;
+  final String? synthesisRelation;
 }
 
 final class EventDetailDto extends EventCardDto {
@@ -87,6 +90,7 @@ final class EventDetailDto extends EventCardDto {
     required super.sourceCount,
     required super.positionCount,
     super.isFollowedSourceMatch,
+    super.synthesisRelation,
     required this.window,
     required this.primaryFact,
     this.coveragePositions = const [],
@@ -107,7 +111,7 @@ final class EventDetailDto extends EventCardDto {
           'window',
           'primary_fact',
           'merged_into',
-        }, optional: const {'positions', 'articles', 'contrasts', 'is_followed_source_match'});
+        }, optional: const {'positions', 'articles', 'contrasts', 'is_followed_source_match', 'synthesis_relation'});
     if (json.raw('merged_into') != null) {
       throw const FormatException('EventDetail.merged_into must be null.');
     }
@@ -128,6 +132,7 @@ final class EventDetailDto extends EventCardDto {
       sourceCount: json.integer('source_count', minimum: 0),
       positionCount: json.nullableInteger('position_count', minimum: 1),
       isFollowedSourceMatch: json.raw('is_followed_source_match') == null ? false : json.boolean('is_followed_source_match'),
+      synthesisRelation: json.raw('synthesis_relation') as String?,
       window: EventWindowDto(
         from: window.dateTime('from'),
         to: window.nullableDateTime('to'),
