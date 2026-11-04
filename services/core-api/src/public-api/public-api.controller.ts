@@ -46,16 +46,17 @@ export class PublicApiController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     this.rateLimit.assertAllowed(request.ip);
-    assertExactQueryKeys(query, ['category', 'topic', 'cursor', 'limit', 'personalized']);
+    assertExactQueryKeys(query, ['category', 'topic', 'cursor', 'limit', 'personalized', 'synthesis']);
+    if (query.synthesis !== undefined && query.synthesis !== '1') throw new BadRequestException('Invalid synthesis projection.');
     if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
     const category = parseOptionalFilter(query.category);
     const topic = parseOptionalFilter(query.topic);
     const userId = query.personalized === '1' ? betaUserId(request) : undefined;
     const followedSourceIds = userId === undefined ? undefined : await this.follows.list(userId);
-    const page = parsePageRequest(query, 'feed', { category, topic, ...(userId === undefined ? {} : {user: userId, follows: followedSourceIds!.join(',')}) });
+    const page = parsePageRequest(query, 'feed', { category, topic, synthesis: query.synthesis, ...(userId === undefined ? {} : {user: userId, follows: followedSourceIds!.join(',')}) });
     if (followedSourceIds !== undefined) {
       void reply.header('cache-control','private, no-store');
-      return (await this.publicApi.feed({ ...(category === undefined ? {} : {category}), ...(topic === undefined ? {} : {topic}), page, followedSourceIds })).body;
+      return (await this.publicApi.feed({ ...(category === undefined ? {} : {category}), ...(topic === undefined ? {} : {topic}), page, followedSourceIds, includeSynthesis: query.synthesis === '1' })).body;
     }
     return sendPublicRead(
       request,
@@ -64,6 +65,7 @@ export class PublicApiController {
         ...(category === undefined ? {} : { category }),
         ...(topic === undefined ? {} : { topic }),
         page,
+        includeSynthesis: query.synthesis === '1',
       }),
     );
   }

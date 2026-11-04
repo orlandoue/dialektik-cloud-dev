@@ -144,6 +144,7 @@ export class PublicApiService {
     readonly page: PageRequest;
     readonly followedSourceIds?: readonly string[];
     readonly blindspots?: boolean;
+    readonly includeSynthesis?: boolean;
   }): Promise<PublicReadResult<PublicPage<EventCardDto>>> {
     const rows = await this.repository.listFeed({
       ...(input.category === undefined ? {} : { category: input.category }),
@@ -160,7 +161,7 @@ export class PublicApiService {
         ? encodeCursor('feed', input.page.filterFingerprint, last.detected_at, last.id)
         : null;
     return {
-      body: { items: visible.map((row) => ({...eventCard(row), ...(input.followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true})})), next_cursor: nextCursor },
+      body: { items: visible.map((row) => ({...eventCard(row), ...(input.includeSynthesis ? {synthesis_relation:row.synthesis_relation ?? null} : {}), ...(input.followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true})})), next_cursor: nextCursor },
       lastModified:
         visible.length === 0
           ? new Date(0)

@@ -1,3 +1,4 @@
+import { synthesisRelationMigration } from './081_synthesis_relation.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -137,6 +138,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '078_editorial_focus_contrasts': editorialFocusContrastsMigration,
   '079_youtube_verified_channel_ids': youtubeVerifiedChannelIdsMigration,
   '080_user_followed_sources': userFollowedSourcesMigration,
+  '081_synthesis_relation': synthesisRelationMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,
