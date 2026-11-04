@@ -95,8 +95,7 @@ Future<void> _tapAndResolveSources(
 
   repository.completeSourceLoad(1);
   await tester.pump();
-  expect(find.text('Fuentes operativas · 1'), findsOneWidget);
-  expect(find.text('Candidatas · 50'), findsOneWidget);
+  expect(find.text('Personaliza tu radar'), findsOneWidget);
   expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
   expect(find.text('Cargando fuentes…'), findsNothing);
   expect(find.text('Cargando catálogo de fuentes…'), findsNothing);

@@ -60,13 +60,26 @@ void main() {
     await tester.tap(button);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
-    expect(find.text('Siguiendo ✓'), findsOneWidget);
-    await tester.ensureVisible(find.text('Canales de YouTube'));
-    await tester.tap(find.text('Canales de YouTube'));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    expect(find.text('✓ Siguiendo'), findsOneWidget);
+    expect(find.textContaining('Tu mezcla: 1 fuentes en Actualidad · 1'), findsOneWidget);
+    await tester.enterText(find.byType(TextField), 'Canal de prueba');
+    await tester.pumpAndSettle();
     expect(find.text('Canal de prueba'), findsOneWidget);
     expect(find.text('Editorial de pruebas · sintético'), findsNothing);
+  });
+  testWidgets('welcome radar opens for a new reader and can be skipped', (tester) async {
+    final repo=_FollowingLiveRepository(); addTearDown(repo.changes.dispose);
+    await tester.pumpWidget(DialektikApp(environment:AppEnvironment.test,loadInterFromDependency:false,
+      consumerRepository:FakeConsumerRepository(),liveNewsRepository:repo,initialRoute:'/live/sources',locale:const Locale('es')));
+    await tester.pumpAndSettle();
+    expect(find.text('Saltar'),findsOneWidget);
+    expect(find.textContaining('Debate y tensión en video'),findsWidgets);
+    expect(find.textContaining('Investigación y análisis'),findsWidgets);
+    expect(find.textContaining('Minuto a minuto'),findsWidgets);
+    await tester.tap(find.text('Saltar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Saltar'),findsNothing);
+    expect(find.text('Personaliza tu radar'),findsOneWidget);
   });
   testWidgets('feed shows followed badge and expandable blind spots', (tester) async {
     final repo = _FollowingFeedRepository();

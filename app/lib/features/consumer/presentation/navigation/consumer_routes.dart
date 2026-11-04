@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
+import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/screens/contradictions_screen.dart';
@@ -13,6 +16,7 @@ import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/presentation/live_components.dart';
 import 'package:dialektik/features/live/presentation/live_news_screens.dart';
+import 'package:dialektik/features/live/presentation/source_radar.dart';
 import 'package:dialektik/features/live/presentation/mirror_screen.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_operational.dart';
 import 'package:dialektik/features/personal_owner/data/personal_owner_status.dart';
@@ -104,6 +108,7 @@ final class ConsumerRouteFactory {
     debugLabel: 'consumer-navigator',
   );
   final ValueNotifier<String> _selectedTab = ValueNotifier<String>(ConsumerRoutes.liveNews);
+  bool _radarPromptShown = false;
   bool _buildingTab = false;
   int _activeTabHosts = 0;
   static const _mainTabs = <String>{ConsumerRoutes.liveNews, ConsumerRoutes.mirror, ConsumerRoutes.feed, ConsumerRoutes.liveSources};
@@ -391,6 +396,7 @@ final class ConsumerRouteFactory {
             repository: live,
             navigationActions: navigationActions,
             onOpenSource: openLiveSource,
+            onContinue: () => _openSection(ConsumerRoutes.liveNews),
           ),
         );
       }
@@ -695,6 +701,27 @@ class _PersistentReaderTabsState extends State<_PersistentReaderTabs> {
     widget.factory._activeTabHosts++;
     widget.factory._selectedTab.value=widget.initialTab;
     widget.factory.publisherMarketSelection?.addListener(_marketChanged);
+    unawaited(_showWelcomeIfNeeded());
+  }
+  Future<void> _showWelcomeIfNeeded() async {
+    final repo=widget.factory.liveNewsRepository;
+    if(widget.factory._radarPromptShown || repo is! FollowingRepository || !repo.followingAvailable) return;
+    try {
+      final ids=await repo.listFollowedSources();
+      if (!mounted || ids.isNotEmpty || widget.factory._radarPromptShown) return;
+      widget.factory._radarPromptShown=true;
+      await Future<void>.delayed(Duration.zero);
+      if (!mounted) return;
+      await showModalBottomSheet<void>(context:context,isScrollControlled:true,backgroundColor:const Color(0xfffaf8f3),
+        shape:const RoundedRectangleBorder(borderRadius:BorderRadius.vertical(top:Radius.circular(24))),
+        builder:(sheetContext)=>SizedBox(height:MediaQuery.sizeOf(sheetContext).height*0.92,child:Column(children:[
+          Padding(padding:const EdgeInsets.symmetric(horizontal:20,vertical:8),child:Row(children:[
+            const Expanded(child:Text('Dialektik',style:TextStyle(fontFamily:'serif',fontSize:24))),
+            TextButton(onPressed:()=>Navigator.of(sheetContext).pop(),child:const Text('Saltar')),
+          ])),
+          Expanded(child:SourceRadar(repository:repo,includeSource:isChileBetaPublisher,onContinue:()=>Navigator.of(sheetContext).pop())),
+        ])));
+    } on Exception { /* A failed lookup must not block the reader. */ }
   }
   void _marketChanged() { if(mounted) setState(() { _pages.removeWhere((route,_) => route != ConsumerRoutes.liveNews); }); }
   @override void dispose() { widget.factory._activeTabHosts--;widget.factory.publisherMarketSelection?.removeListener(_marketChanged);super.dispose(); }

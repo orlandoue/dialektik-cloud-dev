@@ -563,14 +563,8 @@ void main() {
     expect(calls.any((Uri uri) => uri.path == '/live/sources'), isTrue);
     expect(find.text('Fuentes'), findsWidgets);
     expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
-    expect(find.text('diarioeldia.cl'), findsOneWidget);
-    expect(find.text('Candidatas · 50'), findsOneWidget);
-    expect(find.text('BioBioChile'), findsOneWidget);
-    await tapLive(tester, find.text('BioBioChile'));
-    expect(find.text('Revalidación técnica registrada'), findsOneWidget);
-    expect(find.text('Alcance de derechos'), findsOneWidget);
-    expect(find.text('Consulta automatizada'), findsOneWidget);
-    expect(find.text('No autorizada; desactivada'), findsOneWidget);
+    expect(find.text('Personaliza tu radar'), findsOneWidget);
+    expect(find.textContaining('Tu mezcla: 0 fuentes'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
