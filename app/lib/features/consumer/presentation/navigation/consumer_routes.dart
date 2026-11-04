@@ -714,13 +714,14 @@ class _PersistentReaderTabsState extends State<_PersistentReaderTabs> {
       if (!mounted) return;
       await showModalBottomSheet<void>(context:context,isScrollControlled:true,backgroundColor:const Color(0xfffaf8f3),
         shape:const RoundedRectangleBorder(borderRadius:BorderRadius.vertical(top:Radius.circular(24))),
-        builder:(sheetContext)=>SizedBox(height:MediaQuery.sizeOf(sheetContext).height*0.92,child:Column(children:[
+        builder:(sheetContext)=>Padding(padding:EdgeInsets.only(bottom:MediaQuery.viewInsetsOf(sheetContext).bottom),
+          child:SizedBox(height:(MediaQuery.sizeOf(sheetContext).height-MediaQuery.viewInsetsOf(sheetContext).bottom)*0.92,child:Column(children:[
           Padding(padding:const EdgeInsets.symmetric(horizontal:20,vertical:8),child:Row(children:[
             const Expanded(child:Text('Dialektik',style:TextStyle(fontFamily:'serif',fontSize:24))),
             TextButton(onPressed:()=>Navigator.of(sheetContext).pop(),child:const Text('Saltar')),
           ])),
           Expanded(child:SourceRadar(repository:repo,includeSource:isChileBetaPublisher,onContinue:()=>Navigator.of(sheetContext).pop())),
-        ])));
+        ]))));
     } on Exception { /* A failed lookup must not block the reader. */ }
   }
   void _marketChanged() { if(mounted) setState(() { _pages.removeWhere((route,_) => route != ConsumerRoutes.liveNews); }); }
