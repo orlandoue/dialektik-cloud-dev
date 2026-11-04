@@ -65,7 +65,7 @@ class _SourceRadarState extends State<SourceRadar> {
         for(final group in [(0,'1  🎬 Debate y tensión en video'),(1,'2  🔍 Investigación y análisis'),(2,'3  ⚡ Minuto a minuto')]) ...[
           const SizedBox(height:18),Text('${group.$2}  ›',style:const TextStyle(fontWeight:FontWeight.w700,color:navy)),const SizedBox(height:8),
           if(!visible.any((s)=>_group(s)==group.$1)) const Padding(padding:EdgeInsets.all(8),child:Text('Sin resultados'))
-          else SizedBox(height:158,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:visible.where((s)=>_group(s)==group.$1).length,separatorBuilder:(_,_)=>const SizedBox(width:10),itemBuilder:(context,index){
+          else SizedBox(key:ValueKey('radar-group-${group.$1}'),height:158,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:visible.where((s)=>_group(s)==group.$1).length,separatorBuilder:(_,_)=>const SizedBox(width:10),itemBuilder:(context,index){
             final source=visible.where((s)=>_group(s)==group.$1).elementAt(index);
             return _SourceRadarCard(source:source,selected:followed.contains(source.id),busy:busy.contains(source.id),enabled:following!=null,onTap:()=>unawaited(_toggle(source)));
           })),
