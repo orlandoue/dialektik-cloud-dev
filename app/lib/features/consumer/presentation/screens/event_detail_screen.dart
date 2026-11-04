@@ -131,6 +131,7 @@ final class _EventContent extends StatelessWidget {
       for (final assertion in position.assertions) (position, assertion)];
     final followedCoverage = coverage.where((entry) => entry.$2.isFollowed).toList();
     final otherCoverage = coverage.where((entry) => !entry.$2.isFollowed).toList();
+    final chronologicalArticles = [...event.articles]..sort((a,b) => a.publishedAt.compareTo(b.publishedAt));
     final articles = <String, PublicAssertionDto>{};
     for (final assertion in assertions) {
       articles.putIfAbsent(assertion.span.article.id, () => assertion);
@@ -206,9 +207,12 @@ final class _EventContent extends StatelessWidget {
             ],
             if (event.articles.isNotEmpty) ...[
               const SizedBox(height: DialektikSpacing.space8),
-              Text('Noticias originales', style: Theme.of(context).textTheme.headlineSmall),
-              for (final article in event.articles)
+              Text('Cronología de cobertura', style: Theme.of(context).textTheme.headlineSmall),
+              for (final article in chronologicalArticles)
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${article.publishedAt.toLocal().toString().substring(0,16)} · ${article.sourceName} · ${extractYouTubeVideoId(article.url.toString()) != null ? 'Video' : 'Prensa'}'),
+                  for (final entry in coverage.where((entry) => entry.$2.articleId == article.id))
+                    Text('“${entry.$2.quotedText}”'),
                   if (extractYouTubeVideoId(article.url.toString()) case final String id)
                     Row(children:[SizedBox(width:96,child:YouTubeThumbnail(videoId:id,compact:true,onTap:()=>onOpenArticle(article.url))), const SizedBox(width:10), Expanded(child:TextButton(onPressed:()=>onOpenArticle(article.url),child:Text('${article.sourceName.replaceAll('(YouTube)', '').trim()} · ${article.title}')))])
                   else Text('${article.sourceName} · ${article.title}'),
