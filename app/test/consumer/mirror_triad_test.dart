@@ -64,18 +64,24 @@ void main(){
     await tester.pump();
     expect(opened.toString(),'https://www.youtube.com/watch?v=aB3_deF-123');
   });
-  testWidgets('synthesis combines published events and contrast filters', (tester) async {
-    final repo=FakeConsumerRepository(feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
+  testWidgets('synthesis filters editorial classifications without personal filters', (tester) async {
+    final e=EventCardDto(id:publishedEventCard.id,titleDescriptive:publishedEventCard.titleDescriptive,
+      category:publishedEventCard.category,detectedAt:publishedEventCard.detectedAt,
+      analysisState:publishedEventCard.analysisState,sourceCount:publishedEventCard.sourceCount,
+      positionCount:publishedEventCard.positionCount,synthesisRelation:'DIFFERENT_FOCUS',isFollowedSourceMatch:true);
+    final repo=FakeConsumerRepository(feedPages:[PublicPage<EventCardDto>(items:[e],nextCursor:null)]);
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
       home:SynthesisScreen(repository:repo,onOpenEvent:(_){})));
     await tester.pumpAndSettle();
-    expect(find.text('CONTRASTE DE ENFOQUES · 2 POSTURAS'),findsOneWidget);
-    await tester.tap(find.text('Con contraste (1)'));
+    expect(find.text('DISTINTO ENFOQUE · ${e.sourceCount} MEDIOS'),findsOneWidget);
+    expect(find.text('En tus fuentes'),findsNothing);
+    expect(find.text('Punto ciego'),findsNothing);
+    await tester.ensureVisible(find.text('Distinto enfoque'));
+    await tester.tap(find.text('Distinto enfoque'));
     await tester.pumpAndSettle();
-    expect(find.text(publishedEventCard.titleDescriptive),findsOneWidget);
-    await tester.ensureVisible(find.text('Punto ciego'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Punto ciego'));
+    expect(find.text(e.titleDescriptive),findsOneWidget);
+    await tester.ensureVisible(find.text('Contradicción'));
+    await tester.tap(find.text('Contradicción'));
     await tester.pumpAndSettle();
     expect(find.text('No hay acontecimientos en este filtro.'),findsOneWidget);
   });

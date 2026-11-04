@@ -178,6 +178,7 @@ final class PublicApiClient
     return _get<PublicPage<EventCardDto>>(
       '/v1/feed',
       query: <String, String>{
+        'synthesis': '1',
         if (_personalizationEnabled) 'personalized': '1',
         'category': ?category,
         'topic': ?topic,
