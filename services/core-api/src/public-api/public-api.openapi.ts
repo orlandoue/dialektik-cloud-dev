@@ -101,6 +101,7 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
             schema: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{0,79}$' },
           },
           personalizedParameter,
+          { name: 'synthesis', in: 'query', required: false, schema: { type: 'string', enum: ['1'] }, description: 'Include the reviewed synthesis relation when available.' },
           ...pageParameters,
         ],
         responses: {

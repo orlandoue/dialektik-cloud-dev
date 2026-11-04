@@ -13,9 +13,11 @@ test('feed and event preserve explicit classification and null remains unclassif
       async listFeed(){return [event];}, async findEvent(){return event;},
       async findPrimaryFacts(){return [];},
     });
-    const page = await service.feed({page:{cursor:null,limit:10,filterFingerprint:''}});
+    const page = await service.feed({page:{cursor:null,limit:10,filterFingerprint:''},includeSynthesis:true});
     assert.equal(page.body.items[0].synthesis_relation,relation);
     const detail = await service.event('event');
-    assert.equal(detail.body.synthesis_relation,relation);
+    assert.equal('synthesis_relation' in detail.body,false);
+    const legacy = await service.feed({page:{cursor:null,limit:10,filterFingerprint:''}});
+    assert.equal('synthesis_relation' in legacy.body.items[0],false);
   }
 });
