@@ -306,6 +306,10 @@ void main() {
     // causes a real 401, which returns the app to the login gate.
     await tester.tap(find.text('Actualidad'));
     await tester.pumpAndSettle();
+    if (find.text('Saltar').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Saltar'));
+      await tester.pumpAndSettle();
+    }
     testerEnabled = false;
     await tester.ensureVisible(find.text('Síntesis').last);
     await tester.pumpAndSettle();
