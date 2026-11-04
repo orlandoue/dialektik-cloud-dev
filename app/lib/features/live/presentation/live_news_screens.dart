@@ -1,10 +1,10 @@
 import 'dart:async';
 
 import 'package:dialektik/design_system/design_system.dart';
-import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
-import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
+import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
 import 'package:dialektik/features/live/data/candidate_source_registry.dart';

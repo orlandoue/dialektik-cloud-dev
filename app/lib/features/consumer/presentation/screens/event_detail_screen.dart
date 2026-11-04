@@ -1,4 +1,3 @@
-import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
 import 'dart:async';
 
 import 'package:dialektik/design_system/design_system.dart';
@@ -8,6 +7,7 @@ import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/state/event_controller.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
