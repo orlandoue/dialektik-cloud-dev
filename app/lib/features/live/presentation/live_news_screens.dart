@@ -416,6 +416,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
           if (_briefing != null) FutureBuilder<PublicPage<EventCardDto>>(
             future:_briefing, builder:(context,snapshot) {
               final now=widget.clock().toLocal();
+              _stories?.rememberRelations(snapshot.data?.items ?? <EventCardDto>[]);
               final events=(snapshot.data?.items ?? <EventCardDto>[]).where((event) {
                 final date=event.detectedAt.toLocal();
                 return date.year==now.year && date.month==now.month && date.day==now.day;

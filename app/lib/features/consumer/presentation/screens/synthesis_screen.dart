@@ -45,6 +45,7 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
       seen.clear();
       do { final page=await widget.repository.listContradictions(cursor:cursor,limit:50,refresh:true); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
       if(!mounted || run!=generation)return;
+      stories.rememberRelations(allEvents);
       setState((){allEvents.sort((a,b)=>b.detectedAt.compareTo(a.detectedAt));events=allEvents;contrasts={for(final c in allContrasts)c.eventId:c};loading=false;});
     } on Exception catch(e){if(mounted && run==generation)setState((){error=e;loading=false;});}
   }

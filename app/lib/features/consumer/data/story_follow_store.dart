@@ -28,6 +28,13 @@ class StoryFollowStore extends ChangeNotifier {
   final Future<String?> Function(String) _read;
   final Future<void> Function(String,String) _write;
   final Map<String,StorySnapshot> _items = {};
+  final Map<String,String> _relations = {};
+  void rememberRelations(Iterable<EventCardDto> events) {
+    for(final event in events) {
+      if(event.synthesisRelation case final String relation) _relations[event.id]=relation;
+    }
+  }
+  String? relationFor(String eventId) => _relations[eventId];
   Future<void>? _loading;
   Future<void> _writes = Future<void>.value();
   String? _userId;

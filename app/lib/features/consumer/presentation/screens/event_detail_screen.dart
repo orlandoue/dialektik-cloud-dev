@@ -131,6 +131,7 @@ final class _EventContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = ConsumerStrings.of(context);
     final event = controller.event!;
+    final relation = event.synthesisRelation ?? StoryFollowStore.forRepository(repository).relationFor(event.id);
     final assertions = <PublicAssertionDto>[
       for (final position in controller.positions)
         ...?controller.positionDetails[position.id]?.assertions,
@@ -157,13 +158,13 @@ final class _EventContent extends StatelessWidget {
             Text(strings.categoryName(event.category), style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: DialektikSpacing.space2),
             Text(event.titleDescriptive, style: Theme.of(context).textTheme.headlineMedium),
-            TextButton.icon(onPressed: () => showSynthesisSharePreview(context,event,relation:event.synthesisRelation),
+            TextButton.icon(onPressed: () => showSynthesisSharePreview(context,event,relation:relation),
               icon:const Icon(Icons.share_outlined), label:const Text('Compartir síntesis')),
             const SizedBox(height: DialektikSpacing.space4),
             Text(strings.detected(event.detectedAt)),
             Text(strings.sourceCount(event.sourceCount)),
             StoryFollowButton(repository:repository,event:event),
-            SynthesisTransparency(event:event,relation:event.synthesisRelation),
+            SynthesisTransparency(event:event,relation:relation),
             if (event.primaryFact != null) ...[
               Text(event.primaryFact!.statement),
               TextButton(onPressed: () => onOpenSource(event.primaryFact!.primarySource.id),
