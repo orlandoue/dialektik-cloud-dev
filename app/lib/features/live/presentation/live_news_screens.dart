@@ -1365,7 +1365,7 @@ final class LiveNewsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => extractYouTubeVideoId(article.canonicalUrl.toString()) != null
       ? YouTubeNewsCard(videoId:extractYouTubeVideoId(article.canonicalUrl.toString())!,title:article.headline,source:article.source.name,
-          published:liveLocalDate(article.publishedAt),followed:isFollowed,onTap:onPressed)
+          published:liveLocalDate(article.publishedAt),followed:isFollowed,compact:true,onTap:onPressed)
       : EditorialActionCard(
     onTap: onPressed,
     semanticLabel:
