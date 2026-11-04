@@ -92,7 +92,7 @@ void main(){
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
       home:SynthesisScreen(repository:repo,onOpenEvent:(_){})));
     await tester.pumpAndSettle();
-    expect(find.text('DISTINTO ENFOQUE · ${e.sourceCount} MEDIOS'),findsOneWidget);
+    expect(find.text('${e.sourceCount} MEDIOS · DISTINTO ENFOQUE'),findsOneWidget);
     expect(find.text('En tus fuentes'),findsNothing);
     expect(find.text('Punto ciego'),findsNothing);
     await tester.ensureVisible(find.text('Distinto enfoque'));
