@@ -510,6 +510,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             ),
           ),
           const SizedBox(height: DialektikSpacing.space3),
+          ],
           HorizontalChoiceStrip<LiveNewsFormatFilter>(
             semanticsLabel: 'Filtrar noticias por formato',
             allLabel: 'Todo',
@@ -531,7 +532,6 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             },
           ),
           const SizedBox(height: DialektikSpacing.space3),
-          ],
           Text('Tema', style: Theme.of(context).textTheme.titleMedium),
           HorizontalChoiceStrip<LiveNewsTopic>(
             semanticsLabel: 'Filtrar noticias por tema',
