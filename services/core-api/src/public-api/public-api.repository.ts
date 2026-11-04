@@ -340,6 +340,7 @@ export class PublicApiRepository {
         ) as position_count,
         greatest(
           event_row.detected_at,
+          coalesce(event_row.synthesis_relation_updated_at, event_row.detected_at),
           coalesce((
             select max(article_row.captured_at)
             from articles article_row
@@ -420,6 +421,7 @@ export class PublicApiRepository {
         ) as position_count,
         greatest(
           event_row.detected_at,
+          coalesce(event_row.synthesis_relation_updated_at, event_row.detected_at),
           coalesce(event_row.merged_at, event_row.detected_at),
           coalesce((
             select max(article_row.captured_at)
