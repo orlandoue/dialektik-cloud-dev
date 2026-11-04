@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_responsive_shell.dart';
@@ -10,8 +11,10 @@ import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.d
 import 'package:flutter/material.dart';
 
 class MirrorScreen extends StatefulWidget {
-  const MirrorScreen({required this.repository, required this.onOpenArticle, required this.onOpenSources, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], super.key});
+  const MirrorScreen({required this.repository, required this.onOpenArticle, required this.onOpenSources, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], this.consumerRepository, this.onOpenEvent, super.key});
   final LiveNewsRepository repository;
+  final ConsumerRepository? consumerRepository;
+  final ValueChanged<String>? onOpenEvent;
   final ValueChanged<String> onOpenArticle;
   final VoidCallback onOpenSources;
   final ExternalLinkOpener externalLinkOpener;
@@ -29,6 +32,29 @@ class _MirrorScreenState extends State<MirrorScreen> {
   bool loading = true, busy = false;
   Object? error;
   int generation = 0;
+  bool _checkingEvents = false;
+  final Map<String,({String id,String title})> _eventByArticle = {};
+  Future<void> _findEvents() async {
+    final repo=widget.consumerRepository;
+    if (_checkingEvents || repo==null || !items.any((item)=>item.isEventLinked)) return;
+    _checkingEvents=true;
+    try {
+      String? cursor;
+      final seen=<String>{};
+      do {
+        final page=await repo.listFeed(cursor:cursor,limit:50);
+        for (final event in page.items) {
+          try {
+            final detail=await repo.getEvent(event.id);
+            for(final article in detail.articles) { _eventByArticle[article.id]=(id:event.id,title:event.titleDescriptive); }
+          } on Exception { /* Keep the source explanation when a detail is unavailable. */ }
+        }
+        cursor=page.nextCursor;
+      } while(cursor!=null && seen.add(cursor) && seen.length<20);
+      if(mounted) setState(() {});
+    } on Exception { /* News remains available if event lookup fails. */ }
+  }
+
   FollowingRepository? get following => widget.repository is FollowingRepository && (widget.repository as FollowingRepository).followingAvailable ? widget.repository as FollowingRepository : null;
   List<LiveNewsItemDto> _diverse(List<LiveNewsItemDto> news) {
     final groups=<String,List<LiveNewsItemDto>>{};
@@ -50,6 +76,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
     if (cached != null && ids != null) {
       followed=ids; items=ids.isEmpty ? _diverse(cached.items) : cached.items;
       cursor=cached.nextCursor; loading=false;
+      unawaited(_findEvents());
     } else { unawaited(_reload()); }
   }
   @override void dispose() { following?.followingChanges.removeListener(_changed); super.dispose(); }
@@ -69,6 +96,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
       final page = await (widget.repository as ScopedLiveNewsRepository).listScopedLiveNews(scope:'outside', format:format, topic:topic, refresh:true);
       if (!mounted || run != generation) return;
       setState(() {followed=ids; items=ids.isEmpty ? _diverse(page.items) : page.items; cursor=page.nextCursor; loading=false;});
+      unawaited(_findEvents());
     } on Exception catch (e) { if (mounted && run == generation) setState(() {error=e;loading=false;}); }
   }
   Future<void> _more() async {
@@ -79,6 +107,7 @@ class _MirrorScreenState extends State<MirrorScreen> {
       final page=await (widget.repository as ScopedLiveNewsRepository).listScopedLiveNews(scope:'outside',cursor:next,format:format,topic:topic);
       if (!mounted || run != generation) return;
       setState(() { final ids=items.map((e)=>e.id).toSet(); items=[...items,...page.items.where((e)=>ids.add(e.id))]; cursor=page.nextCursor==next ? null : page.nextCursor; });
+      unawaited(_findEvents());
     } on Exception catch(e) { if (mounted) setState(() => error=e); }
     finally { if (mounted && run==generation) setState(() => busy=false); }
   }
@@ -133,7 +162,10 @@ class _MirrorScreenState extends State<MirrorScreen> {
                 if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null)
                   Text('${item.source.name} · ${item.publishedAt.toLocal().toString().substring(0,16)}'),
                 const SizedBox(height:8),
-                Text(_explanation(item),style:const TextStyle(color:Color(0xff475569),fontSize:12)),
+                if (_eventByArticle[item.id] case final event?)
+                  TextButton(onPressed:widget.onOpenEvent == null ? null : () => widget.onOpenEvent!(event.id),
+                    child:Text('Aporta otra mirada sobre: ${event.title} → Ver síntesis'))
+                else Text(_explanation(item),style:const TextStyle(color:Color(0xff475569),fontSize:12)),
                 Wrap(alignment:WrapAlignment.spaceBetween,spacing:8,runSpacing:4,children:[
                   TextButton(onPressed:()=>_openItem(item),child:const Text('Abrir noticia ↗')),
                   OutlinedButton.icon(onPressed:()=>_follow(item.source.id),icon:const Icon(Icons.add,size:16),label:const Text('Seguir medio')),

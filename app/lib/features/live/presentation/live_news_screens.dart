@@ -155,7 +155,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     unawaited(_loadSources());
     unawaited(_load());
     _stories?.addListener(_storyChanged);
-    if (_stories != null) unawaited(_stories!.load().catchError((Object _) {}));
+    if (_stories != null) unawaited(_stories.load().catchError((Object _) {}));
     _following?.followingChanges.addListener(_onFollowingChanged);
     unawaited(_loadFollowing());
   }

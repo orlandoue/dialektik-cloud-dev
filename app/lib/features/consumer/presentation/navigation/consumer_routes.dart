@@ -344,7 +344,7 @@ final class ConsumerRouteFactory {
         );
       }
       if (uri.path == ConsumerRoutes.mirror) {
-        return _page(settings, MirrorScreen(repository:live, externalLinkOpener:externalLinkOpener, onOpenArticle:openLiveNews,
+        return _page(settings, MirrorScreen(repository:live, consumerRepository:repository, onOpenEvent:(id)=>_navigatorKey.currentState?.pushNamed(ConsumerRoutes.event(id)), externalLinkOpener:externalLinkOpener, onOpenArticle:openLiveNews,
           onOpenSources:()=>_openSection(ConsumerRoutes.liveSources), navigationActions:navigationActions));
       }
       if (uri.path == ConsumerRoutes.contradictions) {
