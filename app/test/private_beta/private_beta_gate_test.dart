@@ -302,6 +302,11 @@ void main() {
     await _signIn(tester);
     expect(find.text('Aún no hay contradicciones publicadas.'), findsOneWidget);
 
+    if (find.text('Saltar').evaluate().isNotEmpty) {
+      await tester.tap(find.text('Saltar'));
+      await tester.pumpAndSettle();
+    }
+
     // Revoke access after login. Leaving and reopening the protected route
     // causes a real 401, which returns the app to the login gate.
     await tester.tap(find.text('Actualidad'));

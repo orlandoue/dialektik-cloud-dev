@@ -58,6 +58,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
     expect(find.text('Canal de prueba'), findsOneWidget);
+    await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-350));
+    await tester.pumpAndSettle();
     final button = find.text('+ Seguir').first;
     await tester.ensureVisible(button);
     await tester.tap(button);

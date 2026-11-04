@@ -96,6 +96,8 @@ Future<void> _tapAndResolveSources(
   repository.completeSourceLoad(1);
   await tester.pump();
   expect(find.text('Personaliza tu radar'), findsOneWidget);
+  await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-350));
+  await tester.pumpAndSettle();
   expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
   expect(find.text('Cargando fuentes…'), findsNothing);
   expect(find.text('Cargando catálogo de fuentes…'), findsNothing);

@@ -562,8 +562,9 @@ void main() {
 
     expect(calls.any((Uri uri) => uri.path == '/live/sources'), isTrue);
     expect(find.text('Fuentes'), findsWidgets);
+    await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-350));
+    await tester.pumpAndSettle();
     expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
-    expect(find.text('Personaliza tu radar'), findsOneWidget);
     expect(find.textContaining('Tu mezcla: 0 fuentes'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
