@@ -28,6 +28,7 @@ final class _FollowingLiveRepository extends Fake implements LiveNewsRepository,
     changes.value += 1;
   }
   @override Future<BlindspotsResult> listBlindspots() async => const BlindspotsResult(items: [], total: 0, followedSourceCount: 0);
+  @override Future<LiveNewsPageDto> listLiveNews({String? cursor,int limit=25,String? query,String? sourceId,String? format,String? topic,DateTime? publishedFrom,DateTime? publishedTo,bool refresh=false,PublicRequestToken? requestToken}) async => LiveNewsPageDto.fromJson(liveTestPage());
   @override Future<List<LiveSourceDto>> listLiveSources({bool refresh = false, PublicRequestToken? requestToken}) async => items ?? [
     LiveSourceDto.fromJson(liveTestSource()),
     LiveSourceDto.fromJson({...liveTestSource(), 'id':'01K6MYH0000000000000000011', 'name':'Canal de prueba', 'canonical_domain':'youtube.com'}),
@@ -87,6 +88,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Saltar'),findsNothing);
     expect(find.text('Personaliza tu radar'),findsOneWidget);
+    await tester.tap(find.text('Actualidad')); await tester.pumpAndSettle();
+    await tester.tap(find.text('Fuentes')); await tester.pumpAndSettle();
+    expect(find.text('Saltar'),findsNothing);
   });
   testWidgets('radar groups operational sources into the three carousels', (tester) async {
     tester.view.physicalSize=const Size(800,1600); tester.view.devicePixelRatio=1;
