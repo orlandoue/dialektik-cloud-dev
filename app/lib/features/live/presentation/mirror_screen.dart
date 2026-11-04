@@ -34,27 +34,41 @@ class _MirrorScreenState extends State<MirrorScreen> {
   Object? error;
   int generation = 0;
   bool _checkingEvents = false;
+  DateTime? _eventLookupAt;
   final Map<String,({String id,String title})> _eventByArticle = {};
   Future<void> _findEvents() async {
     final repo=widget.consumerRepository;
     if (_checkingEvents || repo==null || !items.any((item)=>item.isEventLinked)) return;
+    if (_eventLookupAt != null && DateTime.now().difference(_eventLookupAt!) < const Duration(minutes:5)) return;
     _checkingEvents=true;
+    final wanted=items.where((item)=>item.isEventLinked && !_eventByArticle.containsKey(item.id)).map((item)=>item.id).toSet();
     try {
       String? cursor;
       final seen=<String>{};
+      var inspected=0;
       do {
         final page=await repo.listFeed(cursor:cursor,limit:50);
         StoryFollowStore.forRepository(repo).rememberRelations(page.items);
         for (final event in page.items) {
+          if (wanted.isEmpty || inspected++ >= 50) break;
           try {
             final detail=await repo.getEvent(event.id);
-            for(final article in detail.articles) { _eventByArticle[article.id]=(id:event.id,title:event.titleDescriptive); }
+            var changed=false;
+            for(final article in detail.articles) {
+              if (wanted.remove(article.id)) {
+                _eventByArticle[article.id]=(id:event.id,title:event.titleDescriptive);
+                changed=true;
+              }
+            }
+            if (changed && mounted) setState(() {});
           } on Exception { /* Keep the source explanation when a detail is unavailable. */ }
         }
         cursor=page.nextCursor;
-      } while(cursor!=null && seen.add(cursor) && seen.length<20);
-      if(mounted) setState(() {});
+      } while(wanted.isNotEmpty && inspected<50 && cursor!=null && seen.add(cursor));
+      _eventLookupAt=DateTime.now();
     } on Exception { /* News remains available if event lookup fails. */ }
+    finally { _checkingEvents=false; }
+
   }
 
   FollowingRepository? get following => widget.repository is FollowingRepository && (widget.repository as FollowingRepository).followingAvailable ? widget.repository as FollowingRepository : null;
