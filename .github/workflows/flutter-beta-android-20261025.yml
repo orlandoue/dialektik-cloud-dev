@@ -104,7 +104,7 @@ jobs:
             --dart-define=DIALEKTIK_OWNERSHIP_MODE=corporate
           sha256sum build/app/outputs/flutter-apk/app-debug.apk
           {
-            printf 'Dialektik Android private beta: 0.1.12+13\n'
+            printf 'Dialektik Android private beta: 0.1.13+14\n'
             printf 'Flutter commit: %s\n' "$GITHUB_SHA"
             printf 'Core URL: https://dialektik-core-dev.onrender.com\n'
             printf 'Core source feature: official Chile publisher RSS headline-link pilot + USGS, semantic news engine still gated\n'

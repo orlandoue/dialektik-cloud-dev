@@ -5,6 +5,7 @@ import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/dialectical_thread.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/story_follow_button.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/synthesis_transparency.dart';
@@ -82,20 +83,20 @@ class _SynthesisCardState extends State<_SynthesisCard> {
   );
   @override Widget build(BuildContext context)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     badge(switch(widget.event.synthesisRelation) {
-      'CONTRADICTION' => 'CONTRADICCIÓN · ${widget.event.sourceCount} MEDIOS',
-      'DIFFERENT_FOCUS' => 'DISTINTO ENFOQUE · ${widget.event.sourceCount} MEDIOS',
+      'CONTRADICTION' => '${widget.event.sourceCount} MEDIOS · CONTRADICCIÓN',
+      'DIFFERENT_FOCUS' => '${widget.event.sourceCount} MEDIOS · DISTINTO ENFOQUE',
       'DEVELOPING' => 'EN DESARROLLO · ${widget.event.sourceCount} MEDIOS',
       'TREND' => 'TENDENCIA · ${widget.event.sourceCount} MEDIOS',
       _ => 'COBERTURA · ${widget.event.sourceCount} MEDIOS',
     }, switch(widget.event.synthesisRelation) {
-      'CONTRADICTION' => const Color(0xfffde8e8),
-      'DIFFERENT_FOCUS' => const Color(0xfffff3cd),
+      'CONTRADICTION' => const Color(0xffc86446),
+      'DIFFERENT_FOCUS' => const Color(0xffb47814),
       'DEVELOPING' => const Color(0xffe0e7ff),
       'TREND' => const Color(0xffdef7ec),
       _ => const Color(0xffedf2f7),
     }, switch(widget.event.synthesisRelation) {
-      'CONTRADICTION' => const Color(0xff9b1c1c),
-      'DIFFERENT_FOCUS' => const Color(0xff7a4f08),
+      'CONTRADICTION' => Colors.white,
+      'DIFFERENT_FOCUS' => Colors.white,
       'DEVELOPING' => const Color(0xff1e40af),
       'TREND' => const Color(0xff03543f),
       _ => const Color(0xff2d3748),
@@ -116,13 +117,9 @@ class _SynthesisCardState extends State<_SynthesisCard> {
       ])]); }
       final c=widget.contrast!;
       final selected=data.coveragePositions.where((p)=>p.id==c.positionA.id || p.id==c.positionB.id);
-      return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[...videoRows,for(final p in selected)
-        Container(margin:const EdgeInsets.only(bottom:8),padding:const EdgeInsets.all(10),
-          decoration:BoxDecoration(color:const Color(0xfff7f5ee),border:Border.all(color:const Color(0xffe2dec9)),borderRadius:BorderRadius.circular(8)),
-          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            Text(p.assertions.map((a)=>a.sourceName.replaceAll('(YouTube)', '').trim()).toSet().join(', '),style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700,color:Color(0xff1e293b))),
-            Text(p.title,style:const TextStyle(fontSize:13.5,color:Color(0xff334155),height:1.35)),
-          ])),
+      final positions=selected.toList();
+      return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[...videoRows,
+        DialecticalThread(event:data,positions:positions,relation:widget.event.synthesisRelation),
       ]);
     }),
     FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) {

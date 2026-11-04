@@ -15,6 +15,6 @@ void main() {
     final text = synthesisShareText(event, relation:'DIFFERENT_FOCUS');
     expect(text, contains('Distinto enfoque'));
     expect(text, contains('https://example.com/noticia'));
-    expect(text, contains('Síntesis verificable generada en Dialektik'));
+    expect(text, contains('Síntesis de Dialektik'));
   });
 }
