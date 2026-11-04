@@ -128,9 +128,10 @@ class _SynthesisCardState extends State<_SynthesisCard> {
       return ListenableBuilder(listenable:store,builder:(context,_) {
         final seen=store.snapshot(data.id);
         final latest=[...data.articles]..sort((a,b)=>b.publishedAt.compareTo(a.publishedAt));
-        final updated=seen!=null && (data.sourceCount>seen.sourceCount || data.articles.length>seen.articleCount || latest.any((a)=>a.publishedAt.isAfter(seen.seenAt)));
+        final newer=seen==null ? <EventCoverageArticleDto>[] : latest.where((article)=>article.publishedAt.isAfter(seen.seenAt)).toList();
+        final updated=seen!=null && (data.sourceCount>seen.sourceCount || data.articles.length>seen.articleCount || newer.isNotEmpty);
         return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          if(updated) Text('Actualizado · Nuevos aportes${latest.isEmpty ? '' : ' · ${latest.first.sourceName}'}'),
+          if(updated) Text('Actualizado · Nuevos aportes${newer.isEmpty ? '' : ' · ${newer.first.sourceName}'}'),
           StoryFollowButton(repository:widget.repository,event:data),
         ]);
       });
