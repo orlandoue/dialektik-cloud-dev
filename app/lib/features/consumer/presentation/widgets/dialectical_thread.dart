@@ -20,13 +20,14 @@ class _DialecticalThreadState extends State<DialecticalThread> {
   String? usefulness;
   final notes = <Map<String, String>>[];
   bool showNotes = false;
+  bool dirty = false;
   Future<void> writes = Future.value();
   String get storageKey => 'dialektik_x_${base64Url.encode(utf8.encode(widget.event.id)).replaceAll('=', '')}';
   @override void initState() { super.initState(); unawaited(_load()); }
   Future<void> _load() async {
     try {
       final raw = await storage.readStories(storageKey);
-      if (raw == null || !mounted) return;
+      if (raw == null || !mounted || dirty) return;
       final data = jsonDecode(raw) as Map<String, dynamic>;
       setState(() {
         vote = data['vote'] as int?;
@@ -38,6 +39,7 @@ class _DialecticalThreadState extends State<DialecticalThread> {
     } on Exception { /* Keep the card usable when local storage is unavailable. */ }
   }
   void _save() {
+    dirty = true;
     final value = jsonEncode({'vote': vote, 'usefulness': usefulness, 'notes': notes});
     writes = writes.catchError((Object _) {}).then((_) => storage.writeStories(storageKey, value));
     unawaited(writes.catchError((Object _) { if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No se pudo guardar tu selección en este dispositivo.'))); }));
@@ -62,8 +64,11 @@ class _DialecticalThreadState extends State<DialecticalThread> {
     String initials(String name) { final parts = name.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).take(2); return parts.map((e) => e[0].toUpperCase()).join(); }
     Widget position(EventCoveragePositionDto p, double size) {
       final source = name(p); final quote = p.assertions.isEmpty ? null : p.assertions.first.quotedText.trim();
+      final matching = widget.event.articles.where((article) => p.assertions.any((assertion) => assertion.articleId == article.id));
+      final age = matching.isEmpty ? null : DateTime.now().difference(matching.first.publishedAt);
+      final time = age == null || age.isNegative ? '' : age.inHours < 1 ? ' · hace menos de 1 h' : age.inHours < 24 ? ' · hace ${age.inHours} h' : ' · hace ${age.inDays} d';
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [CircleAvatar(radius: size / 2, backgroundColor: const Color(0xff22252a), child: Text(initials(source), style: const TextStyle(color: Colors.white, fontFamily: 'Merriweather', fontSize: 12))), const SizedBox(width: 8), Expanded(child: Text(source, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)))]),
+        Row(children: [CircleAvatar(radius: size / 2, backgroundColor: const Color(0xff22252a), child: Text(initials(source), style: const TextStyle(color: Colors.white, fontFamily: 'Merriweather', fontSize: 12))), const SizedBox(width: 8), Expanded(child: Text('$source$time', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)))]),
         const SizedBox(height: 8), Text(quote == null || quote.isEmpty ? p.title : '“$quote”', style: const TextStyle(fontFamily: 'Merriweather', fontSize: 16.5, fontWeight: FontWeight.w700, height: 1.28, color: Color(0xff141619))),
         if (quote == null || quote.isEmpty) const Text('Resumen de la postura', style: TextStyle(fontSize: 11)),
       ]);
