@@ -711,9 +711,9 @@ class _PersistentReaderTabsState extends State<_PersistentReaderTabs> {
     try {
       final ids=await following.listFollowedSources();
       if (!mounted || ids.isNotEmpty || widget.factory._radarPromptShown) return;
-      widget.factory._radarPromptShown=true;
       await Future<void>.delayed(Duration.zero);
-      if (!mounted) return;
+      if (!mounted || widget.factory._radarPromptShown) return;
+      widget.factory._radarPromptShown=true;
       await showModalBottomSheet<void>(context:context,isScrollControlled:true,backgroundColor:const Color(0xfffaf8f3),
         shape:const RoundedRectangleBorder(borderRadius:BorderRadius.vertical(top:Radius.circular(24))),
         builder:(sheetContext)=>Padding(padding:EdgeInsets.only(bottom:MediaQuery.viewInsetsOf(sheetContext).bottom),
