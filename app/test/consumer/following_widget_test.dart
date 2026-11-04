@@ -67,7 +67,11 @@ void main() {
     await tester.pump(const Duration(milliseconds: 200));
     expect(find.text('✓ Siguiendo'), findsOneWidget);
     expect(find.textContaining('Tu mezcla: 1 fuentes en Actualidad · 1'), findsOneWidget);
+    await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,500));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), 'Canal de prueba');
+    await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-350));
     await tester.pumpAndSettle();
     expect(find.text('Canal de prueba'), findsOneWidget);
     expect(find.text('Editorial de pruebas · sintético'), findsNothing);
