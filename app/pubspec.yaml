@@ -1,7 +1,7 @@
 name: dialektik
 description: Dialektik application and design-system foundation.
 publish_to: none
-version: 0.1.10+11
+version: 0.1.11+12
 
 environment:
   sdk: ^3.10.1
@@ -14,8 +14,10 @@ dependencies:
   google_fonts: ^8.2.1
   http: ^1.5.0
   intl: ^0.20.2
+  path_provider: ^2.1.6
   phosphor_flutter: ^2.1.0
   url_launcher: ^6.3.2
+  web: ^1.1.1
 
 dev_dependencies:
   flutter_lints: ^6.0.0

@@ -3,11 +3,13 @@ import 'dart:async';
 import 'package:dialektik/design_system/design_system.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/state/event_controller.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/story_follow_button.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/synthesis_transparency.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
@@ -47,7 +49,10 @@ final class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   void initState() {
     super.initState();
-    unawaited(_controller.load());
+    unawaited(_controller.load().then((_) async {
+      final event = _controller.event;
+      if (event != null) await StoryFollowStore.forRepository(widget.repository).markSeen(event);
+    }).catchError((Object _) {}));
   }
 
   @override
@@ -93,6 +98,7 @@ final class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             EventPhase.content => _EventContent(
               controller: _controller,
+              repository: widget.repository,
               onOpenArticle: (Uri value) => unawaited(_openArticle(value)),
               onOpenSource: widget.onOpenSource,
             ),
@@ -104,7 +110,8 @@ final class _EventDetailScreenState extends State<EventDetailScreen> {
 }
 
 final class _EventContent extends StatelessWidget {
-  const _EventContent({required this.controller, required this.onOpenArticle, required this.onOpenSource});
+  const _EventContent({required this.controller, required this.repository, required this.onOpenArticle, required this.onOpenSource});
+  final ConsumerRepository repository;
   final EventController controller;
   final ValueChanged<Uri> onOpenArticle;
   final ValueChanged<String> onOpenSource;
@@ -155,6 +162,7 @@ final class _EventContent extends StatelessWidget {
             const SizedBox(height: DialektikSpacing.space4),
             Text(strings.detected(event.detectedAt)),
             Text(strings.sourceCount(event.sourceCount)),
+            StoryFollowButton(repository:repository,event:event),
             SynthesisTransparency(event:event,relation:event.synthesisRelation),
             if (event.primaryFact != null) ...[
               Text(event.primaryFact!.statement),
