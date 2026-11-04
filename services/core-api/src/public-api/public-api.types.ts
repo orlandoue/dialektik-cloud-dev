@@ -13,6 +13,7 @@ export interface EventCardDto {
   readonly analysis_state: AnalysisState;
   readonly source_count: number;
   readonly position_count: number | null;
+  readonly synthesis_relation?: 'CONTRADICTION' | 'DIFFERENT_FOCUS' | 'DEVELOPING' | 'TREND' | null;
   readonly is_followed_source_match?: boolean;
 }
 

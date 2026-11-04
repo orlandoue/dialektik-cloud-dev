@@ -345,6 +345,7 @@ export const PUBLIC_OPENAPI_DOCUMENT = Object.freeze({
           source_count: { type: 'integer', minimum: 0 },
           position_count: { type: ['integer', 'null'], minimum: 1 },
           is_followed_source_match: { type: 'boolean' },
+          synthesis_relation: { type: ['string', 'null'], enum: ['CONTRADICTION', 'DIFFERENT_FOCUS', 'DEVELOPING', 'TREND', null] },
         },
         examples: [
           {

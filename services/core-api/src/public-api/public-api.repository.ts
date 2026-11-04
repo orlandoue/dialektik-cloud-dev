@@ -13,6 +13,7 @@ export interface FeedRow {
   readonly source_count: number;
   readonly position_count: number;
   readonly representation_updated_at: Date;
+  readonly synthesis_relation?: 'CONTRADICTION' | 'DIFFERENT_FOCUS' | 'DEVELOPING' | 'TREND' | null;
   readonly is_followed_source_match?: boolean;
 }
 
@@ -323,6 +324,7 @@ export class PublicApiRepository {
         category_row.slug as category,
         event_row.detected_at,
         event_row.analysis_state,
+        event_row.synthesis_relation,
         ${match} as is_followed_source_match,
         (
           select count(distinct article_row.source_id)::integer
@@ -398,6 +400,7 @@ export class PublicApiRepository {
         category_row.slug as category,
         event_row.detected_at,
         event_row.analysis_state,
+        event_row.synthesis_relation,
         event_row.window_from,
         event_row.window_to,
         event_row.merged_into,

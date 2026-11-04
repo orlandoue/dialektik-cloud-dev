@@ -55,6 +55,7 @@ function eventCard(row: FeedRow | EventRow): EventCardDto {
     analysis_state: row.analysis_state,
     source_count: row.source_count,
     position_count: positionCount,
+    ...(row.synthesis_relation === undefined ? {} : {synthesis_relation: row.synthesis_relation}),
   };
 }
 
