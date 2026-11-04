@@ -3,10 +3,14 @@ import 'dart:async';
 import 'package:dialektik/design_system/design_system.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/localization/consumer_strings.dart';
 import 'package:dialektik/features/consumer/presentation/state/event_controller.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/story_follow_button.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/synthesis_transparency.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
@@ -45,7 +49,10 @@ final class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   void initState() {
     super.initState();
-    unawaited(_controller.load());
+    unawaited(_controller.load().then((_) async {
+      final event = _controller.event;
+      if (event != null) await StoryFollowStore.forRepository(widget.repository).markSeen(event);
+    }).catchError((Object _) {}));
   }
 
   @override
@@ -91,6 +98,7 @@ final class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
             EventPhase.content => _EventContent(
               controller: _controller,
+              repository: widget.repository,
               onOpenArticle: (Uri value) => unawaited(_openArticle(value)),
               onOpenSource: widget.onOpenSource,
             ),
@@ -102,7 +110,8 @@ final class _EventDetailScreenState extends State<EventDetailScreen> {
 }
 
 final class _EventContent extends StatelessWidget {
-  const _EventContent({required this.controller, required this.onOpenArticle, required this.onOpenSource});
+  const _EventContent({required this.controller, required this.repository, required this.onOpenArticle, required this.onOpenSource});
+  final ConsumerRepository repository;
   final EventController controller;
   final ValueChanged<Uri> onOpenArticle;
   final ValueChanged<String> onOpenSource;
@@ -122,6 +131,7 @@ final class _EventContent extends StatelessWidget {
   Widget build(BuildContext context) {
     final strings = ConsumerStrings.of(context);
     final event = controller.event!;
+    final relation = event.synthesisRelation ?? StoryFollowStore.forRepository(repository).relationFor(event.id);
     final assertions = <PublicAssertionDto>[
       for (final position in controller.positions)
         ...?controller.positionDetails[position.id]?.assertions,
@@ -130,6 +140,7 @@ final class _EventContent extends StatelessWidget {
       for (final assertion in position.assertions) (position, assertion)];
     final followedCoverage = coverage.where((entry) => entry.$2.isFollowed).toList();
     final otherCoverage = coverage.where((entry) => !entry.$2.isFollowed).toList();
+    final chronologicalArticles = [...event.articles]..sort((a,b) => a.publishedAt.compareTo(b.publishedAt));
     final articles = <String, PublicAssertionDto>{};
     for (final assertion in assertions) {
       articles.putIfAbsent(assertion.span.article.id, () => assertion);
@@ -147,9 +158,13 @@ final class _EventContent extends StatelessWidget {
             Text(strings.categoryName(event.category), style: Theme.of(context).textTheme.bodySmall),
             const SizedBox(height: DialektikSpacing.space2),
             Text(event.titleDescriptive, style: Theme.of(context).textTheme.headlineMedium),
+            TextButton.icon(onPressed: () => showSynthesisSharePreview(context,event,relation:relation),
+              icon:const Icon(Icons.share_outlined), label:const Text('Compartir síntesis')),
             const SizedBox(height: DialektikSpacing.space4),
             Text(strings.detected(event.detectedAt)),
             Text(strings.sourceCount(event.sourceCount)),
+            StoryFollowButton(repository:repository,event:event),
+            SynthesisTransparency(event:event,relation:relation),
             if (event.primaryFact != null) ...[
               Text(event.primaryFact!.statement),
               TextButton(onPressed: () => onOpenSource(event.primaryFact!.primarySource.id),
@@ -203,9 +218,12 @@ final class _EventContent extends StatelessWidget {
             ],
             if (event.articles.isNotEmpty) ...[
               const SizedBox(height: DialektikSpacing.space8),
-              Text('Noticias originales', style: Theme.of(context).textTheme.headlineSmall),
-              for (final article in event.articles)
+              Text('Cronología de cobertura', style: Theme.of(context).textTheme.headlineSmall),
+              for (final article in chronologicalArticles)
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${article.publishedAt.toLocal().toString().substring(0,16)} · ${article.sourceName} · ${extractYouTubeVideoId(article.url.toString()) != null ? 'Video' : 'Prensa'}'),
+                  for (final entry in coverage.where((entry) => entry.$2.articleId == article.id))
+                    Text('“${entry.$2.quotedText}”'),
                   if (extractYouTubeVideoId(article.url.toString()) case final String id)
                     Row(children:[SizedBox(width:96,child:YouTubeThumbnail(videoId:id,compact:true,onTap:()=>onOpenArticle(article.url))), const SizedBox(width:10), Expanded(child:TextButton(onPressed:()=>onOpenArticle(article.url),child:Text('${article.sourceName.replaceAll('(YouTube)', '').trim()} · ${article.title}')))])
                   else Text('${article.sourceName} · ${article.title}'),

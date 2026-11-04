@@ -22,14 +22,24 @@ class YouTubeThumbnail extends StatelessWidget {
 }
 
 class YouTubeNewsCard extends StatelessWidget {
-  const YouTubeNewsCard({required this.videoId,required this.title,required this.source,required this.published,required this.onTap,this.followed=false,super.key});
+  const YouTubeNewsCard({required this.videoId,required this.title,required this.source,required this.published,required this.onTap,this.followed=false,this.compact=false,super.key});
   final String videoId,title,source,published;
-  final bool followed;
+  final bool followed, compact;
   final VoidCallback onTap;
   @override Widget build(BuildContext context)=>Semantics(button:true,onTap:onTap,excludeSemantics:true,label:'Abrir video en YouTube: $title. $source. Publicado $published',child:Card(clipBehavior:Clip.antiAlias,child:InkWell(onTap:onTap,child:Padding(padding:const EdgeInsets.all(12),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    if (compact) Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      SizedBox(width:128,child:YouTubeThumbnail(videoId:videoId,compact:true)),
+      const SizedBox(width:10),
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        if(followed) const Text('En tus fuentes'),
+        Text(source,style:Theme.of(context).textTheme.labelLarge),
+        Text(title,style:Theme.of(context).textTheme.titleMedium),Text(published),
+      ])),
+    ]) else ...[
     YouTubeThumbnail(videoId:videoId), const SizedBox(height:10),
     if(followed) const Text('En tus fuentes'),
     Text(source,style:Theme.of(context).textTheme.labelLarge),const SizedBox(height:4),
     Text(title,style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:4),Text(published),
+    ],
   ])))));
 }

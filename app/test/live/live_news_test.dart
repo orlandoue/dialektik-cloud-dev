@@ -342,6 +342,7 @@ void main() {
         unorderedEquals(<String>[
           '/live/news',
           '/live/sources',
+          '/v1/feed',
         ]),
       );
       final SemanticsHandle semantics = tester.ensureSemantics();
@@ -387,6 +388,7 @@ void main() {
         unorderedEquals(<String>[
           '/live/news',
           '/live/sources',
+          '/v1/feed',
         ]),
       );
       await tapLive(

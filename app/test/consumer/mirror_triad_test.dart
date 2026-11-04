@@ -49,6 +49,25 @@ void main(){
     expect(find.textContaining('FUERA DE TUS FUENTES'),findsOneWidget);
     expect(repo.requests,0);
   });
+  testWidgets('mirror links an article to a verified public event', (tester) async {
+    final repo=_MirrorRepo(); addTearDown(repo.changes.dispose);
+    final article={...liveTestArticle(),'semantic_assignment':'EVENT_LINKED'};
+    repo.cached=LiveNewsPageDto.fromJson({'origin':'LIVE_REAL','semantic_mode':'mixed','items':<Object?>[article],'next_cursor':null});
+    final event=EventDetailDto.fromJson({...eventDetailJson(id:publishedEventId,analysisState:'PUBLISHED',positionCount:2),
+      'positions':<Object?>[], 'contrasts':<Object?>[], 'articles':<Object?>[
+        {'id':liveTestArticleId,'title':'Nota','source_name':'Medio','published_at':'2026-10-30T12:00:00Z','url':'https://example.com/a'},
+      ]});
+    final consumer=FakeConsumerRepository(event:event,feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
+    String? opened;
+    await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),home:MirrorScreen(
+      repository:repo,consumerRepository:consumer,onOpenEvent:(id)=>opened=id,onOpenArticle:(_){},onOpenSources:(){})));
+    await tester.pumpAndSettle();
+    final link=find.textContaining('Aporta otra mirada sobre:');
+    expect(link,findsOneWidget);
+    await tester.ensureVisible(link);
+    await tester.tap(link);
+    expect(opened,publishedEventId);
+  });
   testWidgets('mirror opens YouTube videos directly', (tester) async {
     final repo=_MirrorRepo();addTearDown(repo.changes.dispose);
     final article={...liveTestArticle(),'canonical_url':'https://www.youtube.com/watch?v=aB3_deF-123'};

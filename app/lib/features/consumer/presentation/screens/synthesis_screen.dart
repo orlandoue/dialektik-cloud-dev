@@ -1,8 +1,13 @@
 import 'dart:async';
+
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/story_follow_button.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/synthesis_transparency.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
@@ -19,13 +24,16 @@ class SynthesisScreen extends StatefulWidget {
   @override State<SynthesisScreen> createState()=>_SynthesisScreenState();
 }
 class _SynthesisScreenState extends State<SynthesisScreen> {
+  late final StoryFollowStore stories=StoryFollowStore.forRepository(widget.repository);
   List<EventCardDto> events=[];
   Map<String,ContradictionDto> contrasts={};
   String filter='all';
   bool loading=true;
   Object? error;
   int generation=0;
-  @override void initState(){super.initState();unawaited(_load());}
+  @override void initState(){super.initState();stories.addListener(_storyChanged);unawaited(stories.load().catchError((Object _) {}));unawaited(_load());}
+  void _storyChanged(){if(mounted)setState((){});}
+  @override void dispose(){stories.removeListener(_storyChanged);super.dispose();}
   void _reload()=>unawaited(_load());
   Future<void> _load() async {
     final run=++generation;setState((){loading=true;error=null;});
@@ -37,14 +45,15 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
       seen.clear();
       do { final page=await widget.repository.listContradictions(cursor:cursor,limit:50,refresh:true); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
       if(!mounted || run!=generation)return;
+      stories.rememberRelations(allEvents);
       setState((){allEvents.sort((a,b)=>b.detectedAt.compareTo(a.detectedAt));events=allEvents;contrasts={for(final c in allContrasts)c.eventId:c};loading=false;});
     } on Exception catch(e){if(mounted && run==generation)setState((){error=e;loading=false;});}
   }
   @override Widget build(BuildContext context){
-    final filtered=events.where((e)=>filter=='all' || e.synthesisRelation==filter).toList();
+    final filtered=events.where((e)=>filter=='all' || (filter=='FOLLOWING' ? stories.contains(e.id) : e.synthesisRelation==filter)).toList();
     return ConsumerScaffold(title:'Síntesis',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:ListView(padding:const EdgeInsets.all(20),children:[
       SingleChildScrollView(scrollDirection:Axis.horizontal, padding:const EdgeInsets.symmetric(horizontal:16), clipBehavior:Clip.none, child:Row(children:[
-        for(final choice in [('all','Todo'),('CONTRADICTION','Contradicción'),('DIFFERENT_FOCUS','Distinto enfoque'),('DEVELOPING','En desarrollo'),('TREND','Tendencia')])
+        for(final choice in [('all','Todo'),('CONTRADICTION','Contradicción'),('DIFFERENT_FOCUS','Distinto enfoque'),('DEVELOPING','En desarrollo'),('TREND','Tendencia'),('FOLLOWING','Siguiendo')])
           Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice.$2),selected:filter==choice.$1,onSelected:(_)=>setState(()=>filter=choice.$1))),
       ])),
       if(widget.seismicRepository case final SeismicObservationRepository seismic) ChileSeismicObservationsPanel(repository:seismic),
@@ -113,6 +122,25 @@ class _SynthesisCardState extends State<_SynthesisCard> {
           ])),
       ]);
     }),
+    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) {
+      final data=snapshot.data; if(data==null)return const SizedBox.shrink();
+      final store=StoryFollowStore.forRepository(widget.repository);
+      return ListenableBuilder(listenable:store,builder:(context,_) {
+        final seen=store.snapshot(data.id);
+        final latest=[...data.articles]..sort((a,b)=>b.publishedAt.compareTo(a.publishedAt));
+        final newer=seen==null ? <EventCoverageArticleDto>[] : latest.where((article)=>article.publishedAt.isAfter(seen.seenAt)).toList();
+        final updated=seen!=null && (data.sourceCount>seen.sourceCount || data.articles.length>seen.articleCount || newer.isNotEmpty);
+        return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+          if(updated) Text('Actualizado · Nuevos aportes${newer.isEmpty ? '' : ' · ${newer.first.sourceName}'}'),
+          StoryFollowButton(repository:widget.repository,event:data),
+        ]);
+      });
+    }),
+    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) => TextButton.icon(
+      onPressed:snapshot.hasData ? () => showSynthesisSharePreview(context,snapshot.data!,relation:widget.event.synthesisRelation) : null,
+      icon:const Icon(Icons.share_outlined),label:const Text('Compartir síntesis'))),
+    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) => snapshot.hasData
+      ? SynthesisTransparency(event:snapshot.data!,relation:widget.event.synthesisRelation) : const SizedBox.shrink()),
     TextButton(onPressed:widget.onOpen,child:const Text('Ver síntesis y noticias originales →')),
   ])));
 }

@@ -41,6 +41,7 @@ final class LiveNewsItemDto {
     required this.versionCount,
     this.excerpt,
     this.modifiedAt,
+    this.isEventLinked = false,
   });
   factory LiveNewsItemDto.fromJson(Object? value) {
     final Map<String, Object?> data = liveObject(value);
@@ -65,6 +66,7 @@ final class LiveNewsItemDto {
       firstSeenAt: liveDate(data, 'first_seen_at'),
       source: LiveSourceDto.fromJson(data['source']),
       versionCount: versionCount,
+      isEventLinked: data['semantic_assignment'] == 'EVENT_LINKED',
     );
   }
   final String id;
@@ -76,6 +78,7 @@ final class LiveNewsItemDto {
   final DateTime firstSeenAt;
   final LiveSourceDto source;
   final int versionCount;
+  final bool isEventLinked;
 }
 
 final class LiveNewsPageDto {

@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:dialektik/design_system/design_system.dart';
+import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
+import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/horizontal_choice_strip.dart';
 import 'package:dialektik/features/live/data/candidate_source_registry.dart';
@@ -73,6 +76,8 @@ final class LiveNewsScreen extends StatefulWidget {
   const LiveNewsScreen({
     required this.repository,
     required this.onOpenArticle,
+    this.briefingRepository,
+    this.onOpenEvent,
     this.initialSourceId,
     this.externalLinkOpener = openExternalHttpLink,
     this.govUkPreviewLoader,
@@ -83,6 +88,8 @@ final class LiveNewsScreen extends StatefulWidget {
   });
   final LiveNewsRepository repository;
   final ValueChanged<String> onOpenArticle;
+  final ConsumerRepository? briefingRepository;
+  final ValueChanged<String>? onOpenEvent;
   final String? initialSourceId;
   final ExternalLinkOpener externalLinkOpener;
   final GovUkPreviewLoader? govUkPreviewLoader;
@@ -94,6 +101,8 @@ final class LiveNewsScreen extends StatefulWidget {
 }
 
 final class _LiveNewsScreenState extends State<LiveNewsScreen> {
+  late final StoryFollowStore? _stories = widget.briefingRepository == null ? null : StoryFollowStore.forRepository(widget.briefingRepository!);
+  late final Future<PublicPage<EventCardDto>>? _briefing = widget.briefingRepository?.listFeed(limit:50);
   Future<GovUkPreview>? _govUkPreviewFuture;
   final TextEditingController _query = TextEditingController();
   final ScrollController _countryScroll = ScrollController();
@@ -145,12 +154,15 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     _govUkPreviewFuture = widget.govUkPreviewLoader?.call(refresh: true);
     unawaited(_loadSources());
     unawaited(_load());
+    _stories?.addListener(_storyChanged);
+    if (_stories != null) unawaited(_stories.load().catchError((Object _) {}));
     _following?.followingChanges.addListener(_onFollowingChanged);
     unawaited(_loadFollowing());
   }
 
   @override
   void dispose() {
+    _stories?.removeListener(_storyChanged);
     _following?.followingChanges.removeListener(_onFollowingChanged);
     widget.publisherMarketSelection?.removeListener(_onMarketChanged);
     _newsToken?.cancel();
@@ -161,6 +173,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
     super.dispose();
   }
 
+  void _storyChanged() { if(mounted) setState(() {}); }
   void _onFollowingChanged() => unawaited(_loadFollowing());
   Future<void> _loadFollowing() async {
     final repository = _following;
@@ -400,6 +413,28 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (_briefing != null) FutureBuilder<PublicPage<EventCardDto>>(
+            future:_briefing, builder:(context,snapshot) {
+              final now=widget.clock().toLocal();
+              _stories?.rememberRelations(snapshot.data?.items ?? <EventCardDto>[]);
+              final events=(snapshot.data?.items ?? <EventCardDto>[]).where((event) {
+                final date=event.detectedAt.toLocal();
+                return date.year==now.year && date.month==now.month && date.day==now.day;
+              }).toList();
+              events.sort((a,b) {
+                final followA=_stories?.contains(a.id) ?? false;
+                final followB=_stories?.contains(b.id) ?? false;
+                if (followA != followB) return followA ? -1 : 1;
+                return b.detectedAt.compareTo(a.detectedAt);
+              });
+              if (events.isEmpty) return const SizedBox.shrink();
+              return Card(child:ExpansionTile(initiallyExpanded:true,title:const Text('Resumen de hoy · En 3 minutos'),children:[
+                for(final event in events.take(5)) ListTile(dense:true,
+                  title:Text(event.titleDescriptive,maxLines:1,overflow:TextOverflow.ellipsis),
+                  subtitle:Text('${switch(event.synthesisRelation) { 'CONTRADICTION' => 'Contradicción', 'DIFFERENT_FOCUS' => 'Distinto enfoque', 'DEVELOPING' => 'En desarrollo', 'TREND' => 'Tendencia', _ => 'Cobertura' }} · ${event.sourceCount} medios'),
+                  onTap:widget.onOpenEvent == null ? null : () => widget.onOpenEvent!(event.id)),
+              ]));
+            }),
           if (_followed.isNotEmpty) Wrap(spacing:8, children: [
             ChoiceChip(label:const Text('Siguiendo'), selected:!_allSources, onSelected: (_) {
               setState(() => _allSources = false); unawaited(_load(refresh:true));
@@ -488,6 +523,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             ),
           ),
           const SizedBox(height: DialektikSpacing.space3),
+          ],
           HorizontalChoiceStrip<LiveNewsFormatFilter>(
             semanticsLabel: 'Filtrar noticias por formato',
             allLabel: 'Todo',
@@ -509,7 +545,6 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
             },
           ),
           const SizedBox(height: DialektikSpacing.space3),
-          ],
           Text('Tema', style: Theme.of(context).textTheme.titleMedium),
           HorizontalChoiceStrip<LiveNewsTopic>(
             semanticsLabel: 'Filtrar noticias por tema',
@@ -1365,7 +1400,7 @@ final class LiveNewsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => extractYouTubeVideoId(article.canonicalUrl.toString()) != null
       ? YouTubeNewsCard(videoId:extractYouTubeVideoId(article.canonicalUrl.toString())!,title:article.headline,source:article.source.name,
-          published:liveLocalDate(article.publishedAt),followed:isFollowed,onTap:onPressed)
+          published:liveLocalDate(article.publishedAt),followed:isFollowed,compact:true,onTap:onPressed)
       : EditorialActionCard(
     onTap: onPressed,
     semanticLabel:
