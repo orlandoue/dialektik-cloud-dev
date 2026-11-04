@@ -52,6 +52,7 @@ void main() {
 
       expect(requested.path, '/v1/feed');
       expect(requested.queryParameters, <String, String>{
+        'synthesis': '1',
         'category': 'economia',
         'topic': 'tasas',
         'cursor': 'opaque/input+value',
