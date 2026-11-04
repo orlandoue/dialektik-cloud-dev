@@ -8,6 +8,7 @@ import 'package:dialektik/features/consumer/presentation/localization/consumer_s
 import 'package:dialektik/features/consumer/presentation/state/event_controller.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/synthesis_transparency.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/system_state_view.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
@@ -154,6 +155,7 @@ final class _EventContent extends StatelessWidget {
             const SizedBox(height: DialektikSpacing.space4),
             Text(strings.detected(event.detectedAt)),
             Text(strings.sourceCount(event.sourceCount)),
+            SynthesisTransparency(event:event,relation:event.synthesisRelation),
             if (event.primaryFact != null) ...[
               Text(event.primaryFact!.statement),
               TextButton(onPressed: () => onOpenSource(event.primaryFact!.primarySource.id),

@@ -5,6 +5,7 @@ import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/synthesis_transparency.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
@@ -118,6 +119,8 @@ class _SynthesisCardState extends State<_SynthesisCard> {
     FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) => TextButton.icon(
       onPressed:snapshot.hasData ? () => showSynthesisSharePreview(context,snapshot.data!,relation:widget.event.synthesisRelation) : null,
       icon:const Icon(Icons.share_outlined),label:const Text('Compartir síntesis'))),
+    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) => snapshot.hasData
+      ? SynthesisTransparency(event:snapshot.data!,relation:widget.event.synthesisRelation) : const SizedBox.shrink()),
     TextButton(onPressed:widget.onOpen,child:const Text('Ver síntesis y noticias originales →')),
   ])));
 }
