@@ -45,7 +45,7 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
       do { final repo=widget.repository; final page=await (repo is PublicApiClient ? repo.listContradictions(cursor:cursor,limit:50,refresh:true,personalized:false) : repo.listContradictions(cursor:cursor,limit:50,refresh:true)); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
       final byId={for(final e in allEvents)e.id:e};
       final missing=allContrasts.map((c)=>c.eventId).where((id)=>!byId.containsKey(id)).toSet();
-      await Future.wait(missing.map((id) async { try { byId[id]=await widget.repository.getEvent(id); } on Exception { /* Keep the publication visible even if its event cannot be loaded. */ } }));
+      await Future.wait(missing.map((id) async { try { byId[id]=await _getUniversalEvent(widget.repository,id); } on Exception { /* Keep the publication visible even if its event cannot be loaded. */ } }));
       final entries=< _ContrastEntry >[for(final c in allContrasts) _ContrastEntry(byId[c.eventId],c)];
       final publishedIds=allContrasts.map((c)=>c.eventId).toSet();
       entries.addAll(allEvents.where((e)=>(e.synthesisRelation=='CONTRADICTION' || e.synthesisRelation=='DIFFERENT_FOCUS') && !publishedIds.contains(e.id)).map((e)=>_ContrastEntry(e,null)));
@@ -70,6 +70,7 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
     ]))));
   }
 }
+Future<EventDetailDto> _getUniversalEvent(ConsumerRepository repo,String id,{bool refresh=false}) => repo is PublicApiClient ? repo.getEvent(id,refresh:refresh,personalized:false) : repo.getEvent(id,refresh:refresh);
 class _ContrastEntry {
   const _ContrastEntry(this.event,this.contrast);
   final EventCardDto? event; final ContradictionDto? contrast;
@@ -100,8 +101,8 @@ class _ContrastCard extends StatefulWidget {
   @override State<_ContrastCard> createState()=>_ContrastCardState();
 }
 class _ContrastCardState extends State<_ContrastCard> {
-  late Future<EventDetailDto> detail=widget.repository.getEvent(widget.event.id);
-  @override void didUpdateWidget(covariant _ContrastCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=widget.repository.getEvent(widget.event.id,refresh:true);}
+  late Future<EventDetailDto> detail=_getUniversalEvent(widget.repository,widget.event.id);
+  @override void didUpdateWidget(covariant _ContrastCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=_getUniversalEvent(widget.repository,widget.event.id,refresh:true);}
   @override Widget build(BuildContext context)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:widget.event.synthesisRelation=='CONTRADICTION' ? const Color(0xffc86446) : const Color(0xffb47814),borderRadius:BorderRadius.circular(6)),child:Text('${widget.event.sourceCount} MEDIOS · ${widget.event.synthesisRelation=='CONTRADICTION' ? 'CONTRADICCIÓN' : widget.event.synthesisRelation=='DIFFERENT_FOCUS' ? 'DISTINTO ENFOQUE' : 'CONTRASTE'}',style:const TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:Colors.white))),
     const SizedBox(height:8),Text(widget.event.titleDescriptive,style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:10),
@@ -121,8 +122,8 @@ class _DevelopmentCard extends StatefulWidget {
   @override State<_DevelopmentCard> createState()=>_DevelopmentCardState();
 }
 class _DevelopmentCardState extends State<_DevelopmentCard> {
-  late Future<EventDetailDto> detail=widget.repository.getEvent(widget.event.id);
-  @override void didUpdateWidget(covariant _DevelopmentCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=widget.repository.getEvent(widget.event.id,refresh:true);}
+  late Future<EventDetailDto> detail=_getUniversalEvent(widget.repository,widget.event.id);
+  @override void didUpdateWidget(covariant _DevelopmentCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=_getUniversalEvent(widget.repository,widget.event.id,refresh:true);}
   @override Widget build(BuildContext context)=>FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
     final data=snapshot.data;
     final articles=[...?data?.articles]..sort((a,b)=>b.publishedAt.compareTo(a.publishedAt));

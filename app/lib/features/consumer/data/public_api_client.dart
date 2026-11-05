@@ -218,10 +218,11 @@ final class PublicApiClient
   Future<EventDetailDto> getEvent(
     String eventId, {
     bool refresh = false,
+    bool personalized = true,
     PublicRequestToken? requestToken,
   }) => _get<EventDetailDto>(
     '/v1/events/${Uri.encodeComponent(eventId)}',
-    query: {'include': 'coverage', if (_personalizationEnabled) 'personalized': '1'},
+    query: {'include': 'coverage', if (_personalizationEnabled && personalized) 'personalized': '1'},
     decoder: EventDetailDto.fromJson,
     refresh: refresh,
     requestToken: requestToken,

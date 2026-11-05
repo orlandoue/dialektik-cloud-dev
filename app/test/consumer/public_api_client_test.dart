@@ -36,11 +36,12 @@ void main() {
     test('consultas universales no solicitan fuentes seguidas ni personalización', () async {
       final requests=<Uri>[];
       final client=PublicApiClient(configuration:ApiConfiguration.fromBaseUrl('https://api.example.test'),authorizationTokenProvider:() async=>'test-token',httpClient:MockClient((request) async {
-        requests.add(request.url); return _jsonResponse({'items':<Object?>[], 'next_cursor':null});
+        requests.add(request.url); return _jsonResponse(request.url.path.startsWith('/v1/events/') ? eventDetailJson() : {'items':<Object?>[], 'next_cursor':null});
       }));
       await client.listFeed(personalized:false);
       await client.listContradictions(personalized:false);
-      expect(requests,hasLength(2));
+      await client.getEvent(pendingEventId,personalized:false);
+      expect(requests,hasLength(3));
       for(final uri in requests) {
         expect(uri.queryParameters.containsKey('personalized'),isFalse);
         expect(uri.queryParameters.containsKey('followed_only'),isFalse);
