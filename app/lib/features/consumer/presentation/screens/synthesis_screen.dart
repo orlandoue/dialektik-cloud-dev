@@ -39,15 +39,13 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
       final allEvents=<EventCardDto>[], allContrasts=<ContradictionDto>[];
       String? cursor; final seen=<String>{};
       do { final page=await widget.repository.listFeed(cursor:cursor,limit:50,refresh:true); allEvents.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid feed cursor'); } while(cursor!=null);
-      if(!widget.development) {
-        seen.clear();
-        do { final page=await widget.repository.listContradictions(cursor:cursor,limit:50,refresh:true); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
-      }
+      seen.clear();
+      do { final page=await widget.repository.listContradictions(cursor:cursor,limit:50,refresh:true); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
       if(!mounted || run!=generation)return;
       setState((){allEvents.sort((a,b)=>b.detectedAt.compareTo(a.detectedAt));events=allEvents;contrasts={for(final c in allContrasts)c.eventId:c};loading=false;});
     } on Exception catch(e){if(mounted && run==generation)setState((){error=e;loading=false;});}
   }
-  bool isContrast(EventCardDto e)=>e.synthesisRelation=='CONTRADICTION' || e.synthesisRelation=='DIFFERENT_FOCUS';
+  bool isContrast(EventCardDto e)=>e.synthesisRelation=='CONTRADICTION' || e.synthesisRelation=='DIFFERENT_FOCUS' || contrasts.containsKey(e.id);
   @override Widget build(BuildContext context){
     final filtered=events.where((e)=>widget.development ? !isContrast(e) && (topic=='Todos' || _eventTopic(e)==topic) : isContrast(e)).toList();
     return ConsumerScaffold(title:widget.development ? 'Desarrollo' : 'Contradicciones',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:RefreshIndicator(onRefresh:_load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.fromLTRB(20,12,20,20),children:[
@@ -93,7 +91,7 @@ class _ContrastCardState extends State<_ContrastCard> {
   late Future<EventDetailDto> detail=widget.repository.getEvent(widget.event.id);
   @override void didUpdateWidget(covariant _ContrastCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=widget.repository.getEvent(widget.event.id,refresh:true);}
   @override Widget build(BuildContext context)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:widget.event.synthesisRelation=='CONTRADICTION' ? const Color(0xffc86446) : const Color(0xffb47814),borderRadius:BorderRadius.circular(6)),child:Text('${widget.event.sourceCount} MEDIOS · ${widget.event.synthesisRelation=='CONTRADICTION' ? 'CONTRADICCIÓN' : 'DISTINTO ENFOQUE'}',style:const TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:Colors.white))),
+    Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:widget.event.synthesisRelation=='CONTRADICTION' ? const Color(0xffc86446) : const Color(0xffb47814),borderRadius:BorderRadius.circular(6)),child:Text('${widget.event.sourceCount} MEDIOS · ${widget.event.synthesisRelation=='CONTRADICTION' ? 'CONTRADICCIÓN' : widget.event.synthesisRelation=='DIFFERENT_FOCUS' ? 'DISTINTO ENFOQUE' : 'CONTRASTE'}',style:const TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:Colors.white))),
     const SizedBox(height:8),Text(widget.event.titleDescriptive,style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:10),
     FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
       final data=snapshot.data;

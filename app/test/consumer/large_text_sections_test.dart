@@ -21,7 +21,7 @@ void main() {
       ], 'contrasts': <Object?>[],
     });
     final contrast=EventCardDto(id:detail.id,titleDescriptive:detail.titleDescriptive,category:'economia',detectedAt:detail.detectedAt,analysisState:detail.analysisState,sourceCount:2,positionCount:2,synthesisRelation:'DIFFERENT_FOCUS');
-    final developing=EventCardDto(id:detail.id,titleDescriptive:detail.titleDescriptive,category:'economia',detectedAt:detail.detectedAt,analysisState:detail.analysisState,sourceCount:2,positionCount:2,synthesisRelation:'DEVELOPING');
+    final developing=EventCardDto(id:'another-development-event',titleDescriptive:detail.titleDescriptive,category:'economia',detectedAt:detail.detectedAt,analysisState:detail.analysisState,sourceCount:2,positionCount:2,synthesisRelation:'DEVELOPING');
     Uri? opened;
     Widget app(EventCardDto card, bool development) {
       final repo=FakeConsumerRepository(event:detail,feedPages:[PublicPage<EventCardDto>(items:[card],nextCursor:null)]);

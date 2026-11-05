@@ -121,7 +121,8 @@ void main(){
         {'id':'video','title':'Entrevista en video','source_name':'Canal (YouTube)',
           'published_at':'2026-10-30T12:00:00Z','url':'https://youtu.be/aB3_deF-123'},
       ]});
-    final repo=FakeConsumerRepository(event:event,feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
+    final story=EventCardDto(id:'another-development-event',titleDescriptive:event.titleDescriptive,category:event.category,detectedAt:event.detectedAt,analysisState:event.analysisState,sourceCount:event.sourceCount,positionCount:event.positionCount,synthesisRelation:'DEVELOPING');
+    final repo=FakeConsumerRepository(event:event,feedPages:[PublicPage<EventCardDto>(items:[story],nextCursor:null)]);
     Uri? opened;
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
       home:SynthesisScreen(repository:repo,onOpenEvent:(_){},development:true,externalLinkOpener:(uri) async {opened=uri;return true;})));
