@@ -95,14 +95,8 @@ void main(){
     expect(find.text('${e.sourceCount} MEDIOS · DISTINTO ENFOQUE'),findsOneWidget);
     expect(find.text('En tus fuentes'),findsNothing);
     expect(find.text('Punto ciego'),findsNothing);
-    await tester.ensureVisible(find.text('Distinto enfoque'));
-    await tester.tap(find.text('Distinto enfoque'));
-    await tester.pumpAndSettle();
-    expect(find.text(e.titleDescriptive),findsOneWidget);
-    await tester.ensureVisible(find.text('Contradicción'));
-    await tester.tap(find.text('Contradicción'));
-    await tester.pumpAndSettle();
-    expect(find.text('No hay acontecimientos en este filtro.'),findsOneWidget);
+    expect(find.text('Distinto enfoque'),findsNothing);
+    expect(find.text('En desarrollo'),findsNothing);
   });
   testWidgets('synthesis refreshes on return and on pull to refresh', (tester) async {
     final repo=FakeConsumerRepository(feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
@@ -130,10 +124,12 @@ void main(){
     final repo=FakeConsumerRepository(event:event,feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
     Uri? opened;
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
-      home:SynthesisScreen(repository:repo,onOpenEvent:(_){},externalLinkOpener:(uri) async {opened=uri;return true;})));
+      home:SynthesisScreen(repository:repo,onOpenEvent:(_){},development:true,externalLinkOpener:(uri) async {opened=uri;return true;})));
     await tester.pump();await tester.pump(const Duration(milliseconds:200));
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
     final preview=tester.widget<YouTubeThumbnail>(find.byType(YouTubeThumbnail));
-    expect(preview.compact,isTrue);
+    expect(preview.compact,isFalse);
     await tester.ensureVisible(find.byType(YouTubeThumbnail));
     await tester.tap(find.byType(YouTubeThumbnail));
     await tester.pump();

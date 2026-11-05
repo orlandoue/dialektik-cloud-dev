@@ -60,6 +60,7 @@ abstract final class ConsumerRoutes {
   static String liveProvenance(String id) =>
       '/live/news/${Uri.encodeComponent(id)}/provenance';
   static const String contradictions = '/contradictions';
+  static const String development = '/desarrollo';
   static const String threads = '/threads';
   static String thread(String id) => '/threads/${Uri.encodeComponent(id)}';
   static String occurrence(String id) =>
@@ -111,7 +112,7 @@ final class ConsumerRouteFactory {
   bool _radarPromptShown = false;
   bool _buildingTab = false;
   int _activeTabHosts = 0;
-  static const _mainTabs = <String>{ConsumerRoutes.liveNews, ConsumerRoutes.mirror, ConsumerRoutes.feed, ConsumerRoutes.liveSources};
+  static const _mainTabs = <String>{ConsumerRoutes.liveNews, ConsumerRoutes.mirror, ConsumerRoutes.feed, ConsumerRoutes.development, ConsumerRoutes.liveSources};
 
   Route<dynamic> generate(RouteSettings settings) {
     final Uri uri = Uri.parse(settings.name ?? ConsumerRoutes.feed);
@@ -212,6 +213,7 @@ final class ConsumerRouteFactory {
       final String marketCode = publisherMarketSelection?.value ?? 'CL';
       final bool sectionRequiresCoverage =
           uri.path == ConsumerRoutes.feed ||
+          uri.path == ConsumerRoutes.development ||
           uri.path == ConsumerRoutes.mirror ||
           uri.path == ConsumerRoutes.liveSources ||
           uri.path == ConsumerRoutes.contradictions ||
@@ -334,14 +336,15 @@ final class ConsumerRouteFactory {
           ),
         );
       }
-      if (uri.path == ConsumerRoutes.feed) {
+      if (uri.path == ConsumerRoutes.feed || uri.path == ConsumerRoutes.development) {
         return _page(
           settings,
           SynthesisScreen(
             externalLinkOpener: externalLinkOpener,
             repository: repository,
+            development: uri.path == ConsumerRoutes.development,
             refreshSignal: _selectedTab,
-            isVisible: () => _selectedTab.value == ConsumerRoutes.feed,
+            isVisible: () => _selectedTab.value == uri.path,
             seismicRepository: liveNewsRepository is SeismicObservationRepository
                 ? liveNewsRepository as SeismicObservationRepository : null,
             navigationActions: navigationActions,
@@ -632,7 +635,8 @@ final class ConsumerRouteFactory {
         <({String label, String route})>[
           (label: 'Actualidad', route: ConsumerRoutes.liveNews),
           (label: 'Espejo', route: ConsumerRoutes.mirror),
-          (label: 'Síntesis', route: ConsumerRoutes.feed),
+          (label: 'Contradicciones', route: ConsumerRoutes.feed),
+          (label: 'Desarrollo', route: ConsumerRoutes.development),
           (label: 'Fuentes', route: ConsumerRoutes.liveSources),
           if (personalOwnerStatusRepository != null)
             (label: 'Administración', route: ConsumerRoutes.personalOwner),
@@ -652,14 +656,15 @@ final class ConsumerRouteFactory {
 
   String _sectionForPath(String path) {
     if (path == ConsumerRoutes.feed || path.startsWith('/events/')) {
-      return 'Síntesis';
+      return 'Contradicciones';
     }
+    if (path == ConsumerRoutes.development) return 'Desarrollo';
     if (path == ConsumerRoutes.liveSources ||
         path.startsWith('/sources/') ||
         path.startsWith('/live/sources/')) {
       return 'Fuentes';
     }
-    if (path == ConsumerRoutes.contradictions) return 'Síntesis';
+    if (path == ConsumerRoutes.contradictions) return 'Contradicciones';
     if (path == ConsumerRoutes.mirror) return 'Espejo';
     if (path.startsWith('/personal/owner/official-votes/')) {
       return 'Administración';

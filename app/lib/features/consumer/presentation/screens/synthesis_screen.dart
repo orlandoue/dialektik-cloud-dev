@@ -1,24 +1,21 @@
 import 'dart:async';
-
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
-import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/dialectical_thread.dart';
-import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
-import 'package:dialektik/features/consumer/presentation/widgets/story_follow_button.dart';
-import 'package:dialektik/features/consumer/presentation/widgets/synthesis_transparency.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class SynthesisScreen extends StatefulWidget {
-  const SynthesisScreen({required this.repository, required this.onOpenEvent, this.seismicRepository, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], this.refreshSignal, this.isVisible, super.key});
+  const SynthesisScreen({required this.repository, required this.onOpenEvent, this.development=false, this.seismicRepository, this.externalLinkOpener=openExternalHttpLink, this.navigationActions=const [], this.refreshSignal, this.isVisible, super.key});
   final ConsumerRepository repository;
   final ValueChanged<String> onOpenEvent;
+  final bool development;
   final SeismicObservationRepository? seismicRepository;
   final ExternalLinkOpener externalLinkOpener;
   final List<Widget> navigationActions;
@@ -27,120 +24,111 @@ class SynthesisScreen extends StatefulWidget {
   @override State<SynthesisScreen> createState()=>_SynthesisScreenState();
 }
 class _SynthesisScreenState extends State<SynthesisScreen> {
-  late final StoryFollowStore stories=StoryFollowStore.forRepository(widget.repository);
   List<EventCardDto> events=[];
   Map<String,ContradictionDto> contrasts={};
-  String filter='all';
+  String topic='Todos';
   bool loading=true;
   Object? error;
   int generation=0;
-  @override void initState(){super.initState();stories.addListener(_storyChanged);widget.refreshSignal?.addListener(_tabChanged);unawaited(stories.load().catchError((Object _) {}));unawaited(_load());}
+  @override void initState(){super.initState();widget.refreshSignal?.addListener(_tabChanged);unawaited(_load());}
   void _tabChanged(){if(widget.isVisible?.call() == true) unawaited(_load());}
-  void _storyChanged(){if(mounted)setState((){});}
-  @override void dispose(){widget.refreshSignal?.removeListener(_tabChanged);stories.removeListener(_storyChanged);super.dispose();}
-  void _reload()=>unawaited(_load());
+  @override void dispose(){widget.refreshSignal?.removeListener(_tabChanged);super.dispose();}
   Future<void> _load() async {
     final run=++generation;setState((){loading=true;error=null;});
     try {
       final allEvents=<EventCardDto>[], allContrasts=<ContradictionDto>[];
-      String? cursor;
-      final seen=<String>{};
+      String? cursor; final seen=<String>{};
       do { final page=await widget.repository.listFeed(cursor:cursor,limit:50,refresh:true); allEvents.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid feed cursor'); } while(cursor!=null);
-      seen.clear();
-      do { final page=await widget.repository.listContradictions(cursor:cursor,limit:50,refresh:true); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
+      if(!widget.development) {
+        seen.clear();
+        do { final page=await widget.repository.listContradictions(cursor:cursor,limit:50,refresh:true); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
+      }
       if(!mounted || run!=generation)return;
-      stories.rememberRelations(allEvents);
       setState((){allEvents.sort((a,b)=>b.detectedAt.compareTo(a.detectedAt));events=allEvents;contrasts={for(final c in allContrasts)c.eventId:c};loading=false;});
     } on Exception catch(e){if(mounted && run==generation)setState((){error=e;loading=false;});}
   }
+  bool isContrast(EventCardDto e)=>e.synthesisRelation=='CONTRADICTION' || e.synthesisRelation=='DIFFERENT_FOCUS';
   @override Widget build(BuildContext context){
-    final filtered=events.where((e)=>filter=='all' || (filter=='FOLLOWING' ? stories.contains(e.id) : e.synthesisRelation==filter)).toList();
-    return ConsumerScaffold(title:'Síntesis',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:RefreshIndicator(onRefresh:_load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.all(20),children:[
-      SingleChildScrollView(scrollDirection:Axis.horizontal, padding:const EdgeInsets.symmetric(horizontal:16), clipBehavior:Clip.none, child:Row(children:[
-        for(final choice in [('all','Todo'),('CONTRADICTION','Contradicción'),('DIFFERENT_FOCUS','Distinto enfoque'),('DEVELOPING','En desarrollo'),('TREND','Tendencia'),('FOLLOWING','Siguiendo')])
-          Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice.$2),selected:filter==choice.$1,onSelected:(_)=>setState(()=>filter=choice.$1))),
-      ])),
-      if(widget.seismicRepository case final SeismicObservationRepository seismic) ChileSeismicObservationsPanel(repository:seismic),
+    final filtered=events.where((e)=>widget.development ? !isContrast(e) && (topic=='Todos' || _eventTopic(e)==topic) : isContrast(e)).toList();
+    return ConsumerScaffold(title:widget.development ? 'Desarrollo' : 'Contradicciones',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:RefreshIndicator(onRefresh:_load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.fromLTRB(20,12,20,20),children:[
+      if(widget.development) ...[
+        SingleChildScrollView(scrollDirection:Axis.horizontal, child:Row(children:[for(final choice in ['Todos','Política','Justicia','Economía','Seguridad','Deportes','Sociedad']) Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice),selected:topic==choice,onSelected:(_)=>setState(()=>topic=choice)))])),
+        if(widget.seismicRepository case final SeismicObservationRepository seismic) ChileSeismicObservationsPanel(repository:seismic),
+      ],
       if(loading && events.isEmpty) const Center(child:CircularProgressIndicator())
-      else if(error!=null && events.isEmpty) TextButton(onPressed:_reload,child:const Text('No se pudieron cargar los acontecimientos. Reintentar'))
+      else if(error!=null && events.isEmpty) TextButton(onPressed:()=>unawaited(_load()),child:const Text('No se pudieron cargar los acontecimientos. Reintentar'))
       else if(filtered.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('No hay acontecimientos en este filtro.'))
-      else for(final event in filtered) _SynthesisCard(event:event, contrast:contrasts[event.id],repository:widget.repository,externalLinkOpener:widget.externalLinkOpener,onOpen:()=>widget.onOpenEvent(event.id)),
+      else for(final event in filtered) widget.development
+        ? _DevelopmentCard(event:event,repository:widget.repository,opener:widget.externalLinkOpener)
+        : _ContrastCard(event:event,contrast:contrasts[event.id],repository:widget.repository,onOpen:()=>widget.onOpenEvent(event.id)),
     ]))));
   }
 }
-class _SynthesisCard extends StatefulWidget {
-  const _SynthesisCard({required this.event,required this.contrast,required this.repository,required this.externalLinkOpener,required this.onOpen});
-  final EventCardDto event; final ContradictionDto? contrast; final ConsumerRepository repository;final ExternalLinkOpener externalLinkOpener;final VoidCallback onOpen;
-  @override State<_SynthesisCard> createState()=>_SynthesisCardState();
+String _topic(String category) => switch(category.toLowerCase()) {
+  'politica' || 'política' => 'Política', 'justicia' => 'Justicia', 'economia' || 'economía' => 'Economía',
+  'seguridad' => 'Seguridad', 'deportes' => 'Deportes', 'sociedad' => 'Sociedad',
+  _ => category.isEmpty ? 'Actualidad' : category,
+};
+String _eventTopic(EventCardDto event) {
+  final category=_topic(event.category);
+  if(const ['Política','Justicia','Economía','Seguridad','Deportes','Sociedad'].contains(category)) return category;
+  final title=event.titleDescriptive.toLowerCase();
+  final patterns=<String,String>{
+    'Justicia':r'justicia|judicial|tribunal|corte|fiscal|condena',
+    'Seguridad':r'seguridad|delito|polic|carabinero|crimen|migratori|robo',
+    'Deportes':r'deporte|fútbol|futbol|tenis|colo.colo|campeonato|liga',
+    'Economía':r'econom|inflación|inflacion|empleo|afp|banco|codelco|despido',
+    'Política':r'polític|politic|gobierno|ministro|congreso|diputad|senador|elecci|presidente',
+    'Sociedad':r'sociedad|salud|educaci|vivienda|familia|cultura|ambiente',
+  };
+  for(final entry in patterns.entries) { if(RegExp(entry.value).hasMatch(title)) return entry.key; }
+  return category;
 }
-class _SynthesisCardState extends State<_SynthesisCard> {
+class _ContrastCard extends StatefulWidget {
+  const _ContrastCard({required this.event,required this.contrast,required this.repository,required this.onOpen});
+  final EventCardDto event; final ContradictionDto? contrast; final ConsumerRepository repository; final VoidCallback onOpen;
+  @override State<_ContrastCard> createState()=>_ContrastCardState();
+}
+class _ContrastCardState extends State<_ContrastCard> {
   late Future<EventDetailDto> detail=widget.repository.getEvent(widget.event.id);
-  @override void didUpdateWidget(covariant _SynthesisCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=widget.repository.getEvent(widget.event.id,refresh:true);}
-  Widget badge(String text, Color background, Color foreground) => Container(
-    padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),
-    decoration:BoxDecoration(color:background,borderRadius:BorderRadius.circular(6)),
-    child:Text(text,style:TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:foreground)),
-  );
+  @override void didUpdateWidget(covariant _ContrastCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=widget.repository.getEvent(widget.event.id,refresh:true);}
   @override Widget build(BuildContext context)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    badge(switch(widget.event.synthesisRelation) {
-      'CONTRADICTION' => '${widget.event.sourceCount} MEDIOS · CONTRADICCIÓN',
-      'DIFFERENT_FOCUS' => '${widget.event.sourceCount} MEDIOS · DISTINTO ENFOQUE',
-      'DEVELOPING' => 'EN DESARROLLO · ${widget.event.sourceCount} MEDIOS',
-      'TREND' => 'TENDENCIA · ${widget.event.sourceCount} MEDIOS',
-      _ => 'COBERTURA · ${widget.event.sourceCount} MEDIOS',
-    }, switch(widget.event.synthesisRelation) {
-      'CONTRADICTION' => const Color(0xffc86446),
-      'DIFFERENT_FOCUS' => const Color(0xffb47814),
-      'DEVELOPING' => const Color(0xffe0e7ff),
-      'TREND' => const Color(0xffdef7ec),
-      _ => const Color(0xffedf2f7),
-    }, switch(widget.event.synthesisRelation) {
-      'CONTRADICTION' => Colors.white,
-      'DIFFERENT_FOCUS' => Colors.white,
-      'DEVELOPING' => const Color(0xff1e40af),
-      'TREND' => const Color(0xff03543f),
-      _ => const Color(0xff2d3748),
-    }),
-    const SizedBox(height:8),
-    Text(widget.event.titleDescriptive,style:Theme.of(context).textTheme.titleLarge),
-    const SizedBox(height:10),
+    Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:widget.event.synthesisRelation=='CONTRADICTION' ? const Color(0xffc86446) : const Color(0xffb47814),borderRadius:BorderRadius.circular(6)),child:Text('${widget.event.sourceCount} MEDIOS · ${widget.event.synthesisRelation=='CONTRADICTION' ? 'CONTRADICCIÓN' : 'DISTINTO ENFOQUE'}',style:const TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:Colors.white))),
+    const SizedBox(height:8),Text(widget.event.titleDescriptive,style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:10),
     FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
-      final data=snapshot.data;if(data==null)return const SizedBox.shrink();
-      final videos=data.articles.where((a)=>extractYouTubeVideoId(a.url.toString())!=null).toList();
-      final videoRows=<Widget>[for(final article in videos) Padding(padding:const EdgeInsets.symmetric(vertical:6),child:Row(children:[
-        SizedBox(width:96,child:YouTubeThumbnail(videoId:extractYouTubeVideoId(article.url.toString())!,compact:true,onTap:()=>unawaited(widget.externalLinkOpener(article.url)))),
-        const SizedBox(width:10),Expanded(child:TextButton(onPressed:()=>unawaited(widget.externalLinkOpener(article.url)),child:Text('${article.sourceName.replaceAll('(YouTube)', '').trim()} · ${article.title}'))),
-      ]))];
-      if(widget.event.synthesisRelation != 'CONTRADICTION' && widget.event.synthesisRelation != 'DIFFERENT_FOCUS') { return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[...videoRows, Wrap(spacing:8,runSpacing:4,children:[
-        for(final name in data.articles.where((a)=>extractYouTubeVideoId(a.url.toString())==null).map((a)=>a.sourceName).toSet())
-          Text(name.contains('(YouTube)') ? '${name.replaceAll('(YouTube)', '').trim()} · ▶ Video' : name),
-      ])]); }
+      final data=snapshot.data;
+      if(data==null) return snapshot.hasError ? const Text('No se pudieron cargar las fuentes.') : const SizedBox.shrink();
       final c=widget.contrast;
-      final selected=c == null ? data.coveragePositions.take(2) : data.coveragePositions.where((p)=>p.id==c.positionA.id || p.id==c.positionB.id);
-      final positions=selected.toList();
-      return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[...videoRows,
-        DialecticalThread(event:data,positions:positions,relation:widget.event.synthesisRelation),
-      ]);
+      final positions=(c == null ? data.coveragePositions.take(2) : data.coveragePositions.where((p)=>p.id==c.positionA.id || p.id==c.positionB.id)).toList();
+      return DialecticalThread(event:data,positions:positions,relation:widget.event.synthesisRelation);
     }),
-    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) {
-      final data=snapshot.data; if(data==null)return const SizedBox.shrink();
-      final store=StoryFollowStore.forRepository(widget.repository);
-      return ListenableBuilder(listenable:store,builder:(context,_) {
-        final seen=store.snapshot(data.id);
-        final latest=[...data.articles]..sort((a,b)=>b.publishedAt.compareTo(a.publishedAt));
-        final newer=seen==null ? <EventCoverageArticleDto>[] : latest.where((article)=>article.publishedAt.isAfter(seen.seenAt)).toList();
-        final updated=seen!=null && (data.sourceCount>seen.sourceCount || data.articles.length>seen.articleCount || newer.isNotEmpty);
-        return Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          if(updated) Text('Actualizado · Nuevos aportes${newer.isEmpty ? '' : ' · ${newer.first.sourceName}'}'),
-          StoryFollowButton(repository:widget.repository,event:data),
-        ]);
-      });
-    }),
-    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) => TextButton.icon(
-      onPressed:snapshot.hasData ? () => showSynthesisSharePreview(context,snapshot.data!,relation:widget.event.synthesisRelation) : null,
-      icon:const Icon(Icons.share_outlined),label:const Text('Compartir síntesis'))),
-    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot) => snapshot.hasData
-      ? SynthesisTransparency(event:snapshot.data!,relation:widget.event.synthesisRelation) : const SizedBox.shrink()),
-    TextButton(onPressed:widget.onOpen,child:const Text('Ver síntesis y noticias originales →')),
+    TextButton(onPressed:widget.onOpen,style:TextButton.styleFrom(foregroundColor:const Color(0xff162032)),child:const Text('Ver fuentes originales →',style:TextStyle(fontWeight:FontWeight.w600))),
   ])));
+}
+class _DevelopmentCard extends StatefulWidget {
+  const _DevelopmentCard({required this.event,required this.repository,required this.opener});
+  final EventCardDto event; final ConsumerRepository repository; final ExternalLinkOpener opener;
+  @override State<_DevelopmentCard> createState()=>_DevelopmentCardState();
+}
+class _DevelopmentCardState extends State<_DevelopmentCard> {
+  late Future<EventDetailDto> detail=widget.repository.getEvent(widget.event.id);
+  @override void didUpdateWidget(covariant _DevelopmentCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=widget.repository.getEvent(widget.event.id,refresh:true);}
+  @override Widget build(BuildContext context)=>FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
+    final data=snapshot.data;
+    final articles=[...?data?.articles]..sort((a,b)=>b.publishedAt.compareTo(a.publishedAt));
+    return Card(child:ExpansionTile(title:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      Text('${_eventTopic(widget.event)} · ${widget.event.sourceCount} fuentes',style:Theme.of(context).textTheme.labelMedium),
+      const SizedBox(height:6),Text(widget.event.titleDescriptive,style:const TextStyle(fontWeight:FontWeight.w700)),
+      if(data?.primaryFact?.statement case final String fact) Padding(padding:const EdgeInsets.only(top:6),child:Text(fact,maxLines:2,overflow:TextOverflow.ellipsis,style:Theme.of(context).textTheme.bodyMedium)),
+    ]),childrenPadding:const EdgeInsets.fromLTRB(16,0,16,16),children:[
+      if(snapshot.connectionState!=ConnectionState.done) const CircularProgressIndicator()
+      else if(snapshot.hasError) const Text('No se pudieron cargar las noticias originales.')
+      else if(articles.isEmpty) const Text('No hay noticias originales disponibles.')
+      else for(final article in articles) Padding(padding:const EdgeInsets.only(top:12),child:InkWell(onTap:()=>unawaited(widget.opener(article.url)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        if(extractYouTubeVideoId(article.url.toString()) case final String id) Padding(padding:const EdgeInsets.only(bottom:8),child:YouTubeThumbnail(videoId:id,onTap:()=>unawaited(widget.opener(article.url)))),
+        Text('${DateFormat('dd/MM HH:mm').format(article.publishedAt.toLocal())} · ${article.sourceName}',style:const TextStyle(fontWeight:FontWeight.w700)),
+        Text(article.title,style:const TextStyle(color:Color(0xff1a1a1a),fontWeight:FontWeight.w600)),
+      ]))),
+    ]));
+  });
 }

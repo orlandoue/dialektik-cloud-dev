@@ -1,7 +1,7 @@
 name: dialektik
 description: Dialektik application and design-system foundation.
 publish_to: none
-version: 0.1.13+14
+version: 0.1.14+15
 
 environment:
   sdk: ^3.10.1

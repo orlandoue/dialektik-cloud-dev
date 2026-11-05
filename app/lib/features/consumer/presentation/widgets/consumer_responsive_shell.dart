@@ -156,7 +156,8 @@ final class _MobileHeader extends StatelessWidget {
           (ConsumerNavigationAction action) => const <String>{
             'Actualidad',
             'Espejo',
-            'Síntesis',
+            'Contradicciones',
+            'Desarrollo',
             'Fuentes',
             'Historias',
           }.contains(action.label),
@@ -257,12 +258,12 @@ final class _MobilePrimaryNavigation extends StatelessWidget {
   final List<ConsumerNavigationAction> secondary;
 
   @override
-  Widget build(BuildContext context) => Row(
+  Widget build(BuildContext context) => SingleChildScrollView(
     key: const Key('consumer-primary-navigation-scroll'),
-    children: <Widget>[
-      for (final ConsumerNavigationAction action in primary)
-        Expanded(child: _PrimaryTab(action: action)),
-    ],
+    scrollDirection: Axis.horizontal,
+    child: Row(children: <Widget>[
+      for (final ConsumerNavigationAction action in primary) _PrimaryTab(action: action),
+    ]),
   );
 }
 
@@ -282,7 +283,7 @@ final class _PrimaryTab extends StatelessWidget {
       onTap: action.onPressed,
       child: Container(
         constraints: const BoxConstraints(minHeight: 48),
-        padding: const EdgeInsets.symmetric(horizontal: 4),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           border: Border(
             bottom: BorderSide(

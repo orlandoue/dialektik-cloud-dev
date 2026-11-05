@@ -22,8 +22,8 @@ void main() {
     expect(find.text('Termómetro de evidencia'), findsOneWidget);
     await tester.tap(find.text('Faltan datos')); await tester.pump();
     expect(find.text('✓ Tu elección'), findsOneWidget);
-    await tester.ensureVisible(find.text('+ Nota de contexto (0)'));
-    await tester.tap(find.text('+ Nota de contexto (0)')); await tester.pump();
+    await tester.ensureVisible(find.text('📝 Contexto (0)'));
+    await tester.tap(find.text('📝 Contexto (0)')); await tester.pump();
     expect(find.textContaining('TU APORTE LOCAL'), findsOneWidget);
     expect(find.text('+ Aportar enlace o documento verificable'), findsOneWidget);
   });

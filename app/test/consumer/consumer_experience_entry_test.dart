@@ -203,14 +203,14 @@ void main() {
       expect(find.text('Administración'), findsNothing);
       expect(find.byTooltip('Más opciones'), findsOneWidget);
 
-      await _tap(tester, find.text('Síntesis'));
+      await _tap(tester, find.text('Contradicciones'));
       expect(
         find.text('No hay acontecimientos en este filtro.'),
         findsOneWidget,
       );
       await _tap(tester, find.text('Actualidad'));
       expect(liveRepository.pendingSourceLoads, hasLength(1));
-      await _tap(tester, find.text('Síntesis'));
+      await _tap(tester, find.text('Contradicciones'));
       await _tapAndResolveSources(tester, liveRepository);
       await _tap(tester, find.text('Espejo'));
       expect(find.textContaining('Elige al menos 2 medios'), findsOneWidget);

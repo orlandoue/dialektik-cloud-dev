@@ -269,7 +269,8 @@ void main() {
             for (final String label in <String>[
               'Actualidad',
               'Espejo',
-              'Síntesis',
+              'Contradicciones',
+              'Desarrollo',
               'Fuentes',
             ])
               ConsumerNavigationAction(
@@ -291,11 +292,14 @@ void main() {
     final Finder moreEntry = find.text('Más');
     await tester.ensureVisible(moreEntry);
     await tester.pumpAndSettle();
-    final tabs = ['Actualidad','Espejo','Síntesis','Fuentes'].map((label)=>tester.getRect(find.text(label))).toList();
+    final tabs = ['Actualidad','Espejo','Contradicciones','Desarrollo','Fuentes'].map((label)=>tester.getRect(find.text(label))).toList();
     for (final tab in tabs) {
       expect(tab.center.dy, closeTo(tabs.first.center.dy, 0.5));
     }
-    expect(tabs.last.right, lessThanOrEqualTo(390));
+    expect(tabs.last.right, greaterThan(tabs.first.right));
+    await tester.ensureVisible(find.text('Fuentes'));
+    await tester.pumpAndSettle();
+    expect(tester.getRect(find.text('Fuentes')).right, lessThanOrEqualTo(390));
     await tester.tap(moreEntry);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Administración'));
