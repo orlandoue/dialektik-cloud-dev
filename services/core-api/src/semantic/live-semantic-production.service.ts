@@ -356,6 +356,7 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
           limit,
           configSha,
           articleIds,
+          new LiveSemanticCallBudget(25),
         );
       } finally {
         await sql`select pg_advisory_unlock(hashtextextended(${leaseName},0))`.execute(
@@ -518,6 +519,8 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
       `.execute(connection);
       return {
         status: "COMPLETED_FOR_EDITORIAL_REVIEW",
+        modelCalls: budget?.used ?? null,
+        providerHalted: budget?.providerHalted ?? false,
         runId,
         targetDay,
         attempted: pending.rows.length,
