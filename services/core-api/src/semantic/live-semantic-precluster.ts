@@ -37,6 +37,7 @@ const STOP_WORDS = new Set([
   "controversy", "controversia", "tour", "gira", "viaje", "government",
   "party", "partido", "critica", "critican", "criticó", "criticized", "criticizes",
   "criticize", "criticism", "actions", "acción", "acciones", "becomes",
+  "lleg", "llego", "llega", "hora", "noticias", "programa", "radio", "television",
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
   "uno", "una", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho",
   "nueve", "diez",
@@ -65,6 +66,41 @@ function namedTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {
     if (!STOP_WORDS.has(token)) tokens.add(token);
   }
   return tokens;
+}
+
+/** Shared names are used for queue diversity, not as proof of the same event. */
+export function sharedSemanticEntities(pair: SemanticCandidatePair): readonly string[] {
+  const right = namedTokens(pair.right);
+  return [...namedTokens(pair.left)].filter(token => token.length >= 3 && right.has(token)).sort();
+}
+
+/** Count already-published event titles mentioning any entity in this pair. */
+export function publishedEntityCount(pair: SemanticCandidatePair, publishedTitles: readonly string[]): number {
+  const entities = new Set(sharedSemanticEntities(pair));
+  return publishedTitles.filter(title => (normalized(title).match(/[a-z0-9]+/gu) ?? []).some(token => entities.has(token))).length;
+}
+
+/** Prefer distinct named entities in the first pass; retain the supplied rank within each pass. */
+export function diversifySemanticPairs(pairs: readonly SemanticCandidatePair[], maxArticles: number): readonly SemanticCandidatePair[] {
+  const selected: SemanticCandidatePair[] = [];
+  const selectedIds = new Set<string>();
+  const selectedEntities = new Set<string>();
+  const add = (pair: SemanticCandidatePair) => {
+    const ids = [pair.left.articleId, pair.right.articleId];
+    if (new Set([...selectedIds, ...ids]).size > maxArticles || ids.some(id => selectedIds.has(id))) return false;
+    selected.push(pair);
+    ids.forEach(id => selectedIds.add(id));
+    sharedSemanticEntities(pair).forEach(entity => selectedEntities.add(entity));
+    return true;
+  };
+  for (const pair of pairs) {
+    const entities = sharedSemanticEntities(pair);
+    if (entities.length === 0 || entities.some(entity => selectedEntities.has(entity))) continue;
+    add(pair);
+  }
+  // If diversity cannot fill the batch, return to the highest ranked remaining pairs.
+  for (const pair of pairs) add(pair);
+  return selected;
 }
 
 function incidentTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {

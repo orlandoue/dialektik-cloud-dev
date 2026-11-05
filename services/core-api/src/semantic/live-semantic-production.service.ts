@@ -28,6 +28,8 @@ import { parseLegacyContradictionReview, parseSemanticPromotionDecision, parseSe
 import {
   canAddSemanticPairToClique,
   canJoinSemanticEventGroup,
+  diversifySemanticPairs,
+  publishedEntityCount,
   preclusterLiveSemanticArticles,
 } from "./live-semantic-precluster.js";
 import {
@@ -281,29 +283,31 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
         const recent=await sql<{present:boolean}>`select exists(select 1 from public.live_semantic_production_runs where started_at>clock_timestamp()-interval '4 hours') as present`.execute(connection);
         if(!manual && recent.rows[0]?.present===true) return 'RECENT_SEMANTIC_RUN';
         const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean}>`
+          select * from (
           select i.article_id as "articleId",i.source_id as "sourceId",i.published_at as "publishedAt",i.headline,i.excerpt,
+            row_number() over(partition by (i.published_at at time zone 'America/Santiago')::date order by i.published_at desc,i.article_id desc) as daily_rank,
             not exists(select 1 from public.live_semantic_article_attempts a where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256 and a.config_sha256=${configSha})
             and not exists(select 1 from public.assertion_extraction_generations g where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256 and g.provider_id=${PROVIDER} and g.model_id=${MODEL} and g.config_version=${configSha} and g.state='active') as "needsExtraction"
           from public.live_semantic_excerpt_inputs i
           where (published_at at time zone 'America/Santiago')::date>=${targetDay}::date
             and (published_at at time zone 'America/Santiago')::date<${targetDay}::date+2
-          order by published_at desc,article_id desc limit 400`.execute(connection);
+            and i.event_id is null
+          ) ranked where daily_rank<=300 order by "publishedAt" desc,"articleId" desc`.execute(connection);
         const proposals=candidates.rows.map(a=>({...a,eventKey:'',eventTitle:a.headline,eventSummary:''}));
         const pendingIds=new Set(candidates.rows.filter(a=>a.needsExtraction).map(a=>a.articleId));
         const excerpts=new Map(candidates.rows.map(a=>[a.articleId,a.excerpt]));
-        const pairs=[...preclusterLiveSemanticArticles(proposals,targetDay)].sort((a,b)=>
-          controversyScore(b.left.headline,excerpts.get(b.left.articleId) ?? '',b.right.headline,excerpts.get(b.right.articleId) ?? '') -
-            controversyScore(a.left.headline,excerpts.get(a.left.articleId) ?? '',a.right.headline,excerpts.get(a.right.articleId) ?? '') ||
-          Math.max(b.left.publishedAt.getTime(),b.right.publishedAt.getTime())-Math.max(a.left.publishedAt.getTime(),a.right.publishedAt.getTime()));
-        const selected=new Set<string>();
-        for(const pair of pairs) {
-          if(!pendingIds.has(pair.left.articleId) && !pendingIds.has(pair.right.articleId)) continue;
-          if(!hasSpecificHeadlineOverlap(pair.left.headline,pair.right.headline)) continue;
-          const ids=[pair.left.articleId,pair.right.articleId];
-          if(new Set([...selected,...ids]).size>4) continue;
-          for(const id of ids) selected.add(id);
-          if(selected.size===4) break;
-        }
+        const published=await sql<{title:string}>`select title_descriptive as title from public.events
+          where analysis_state='PUBLISHED' and origin='LIVE_REAL' and merged_into is null
+          order by detected_at desc limit 150`.execute(connection);
+        const publishedTitles=published.rows.map(row=>row.title);
+        const pairs=preclusterLiveSemanticArticles(proposals,targetDay).filter(pair =>
+          (pendingIds.has(pair.left.articleId) || pendingIds.has(pair.right.articleId)) &&
+          hasSpecificHeadlineOverlap(pair.left.headline,pair.right.headline)).map(pair=>({pair,
+            coverage:publishedEntityCount(pair,publishedTitles),
+            tension:controversyScore(pair.left.headline,excerpts.get(pair.left.articleId) ?? '',pair.right.headline,excerpts.get(pair.right.articleId) ?? ''),
+            newest:Math.max(pair.left.publishedAt.getTime(),pair.right.publishedAt.getTime()),
+          })).sort((a,b)=>a.coverage-b.coverage || b.tension-a.tension || b.newest-a.newest).map(item=>item.pair);
+        const selected=new Set(diversifySemanticPairs(pairs,4).flatMap(pair=>[pair.left.articleId,pair.right.articleId]));
         if(selected.size<2) return 'NO_PENDING_MULTISOURCE_PAIRS';
         const budget=new LiveSemanticCallBudget(25);
         const result=await this.runLocked(connection,actor,targetDay,selected.size,configSha,[...selected],budget);
@@ -408,6 +412,7 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
         extractionSchema: LIVE_CLAIM_EXTRACTION_SCHEMA,
         pairPrompt: LIVE_PAIR_ASSESSMENT_PROMPT,
         pairSchema: LIVE_PAIR_ASSESSMENT_SCHEMA,
+        stancePrompt: LIVE_STANCE_PAIR_PROMPT,
         grounding: "exact-unicode-codepoint-span-multiple-claims-v2",
         publication: "single-editor-multiposition-conflict-promotion-v2",
         precluster: "named-entity-incident-signature-complete-link-48h-v3",

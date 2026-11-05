@@ -135,4 +135,8 @@ describe("live semantic production grounding", () => {
   it("binds the stance prompt to its declared version fingerprint", () => {
     expect(createHash("sha256").update(LIVE_STANCE_PAIR_PROMPT).digest("hex")).toBe(LIVE_STANCE_PAIR_PROMPT_SHA256);
   });
+  it("allows different relevant angles of the same controversy without requiring negation", () => {
+    expect(LIVE_STANCE_PAIR_PROMPT).toContain('Different relevant angles of the same controversy are comparable');
+    expect(LIVE_STANCE_PAIR_PROMPT).toContain('DIVERGENT, not CONTRADICTORY');
+  });
 });
