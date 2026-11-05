@@ -279,15 +279,20 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
         const proposals=candidates.rows.map(a=>({...a,eventKey:'',eventTitle:a.headline,eventSummary:''}));
         const pendingIds=new Set(candidates.rows.filter(a=>a.needsExtraction).map(a=>a.articleId));
         const pairs=[...preclusterLiveSemanticArticles(proposals,targetDay)].sort((a,b)=>Math.max(b.left.publishedAt.getTime(),b.right.publishedAt.getTime())-Math.max(a.left.publishedAt.getTime(),a.right.publishedAt.getTime()));
+        const selected=new Set<string>();
         for(const pair of pairs) {
           if(!pendingIds.has(pair.left.articleId) && !pendingIds.has(pair.right.articleId)) continue;
           if(!hasSpecificHeadlineOverlap(pair.left.headline,pair.right.headline)) continue;
           const ids=[pair.left.articleId,pair.right.articleId];
-          const budget=new LiveSemanticCallBudget(25);
-          const result=await this.runLocked(connection,actor,targetDay,2,configSha,ids,budget);
-          if(result.status !== 'NO_PENDING_ARTICLES') { this.logger.log(`Semantic scheduled model calls: ${budget.used}/25`); return result.status; }
+          if(new Set([...selected,...ids]).size>4) continue;
+          for(const id of ids) selected.add(id);
+          if(selected.size===4) break;
         }
-        return 'NO_PENDING_MULTISOURCE_PAIRS';
+        if(selected.size<2) return 'NO_PENDING_MULTISOURCE_PAIRS';
+        const budget=new LiveSemanticCallBudget(25);
+        const result=await this.runLocked(connection,actor,targetDay,selected.size,configSha,[...selected],budget);
+        this.logger.log(`Semantic scheduled model calls: ${budget.used}/25`);
+        return result.status;
       } finally {await sql`select pg_advisory_unlock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0))`.execute(connection);}
       } finally {await sql`select pg_advisory_unlock(hashtextextended('dialektik-live-semantic-automation',0))`.execute(connection);}
     });
