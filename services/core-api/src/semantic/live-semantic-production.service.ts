@@ -314,6 +314,8 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
   }
 
   private async autoPromoteRun(connection: Kysely<Database>, runId: string, actor: string, configSha: string): Promise<number> {
+    // Disabled by default after a production run classified complementary quotes as conflict.
+    if (process.env.DIALEKTIK_LIVE_SEMANTIC_AUTOPROMOTE_ENABLED !== 'true') return 0;
     if (!/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(actor)) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
     type Candidate = {
       groupId:string; title:string; pairId:string; relation:string; sameEvent:boolean;
