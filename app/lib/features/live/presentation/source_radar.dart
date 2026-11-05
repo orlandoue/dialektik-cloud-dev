@@ -2,9 +2,9 @@ import 'dart:async';
 
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/source_sync_repository.dart';
-import 'package:dialektik/features/live/presentation/source_sync_sheet.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/presentation/source_sync_sheet.dart';
 import 'package:flutter/material.dart';
 
 /// A shared source selector for the welcome sheet and Sources tab.
