@@ -13,6 +13,7 @@ import { generateUlid, setTransactionAuditContext } from "@dialektik/database";
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@dialektik/database";
 import { LiveSemanticCallBudget } from "./live-semantic-call-budget.js";
+import { hasSpecificHeadlineOverlap } from "./live-semantic-scheduler-prefilter.js";
 import { CloudflareWorkersAITransport } from "../llm-shadow/llm.cloudflare.js";
 import {
   CLOUDFLARE_JSON_MODE_MODEL,
@@ -280,6 +281,7 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
         const pairs=[...preclusterLiveSemanticArticles(proposals,targetDay)].sort((a,b)=>Math.max(b.left.publishedAt.getTime(),b.right.publishedAt.getTime())-Math.max(a.left.publishedAt.getTime(),a.right.publishedAt.getTime()));
         for(const pair of pairs) {
           if(!pendingIds.has(pair.left.articleId) && !pendingIds.has(pair.right.articleId)) continue;
+          if(!hasSpecificHeadlineOverlap(pair.left.headline,pair.right.headline)) continue;
           const ids=[pair.left.articleId,pair.right.articleId];
           const budget=new LiveSemanticCallBudget(25);
           const result=await this.runLocked(connection,actor,targetDay,2,configSha,ids,budget);
