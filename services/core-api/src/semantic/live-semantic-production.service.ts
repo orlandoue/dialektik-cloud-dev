@@ -5,10 +5,14 @@ import {
   Injectable,
   NotFoundException,
   ServiceUnavailableException,
+  Logger,
+  type OnModuleInit,
+  type OnModuleDestroy,
 } from "@nestjs/common";
 import { generateUlid, setTransactionAuditContext } from "@dialektik/database";
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@dialektik/database";
+import { LiveSemanticCallBudget } from "./live-semantic-call-budget.js";
 import { CloudflareWorkersAITransport } from "../llm-shadow/llm.cloudflare.js";
 import {
   CLOUDFLARE_JSON_MODE_MODEL,
@@ -217,7 +221,11 @@ function normalizedEventKey(value: string): string {
 }
 
 @Injectable()
-export class LiveSemanticProductionService {
+export class LiveSemanticProductionService implements OnModuleInit, OnModuleDestroy {
+  private scheduler: ReturnType<typeof setInterval> | undefined;
+  private startup: ReturnType<typeof setTimeout> | undefined;
+  private schedulerBusy = false;
+  private readonly logger = new Logger(LiveSemanticProductionService.name);
   constructor(
     @Inject(HeadlineReviewService)
     private readonly reviews: HeadlineReviewService,
@@ -226,6 +234,55 @@ export class LiveSemanticProductionService {
     @Inject(ModerationDatabaseService)
     private readonly moderationWriter: ModerationDatabaseService,
   ) {}
+
+  onModuleInit(): void {
+    if(process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED !== 'true') return;
+    this.startup=setTimeout(()=>void this.runScheduledSafely(),30_000); this.startup.unref();
+    this.scheduler=setInterval(()=>void this.runScheduledSafely(),4*60*60*1000); this.scheduler.unref();
+  }
+  onModuleDestroy(): void { if(this.startup) clearTimeout(this.startup); if(this.scheduler) clearInterval(this.scheduler); }
+  private async runScheduledSafely(): Promise<void> {
+    if(this.schedulerBusy) return;
+    this.schedulerBusy=true;
+    try { const result=await this.runScheduled(); this.logger.log(`Semantic scheduled run: ${result}`); }
+    catch(error) { this.logger.warn(`Semantic scheduled run failed: ${error instanceof Error ? error.name : 'unknown'}`); }
+    finally { this.schedulerBusy=false; }
+  }
+  async runScheduled(): Promise<string> {
+    this.ensureEnabled();
+    const actor=process.env.DIALEKTIK_SEMANTIC_AUTOMATION_ACTOR_ID ?? '';
+    if(!/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(actor)) throw new Error('SEMANTIC_AUTOMATION_ACTOR_REQUIRED');
+    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    const date=new Date(`${today}T00:00:00.000Z`); date.setUTCDate(date.getUTCDate()-1);
+    const targetDay=date.toISOString().slice(0,10); const configSha=this.configSha256();
+    return this.writer.database.connection().execute(async connection=>{
+      const locked=await sql<{locked:boolean}>`select pg_try_advisory_lock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0)) as locked`.execute(connection);
+      if(locked.rows[0]?.locked!==true) return 'ALREADY_RUNNING';
+      try {
+        const editor=await sql<{allowed:boolean}>`select exists(select 1 from public.users u join public.editorial_single_editor_authorizations a on a.editor_user_id=u.id where u.id=${actor}::dialektik_ulid and u.role='editor' and a.revoked_at is null) as allowed`.execute(connection);
+        if(editor.rows[0]?.allowed!==true) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
+        const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean}>`
+          select i.article_id as "articleId",i.source_id as "sourceId",i.published_at as "publishedAt",i.headline,i.excerpt,
+            not exists(select 1 from public.live_semantic_article_attempts a where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256 and a.config_sha256=${configSha})
+            and not exists(select 1 from public.assertion_extraction_generations g where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256 and g.provider_id=${PROVIDER} and g.model_id=${MODEL} and g.config_version=${configSha} and g.state='active') as "needsExtraction"
+          from public.live_semantic_excerpt_inputs i
+          where (published_at at time zone 'America/Santiago')::date>=${targetDay}::date
+            and (published_at at time zone 'America/Santiago')::date<${targetDay}::date+2
+          order by published_at desc,article_id desc limit 400`.execute(connection);
+        const proposals=candidates.rows.map(a=>({...a,eventKey:'',eventTitle:a.headline,eventSummary:''}));
+        const pendingIds=new Set(candidates.rows.filter(a=>a.needsExtraction).map(a=>a.articleId));
+        const pairs=[...preclusterLiveSemanticArticles(proposals,targetDay)].sort((a,b)=>Math.max(b.left.publishedAt.getTime(),b.right.publishedAt.getTime())-Math.max(a.left.publishedAt.getTime(),a.right.publishedAt.getTime()));
+        for(const pair of pairs) {
+          if(!pendingIds.has(pair.left.articleId) && !pendingIds.has(pair.right.articleId)) continue;
+          const ids=[pair.left.articleId,pair.right.articleId];
+          const budget=new LiveSemanticCallBudget(25);
+          const result=await this.runLocked(connection,actor,targetDay,2,configSha,ids,budget);
+          if(result.status !== 'NO_PENDING_ARTICLES') { this.logger.log(`Semantic scheduled model calls: ${budget.used}/25`); return result.status; }
+        }
+        return 'NO_PENDING_MULTISOURCE_PAIRS';
+      } finally {await sql`select pg_advisory_unlock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0))`.execute(connection);}
+    });
+  }
 
   private ensureEnabled(): void {
     if (process.env.DIALEKTIK_LIVE_SEMANTIC_PRODUCTION_ENABLED !== "true")
@@ -301,6 +358,7 @@ export class LiveSemanticProductionService {
     limit: number,
     configSha: string,
     articleIds: string[],
+    budget?: LiveSemanticCallBudget,
   ) {
     const pending = await sql<LiveExcerptInput>`
       select i.article_id as "articleId",i.source_id as "sourceId",i.event_id as "eventId",
@@ -346,19 +404,19 @@ export class LiveSemanticProductionService {
     try {
       extractionTransport = new CloudflareWorkersAITransport(
         profile,
-        undefined,
+        budget?.request,
         process.env,
         LIVE_CLAIM_EXTRACTION_PROMPT,
       );
       pairTransport = new CloudflareWorkersAITransport(
         profile,
-        undefined,
+        budget?.request,
         process.env,
         LIVE_PAIR_ASSESSMENT_PROMPT,
       );
       stanceTransport = new CloudflareWorkersAITransport(
         profile,
-        undefined,
+        budget?.request,
         process.env,
         LIVE_STANCE_PAIR_PROMPT,
       );
@@ -387,6 +445,7 @@ export class LiveSemanticProductionService {
     let pairAssessmentCount = 0;
     try {
       for (const input of pending.rows) {
+        if(budget && !budget.available) break;
         const outcome = await this.analyzeArticle(
           connection,
           runId,
@@ -406,6 +465,7 @@ export class LiveSemanticProductionService {
         configSha,
         stanceTransport,
         articleIds,
+        budget,
       );
       const claimPairAssessment = await this.assessGroupClaims(
         connection,
@@ -414,9 +474,10 @@ export class LiveSemanticProductionService {
         configSha,
         pairTransport,
         articleIds,
+        budget,
       );
       const stanceAssessment = await this.reassessClaimPairs(
-        connection, runId, requestedBy, targetDay, configSha, stanceTransport, articleIds,
+        connection, runId, requestedBy, targetDay, configSha, stanceTransport, articleIds, budget,
       );
       const processed = outcomes.filter((item) =>
         ["VALIDATED", "NO_CLAIM_WORTHY_CONTENT"].includes(item.outcome),
@@ -685,6 +746,7 @@ export class LiveSemanticProductionService {
     configSha: string,
     transport: CloudflareWorkersAITransport,
     articleIds: string[] | null = [],
+    budget?: LiveSemanticCallBudget,
   ): Promise<number> {
     articleIds ??= [];
     const result = await sql<ProposalRow>`
@@ -721,6 +783,7 @@ export class LiveSemanticProductionService {
     const caseConfig = caseConfigSha256(configSha);
     let assessments = 0;
     for (const pair of pairs) {
+      if(budget && !budget.available) break;
       if (articleIds.length > 0 && !articleIds.includes(pair.left.articleId) && !articleIds.includes(pair.right.articleId)) continue;
       if (assessments >= MAX_CASE_PAIR_ASSESSMENTS) break;
       const left = proposalById.get(pair.left.articleId);
@@ -870,6 +933,7 @@ export class LiveSemanticProductionService {
     configSha: string,
     transport: CloudflareWorkersAITransport,
     articleIds: string[],
+    budget?: LiveSemanticCallBudget,
   ): Promise<{ count: number; limitReached: boolean }> {
     const rows = await sql<ClaimPairRow & { groupId: string }>`
       select group_row.id::text as "groupId",member.article_id::text as "articleId",
@@ -909,7 +973,7 @@ export class LiveSemanticProductionService {
         for (let rightIndex = leftIndex + 1; rightIndex < claims.length; rightIndex += 1) {
           const left = claims[leftIndex]!;
           const right = claims[rightIndex]!;
-          if (attempted >= MAX_ORIGINAL_CLAIM_PAIR_ASSESSMENTS)
+          if ((budget && !budget.available) || attempted >= MAX_ORIGINAL_CLAIM_PAIR_ASSESSMENTS)
             return { count, limitReached: true };
           const exists = await sql<{ present: boolean }>`select exists(
             select 1 from public.live_semantic_claim_pair_assessments
@@ -983,6 +1047,7 @@ export class LiveSemanticProductionService {
   private async reassessClaimPairs(
     connection: Kysely<Database>, runId: string, requestedBy: string, targetDay: string,
     configSha: string, transport: CloudflareWorkersAITransport, articleIds: string[] | null = [],
+    budget?: LiveSemanticCallBudget,
   ): Promise<{ attempted: number; validated: number; invalid: number; unavailable: number }> {
     articleIds ??= [];
     type Input = {
@@ -1022,6 +1087,7 @@ export class LiveSemanticProductionService {
       order by old.created_at,old.id`.execute(connection);
     const totals = { attempted: 0, validated: 0, invalid: 0, unavailable: 0 };
     for (const row of rows.rows) {
+      if(budget && !budget.available) break;
       const attemptId = generateUlid({ now: Date.now });
       const attempt = await sql<{ id: string }>`insert into public.live_semantic_stance_pair_attempts
         (id,original_pair_id,run_id,config_sha256,requested_by,requested_at)

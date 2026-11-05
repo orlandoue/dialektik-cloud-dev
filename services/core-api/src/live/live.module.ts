@@ -10,6 +10,7 @@ import { LiveApplicationService } from './live.service.js';
 import { assertLiveDatabase } from './live.sync.js';
 import { CorporateLiveAcquisitionService } from './corporate-live-acquisition.service.js';
 import { CorporateLiveAcquisitionController } from './corporate-live-acquisition.controller.js';
+import { YoutubeSubscriptionsSyncController } from './youtube-subscriptions-sync.controller.js';
 import { CorporateLiveAcquisitionDatabaseService } from './corporate-live-acquisition-database.service.js';
 import { FollowedSourcesService } from '../public-api/followed-sources.service.js';
 
@@ -45,7 +46,7 @@ export class LiveModule {
         imports: [PrivateBetaAuthModule],
         controllers: [
           PrivateBetaLiveController,
-          ...(config.ownershipMode === 'corporate' ? [CorporateLiveAcquisitionController] : []),
+          ...(config.ownershipMode === 'corporate' ? [CorporateLiveAcquisitionController, YoutubeSubscriptionsSyncController] : []),
         ],
         providers: [...providers, FollowedSourcesService, ...corporateAcquisitionProviders],
       };
