@@ -1,5 +1,6 @@
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/screens/synthesis_screen.dart';
+import 'package:dialektik/features/consumer/presentation/widgets/consumer_navigation_action.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -25,10 +26,12 @@ void main() {
     Uri? opened;
     Widget app(EventCardDto card, bool development) {
       final repo=FakeConsumerRepository(event:detail,feedPages:[PublicPage<EventCardDto>(items:[card],nextCursor:null)]);
-      return MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(390,844),textScaler:TextScaler.linear(1.45)),child:SynthesisScreen(repository:repo,onOpenEvent:(_){},development:development,externalLinkOpener:(uri) async {opened=uri;return true;})));
+      return MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(390,844),textScaler:TextScaler.linear(1.45)),child:SynthesisScreen(repository:repo,onOpenEvent:(_){},development:development,navigationActions:[for(final label in ['Actualidad','Espejo','Contradicciones','Desarrollo','Fuentes']) ConsumerNavigationAction(label:label,selected:false,onPressed:(){})],externalLinkOpener:(uri) async {opened=uri;return true;})));
     }
     await tester.pumpWidget(app(contrast,false)); await tester.pumpAndSettle();
     expect(find.text('Termómetro de evidencia'),findsOneWidget);
+    await tester.ensureVisible(find.text('Fuentes')); await tester.pumpAndSettle();
+    expect(tester.getRect(find.text('Fuentes')).right,lessThanOrEqualTo(390));
     expect(find.text('“[...] segunda cita”'),findsOneWidget);
     expect(tester.takeException(),isNull);
     await tester.pumpWidget(const SizedBox.shrink());
