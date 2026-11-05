@@ -4,6 +4,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { liveSemanticEditorialDecisionsDdl } from '../../../packages/database/dist/migration/075_live_semantic_editorial_decisions.js';
 import { liveStanceReassessmentDdl } from '../../../packages/database/dist/migration/076_live_stance_reassessment.js';
 import { liveSemanticEventAttachmentDdl } from '../../../packages/database/dist/migration/077_live_semantic_event_attachment.js';
+import { automaticFocusContrastsDdl } from '../../../packages/database/dist/migration/082_automatic_focus_contrasts.js';
 
 const id = (n) => `01M4YDQK00EVART${String(n).padStart(11, '0')}`;
 const editor = id(1), group = id(2), rejectedGroup = id(3), noDecisionGroup = id(4);
@@ -109,6 +110,7 @@ test('editorial decisions require an editor and an explicit current claim select
     await db.exec(liveStanceReassessmentDdl.schema);
     await db.exec(liveStanceReassessmentDdl.decision);
     await db.exec(liveStanceReassessmentDdl.promotion);
+    await db.exec(automaticFocusContrastsDdl);
     await db.exec(liveSemanticEventAttachmentDdl);
     await db.query(`insert into live_semantic_event_group_members values($1,$2,$4,$6),($1,$3,$5,$7)`,
       [noDecisionGroup, articleA, articleB, sourceA, sourceB, generationA, generationB]);

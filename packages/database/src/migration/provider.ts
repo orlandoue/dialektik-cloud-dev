@@ -77,6 +77,7 @@ import { liveSemanticEditorialDecisionsMigration } from './075_live_semantic_edi
 import { liveStanceReassessmentMigration } from './076_live_stance_reassessment';
 import { liveSemanticEventAttachmentMigration } from './077_live_semantic_event_attachment';
 import { editorialFocusContrastsMigration } from './078_editorial_focus_contrasts';
+import { automaticFocusContrastsMigration } from './082_automatic_focus_contrasts';
 import { youtubeVerifiedChannelIdsMigration } from './079_youtube_verified_channel_ids';
 import { userFollowedSourcesMigration } from './080_user_followed_sources';
 
@@ -139,6 +140,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '079_youtube_verified_channel_ids': youtubeVerifiedChannelIdsMigration,
   '080_user_followed_sources': userFollowedSourcesMigration,
   '081_synthesis_relation': synthesisRelationMigration,
+  '082_automatic_focus_contrasts': automaticFocusContrastsMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,
