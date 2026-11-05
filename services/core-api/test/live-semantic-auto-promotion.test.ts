@@ -27,15 +27,7 @@ const candidate = {
 };
 
 describe('automatic selection and canonical promotion integration', () => {
-  it('does not promote unless the explicit runtime flag is enabled', async () => {
-    vi.stubEnv('DIALEKTIK_LIVE_SEMANTIC_AUTOPROMOTE_ENABLED','false');
-    const service=new LiveSemanticProductionService({} as never, {} as never, {} as never);
-    const run=(service as unknown as {autoPromoteRun:(...args:unknown[])=>Promise<number>}).autoPromoteRun.bind(service);
-    expect(await run({},'run','actor','config')).toBe(0);
-    vi.unstubAllEnvs();
-  });
   it('passes the selected Hermosilla claims to the canonical transaction and reports refusals', async () => {
-    vi.stubEnv('DIALEKTIK_LIVE_SEMANTIC_AUTOPROMOTE_ENABLED','true');
     const operations:string[]=[]; let promotionStatus='PROMOTED';
     const connection={executeSql:async () => ({rows:[candidate]})};
     const transaction={executeSql:async (query:string) => {
@@ -51,6 +43,5 @@ describe('automatic selection and canonical promotion integration', () => {
     operations.length=0; promotionStatus='NEEDS_EDITORIAL_REVIEW';
     expect(await run(connection,'01M6PDQH3WBGJ4ZNWZV38F2B3J','01M4YDQK00ED1T0R0R1AND0VE1','config')).toBe(0);
     expect(operations).toEqual(['decision','promote']);
-    vi.unstubAllEnvs();
   });
 });

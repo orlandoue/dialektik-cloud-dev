@@ -250,18 +250,24 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
     catch(error) { this.logger.warn(`Semantic scheduled run failed: ${error instanceof Error ? error.name : 'unknown'}`); }
     finally { this.schedulerBusy=false; }
   }
-  async runAutomatic(authorization: string | undefined): Promise<{status:string}> {
+  async runAutomatic(authorization: string | undefined, body: unknown): Promise<{status:string}> {
     this.ensureEnabled();
     await this.reviews.authorizeEditor(authorization);
-    return {status:await this.runScheduled()};
+    let targetDay: string | undefined;
+    if (body !== undefined && body !== null && (typeof body !== 'object' || Array.isArray(body)))
+      throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
+    const request = (body ?? {}) as Record<string,unknown>;
+    if (Object.keys(request).some(key => key !== 'targetDay')) throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
+    if (request.targetDay !== undefined) targetDay = parseSemanticBatchBody({targetDay:request.targetDay}).targetDay;
+    return {status:await this.runScheduled(true,targetDay)};
   }
-  async runScheduled(): Promise<string> {
+  async runScheduled(manual = false, targetDayOverride?: string): Promise<string> {
     this.ensureEnabled();
     const actor=process.env.DIALEKTIK_SEMANTIC_AUTOMATION_ACTOR_ID ?? '';
     if(!/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(actor)) throw new Error('SEMANTIC_AUTOMATION_ACTOR_REQUIRED');
     const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
     const date=new Date(`${today}T00:00:00.000Z`); date.setUTCDate(date.getUTCDate()-1);
-    const targetDay=date.toISOString().slice(0,10); const configSha=this.configSha256();
+    const targetDay=targetDayOverride ?? date.toISOString().slice(0,10); const configSha=this.configSha256();
     return this.writer.database.connection().execute(async connection=>{
       const global=await sql<{locked:boolean}>`select pg_try_advisory_lock(hashtextextended('dialektik-live-semantic-automation',0)) as locked`.execute(connection);
       if(global.rows[0]?.locked!==true) return 'ALREADY_RUNNING';
@@ -273,7 +279,7 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
         if(editor.rows[0]?.allowed!==true) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
         // Render may restart or wake repeatedly: do not spend the budget again within four hours.
         const recent=await sql<{present:boolean}>`select exists(select 1 from public.live_semantic_production_runs where started_at>clock_timestamp()-interval '4 hours') as present`.execute(connection);
-        if(recent.rows[0]?.present===true) return 'RECENT_SEMANTIC_RUN';
+        if(!manual && recent.rows[0]?.present===true) return 'RECENT_SEMANTIC_RUN';
         const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean}>`
           select i.article_id as "articleId",i.source_id as "sourceId",i.published_at as "publishedAt",i.headline,i.excerpt,
             not exists(select 1 from public.live_semantic_article_attempts a where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256 and a.config_sha256=${configSha})
@@ -314,8 +320,6 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
   }
 
   private async autoPromoteRun(connection: Kysely<Database>, runId: string, actor: string, configSha: string): Promise<number> {
-    // Disabled by default after a production run classified complementary quotes as conflict.
-    if (process.env.DIALEKTIK_LIVE_SEMANTIC_AUTOPROMOTE_ENABLED !== 'true') return 0;
     if (!/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(actor)) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
     type Candidate = {
       groupId:string; title:string; pairId:string; relation:string; sameEvent:boolean;
