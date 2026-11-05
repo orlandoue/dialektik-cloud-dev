@@ -5,6 +5,7 @@ import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/source_sync_repository.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/presentation/live_news_screens.dart';
@@ -15,11 +16,13 @@ import 'package:flutter_test/flutter_test.dart';
 import '../live/live_fixtures.dart';
 import '../support/public_api_fixtures.dart';
 
-final class _FollowingLiveRepository extends Fake implements LiveNewsRepository, FollowingRepository {
+final class _FollowingLiveRepository extends Fake implements LiveNewsRepository, FollowingRepository, SourceSyncRepository {
   _FollowingLiveRepository({this.items});
   final List<LiveSourceDto>? items;
   final ValueNotifier<int> changes = ValueNotifier<int>(0);
   final Set<String> ids = <String>{};
+  Set<String> youtubeMatches={};
+  @override Future<YouTubeSourceMatches> lookupPublicYouTubeSubscriptions(String channel) async => YouTubeSourceMatches(sourceIds:youtubeMatches,truncated:false);
   @override bool get followingAvailable => true;
   @override Listenable get followingChanges => changes;
   @override Future<Set<String>> listFollowedSources() async => Set<String>.of(ids);
@@ -57,6 +60,8 @@ void main() {
     )));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
+    await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-250));
+    await tester.pumpAndSettle();
     expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
     expect(find.text('Canal de prueba'), findsOneWidget);
     await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-350));
@@ -118,6 +123,7 @@ void main() {
     addTearDown(repo.changes.dispose);
     await tester.pumpWidget(MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(390,844),textScaler:TextScaler.linear(1.45)),child:Scaffold(body:SourceRadar(repository:repo,onContinue:(){})))));
     await tester.pumpAndSettle();
+    await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-240)); await tester.pumpAndSettle();
     final group=find.byKey(const ValueKey('radar-group-1'));
     await tester.ensureVisible(group); await tester.pumpAndSettle();
     expect(find.descendant(of:group,matching:find.text('CIPER Chile')),findsOneWidget);
@@ -127,6 +133,26 @@ void main() {
     await tester.tap(find.descendant(of:group,matching:find.text('✓ Siguiendo'))); await tester.pumpAndSettle();
     expect(repo.ids,isEmpty);
     expect(tester.takeException(),isNull);
+  });
+  testWidgets('importa cuentas de X escritas sin consultar una cuenta privada', (tester) async {
+    final repo=_FollowingLiveRepository(items:[LiveSourceDto.fromJson({...liveTestSource(),'id':'01K6MYH0000000000000000011','name':'CIPER Chile'})]);
+    addTearDown(repo.changes.dispose);
+    await tester.pumpWidget(MaterialApp(home:Scaffold(body:SourceRadar(repository:repo,onContinue:(){})))); await tester.pumpAndSettle();
+    await tester.tap(find.text('Sincronizar mis fuentes con YouTube o X')); await tester.pumpAndSettle();
+    await tester.tap(find.text('Sincronizar con X')); await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last,'@ciper');
+    await tester.tap(find.text('Buscar y seguir coincidencias')); await tester.pumpAndSettle();
+    expect(repo.ids,{'01K6MYH0000000000000000011'});
+  });
+  testWidgets('importa coincidencias públicas de YouTube', (tester) async {
+    final repo=_FollowingLiveRepository(items:[LiveSourceDto.fromJson({...liveTestSource(),'id':'01K6MYH0000000000000000011','name':'BioBioChile TV (YouTube)'}),LiveSourceDto.fromJson({...liveTestSource(),'id':'01K6MYH0000000000000000012','name':'BioBioChile'})]);
+    repo.youtubeMatches={'01K6MYH0000000000000000011'}; addTearDown(repo.changes.dispose);
+    await tester.pumpWidget(MaterialApp(home:Scaffold(body:SourceRadar(repository:repo,onContinue:(){})))); await tester.pumpAndSettle();
+    await tester.tap(find.text('Sincronizar mis fuentes con YouTube o X')); await tester.pumpAndSettle();
+    await tester.tap(find.text('Sincronizar con YouTube')); await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).last,'@usuario');
+    await tester.tap(find.text('Buscar y seguir coincidencias')); await tester.pumpAndSettle();
+    expect(repo.ids,{'01K6MYH0000000000000000011','01K6MYH0000000000000000012'});
   });
   testWidgets('welcome is not shown when a source is already followed', (tester) async {
     final repo=_FollowingLiveRepository(); repo.ids.add(liveTestSourceId); addTearDown(repo.changes.dispose);

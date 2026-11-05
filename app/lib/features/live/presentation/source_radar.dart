@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:dialektik/features/consumer/data/following_repository.dart';
+import 'package:dialektik/features/consumer/data/source_sync_repository.dart';
+import 'package:dialektik/features/live/presentation/source_sync_sheet.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:flutter/material.dart';
@@ -53,6 +55,32 @@ class _SourceRadarState extends State<SourceRadar> {
       if(mounted) { setState(() {followed=actual ?? previous; if(actual==null) {for(final id in confirmed) {if(next) {followed.add(id);} else {followed.remove(id);}}}}); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No se pudo actualizar el seguimiento completo.'))); }
     } finally {if(mounted)setState(()=>busy.remove(key));}
   }
+  String _associatedBrand(String name) {
+    final key=_brandKey(name);
+    return switch(key) {
+      'biobiochile tv' => 'biobiochile',
+      'cooperativa fm' || 'cooperativa.cl' => 'cooperativa',
+      'el mostrador tv' => 'el mostrador',
+      'la tercera tv' => 'la tercera',
+      _ => key,
+    };
+  }
+  Future<void> _openSourceSync() async {
+    final selected=await showModalBottomSheet<SourceSyncSelection>(context:context,isScrollControlled:true,backgroundColor:const Color(0xfffaf8f3),shape:const RoundedRectangleBorder(borderRadius:BorderRadius.vertical(top:Radius.circular(24))),builder:(_)=>SourceSyncSheet(sources:sources,lookup:widget.repository is SourceSyncRepository ? widget.repository as SourceSyncRepository : null));
+    if(!mounted || selected==null)return;
+    final repo=following;
+    if(repo==null)return;
+    final related=sources.where((s)=>selected.ids.contains(s.id)).map((s)=>_associatedBrand(s.name)).toSet();
+    final ids=sources.where((s)=>selected.ids.contains(s.id) || related.contains(_associatedBrand(s.name))).map((s)=>s.id).where((id)=>!followed.contains(id)).toList();
+    setState(()=>busy.add('sync'));
+    var done=0;
+    try {
+      for(final id in ids) {await repo.setFollowing(id,following:true);done++;if(mounted)setState(()=>followed.add(id));}
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('$done fuentes seguidas.${selected.truncated ? ' La lista de YouTube era demasiado extensa y se consultó parcialmente.' : ''}')));
+    } on Exception {
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Se siguieron $done fuentes; no se pudieron guardar todas.')));
+    } finally {if(mounted)setState(()=>busy.remove('sync'));}
+  }
   int _group(LiveSourceDto source) {
     final name=source.name.toLowerCase();
     if (['sin filtros','voz de los que sobran','vía x','via x','el líbero','el libero','turno','the clinic','el ciudadano','el desconcierto'].any(name.contains)) return 0;
@@ -72,6 +100,7 @@ class _SourceRadarState extends State<SourceRadar> {
         if(sources.isEmpty) const Text('Todavía no hay fuentes operativas.'),
         const Text('Personaliza tu radar',textAlign:TextAlign.center,style:TextStyle(fontFamily:'serif',fontSize:26,fontWeight:FontWeight.w700,color:navy)),
         const SizedBox(height:14),TextField(onChanged:(value)=>setState(()=>query=value),decoration:InputDecoration(hintText:'Buscar medios...',prefixIcon:const Icon(Icons.search),filled:true,fillColor:Colors.white,border:OutlineInputBorder(borderRadius:BorderRadius.circular(12),borderSide:const BorderSide(color:Color(0xffe2dec9))),enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(12),borderSide:const BorderSide(color:Color(0xffe2dec9))))),
+        const SizedBox(height:12),OutlinedButton.icon(style:OutlinedButton.styleFrom(backgroundColor:const Color(0xffede9df),foregroundColor:navy,side:const BorderSide(color:Color(0xffd0c9b8)),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))),onPressed:following!=null && busy.isEmpty ? _openSourceSync : null,icon:const Icon(Icons.sync_rounded),label:const Text('Sincronizar mis fuentes con YouTube o X')),
         const SizedBox(height:20),const Text('Carruseles por estilo',textAlign:TextAlign.center,style:TextStyle(fontFamily:'serif',fontSize:18,fontWeight:FontWeight.w600,color:navy)),
         for(final group in [(0,'1  🎬 Debate y tensión en video'),(1,'2  🔍 Investigación y análisis'),(2,'3  ⚡ Minuto a minuto')]) ...[
           const SizedBox(height:18),Text('${group.$2}  ›',style:const TextStyle(fontWeight:FontWeight.w700,color:navy)),const SizedBox(height:8),

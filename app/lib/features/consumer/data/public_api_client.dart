@@ -7,6 +7,7 @@ import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/source_sync_repository.dart';
 import 'package:dialektik/features/live/data/chile_rss_chronology.dart';
 import 'package:dialektik/features/live/data/chile_rss_linked_news.dart';
 import 'package:dialektik/features/live/data/chile_rss_links.dart';
@@ -36,6 +37,7 @@ final class PublicApiClient
     implements
         ConsumerRepository,
         FollowingRepository,
+        SourceSyncRepository,
         SemanticRepository,
         LiveNewsRepository,
         ScopedLiveNewsRepository,
@@ -116,6 +118,25 @@ final class PublicApiClient
     if (version != _followingVersion.value) return listFollowedSources();
     _cachedFollowedSources = Set.of(result);
     return result;
+  }
+
+  @override
+  Future<YouTubeSourceMatches> lookupPublicYouTubeSubscriptions(String channel) async {
+    final token = await authorizationTokenProvider?.call();
+    if (token == null || token.isEmpty) throw const PublicApiFailure(kind: PublicFailureKind.unauthorized);
+    final uri = _configuration.resolve('/v1/source-sync/youtube');
+    late http.Response response;
+    try {
+      response=await _httpClient.post(uri,headers:{'accept':'application/json','content-type':'application/json','authorization':'Bearer $token'},body:jsonEncode({'channel':channel})).timeout(timeout);
+    } on TimeoutException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+      on http.ClientException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+    if(response.statusCode<200 || response.statusCode>=300) {
+      if(response.statusCode==401) onAuthorizationRejected?.call();
+      throw _decodeFailure(response);
+    }
+    final data=jsonDecode(response.body);
+    if(data is! Map<String,dynamic> || data['source_ids'] is! List || data['truncated'] is! bool || (data['source_ids'] as List).any((id)=>id is! String)) throw const FormatException('Invalid source matches.');
+    return YouTubeSourceMatches(sourceIds:(data['source_ids'] as List).cast<String>().toSet(),truncated:data['truncated'] as bool);
   }
 
   @override
