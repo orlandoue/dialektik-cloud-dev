@@ -7,6 +7,7 @@ export class LiveSemanticCallBudget {
   }
   get available(): boolean { return !this.halted && this.calls<this.maximum; }
   get used(): number { return this.calls; }
+  get providerHalted(): boolean { return this.halted; }
   readonly request: typeof fetch = async (...args) => {
     if(!this.available) throw new Error('SEMANTIC_CALL_BUDGET_EXHAUSTED');
     this.calls++;
