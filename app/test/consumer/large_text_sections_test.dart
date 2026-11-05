@@ -1,6 +1,7 @@
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/screens/synthesis_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../support/public_api_fixtures.dart';
 
@@ -40,4 +41,13 @@ void main() {
     expect(find.text('Termómetro de evidencia'),findsNothing);
     expect(tester.takeException(),isNull);
   });
+  testWidgets('video con letra grande usa miniatura ancha', (tester) async {
+    tester.view.physicalSize=const Size(390,844); tester.view.devicePixelRatio=1;
+    addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+    await tester.pumpWidget(MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(390,844),textScaler:TextScaler.linear(1.45)),child:Scaffold(body:SingleChildScrollView(child:YouTubeNewsCard(videoId:'aB3_deF-123',title:'Titular del video',source:'Canal',published:'Hoy',compact:true,onTap:(){}))))));
+    await tester.pump();
+    expect(tester.getSize(find.byType(YouTubeThumbnail)).width,greaterThan(250));
+    expect(tester.takeException(),isNull);
+  });
+
 }

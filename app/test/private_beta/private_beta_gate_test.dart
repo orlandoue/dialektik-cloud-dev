@@ -311,9 +311,9 @@ void main() {
       await tester.pumpAndSettle();
     }
     testerEnabled = false;
-    await tester.ensureVisible(find.text('Síntesis').last);
+    await tester.ensureVisible(find.text('Contradicciones').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Síntesis').last);
+    await tester.tap(find.text('Contradicciones').last);
     await tester.pumpAndSettle();
     expect(
       find.text(
