@@ -32,7 +32,7 @@ void main() {
     );
 
     expect(find.text('Beta privada'), findsOneWidget);
-    expect(find.text('Contradicciones'), findsNothing);
+    expect(find.text('VS'), findsNothing);
     expect(authRequests, 0);
     expect(coreRequests, 0);
   });
@@ -311,9 +311,9 @@ void main() {
       await tester.pumpAndSettle();
     }
     testerEnabled = false;
-    await tester.ensureVisible(find.text('Contradicciones').last);
+    await tester.ensureVisible(find.text('VS').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Contradicciones').last);
+    await tester.tap(find.text('VS').last);
     await tester.pumpAndSettle();
     expect(
       find.text(

@@ -168,6 +168,7 @@ final class PublicApiClient
     String? cursor,
     int limit = 20,
     bool refresh = false,
+    bool personalized = true,
     PublicRequestToken? requestToken,
   }) {
     if (_otherMarket) {
@@ -179,7 +180,7 @@ final class PublicApiClient
       '/v1/feed',
       query: <String, String>{
         'synthesis': '1',
-        if (_personalizationEnabled) 'personalized': '1',
+        if (_personalizationEnabled && personalized) 'personalized': '1',
         'category': ?category,
         'topic': ?topic,
         'cursor': ?cursor,
@@ -196,6 +197,7 @@ final class PublicApiClient
     String? cursor,
     int limit = 20,
     bool refresh = false,
+    bool personalized = true,
     PublicRequestToken? requestToken,
   }) {
     if (_otherMarket) {
@@ -205,7 +207,7 @@ final class PublicApiClient
     }
     return _get<PublicPage<ContradictionDto>>(
       '/v1/contradictions',
-      query: <String, String>{if (_personalizationEnabled) 'personalized': '1', 'cursor': ?cursor, 'limit': '$limit'},
+      query: <String, String>{if (_personalizationEnabled && personalized) 'personalized': '1', 'cursor': ?cursor, 'limit': '$limit'},
       decoder: (Object? value) => _page(value, ContradictionDto.fromJson),
       refresh: refresh,
       requestToken: requestToken,

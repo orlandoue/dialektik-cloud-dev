@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
+import 'package:dialektik/features/consumer/data/public_api_client.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
@@ -26,6 +27,7 @@ class SynthesisScreen extends StatefulWidget {
 class _SynthesisScreenState extends State<SynthesisScreen> {
   List<EventCardDto> events=[];
   Map<String,ContradictionDto> contrasts={};
+  List<_ContrastEntry> contrastEntries=[];
   String topic='Todos';
   bool loading=true;
   Object? error;
@@ -38,29 +40,39 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
     try {
       final allEvents=<EventCardDto>[], allContrasts=<ContradictionDto>[];
       String? cursor; final seen=<String>{};
-      do { final page=await widget.repository.listFeed(cursor:cursor,limit:50,refresh:true); allEvents.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid feed cursor'); } while(cursor!=null);
+      do { final repo=widget.repository; final page=await (repo is PublicApiClient ? repo.listFeed(cursor:cursor,limit:50,refresh:true,personalized:false) : repo.listFeed(cursor:cursor,limit:50,refresh:true)); allEvents.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid feed cursor'); } while(cursor!=null);
       seen.clear();
-      do { final page=await widget.repository.listContradictions(cursor:cursor,limit:50,refresh:true); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
+      do { final repo=widget.repository; final page=await (repo is PublicApiClient ? repo.listContradictions(cursor:cursor,limit:50,refresh:true,personalized:false) : repo.listContradictions(cursor:cursor,limit:50,refresh:true)); allContrasts.addAll(page.items);cursor=page.nextCursor;if(cursor!=null && !seen.add(cursor)) throw const FormatException('Invalid contrast cursor'); } while(cursor!=null);
+      final byId={for(final e in allEvents)e.id:e};
+      final missing=allContrasts.map((c)=>c.eventId).where((id)=>!byId.containsKey(id)).toSet();
+      await Future.wait(missing.map((id) async { try { byId[id]=await widget.repository.getEvent(id); } on Exception { /* Keep the publication visible even if its event cannot be loaded. */ } }));
+      final entries=< _ContrastEntry >[for(final c in allContrasts) _ContrastEntry(byId[c.eventId],c)];
+      final publishedIds=allContrasts.map((c)=>c.eventId).toSet();
+      entries.addAll(allEvents.where((e)=>(e.synthesisRelation=='CONTRADICTION' || e.synthesisRelation=='DIFFERENT_FOCUS') && !publishedIds.contains(e.id)).map((e)=>_ContrastEntry(e,null)));
       if(!mounted || run!=generation)return;
-      setState((){allEvents.sort((a,b)=>b.detectedAt.compareTo(a.detectedAt));events=allEvents;contrasts={for(final c in allContrasts)c.eventId:c};loading=false;});
+      setState((){allEvents.sort((a,b)=>b.detectedAt.compareTo(a.detectedAt));events=allEvents;contrasts={for(final c in allContrasts)c.eventId:c};contrastEntries=entries;loading=false;});
     } on Exception catch(e){if(mounted && run==generation)setState((){error=e;loading=false;});}
   }
   bool isContrast(EventCardDto e)=>e.synthesisRelation=='CONTRADICTION' || e.synthesisRelation=='DIFFERENT_FOCUS' || contrasts.containsKey(e.id);
   @override Widget build(BuildContext context){
     final filtered=events.where((e)=>widget.development ? !isContrast(e) && (topic=='Todos' || _eventTopic(e)==topic) : isContrast(e)).toList();
-    return ConsumerScaffold(title:widget.development ? 'Desarrollo' : 'Contradicciones',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:RefreshIndicator(onRefresh:_load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.fromLTRB(20,12,20,20),children:[
+    return ConsumerScaffold(title:widget.development ? 'Desarrollo' : 'VS',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:RefreshIndicator(onRefresh:_load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.fromLTRB(20,12,20,20),children:[
       if(widget.development) ...[
         SingleChildScrollView(scrollDirection:Axis.horizontal, child:Row(children:[for(final choice in ['Todos','Política','Justicia','Economía','Seguridad','Deportes','Sociedad']) Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice),selected:topic==choice,onSelected:(_)=>setState(()=>topic=choice)))])),
         if(widget.seismicRepository case final SeismicObservationRepository seismic) ChileSeismicObservationsPanel(repository:seismic),
       ],
       if(loading && events.isEmpty) const Center(child:CircularProgressIndicator())
       else if(error!=null && events.isEmpty) TextButton(onPressed:()=>unawaited(_load()),child:const Text('No se pudieron cargar los acontecimientos. Reintentar'))
-      else if(filtered.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('No hay acontecimientos en este filtro.'))
-      else for(final event in filtered) widget.development
-        ? _DevelopmentCard(event:event,repository:widget.repository,opener:widget.externalLinkOpener)
-        : _ContrastCard(event:event,contrast:contrasts[event.id],repository:widget.repository,onOpen:()=>widget.onOpenEvent(event.id)),
+      else if(widget.development ? filtered.isEmpty : contrastEntries.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('No hay acontecimientos en este filtro.'))
+      else if(widget.development) for(final event in filtered) _DevelopmentCard(event:event,repository:widget.repository,opener:widget.externalLinkOpener)
+      else for(final entry in contrastEntries) if(entry.event case final event?) _ContrastCard(event:event,contrast:entry.contrast,repository:widget.repository,onOpen:()=>widget.onOpenEvent(event.id))
+        else Card(child:ListTile(title:Text(entry.contrast!.eventTitle),subtitle:const Text('No se pudo cargar el detalle de este contraste.'),onTap:()=>widget.onOpenEvent(entry.contrast!.eventId))),
     ]))));
   }
+}
+class _ContrastEntry {
+  const _ContrastEntry(this.event,this.contrast);
+  final EventCardDto? event; final ContradictionDto? contrast;
 }
 String _topic(String category) => switch(category.toLowerCase()) {
   'politica' || 'política' => 'Política', 'justicia' => 'Justicia', 'economia' || 'economía' => 'Economía',

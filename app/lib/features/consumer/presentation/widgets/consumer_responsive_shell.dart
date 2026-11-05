@@ -156,7 +156,7 @@ final class _MobileHeader extends StatelessWidget {
           (ConsumerNavigationAction action) => const <String>{
             'Actualidad',
             'Espejo',
-            'Contradicciones',
+            'VS',
             'Desarrollo',
             'Fuentes',
             'Historias',

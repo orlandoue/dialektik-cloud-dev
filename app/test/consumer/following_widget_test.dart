@@ -110,6 +110,24 @@ void main() {
     await tester.tap(find.text('+ Seguir').first); await tester.pumpAndSettle();
     expect(find.text('Tu mezcla: 1 fuentes en Actualidad · 2 en tu Espejo'),findsOneWidget);
   });
+  testWidgets('radar agrupa CIPER y sincroniza sus dos fuentes con letra grande', (tester) async {
+    tester.view.physicalSize=const Size(390,844); tester.view.devicePixelRatio=1;
+    addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+    LiveSourceDto source(String name,String id) => LiveSourceDto.fromJson({...liveTestSource(),'name':name,'id':id});
+    final repo=_FollowingLiveRepository(items:[source('CIPER Chile','01K6MYH0000000000000000011'),source('CIPER Chile (YouTube)','01K6MYH0000000000000000012')]);
+    addTearDown(repo.changes.dispose);
+    await tester.pumpWidget(MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(390,844),textScaler:TextScaler.linear(1.45)),child:Scaffold(body:SourceRadar(repository:repo,onContinue:(){})))));
+    await tester.pumpAndSettle();
+    final group=find.byKey(const ValueKey('radar-group-1'));
+    await tester.ensureVisible(group); await tester.pumpAndSettle();
+    expect(find.descendant(of:group,matching:find.text('CIPER Chile')),findsOneWidget);
+    expect(tester.takeException(),isNull);
+    await tester.tap(find.descendant(of:group,matching:find.text('+ Seguir'))); await tester.pumpAndSettle();
+    expect(repo.ids,{'01K6MYH0000000000000000011','01K6MYH0000000000000000012'});
+    await tester.tap(find.descendant(of:group,matching:find.text('✓ Siguiendo'))); await tester.pumpAndSettle();
+    expect(repo.ids,isEmpty);
+    expect(tester.takeException(),isNull);
+  });
   testWidgets('welcome is not shown when a source is already followed', (tester) async {
     final repo=_FollowingLiveRepository(); repo.ids.add(liveTestSourceId); addTearDown(repo.changes.dispose);
     await tester.pumpWidget(DialektikApp(environment:AppEnvironment.test,loadInterFromDependency:false,

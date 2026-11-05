@@ -635,7 +635,7 @@ final class ConsumerRouteFactory {
         <({String label, String route})>[
           (label: 'Actualidad', route: ConsumerRoutes.liveNews),
           (label: 'Espejo', route: ConsumerRoutes.mirror),
-          (label: 'Contradicciones', route: ConsumerRoutes.feed),
+          (label: 'VS', route: ConsumerRoutes.feed),
           (label: 'Desarrollo', route: ConsumerRoutes.development),
           (label: 'Fuentes', route: ConsumerRoutes.liveSources),
           if (personalOwnerStatusRepository != null)
@@ -656,7 +656,7 @@ final class ConsumerRouteFactory {
 
   String _sectionForPath(String path) {
     if (path == ConsumerRoutes.feed || path.startsWith('/events/')) {
-      return 'Contradicciones';
+      return 'VS';
     }
     if (path == ConsumerRoutes.development) return 'Desarrollo';
     if (path == ConsumerRoutes.liveSources ||
@@ -664,7 +664,7 @@ final class ConsumerRouteFactory {
         path.startsWith('/live/sources/')) {
       return 'Fuentes';
     }
-    if (path == ConsumerRoutes.contradictions) return 'Contradicciones';
+    if (path == ConsumerRoutes.contradictions) return 'VS';
     if (path == ConsumerRoutes.mirror) return 'Espejo';
     if (path.startsWith('/personal/owner/official-votes/')) {
       return 'Administración';

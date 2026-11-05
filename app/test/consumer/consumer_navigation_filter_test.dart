@@ -269,7 +269,7 @@ void main() {
             for (final String label in <String>[
               'Actualidad',
               'Espejo',
-              'Contradicciones',
+              'VS',
               'Desarrollo',
               'Fuentes',
             ])
@@ -292,7 +292,7 @@ void main() {
     final Finder moreEntry = find.text('Más');
     await tester.ensureVisible(moreEntry);
     await tester.pumpAndSettle();
-    final tabs = ['Actualidad','Espejo','Contradicciones','Desarrollo','Fuentes'].map((label)=>tester.getRect(find.text(label))).toList();
+    final tabs = ['Actualidad','Espejo','VS','Desarrollo','Fuentes'].map((label)=>tester.getRect(find.text(label))).toList();
     for (final tab in tabs) {
       expect(tab.center.dy, closeTo(tabs.first.center.dy, 0.5));
     }

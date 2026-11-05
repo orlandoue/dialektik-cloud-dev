@@ -38,14 +38,20 @@ class _SourceRadarState extends State<SourceRadar> {
       setState((){sources=all.where((s)=>widget.includeSource?.call(s) ?? true).toList();followed=ids;loading=false;});
     } on Exception { if(mounted)setState((){loading=false;failed=true;}); }
   }
-  Future<void> _toggle(LiveSourceDto source) async {
-    final repo=following;
-    if(repo==null || busy.contains(source.id))return;
-    final next=!followed.contains(source.id);
-    setState(() {busy.add(source.id);if(next){followed.add(source.id);}else{followed.remove(source.id);}});
-    try { await repo.setFollowing(source.id,following:next); }
-    on Exception { if(mounted){setState((){if(next){followed.remove(source.id);}else{followed.add(source.id);}});ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No se pudo actualizar el seguimiento.')));} }
-    finally {if(mounted)setState(()=>busy.remove(source.id));}
+  String _brandKey(String name) => name.replaceAll(RegExp(r'\s*\(youtube\)\s*',caseSensitive:false),' ').trim().toLowerCase().replaceAll(RegExp(r'\s+'),' ');
+  Future<void> _toggle(List<LiveSourceDto> brand) async {
+    final repo=following; final key=_brandKey(brand.first.name);
+    if(repo==null || busy.contains(key))return;
+    final next=!brand.every((source)=>followed.contains(source.id));
+    final previous=Set<String>.of(followed); final confirmed=<String>[];
+    setState(() {busy.add(key);for(final source in brand) { if(next) {followed.add(source.id);} else {followed.remove(source.id);} }});
+    try {
+      for(final source in brand) { if(previous.contains(source.id)==next) continue; await repo.setFollowing(source.id,following:next); confirmed.add(source.id); }
+    } on Exception {
+      Set<String>? actual;
+      try { actual=await repo.listFollowedSources(); } on Exception { /* Retain the known successful updates. */ }
+      if(mounted) { setState(() {followed=actual ?? previous; if(actual==null) {for(final id in confirmed) {if(next) {followed.add(id);} else {followed.remove(id);}}}}); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('No se pudo actualizar el seguimiento completo.'))); }
+    } finally {if(mounted)setState(()=>busy.remove(key));}
   }
   int _group(LiveSourceDto source) {
     final name=source.name.toLowerCase();
@@ -55,7 +61,12 @@ class _SourceRadarState extends State<SourceRadar> {
   }
   @override Widget build(BuildContext context) {
     final selected=sources.where((s)=>followed.contains(s.id)).length;
-    final visible=sources.where((s)=>s.name.toLowerCase().contains(query.trim().toLowerCase())).toList();
+    final brands=<String,List<LiveSourceDto>>{};
+    for(final source in sources) { brands.putIfAbsent(_brandKey(source.name),()=>[]).add(source); }
+    final visible=brands.values.where((brand)=>brand.any((s)=>s.name.toLowerCase().contains(query.trim().toLowerCase()))).toList();
+    final scale=MediaQuery.textScalerOf(context).scale(1).clamp(1.0,1.35);
+    final rowHeight=176.0*scale;
+    final cardWidth=scale>1.15 ? 168.0 : 160.0;
     return ColoredBox(color:const Color(0xfffaf8f3),child:Column(children:[
       Expanded(child:loading ? const Center(child:Column(mainAxisSize:MainAxisSize.min,children:[CircularProgressIndicator(),Text('Cargando fuentes…')])) : failed ? Center(child:Column(mainAxisSize:MainAxisSize.min,children:[const Text('El servicio de fuentes no está disponible.'),TextButton(onPressed:_load,child:const Text('Reintentar'))])) : ListView(key:const Key('radar-scroll'),padding:const EdgeInsets.fromLTRB(16,18,16,20),children:[
         if(sources.isEmpty) const Text('Todavía no hay fuentes operativas.'),
@@ -64,10 +75,10 @@ class _SourceRadarState extends State<SourceRadar> {
         const SizedBox(height:20),const Text('Carruseles por estilo',textAlign:TextAlign.center,style:TextStyle(fontFamily:'serif',fontSize:18,fontWeight:FontWeight.w600,color:navy)),
         for(final group in [(0,'1  🎬 Debate y tensión en video'),(1,'2  🔍 Investigación y análisis'),(2,'3  ⚡ Minuto a minuto')]) ...[
           const SizedBox(height:18),Text('${group.$2}  ›',style:const TextStyle(fontWeight:FontWeight.w700,color:navy)),const SizedBox(height:8),
-          if(!visible.any((s)=>_group(s)==group.$1)) const Padding(padding:EdgeInsets.all(8),child:Text('Sin resultados'))
-          else SizedBox(key:ValueKey('radar-group-${group.$1}'),height:158,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:visible.where((s)=>_group(s)==group.$1).length,separatorBuilder:(_,_)=>const SizedBox(width:10),itemBuilder:(context,index){
-            final source=visible.where((s)=>_group(s)==group.$1).elementAt(index);
-            return _SourceRadarCard(source:source,selected:followed.contains(source.id),busy:busy.contains(source.id),enabled:following!=null,onTap:()=>unawaited(_toggle(source)));
+          if(!visible.any((brand)=>_group(brand.first)==group.$1)) const Padding(padding:EdgeInsets.all(8),child:Text('Sin resultados'))
+          else SizedBox(key:ValueKey('radar-group-${group.$1}'),height:rowHeight,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:visible.where((brand)=>_group(brand.first)==group.$1).length,separatorBuilder:(_,_)=>const SizedBox(width:10),itemBuilder:(context,index){
+            final brand=visible.where((brand)=>_group(brand.first)==group.$1).elementAt(index);
+            return _SourceRadarCard(source:brand.first,width:cardWidth,selected:brand.every((source)=>followed.contains(source.id)),busy:busy.contains(_brandKey(brand.first.name)),enabled:following!=null,onTap:()=>unawaited(_toggle(brand)));
           })),
         ],
       ])),
@@ -81,8 +92,9 @@ class _SourceRadarState extends State<SourceRadar> {
 }
 
 class _SourceRadarCard extends StatelessWidget {
-  const _SourceRadarCard({required this.source,required this.selected,required this.busy,required this.enabled,required this.onTap});
+  const _SourceRadarCard({required this.source,required this.width,required this.selected,required this.busy,required this.enabled,required this.onTap});
   final LiveSourceDto source;
+  final double width;
   final bool selected,busy,enabled;
   final VoidCallback onTap;
   @override Widget build(BuildContext context) {
@@ -96,11 +108,11 @@ class _SourceRadarCard extends StatelessWidget {
     final tercera=lower.contains('la tercera');
     final color=voice || ciper || tercera ? Colors.white : lower.contains('sin filtros') || lower.contains('cnn') || lower.contains('24 horas') ? const Color(0xffc21f2b) : lower.contains('cooperativa') ? const Color(0xff16488a) : lower.contains('ciper') ? const Color(0xffb2272a) : lower.contains('biobio') ? const Color(0xff15578e) : lower.contains('vía x') || lower.contains('via x') ? const Color(0xffba2132) : lower.contains('adn') ? const Color(0xff203a79) : lower.contains('la tercera') || lower.contains('el mostrador') ? const Color(0xff1e2430) : defaultColor;
     final initials=name.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).take(3).map((w)=>w.characters.first.toUpperCase()).join();
-    final words=voice ? 'la voz' : lower.contains('sin filtros') ? 'SIN\nFILTROS' : ciper ? 'CiPER' : lower.contains('biobio') ? 'RBB' : lower.contains('cooperativa') ? 'COOP' : lower.contains('vía x') || lower.contains('via x') ? 'X' : lower.contains('la tercera') ? 'LA\nTERCERA' : lower.contains('el mostrador') ? 'MOSTRADOR' : lower.contains('adn') ? 'ADN' : lower.contains('24 horas') ? '24H' : lower.contains('cnn') ? 'CNN' : lower.contains('t13') ? 'T13' : lower.contains('mega') ? 'MEGA' : lower.contains('chv') ? 'CHV' : initials;
-    return Semantics(button:true,toggled:selected,label:'${source.name}, ${selected ? 'siguiendo' : 'no sigues'}',child:Material(color:Colors.white,borderRadius:BorderRadius.circular(14),elevation:1,child:InkWell(borderRadius:BorderRadius.circular(14),onTap:enabled && !busy ? onTap : null,child:Container(width:132,height:158,padding:const EdgeInsets.all(8),decoration:BoxDecoration(border:Border.all(color:const Color(0xffe4e0d4)),borderRadius:BorderRadius.circular(14)),child:Column(children:[
-      Container(height:48,width:viaX ? 48 : 64,alignment:Alignment.center,decoration:BoxDecoration(color:color,shape:viaX ? BoxShape.circle : BoxShape.rectangle,borderRadius:viaX ? null : BorderRadius.circular(lower.contains('cooperativa') ? 24 : 8)),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Text(words.isEmpty ? '?' : words,textAlign:TextAlign.center,style:TextStyle(color:voice || ciper || tercera ? const Color(0xff162032) : lower.contains('cooperativa') ? const Color(0xffffd34d) : Colors.white,fontFamily:tercera ? 'serif' : null,fontWeight:FontWeight.bold,fontSize:words.contains('\n') || words.length>7 ? 11 : 19,height:1)),if(voice) Container(width:48,height:3,color:const Color(0xffffcf18)),if(ciper || lower.contains('el mostrador')) const Text('●',style:TextStyle(color:Color(0xffc21f2b),fontSize:10,height:0.8)),if(lower.contains('biobio')) Container(width:36,height:3,color:const Color(0xffffa326)),if(lower.contains('adn')) Container(width:36,height:3,color:const Color(0xffe22b35))])),
+    final words=voice ? 'la voz' : lower.contains('sin filtros') ? 'SIN FILTROS' : ciper ? 'CiPER' : lower.contains('biobio') ? 'RBB' : lower.contains('cooperativa') ? 'COOP' : lower.contains('vía x') || lower.contains('via x') ? 'X' : lower.contains('la tercera') ? 'LA TERCERA' : lower.contains('el mostrador') ? 'MOSTRADOR' : lower.contains('adn') ? 'ADN' : lower.contains('24 horas') ? '24H' : lower.contains('cnn') ? 'CNN' : lower.contains('t13') ? 'T13' : lower.contains('mega') ? 'MEGA' : lower.contains('chv') ? 'CHV' : initials;
+    return Semantics(button:true,toggled:selected,label:'${source.name}, ${selected ? 'siguiendo' : 'no sigues'}',child:Material(color:Colors.white,borderRadius:BorderRadius.circular(14),elevation:1,child:InkWell(borderRadius:BorderRadius.circular(14),onTap:enabled && !busy ? onTap : null,child:Container(width:width,padding:const EdgeInsets.all(8),decoration:BoxDecoration(border:Border.all(color:const Color(0xffe4e0d4)),borderRadius:BorderRadius.circular(14)),child:Column(children:[
+      SizedBox(height:42,child:Center(child:MediaQuery.withClampedTextScaling(maxScaleFactor:1.0,child:FittedBox(fit:BoxFit.scaleDown,child:Container(height:42,width:viaX ? 42 : 70,alignment:Alignment.center,decoration:BoxDecoration(color:color,shape:viaX ? BoxShape.circle : BoxShape.rectangle,borderRadius:viaX ? null : BorderRadius.circular(lower.contains('cooperativa') ? 24 : 8)),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Text(words.isEmpty ? '?' : words,textAlign:TextAlign.center,maxLines:1,softWrap:false,style:TextStyle(color:voice || ciper || tercera ? const Color(0xff162032) : lower.contains('cooperativa') ? const Color(0xffffd34d) : Colors.white,fontFamily:tercera ? 'serif' : null,fontWeight:FontWeight.bold,fontSize:words.contains('\n') || words.length>7 ? 11 : 19,height:1)),if(voice) Container(width:48,height:3,color:const Color(0xffffcf18)),if(ciper || lower.contains('el mostrador')) const Text('●',style:TextStyle(color:Color(0xffc21f2b),fontSize:10,height:0.8)),if(lower.contains('biobio')) Container(width:36,height:3,color:const Color(0xffffa326)),if(lower.contains('adn')) Container(width:36,height:3,color:const Color(0xffe22b35))])))))),
       const SizedBox(height:4),Expanded(child:Center(child:Text(name,textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:13,fontWeight:FontWeight.w600,color:Color(0xff1a1a1a))))),
-      const SizedBox(height:4),AnimatedContainer(duration:MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds:180),height:30,width:double.infinity,decoration:BoxDecoration(color:selected ? const Color(0xffede9df) : Colors.white,borderRadius:BorderRadius.circular(15)),child:OutlinedButton(style:OutlinedButton.styleFrom(padding:EdgeInsets.zero,backgroundColor:Colors.transparent,foregroundColor:const Color(0xff162032),side:const BorderSide(color:Color(0xff162032)),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15))),onPressed:enabled && !busy ? onTap : null,child:FittedBox(child:Text(selected ? '✓ Siguiendo' : '+ Seguir',style:const TextStyle(fontSize:12))))),
+      const SizedBox(height:4),AnimatedContainer(duration:MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds:180),height:30,width:double.infinity,decoration:BoxDecoration(color:selected ? const Color(0xffede9df) : Colors.white,borderRadius:BorderRadius.circular(15)),child:OutlinedButton(style:OutlinedButton.styleFrom(padding:EdgeInsets.zero,backgroundColor:Colors.transparent,foregroundColor:const Color(0xff162032),side:const BorderSide(color:Color(0xff162032)),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15))),onPressed:enabled && !busy ? onTap : null,child:Padding(padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),child:FittedBox(fit:BoxFit.scaleDown,child:Text(selected ? '✓ Siguiendo' : '+ Seguir',maxLines:1,softWrap:false,style:const TextStyle(fontSize:12)))))),
     ])))));
   }
 }
