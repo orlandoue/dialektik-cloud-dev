@@ -9,11 +9,12 @@ import {
   type OnModuleInit,
   type OnModuleDestroy,
 } from "@nestjs/common";
-import { generateUlid, setTransactionAuditContext } from "@dialektik/database";
+import { generateUlid, parseUlid, setTransactionAuditContext } from "@dialektik/database";
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@dialektik/database";
 import { LiveSemanticCallBudget } from "./live-semantic-call-budget.js";
 import { controversyScore, hasSpecificHeadlineOverlap } from "./live-semantic-scheduler-prefilter.js";
+import { validateAutoScope } from "./live-semantic-auto-guard.js";
 import { CloudflareWorkersAITransport } from "../llm-shadow/llm.cloudflare.js";
 import {
   CLOUDFLARE_JSON_MODE_MODEL,
@@ -249,6 +250,11 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
     catch(error) { this.logger.warn(`Semantic scheduled run failed: ${error instanceof Error ? error.name : 'unknown'}`); }
     finally { this.schedulerBusy=false; }
   }
+  async runAutomatic(authorization: string | undefined): Promise<{status:string}> {
+    this.ensureEnabled();
+    await this.reviews.authorizeEditor(authorization);
+    return {status:await this.runScheduled()};
+  }
   async runScheduled(): Promise<string> {
     this.ensureEnabled();
     const actor=process.env.DIALEKTIK_SEMANTIC_AUTOMATION_ACTOR_ID ?? '';
@@ -295,11 +301,81 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
         if(selected.size<2) return 'NO_PENDING_MULTISOURCE_PAIRS';
         const budget=new LiveSemanticCallBudget(25);
         const result=await this.runLocked(connection,actor,targetDay,selected.size,configSha,[...selected],budget);
+        if ('runId' in result && result.runId) {
+          const automaticActor=process.env.SYSTEM_AUTO_EDITOR_ID ?? '01M4YDQK00ED1T0R0R1AND0VE1';
+          const published=await this.autoPromoteRun(connection,result.runId,automaticActor,configSha);
+          this.logger.log(`Semantic automatic promotions: ${published}`);
+        }
         this.logger.log(`Semantic scheduled model calls: ${budget.used}/25`);
         return result.status;
       } finally {await sql`select pg_advisory_unlock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0))`.execute(connection);}
       } finally {await sql`select pg_advisory_unlock(hashtextextended('dialektik-live-semantic-automation',0))`.execute(connection);}
     });
+  }
+
+  private async autoPromoteRun(connection: Kysely<Database>, runId: string, actor: string, configSha: string): Promise<number> {
+    if (!/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(actor)) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
+    type Candidate = {
+      groupId:string; title:string; pairId:string; relation:string; sameEvent:boolean;
+      sameEventConfidence:number; ratioConflicting:number; ratioComparable:number;
+      leftId:string; rightId:string; leftOrdinal:number; rightOrdinal:number;
+      leftSource:string; rightSource:string; leftText:string; rightText:string;
+      leftDate:Date; rightDate:Date; leftSpan:Record<string,unknown>; rightSpan:Record<string,unknown>;
+    };
+    const rows=await sql<Candidate>`select g.id::text as "groupId",g.proposed_title as title,
+      p.id::text as "pairId",p.relation,p.same_event as "sameEvent",p.same_event_confidence as "sameEventConfidence",
+      p.ratio_conflicting as "ratioConflicting",p.ratio_comparable as "ratioComparable",
+      lm.article_id::text as "leftId",rm.article_id::text as "rightId",
+      p.left_claim_ordinal as "leftOrdinal",p.right_claim_ordinal as "rightOrdinal",
+      lm.source_id::text as "leftSource",rm.source_id::text as "rightSource",
+      li.text_original as "leftText",ri.text_original as "rightText",li.published_at as "leftDate",ri.published_at as "rightDate",
+      lg.proposal_payload->'spans'->(p.left_claim_ordinal-1) as "leftSpan",
+      rg.proposal_payload->'spans'->(p.right_claim_ordinal-1) as "rightSpan"
+      from public.live_semantic_event_group_candidates g
+      join public.live_semantic_claim_pair_assessments p on p.group_id=g.id
+      join public.live_semantic_event_group_members lm on lm.group_id=g.id and lm.article_id=p.left_article_id
+      join public.live_semantic_event_group_members rm on rm.group_id=g.id and rm.article_id=p.right_article_id
+      join public.assertion_extraction_generations lg on lg.id=lm.extraction_generation_id and lg.id=p.left_extraction_generation_id and lg.state='active'
+      join public.assertion_extraction_generations rg on rg.id=rm.extraction_generation_id and rg.id=p.right_extraction_generation_id and rg.state='active'
+      join public.live_semantic_excerpt_inputs li on li.article_id=lm.article_id::text and li.input_sha256=lg.input_hash
+      join public.live_semantic_excerpt_inputs ri on ri.article_id=rm.article_id::text and ri.input_sha256=rg.input_hash
+      where g.origin_run_id=${runId}::dialektik_ulid and g.config_sha256=${configSha}
+        and p.config_sha256=${stanceConfigSha256(configSha)} and lm.source_id<>rm.source_id
+        and (select count(*) from public.live_semantic_event_group_members m where m.group_id=g.id)=2
+        and not exists(select 1 from public.live_semantic_editorial_decisions d where d.group_id=g.id)
+      order by g.id,p.ratio_comparable desc,p.id limit 50`.execute(connection);
+    const tried=new Set<string>(); let published=0;
+    for (const row of rows.rows) {
+      if (tried.has(row.groupId)) continue;
+      try {
+        const article=(sourceId:string,textOriginal:string,publishedAt:Date,span:Record<string,unknown>) => ({
+          sourceId,textOriginal,publishedAt,selectedQuote:String(span?.quoted_text ?? ''),
+          start:Number(span?.start),end:Number(span?.end),
+        });
+        const assessment=validateAutoScope({sameEvent:row.sameEvent,sameEventConfidence:row.sameEventConfidence,
+          relation:row.relation,ratioConflicting:row.ratioConflicting,ratioComparable:row.ratioComparable},
+          article(row.leftSource,row.leftText,row.leftDate,row.leftSpan),article(row.rightSource,row.rightText,row.rightDate,row.rightSpan));
+        const conflictIds=['DIVERGENT','CONTRADICTORY'].includes(assessment.relation) ? [row.pairId] : [];
+        const commandId=generateUlid({now:Date.now});
+        await this.moderationWriter.database.transaction().execute(async transaction=>{
+          await setTransactionAuditContext(transaction,{action:'moderation_decision',actorId:parseUlid(actor),actorType:'editor',
+            correlationId:commandId,reasonCode:'live_semantic_automatic_promotion',metadata:{decision_mode:'AUTO_ENGINE',semantic_group_id:row.groupId}});
+          const claims=[{articleId:row.leftId,ordinal:row.leftOrdinal},{articleId:row.rightId,ordinal:row.rightOrdinal}];
+          await sql`select public.dialektik_record_live_semantic_editorial_decision(
+            ${row.groupId}::dialektik_ulid,${actor}::dialektik_ulid,${commandId}::dialektik_ulid,
+            'APPROVED','AUTO_ENGINE: promoción automática de citas y evaluación verificadas',${row.title},
+            ${JSON.stringify(claims)}::jsonb,${JSON.stringify(conflictIds)}::jsonb)`.execute(transaction);
+          const result=await sql<{result:{status:string}}>`select public.dialektik_promote_live_semantic_event_group(
+            ${row.groupId}::dialektik_ulid,${actor}::dialektik_ulid,${commandId}::dialektik_ulid) as result`.execute(transaction);
+          if (result.rows[0]?.result.status!=='PROMOTED') throw new Error('AUTO_PROMOTION_REVIEW_REQUIRED');
+        });
+        tried.add(row.groupId);
+        published++;
+      } catch (error) {
+        this.logger.warn(`Semantic automatic group not promoted: ${error instanceof Error ? error.name : 'unknown'}`);
+      }
+    }
+    return published;
   }
 
   private ensureEnabled(): void {
@@ -353,7 +429,7 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
       if (locked.rows[0]?.locked !== true)
         throw new ConflictException("SEMANTIC_BATCH_ALREADY_RUNNING");
       try {
-        return await this.runLocked(
+        const result = await this.runLocked(
           connection,
           identity.userId,
           targetDay,
@@ -362,6 +438,12 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
           articleIds,
           new LiveSemanticCallBudget(25),
         );
+        if ('runId' in result && result.runId) {
+          const actor = process.env.SYSTEM_AUTO_EDITOR_ID ?? '01M4YDQK00ED1T0R0R1AND0VE1';
+          const automaticPromotions = await this.autoPromoteRun(connection,result.runId,actor,configSha);
+          return {...result, automaticPromotions};
+        }
+        return result;
       } finally {
         await sql`select pg_advisory_unlock(hashtextextended(${leaseName},0))`.execute(
           connection,
