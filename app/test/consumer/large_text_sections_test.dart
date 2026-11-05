@@ -1,7 +1,7 @@
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/screens/synthesis_screen.dart';
-import 'package:flutter/material.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../support/public_api_fixtures.dart';
 
