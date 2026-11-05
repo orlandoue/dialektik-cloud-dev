@@ -49,6 +49,20 @@ describe("live semantic production grounding", () => {
       Array.from(text).slice(result.charStart!, result.charEnd!).join(""),
     ).toBe(result.quotedText);
     expect(result.usedFallback).toBe(true);
+    expect(result.assertionText).toBe(result.quotedText);
+    expect(result.positionSummary).toBe(result.quotedText);
+  });
+
+  it("retains uncertainty and ignores unsupported English paraphrases", () => {
+    const text = "Titular. El futbolista no jugaría el resto del año.";
+    const quote = "El futbolista no jugaría el resto del año.";
+    const result = groundLiveClaim({
+      ...claim(quote), assertionText: "The player will not play again this year.",
+      positionSummary: "The player definitely will not play again.",
+    }, text, "Titular");
+    expect(result.assertionText).toBe(quote);
+    expect(result.positionSummary).toBe(quote);
+    expect(result.usedFallback).toBe(false);
   });
 
   it("grounds multiple non-overlapping claims with exact Unicode offsets", () => {

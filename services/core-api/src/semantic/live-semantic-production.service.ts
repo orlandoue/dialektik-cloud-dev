@@ -13,7 +13,7 @@ import { generateUlid, setTransactionAuditContext } from "@dialektik/database";
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@dialektik/database";
 import { LiveSemanticCallBudget } from "./live-semantic-call-budget.js";
-import { hasSpecificHeadlineOverlap } from "./live-semantic-scheduler-prefilter.js";
+import { controversyScore, hasSpecificHeadlineOverlap } from "./live-semantic-scheduler-prefilter.js";
 import { CloudflareWorkersAITransport } from "../llm-shadow/llm.cloudflare.js";
 import {
   CLOUDFLARE_JSON_MODE_MODEL,
@@ -278,7 +278,11 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
           order by published_at desc,article_id desc limit 400`.execute(connection);
         const proposals=candidates.rows.map(a=>({...a,eventKey:'',eventTitle:a.headline,eventSummary:''}));
         const pendingIds=new Set(candidates.rows.filter(a=>a.needsExtraction).map(a=>a.articleId));
-        const pairs=[...preclusterLiveSemanticArticles(proposals,targetDay)].sort((a,b)=>Math.max(b.left.publishedAt.getTime(),b.right.publishedAt.getTime())-Math.max(a.left.publishedAt.getTime(),a.right.publishedAt.getTime()));
+        const excerpts=new Map(candidates.rows.map(a=>[a.articleId,a.excerpt]));
+        const pairs=[...preclusterLiveSemanticArticles(proposals,targetDay)].sort((a,b)=>
+          controversyScore(b.left.headline,excerpts.get(b.left.articleId) ?? '',b.right.headline,excerpts.get(b.right.articleId) ?? '') -
+            controversyScore(a.left.headline,excerpts.get(a.left.articleId) ?? '',a.right.headline,excerpts.get(a.right.articleId) ?? '') ||
+          Math.max(b.left.publishedAt.getTime(),b.right.publishedAt.getTime())-Math.max(a.left.publishedAt.getTime(),a.right.publishedAt.getTime()));
         const selected=new Set<string>();
         for(const pair of pairs) {
           if(!pendingIds.has(pair.left.articleId) && !pendingIds.has(pair.right.articleId)) continue;
@@ -1082,7 +1086,9 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
           and old.config_sha256=${configSha}
           and not exists(select 1 from public.live_semantic_stance_pair_attempts attempt
             where attempt.original_pair_id=old.id and attempt.config_sha256=${stanceConfig})
-        order by old.created_at,old.id limit ${MAX_STANCE_PAIR_ASSESSMENTS}
+        -- Cross-source claims are needed for promotion; same-article pairs
+        -- should not exhaust the bounded reassessment queue first.
+        order by (old.left_article_id=old.right_article_id),old.created_at,old.id limit ${MAX_STANCE_PAIR_ASSESSMENTS}
       ) select old.id::text as id,old.group_id::text as "groupId",
         old.left_article_id::text as "leftArticleId",old.right_article_id::text as "rightArticleId",
         old.left_claim_ordinal as "leftOrdinal",old.right_claim_ordinal as "rightOrdinal",
@@ -1101,7 +1107,7 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
       left join lateral (select input.* from public.live_semantic_excerpt_inputs input
         where input.article_id=old.right_article_id::text and input.input_sha256=right_generation.input_hash
           and right_generation.state='active' limit 1) right_input on true
-      order by old.created_at,old.id`.execute(connection);
+      order by (old.left_article_id=old.right_article_id),old.created_at,old.id`.execute(connection);
     const totals = { attempted: 0, validated: 0, invalid: 0, unavailable: 0 };
     for (const row of rows.rows) {
       if(budget && !budget.available) break;

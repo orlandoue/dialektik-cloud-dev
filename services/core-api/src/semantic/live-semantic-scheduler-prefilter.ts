@@ -9,3 +9,11 @@ export function hasSpecificHeadlineOverlap(left:string,right:string):boolean {
   for(const token of a) if(b.has(token) && ++shared>=2) return true;
   return false;
 }
+
+/** Ranking signal only; it does not prove conflict or permit publication. */
+export function controversyScore(...texts: string[]): number {
+  const text = texts.join(' ').normalize('NFKD').replace(/[\u0300-\u036f]/gu, '').toLowerCase();
+  const strong = /\b(?:cuestion\w*|rechaz\w*|acus\w*|desmient\w*|respond\w*|replic\w*|polemic\w*|critic\w*|querell\w*|denunci\w*|defens\w*|imputad\w*)\b/gu;
+  const context = /\b(?:oposicion|gobierno|fiscalia|corte|investigacion)\b/gu;
+  return new Set(text.match(strong) ?? []).size * 3 + new Set(text.match(context) ?? []).size;
+}
