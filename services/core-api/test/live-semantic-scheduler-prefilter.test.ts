@@ -7,6 +7,9 @@ describe('semantic scheduler headline prefilter',()=>{
   it('retains a pair sharing specific event words',()=>{
     expect(hasSpecificHeadlineOverlap('Codelco anuncia despidos en división El Teniente','Trabajadores cuestionan despidos en Codelco El Teniente')).toBe(true);
   });
+  it('rejects a shared person plus generic words when the incidents differ',()=>{
+    expect(hasSpecificHeadlineOverlap('Kast responde por acusación contra Rabat','Kast defiende cooperación contra crimen organizado')).toBe(false);
+  });
   it('prioritizes controversies without treating the score as proof of a conflict',()=>{
     expect(controversyScore('Fiscalía denuncia y la defensa rechaza acusación')).toBeGreaterThan(
       controversyScore('Fiscalía informa avance de la investigación'));
