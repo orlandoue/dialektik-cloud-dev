@@ -24,6 +24,11 @@ export class LiveSemanticProductionController {
     return this.service.runBatch(authorization, body);
   }
 
+  @Post("run-automatic")
+  runAutomatic(@Headers("authorization") authorization: string | undefined) {
+    return this.service.runAutomatic(authorization);
+  }
+
   @Post("promote")
   promote(
     @Headers("authorization") authorization: string | undefined,
