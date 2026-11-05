@@ -256,11 +256,17 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
     const date=new Date(`${today}T00:00:00.000Z`); date.setUTCDate(date.getUTCDate()-1);
     const targetDay=date.toISOString().slice(0,10); const configSha=this.configSha256();
     return this.writer.database.connection().execute(async connection=>{
+      const global=await sql<{locked:boolean}>`select pg_try_advisory_lock(hashtextextended('dialektik-live-semantic-automation',0)) as locked`.execute(connection);
+      if(global.rows[0]?.locked!==true) return 'ALREADY_RUNNING';
+      try {
       const locked=await sql<{locked:boolean}>`select pg_try_advisory_lock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0)) as locked`.execute(connection);
       if(locked.rows[0]?.locked!==true) return 'ALREADY_RUNNING';
       try {
         const editor=await sql<{allowed:boolean}>`select exists(select 1 from public.users u join public.editorial_single_editor_authorizations a on a.editor_user_id=u.id where u.id=${actor}::dialektik_ulid and u.role='editor' and a.revoked_at is null) as allowed`.execute(connection);
         if(editor.rows[0]?.allowed!==true) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
+        // Render may restart or wake repeatedly: do not spend the budget again within four hours.
+        const recent=await sql<{present:boolean}>`select exists(select 1 from public.live_semantic_production_runs where started_at>clock_timestamp()-interval '4 hours') as present`.execute(connection);
+        if(recent.rows[0]?.present===true) return 'RECENT_SEMANTIC_RUN';
         const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean}>`
           select i.article_id as "articleId",i.source_id as "sourceId",i.published_at as "publishedAt",i.headline,i.excerpt,
             not exists(select 1 from public.live_semantic_article_attempts a where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256 and a.config_sha256=${configSha})
@@ -281,6 +287,7 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
         }
         return 'NO_PENDING_MULTISOURCE_PAIRS';
       } finally {await sql`select pg_advisory_unlock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0))`.execute(connection);}
+      } finally {await sql`select pg_advisory_unlock(hashtextextended('dialektik-live-semantic-automation',0))`.execute(connection);}
     });
   }
 
