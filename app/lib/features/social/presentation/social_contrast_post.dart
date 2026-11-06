@@ -46,10 +46,11 @@ class _SocialContrastPostState extends State<SocialContrastPost> {
   void initState() {
     super.initState();
     unawaited(_load());
-    if (social != null)
+    if (social != null) {
       refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
         if (!busy) unawaited(_load());
       });
+    }
   }
 
   Future<void> _load() async {

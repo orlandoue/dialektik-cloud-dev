@@ -34,10 +34,11 @@ Future<void> openMediaPublicProfile(
       ),
     );
   } on Exception {
-    if (context.mounted)
+    if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('No se pudo abrir el perfil.')),
       );
+    }
   }
 }
 
@@ -72,11 +73,12 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
   void initState() {
     super.initState();
     unawaited(_load());
-    if (widget.repository is SocialRepository)
+    if (widget.repository is SocialRepository) {
       refreshTimer = Timer.periodic(
         const Duration(seconds: 30),
         (_) => unawaited(_loadSocial()),
       );
+    }
   }
 
   @override
