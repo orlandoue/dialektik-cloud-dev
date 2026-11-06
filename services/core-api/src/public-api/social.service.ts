@@ -33,7 +33,10 @@ export class SocialService {
           max(r.reaction) filter (where r.user_id=${userId}::uuid) as mine
         from public.social_reactions r join public.public_events e on e.id=r.event_id and e.analysis_state='PUBLISHED'
         where ${filter}`.execute(tx);
-      if (eventId === undefined) return {...votes.rows[0], mine: null};
+      if (eventId === undefined) {
+        const followers = await sql<{count:number}>`select public.social_follower_count(${sourceId}::dialektik_ulid) as count`.execute(tx);
+        return {...votes.rows[0], mine: null, followers: followers.rows[0]?.count ?? 0};
+      }
       const comments = await sql<{id:string; body:string; article_id:string; url:string; created_at:Date}>`
         select c.id::text, c.body, c.article_id::text, a.url_canonical as url, c.created_at
         from public.social_evidence_comments c join public.articles a on a.id=c.article_id

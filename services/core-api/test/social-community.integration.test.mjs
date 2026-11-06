@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { socialCommunitySql } from '../../../packages/database/dist/migration/083_social_community.js';
+import { socialFollowerCountSql } from '../../../packages/database/dist/migration/084_social_follower_count.js';
 
 const a='11111111-1111-4111-8111-111111111111';
 const b='22222222-2222-4222-8222-222222222222';
@@ -38,13 +39,16 @@ test('service aggregates shared votes and accepts only evidence from the publish
       create role anon; create role authenticated; create role service_role; create role dialektik_core_app;
       create table public.events(id dialektik_ulid primary key);
       create table public.public_events(id dialektik_ulid primary key,analysis_state text);
+      create table public.user_followed_sources(user_id uuid, source_id dialektik_ulid);
       create table public.articles(id dialektik_ulid primary key,event_id dialektik_ulid,source_id dialektik_ulid,url_canonical text);
       insert into auth.users values('${a}'),('${b}');
+      insert into public.user_followed_sources values('${a}','source1'),('${b}','source1');
       insert into public.events values('event1'),('event2');
       insert into public.public_events values('event1','PUBLISHED'),('event2','PUBLISHED');
       insert into public.articles values('article1','event1','source1','https://example.cl/a'),('article2','event2','source2','https://example.cl/b');
       grant select on public.public_events,public.articles to dialektik_core_app;`);
     await pg.exec(socialCommunitySql);
+    await pg.exec(socialFollowerCountSql);
     await pg.exec('set role dialektik_core_app');
     const pool={async connect(){return {query:(query,values)=>pg.query(typeof query==='string'?query:query.text,values??query.values??[]),release(){}}},async end(){}};
     database=new Kysely({dialect:new PostgresDialect({pool})});
@@ -60,7 +64,9 @@ test('service aggregates shared votes and accepts only evidence from the publish
     assert.equal(updated.comments[0].url,'https://example.cl/a');
     assert.equal(updated.comments[0].body,'Cita y contexto');
     assert.equal('user_id' in updated.comments[0],false);
-    assert.equal((await service.summary(b,undefined,'source1')).solid,1);
+    const sourceSummary=await service.summary(b,undefined,'source1');
+    assert.equal(sourceSummary.solid,1);
+    assert.equal(sourceSummary.followers,2);
     await service.react(a,'event1',null);
     assert.equal((await service.summary(a,'event1')).solid,0);
   } finally { if(database) await database.destroy(); await pg.close(); }
