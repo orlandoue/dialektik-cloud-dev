@@ -1,4 +1,5 @@
 import { synthesisRelationMigration } from './081_synthesis_relation.js';
+import { socialCommunityMigration } from './083_social_community.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -82,6 +83,7 @@ import { youtubeVerifiedChannelIdsMigration } from './079_youtube_verified_chann
 import { userFollowedSourcesMigration } from './080_user_followed_sources';
 
 const migrations: Readonly<Record<string, Migration>> = {
+  '083_social_community': socialCommunityMigration,
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
   '024_llm_semantic_contract_v2': llmSemanticContractV2Migration,
   '025_cloudflare_projection_route_grants': cloudflareProjectionRouteGrantMigration,
