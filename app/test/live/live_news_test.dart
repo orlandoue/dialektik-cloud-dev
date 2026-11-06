@@ -343,6 +343,7 @@ void main() {
           '/live/news',
           '/live/sources',
           '/v1/feed',
+          '/v1/contradictions',
         ]),
       );
       final SemanticsHandle semantics = tester.ensureSemantics();
@@ -389,6 +390,7 @@ void main() {
           '/live/news',
           '/live/sources',
           '/v1/feed',
+          '/v1/contradictions',
         ]),
       );
       await tapLive(

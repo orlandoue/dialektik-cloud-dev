@@ -19,6 +19,8 @@ import 'package:dialektik/features/live/presentation/source_radar.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_vocabulary.dart';
+import 'package:dialektik/features/social/presentation/dialektik_stories_bar.dart';
+import 'package:dialektik/features/social/presentation/social_contrast_feed.dart';
 import 'package:flutter/material.dart';
 
 // dialektik:epistemic-component
@@ -103,6 +105,7 @@ final class LiveNewsScreen extends StatefulWidget {
 final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   late final StoryFollowStore? _stories = widget.briefingRepository == null ? null : StoryFollowStore.forRepository(widget.briefingRepository!);
   late final Future<PublicPage<EventCardDto>>? _briefing = widget.briefingRepository?.listFeed(limit:50);
+  late final Future<PublicPage<ContradictionDto>>? _socialContrasts = widget.briefingRepository?.listContradictions(limit:50);
   Future<GovUkPreview>? _govUkPreviewFuture;
   final TextEditingController _query = TextEditingController();
   final ScrollController _countryScroll = ScrollController();
@@ -413,6 +416,11 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (widget.briefingRepository case final ConsumerRepository socialRepository)
+            DialektikStoriesBar(repository:socialRepository,sourcesRepository:widget.repository,initialSources:_sources,contrastsFuture:_socialContrasts),
+          if (widget.briefingRepository case final ConsumerRepository socialRepository)
+            if (widget.onOpenEvent case final ValueChanged<String> openEvent)
+              SocialContrastFeed(repository:socialRepository,sourcesRepository:widget.repository,onOpenEvent:openEvent,contrastsFuture:_socialContrasts),
           if (_briefing != null) FutureBuilder<PublicPage<EventCardDto>>(
             future:_briefing, builder:(context,snapshot) {
               final now=widget.clock().toLocal();
