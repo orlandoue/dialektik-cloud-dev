@@ -5,6 +5,7 @@ import 'package:dialektik/features/consumer/data/source_sync_repository.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/presentation/source_sync_sheet.dart';
+import 'package:dialektik/features/social/presentation/media_public_profile.dart';
 import 'package:flutter/material.dart';
 
 /// A shared source selector for the welcome sheet and Sources tab.
@@ -107,7 +108,7 @@ class _SourceRadarState extends State<SourceRadar> {
           if(!visible.any((brand)=>_group(brand.first)==group.$1)) const Padding(padding:EdgeInsets.all(8),child:Text('Sin resultados'))
           else SizedBox(key:ValueKey('radar-group-${group.$1}'),height:rowHeight,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:visible.where((brand)=>_group(brand.first)==group.$1).length,separatorBuilder:(_,_)=>const SizedBox(width:10),itemBuilder:(context,index){
             final brand=visible.where((brand)=>_group(brand.first)==group.$1).elementAt(index);
-            return _SourceRadarCard(source:brand.first,width:cardWidth,selected:brand.every((source)=>followed.contains(source.id)),busy:busy.contains(_brandKey(brand.first.name)),enabled:following!=null,onTap:()=>unawaited(_toggle(brand)));
+            return _SourceRadarCard(source:brand.first,width:cardWidth,selected:brand.every((source)=>followed.contains(source.id)),busy:busy.contains(_brandKey(brand.first.name)),enabled:following!=null,onTap:()=>unawaited(_toggle(brand)),onOpenProfile:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>MediaPublicProfileScreen(source:brand.first,repository:widget.repository))));
           })),
         ],
       ])),
@@ -121,11 +122,11 @@ class _SourceRadarState extends State<SourceRadar> {
 }
 
 class _SourceRadarCard extends StatelessWidget {
-  const _SourceRadarCard({required this.source,required this.width,required this.selected,required this.busy,required this.enabled,required this.onTap});
+  const _SourceRadarCard({required this.source,required this.width,required this.selected,required this.busy,required this.enabled,required this.onTap,required this.onOpenProfile});
   final LiveSourceDto source;
   final double width;
   final bool selected,busy,enabled;
-  final VoidCallback onTap;
+  final VoidCallback onTap,onOpenProfile;
   @override Widget build(BuildContext context) {
     final name=source.name.replaceAll('(YouTube)','').trim();
     final palette=[const Color(0xffa82929),const Color(0xff173b70),const Color(0xff29354c),const Color(0xff6e3f79),const Color(0xff1b695f)];
@@ -138,9 +139,9 @@ class _SourceRadarCard extends StatelessWidget {
     final color=voice || ciper || tercera ? Colors.white : lower.contains('sin filtros') || lower.contains('cnn') || lower.contains('24 horas') ? const Color(0xffc21f2b) : lower.contains('cooperativa') ? const Color(0xff16488a) : lower.contains('ciper') ? const Color(0xffb2272a) : lower.contains('biobio') ? const Color(0xff15578e) : lower.contains('vía x') || lower.contains('via x') ? const Color(0xffba2132) : lower.contains('adn') ? const Color(0xff203a79) : lower.contains('la tercera') || lower.contains('el mostrador') ? const Color(0xff1e2430) : defaultColor;
     final initials=name.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).take(3).map((w)=>w.characters.first.toUpperCase()).join();
     final words=voice ? 'la voz' : lower.contains('sin filtros') ? 'SIN FILTROS' : ciper ? 'CiPER' : lower.contains('biobio') ? 'RBB' : lower.contains('cooperativa') ? 'COOP' : lower.contains('vía x') || lower.contains('via x') ? 'X' : lower.contains('la tercera') ? 'LA TERCERA' : lower.contains('el mostrador') ? 'MOSTRADOR' : lower.contains('adn') ? 'ADN' : lower.contains('24 horas') ? '24H' : lower.contains('cnn') ? 'CNN' : lower.contains('t13') ? 'T13' : lower.contains('mega') ? 'MEGA' : lower.contains('chv') ? 'CHV' : initials;
-    return Semantics(button:true,toggled:selected,label:'${source.name}, ${selected ? 'siguiendo' : 'no sigues'}',child:Material(color:Colors.white,borderRadius:BorderRadius.circular(14),elevation:1,child:InkWell(borderRadius:BorderRadius.circular(14),onTap:enabled && !busy ? onTap : null,child:Container(width:width,padding:const EdgeInsets.all(8),decoration:BoxDecoration(border:Border.all(color:const Color(0xffe4e0d4)),borderRadius:BorderRadius.circular(14)),child:Column(children:[
+    return Semantics(button:true,toggled:selected,label:'${source.name}, ${selected ? 'siguiendo' : 'no sigues'}',child:Material(color:Colors.white,borderRadius:BorderRadius.circular(14),elevation:1,child:InkWell(borderRadius:BorderRadius.circular(14),onTap:onOpenProfile,child:Container(width:width,padding:const EdgeInsets.all(8),decoration:BoxDecoration(border:Border.all(color:const Color(0xffe4e0d4)),borderRadius:BorderRadius.circular(14)),child:Column(children:[
       SizedBox(height:42,child:Center(child:MediaQuery.withClampedTextScaling(maxScaleFactor:1.0,child:FittedBox(fit:BoxFit.scaleDown,child:Container(height:42,width:viaX ? 42 : 70,alignment:Alignment.center,decoration:BoxDecoration(color:color,shape:viaX ? BoxShape.circle : BoxShape.rectangle,borderRadius:viaX ? null : BorderRadius.circular(lower.contains('cooperativa') ? 24 : 8)),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Text(words.isEmpty ? '?' : words,textAlign:TextAlign.center,maxLines:1,softWrap:false,style:TextStyle(color:voice || ciper || tercera ? const Color(0xff162032) : lower.contains('cooperativa') ? const Color(0xffffd34d) : Colors.white,fontFamily:tercera ? 'serif' : null,fontWeight:FontWeight.bold,fontSize:words.contains('\n') || words.length>7 ? 11 : 19,height:1)),if(voice) Container(width:48,height:3,color:const Color(0xffffcf18)),if(ciper || lower.contains('el mostrador')) const Text('●',style:TextStyle(color:Color(0xffc21f2b),fontSize:10,height:0.8)),if(lower.contains('biobio')) Container(width:36,height:3,color:const Color(0xffffa326)),if(lower.contains('adn')) Container(width:36,height:3,color:const Color(0xffe22b35))])))))),
-      const SizedBox(height:4),Expanded(child:Center(child:Text(name,textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:13,fontWeight:FontWeight.w600,color:Color(0xff1a1a1a))))),
+      const SizedBox(height:4),Expanded(child:Center(child:InkWell(onTap:onOpenProfile,child:Text(name,textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:13,fontWeight:FontWeight.w600,color:Color(0xff1a1a1a)))))),
       const SizedBox(height:4),AnimatedContainer(duration:MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds:180),height:30,width:double.infinity,decoration:BoxDecoration(color:selected ? const Color(0xffede9df) : Colors.white,borderRadius:BorderRadius.circular(15)),child:OutlinedButton(style:OutlinedButton.styleFrom(padding:EdgeInsets.zero,backgroundColor:Colors.transparent,foregroundColor:const Color(0xff162032),side:const BorderSide(color:Color(0xff162032)),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15))),onPressed:enabled && !busy ? onTap : null,child:Padding(padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),child:FittedBox(fit:BoxFit.scaleDown,child:Text(selected ? '✓ Siguiendo' : '+ Seguir',maxLines:1,softWrap:false,style:const TextStyle(fontSize:12)))))),
     ])))));
   }

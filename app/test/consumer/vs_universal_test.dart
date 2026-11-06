@@ -28,8 +28,10 @@ void main() {
     final repo=_UniversalRepo(); addTearDown(repo.changes.dispose);
     await tester.pumpWidget(MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(390,844),textScaler:TextScaler.linear(1.45)),child:SynthesisScreen(repository:repo,onOpenEvent:(_){}))));
     await tester.pumpAndSettle();
-    expect(find.text('Contraste en feed'),findsOneWidget);
-    expect(find.text('Contraste sin evento en feed'),findsOneWidget);
+    expect(find.text('Contraste en feed'),findsWidgets);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('contrast-01K4W4M7R0B000000000000098')),400,scrollable:find.descendant(of:find.byKey(const Key('synthesis-feed')),matching:find.byType(Scrollable)).first);
+    expect(find.text('Contraste sin evento en feed'),findsWidgets);
+    await tester.scrollUntilVisible(find.byKey(const ValueKey('contrast-01K4W4M7R0B000000000000099')),400,scrollable:find.descendant(of:find.byKey(const Key('synthesis-feed')),matching:find.byType(Scrollable)).first);
     expect(find.text('Otro contraste del feed'),findsOneWidget);
     expect(repo.followedReads,0);
     expect(tester.takeException(),isNull);

@@ -1,14 +1,18 @@
 import 'dart:async';
+
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_client.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/consumer_scaffold.dart';
-import 'package:dialektik/features/consumer/presentation/widgets/dialectical_thread.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
+import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
+import 'package:dialektik/features/social/presentation/dialektik_stories_bar.dart';
+import 'package:dialektik/features/social/presentation/media_public_profile.dart';
+import 'package:dialektik/features/social/presentation/social_contrast_post.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -56,7 +60,8 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
   bool isContrast(EventCardDto e)=>e.synthesisRelation=='CONTRADICTION' || e.synthesisRelation=='DIFFERENT_FOCUS' || contrasts.containsKey(e.id);
   @override Widget build(BuildContext context){
     final filtered=events.where((e)=>widget.development ? !isContrast(e) && (topic=='Todos' || _eventTopic(e)==topic) : isContrast(e)).toList();
-    return ConsumerScaffold(title:widget.development ? 'Desarrollo' : 'VS',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:RefreshIndicator(onRefresh:_load,child:ListView(physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.fromLTRB(20,12,20,20),children:[
+    return ConsumerScaffold(title:widget.development ? 'Desarrollo' : 'VS',navigationActions:widget.navigationActions,body:ColoredBox(color:const Color(0xfffaf8f3),child:RefreshIndicator(onRefresh:_load,child:ListView(key:const Key('synthesis-feed'),physics:const AlwaysScrollableScrollPhysics(),padding:const EdgeInsets.fromLTRB(20,12,20,20),children:[
+      if(!widget.development) DialektikStoriesBar(repository:widget.repository,sourcesRepository:widget.repository is LiveNewsRepository ? widget.repository as LiveNewsRepository : null,initialContrasts:contrasts.values.toList()),
       if(widget.development) ...[
         SingleChildScrollView(scrollDirection:Axis.horizontal, child:Row(children:[for(final choice in ['Todos','Política','Justicia','Economía','Seguridad','Deportes','Sociedad']) Padding(padding:const EdgeInsets.only(right:8),child:ChoiceChip(label:Text(choice),selected:topic==choice,onSelected:(_)=>setState(()=>topic=choice)))])),
         if(widget.seismicRepository case final SeismicObservationRepository seismic) ChileSeismicObservationsPanel(repository:seismic),
@@ -66,7 +71,7 @@ class _SynthesisScreenState extends State<SynthesisScreen> {
       else if(widget.development ? filtered.isEmpty : contrastEntries.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('No hay acontecimientos en este filtro.'))
       else if(widget.development) for(final event in filtered) _DevelopmentCard(event:event,repository:widget.repository,opener:widget.externalLinkOpener)
       else for(final entry in contrastEntries) if(entry.event case final event?) _ContrastCard(event:event,contrast:entry.contrast,repository:widget.repository,onOpen:()=>widget.onOpenEvent(event.id))
-        else Card(child:ListTile(title:Text(entry.contrast!.eventTitle),subtitle:const Text('No se pudo cargar el detalle de este contraste.'),onTap:()=>widget.onOpenEvent(entry.contrast!.eventId))),
+        else Card(key:ValueKey('contrast-${entry.contrast!.eventId}'),child:ListTile(title:Text(entry.contrast!.eventTitle),subtitle:const Text('No se pudo cargar el detalle de este contraste.'),onTap:()=>widget.onOpenEvent(entry.contrast!.eventId))),
     ]))));
   }
 }
@@ -103,18 +108,13 @@ class _ContrastCard extends StatefulWidget {
 class _ContrastCardState extends State<_ContrastCard> {
   late Future<EventDetailDto> detail=_getUniversalEvent(widget.repository,widget.event.id);
   @override void didUpdateWidget(covariant _ContrastCard oldWidget){super.didUpdateWidget(oldWidget);if(oldWidget.event != widget.event)detail=_getUniversalEvent(widget.repository,widget.event.id,refresh:true);}
-  @override Widget build(BuildContext context)=>Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),decoration:BoxDecoration(color:widget.event.synthesisRelation=='CONTRADICTION' ? const Color(0xffc86446) : const Color(0xffb47814),borderRadius:BorderRadius.circular(6)),child:Text('${widget.event.sourceCount} MEDIOS · ${widget.event.synthesisRelation=='CONTRADICTION' ? 'CONTRADICCIÓN' : widget.event.synthesisRelation=='DIFFERENT_FOCUS' ? 'DISTINTO ENFOQUE' : 'CONTRASTE'}',style:const TextStyle(fontSize:11,fontWeight:FontWeight.w700,color:Colors.white))),
-    const SizedBox(height:8),Text(widget.event.titleDescriptive,style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:10),
-    FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
-      final data=snapshot.data;
-      if(data==null) return snapshot.hasError ? const Text('No se pudieron cargar las fuentes.') : const SizedBox.shrink();
-      final c=widget.contrast;
-      final positions=(c == null ? data.coveragePositions.take(2) : data.coveragePositions.where((p)=>p.id==c.positionA.id || p.id==c.positionB.id)).toList();
-      return DialecticalThread(event:data,positions:positions,relation:widget.event.synthesisRelation);
-    }),
-    TextButton(onPressed:widget.onOpen,style:TextButton.styleFrom(foregroundColor:const Color(0xff162032)),child:const Text('Ver fuentes originales →',style:TextStyle(fontWeight:FontWeight.w600))),
-  ])));
+  @override Widget build(BuildContext context)=>FutureBuilder<EventDetailDto>(future:detail,builder:(context,snapshot){
+    final data=snapshot.data;
+    if(data==null) return Card(child:ListTile(title:Text(widget.event.titleDescriptive),subtitle:Text(snapshot.hasError ? 'No se pudieron cargar las fuentes.' : 'Cargando fuentes…'),onTap:widget.onOpen));
+    final c=widget.contrast;
+    final positions=(c == null ? data.coveragePositions.take(2) : data.coveragePositions.where((p)=>p.id==c.positionA.id || p.id==c.positionB.id)).toList();
+    return SocialContrastPost(key:ValueKey('contrast-${widget.event.id}'),event:data,positions:positions,onOpenEvent:widget.onOpen,title:widget.event.titleDescriptive,relation:widget.event.synthesisRelation,sourceCount:widget.event.sourceCount,sourcesRepository:widget.repository is LiveNewsRepository ? widget.repository as LiveNewsRepository : null);
+  });
 }
 class _DevelopmentCard extends StatefulWidget {
   const _DevelopmentCard({required this.event,required this.repository,required this.opener});
@@ -137,7 +137,7 @@ class _DevelopmentCardState extends State<_DevelopmentCard> {
       else if(articles.isEmpty) const Text('No hay noticias originales disponibles.')
       else for(final article in articles) Padding(padding:const EdgeInsets.only(top:12),child:InkWell(onTap:()=>unawaited(widget.opener(article.url)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         if(extractYouTubeVideoId(article.url.toString()) case final String id) Padding(padding:const EdgeInsets.only(bottom:8),child:YouTubeThumbnail(videoId:id,onTap:()=>unawaited(widget.opener(article.url)))),
-        Text('${DateFormat('dd/MM HH:mm').format(article.publishedAt.toLocal())} · ${article.sourceName}',style:const TextStyle(fontWeight:FontWeight.w700)),
+        InkWell(onTap:article.sourceId != null && widget.repository is LiveNewsRepository ? () => openMediaPublicProfile(context,widget.repository as LiveNewsRepository,article.sourceId!) : null,child:Text('${DateFormat('dd/MM HH:mm').format(article.publishedAt.toLocal())} · ${article.sourceName}',style:const TextStyle(fontWeight:FontWeight.w700))),
         Text(article.title,style:const TextStyle(color:Color(0xff1a1a1a),fontWeight:FontWeight.w600)),
       ]))),
     ]));

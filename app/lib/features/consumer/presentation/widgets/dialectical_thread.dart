@@ -9,10 +9,11 @@ import 'package:flutter/material.dart';
 
 /// Local preferences, not community-wide votes or editorial verification.
 class DialecticalThread extends StatefulWidget {
-  const DialecticalThread({required this.event, required this.positions, required this.relation, super.key});
+  const DialecticalThread({required this.event, required this.positions, required this.relation, this.onOpenSource, super.key});
   final EventDetailDto event;
   final List<EventCoveragePositionDto> positions;
   final String? relation;
+  final ValueChanged<String>? onOpenSource;
   @override State<DialecticalThread> createState() => _DialecticalThreadState();
 }
 class _DialecticalThreadState extends State<DialecticalThread> {
@@ -68,7 +69,7 @@ class _DialecticalThreadState extends State<DialecticalThread> {
       final age = matching.isEmpty ? null : DateTime.now().difference(matching.first.publishedAt);
       final time = age == null || age.isNegative ? '' : age.inHours < 1 ? ' · hace menos de 1 h' : age.inHours < 24 ? ' · hace ${age.inHours}\u00a0h' : ' · hace ${age.inDays}\u00a0d';
       return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [CircleAvatar(radius: size / 2, backgroundColor: const Color(0xff22252a), child: Text(initials(source), style: const TextStyle(color: Colors.white, fontFamily: 'Merriweather', fontSize: 12))), const SizedBox(width: 8), Expanded(child: Text(source, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15))), Flexible(child: Text(time, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.grey)))]),
+        Row(children: [InkWell(onTap:p.assertions.firstOrNull?.sourceId == null ? null : () => widget.onOpenSource?.call(p.assertions.first.sourceId!),child:CircleAvatar(radius: size / 2, backgroundColor: const Color(0xff22252a), child: Text(initials(source), style: const TextStyle(color: Colors.white, fontFamily: 'Merriweather', fontSize: 12)))), const SizedBox(width: 8), Expanded(child: InkWell(onTap:p.assertions.firstOrNull?.sourceId == null ? null : () => widget.onOpenSource?.call(p.assertions.first.sourceId!),child:Text(source, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15)))), Flexible(child: Text(time, maxLines: 1, softWrap: false, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, color: Colors.grey)))]),
         const SizedBox(height: 8), Text(quote == null || quote.isEmpty ? p.title : '“${RegExp(r"^[a-záéíóúñü]").hasMatch(quote) ? "[...] " : ""}$quote”', style: const TextStyle(fontFamily: 'Merriweather', fontSize: 16.5, fontWeight: FontWeight.w700, height: 1.28, color: Color(0xff141619))),
         if (quote == null || quote.isEmpty) const Text('Resumen de la postura', style: TextStyle(fontSize: 11)),
       ]);

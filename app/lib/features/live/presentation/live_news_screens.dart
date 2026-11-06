@@ -19,6 +19,9 @@ import 'package:dialektik/features/live/presentation/source_radar.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_components.dart';
 import 'package:dialektik/features/semantic/presentation/editorial_vocabulary.dart';
+import 'package:dialektik/features/social/presentation/dialektik_stories_bar.dart';
+import 'package:dialektik/features/social/presentation/media_public_profile.dart';
+import 'package:dialektik/features/social/presentation/social_contrast_feed.dart';
 import 'package:flutter/material.dart';
 
 // dialektik:epistemic-component
@@ -103,6 +106,7 @@ final class LiveNewsScreen extends StatefulWidget {
 final class _LiveNewsScreenState extends State<LiveNewsScreen> {
   late final StoryFollowStore? _stories = widget.briefingRepository == null ? null : StoryFollowStore.forRepository(widget.briefingRepository!);
   late final Future<PublicPage<EventCardDto>>? _briefing = widget.briefingRepository?.listFeed(limit:50);
+  late final Future<PublicPage<ContradictionDto>>? _socialContrasts = widget.briefingRepository?.listContradictions(limit:50);
   Future<GovUkPreview>? _govUkPreviewFuture;
   final TextEditingController _query = TextEditingController();
   final ScrollController _countryScroll = ScrollController();
@@ -413,6 +417,11 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
+          if (widget.briefingRepository case final ConsumerRepository socialRepository)
+            DialektikStoriesBar(repository:socialRepository,sourcesRepository:widget.repository,initialSources:_sources,contrastsFuture:_socialContrasts),
+          if (widget.briefingRepository case final ConsumerRepository socialRepository)
+            if (widget.onOpenEvent case final ValueChanged<String> openEvent)
+              SocialContrastFeed(repository:socialRepository,sourcesRepository:widget.repository,onOpenEvent:openEvent,contrastsFuture:_socialContrasts),
           if (_briefing != null) FutureBuilder<PublicPage<EventCardDto>>(
             future:_briefing, builder:(context,snapshot) {
               final now=widget.clock().toLocal();
@@ -805,6 +814,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
           else ...<Widget>[
             LiveLeadCard(
               article: _visibleItems.first,
+              onOpenSource: () => openMediaPublicProfile(context,widget.repository,_visibleItems.first.source.id),
               isFollowed: _followed.contains(_visibleItems.first.source.id),
               onPressed: () => _openNews(_visibleItems.first),
             ),
@@ -835,6 +845,7 @@ final class _LiveNewsScreenState extends State<LiveNewsScreen> {
                           width: cardWidth,
                           child: LiveNewsCard(
                             article: article,
+                            onOpenSource: () => openMediaPublicProfile(context,widget.repository,article.source.id),
                             isFollowed: _followed.contains(article.source.id),
                             onPressed: () => _openNews(article),
                           ),
@@ -896,17 +907,19 @@ final class LiveLeadCard extends StatelessWidget {
     required this.article,
     required this.onPressed,
     this.isFollowed = false,
+    this.onOpenSource,
     super.key,
   });
 
   final LiveNewsItemDto article;
   final VoidCallback onPressed;
   final bool isFollowed;
+  final VoidCallback? onOpenSource;
 
   @override
   Widget build(BuildContext context) => extractYouTubeVideoId(article.canonicalUrl.toString()) != null
       ? YouTubeNewsCard(videoId:extractYouTubeVideoId(article.canonicalUrl.toString())!,title:article.headline,source:article.source.name,
-          published:liveLocalDate(article.publishedAt),followed:isFollowed,onTap:onPressed)
+          published:liveLocalDate(article.publishedAt),followed:isFollowed,onTap:onPressed,onOpenSource:onOpenSource)
       : Semantics(
     button: true,
     label:
@@ -942,12 +955,12 @@ final class LiveLeadCard extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: DialektikSpacing.space6),
-                  Text(
+                  InkWell(onTap:onOpenSource,child:Text(
                     '${article.source.name}  ·  ${liveLocalDate(article.publishedAt)}',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: DialektikColors.nocturneMuted,
                     ),
-                  ),
+                  )),
                 ],
               );
               return Row(
@@ -1045,15 +1058,17 @@ final class LiveNewsCard extends StatelessWidget {
     required this.article,
     required this.onPressed,
     this.isFollowed = false,
+    this.onOpenSource,
     super.key,
   });
   final LiveNewsItemDto article;
   final VoidCallback onPressed;
   final bool isFollowed;
+  final VoidCallback? onOpenSource;
   @override
   Widget build(BuildContext context) => extractYouTubeVideoId(article.canonicalUrl.toString()) != null
       ? YouTubeNewsCard(videoId:extractYouTubeVideoId(article.canonicalUrl.toString())!,title:article.headline,source:article.source.name,
-          published:liveLocalDate(article.publishedAt),followed:isFollowed,compact:true,onTap:onPressed)
+          published:liveLocalDate(article.publishedAt),followed:isFollowed,compact:true,onTap:onPressed,onOpenSource:onOpenSource)
       : EditorialActionCard(
     onTap: onPressed,
     semanticLabel:
@@ -1064,10 +1079,10 @@ final class LiveNewsCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             if (isFollowed) const Text('En tus fuentes'),
-            Text(
+            InkWell(onTap:onOpenSource,child:Text(
               article.source.name,
               style: Theme.of(context).textTheme.bodyMedium,
-            ),
+            )),
             const SizedBox(height: DialektikSpacing.space3),
             Text(
               liveLocalDate(article.publishedAt),

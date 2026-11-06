@@ -29,6 +29,7 @@ void main() {
       return MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(390,844),textScaler:TextScaler.linear(1.45)),child:SynthesisScreen(repository:repo,onOpenEvent:(_){},development:development,navigationActions:[for(final label in ['Actualidad','Espejo','VS','Desarrollo','Fuentes']) ConsumerNavigationAction(label:label,selected:false,onPressed:(){})],externalLinkOpener:(uri) async {opened=uri;return true;})));
     }
     await tester.pumpWidget(app(contrast,false)); await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('💬 Debate')); await tester.pumpAndSettle(); await tester.tap(find.text('💬 Debate')); await tester.pumpAndSettle();
     expect(find.text('Termómetro de evidencia'),findsOneWidget);
     await tester.ensureVisible(find.text('Fuentes')); await tester.pumpAndSettle();
     expect(tester.getRect(find.text('Fuentes')).right,lessThanOrEqualTo(390));
