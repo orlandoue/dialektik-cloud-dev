@@ -11,6 +11,7 @@ import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
 import 'package:dialektik/features/social/presentation/dialektik_stories_bar.dart';
+import 'package:dialektik/features/social/presentation/media_public_profile.dart';
 import 'package:dialektik/features/social/presentation/social_contrast_post.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -136,7 +137,7 @@ class _DevelopmentCardState extends State<_DevelopmentCard> {
       else if(articles.isEmpty) const Text('No hay noticias originales disponibles.')
       else for(final article in articles) Padding(padding:const EdgeInsets.only(top:12),child:InkWell(onTap:()=>unawaited(widget.opener(article.url)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         if(extractYouTubeVideoId(article.url.toString()) case final String id) Padding(padding:const EdgeInsets.only(bottom:8),child:YouTubeThumbnail(videoId:id,onTap:()=>unawaited(widget.opener(article.url)))),
-        Text('${DateFormat('dd/MM HH:mm').format(article.publishedAt.toLocal())} · ${article.sourceName}',style:const TextStyle(fontWeight:FontWeight.w700)),
+        InkWell(onTap:article.sourceId != null && widget.repository is LiveNewsRepository ? () => openMediaPublicProfile(context,widget.repository as LiveNewsRepository,article.sourceId!) : null,child:Text('${DateFormat('dd/MM HH:mm').format(article.publishedAt.toLocal())} · ${article.sourceName}',style:const TextStyle(fontWeight:FontWeight.w700))),
         Text(article.title,style:const TextStyle(color:Color(0xff1a1a1a),fontWeight:FontWeight.w600)),
       ]))),
     ]));

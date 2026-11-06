@@ -2,6 +2,7 @@ import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:dialektik/features/social/presentation/dialektik_stories_bar.dart';
 import 'package:dialektik/features/social/presentation/media_public_profile.dart';
 import 'package:dialektik/features/social/presentation/social_contrast_post.dart';
@@ -50,6 +51,33 @@ class _LiveRepo extends Fake implements LiveNewsRepository {
     bool refresh = false,
     dynamic requestToken,
   }) async => const LiveNewsPageDto(items: []);
+}
+
+class _SocialRepo extends _LiveRepo implements SocialRepository {
+  SocialSummary current = const SocialSummary(solid: 2, biased: 1);
+  @override
+  Future<SocialSummary> socialSummary({
+    String? eventId,
+    String? sourceId,
+  }) async => current;
+  @override
+  Future<SocialSummary> setSocialReaction(
+    String eventId,
+    String? reaction,
+  ) async => current = SocialSummary(solid: 3, biased: 1, mine: reaction);
+  @override
+  Future<SocialSummary> addSocialComment(
+    String eventId,
+    String articleId,
+    String body,
+  ) async => current = SocialSummary(
+    solid: 3,
+    biased: 1,
+    mine: 'SOLID',
+    comments: [
+      SocialComment(body: body, url: Uri.parse('https://example.cl/nota')),
+    ],
+  );
 }
 
 void main() {
@@ -143,12 +171,12 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('1/3'), findsOneWidget);
+      expect(find.textContaining('1/3 · Desliza'), findsOneWidget);
       expect(find.text('✓ Sólido'), findsOneWidget);
       await tester.ensureVisible(find.text('💬 Debate'));
       await tester.tap(find.text('💬 Debate'));
       await tester.pumpAndSettle();
-      expect(find.text('2/3'), findsOneWidget);
+      expect(find.textContaining('2/3 · Desliza'), findsOneWidget);
       expect(find.text('“Cita literal A”'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -183,4 +211,76 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+  testWidgets('reacciones usan recuentos compartidos de la API', (
+    tester,
+  ) async {
+    final repository = _SocialRepo();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SocialContrastPost(
+              event: event,
+              positions: event.coveragePositions,
+              onOpenEvent: () {},
+              sourcesRepository: repository,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('✓ Sólido 2'), findsOneWidget);
+    await tester.ensureVisible(find.text('✓ Sólido 2'));
+    await tester.tap(find.text('✓ Sólido 2'));
+    await tester.pumpAndSettle();
+    expect(find.text('✓ Sólido 3'), findsOneWidget);
+    expect(repository.current.mine, 'SOLID');
+  });
+  testWidgets('un aporte compartido conserva el enlace a la noticia', (
+    tester,
+  ) async {
+    final repository = _SocialRepo();
+    final withArticle = EventDetailDto.fromJson({
+      ...eventDetailJson(
+        id: publishedEventId,
+        analysisState: 'PUBLISHED',
+        positionCount: 2,
+      ),
+      'positions': <Object?>[],
+      'articles': [
+        {
+          'id': 'article1',
+          'title': 'Noticia original',
+          'source_name': 'Medio A',
+          'published_at': '2026-11-06T10:00:00Z',
+          'url': 'https://example.cl/nota',
+        },
+      ],
+      'contrasts': <Object?>[],
+    });
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SocialContrastPost(
+              event: withArticle,
+              positions: const [],
+              onOpenEvent: () {},
+              sourcesRepository: repository,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('💬 Debate 0'));
+    await tester.tap(find.text('💬 Debate 0'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'Contexto de la noticia');
+    await tester.tap(find.text('Publicar'));
+    await tester.pumpAndSettle();
+    expect(find.text('Contexto de la noticia'), findsOneWidget);
+    expect(find.text('Ver evidencia ↗'), findsOneWidget);
+  });
 }

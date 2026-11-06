@@ -8,8 +8,38 @@ import 'package:dialektik/features/consumer/presentation/widgets/dialectical_thr
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
+import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:dialektik/features/social/theme/dialektik_social_theme.dart';
 import 'package:flutter/material.dart';
+
+Future<void> openMediaPublicProfile(
+  BuildContext context,
+  LiveNewsRepository repository,
+  String sourceId,
+) async {
+  try {
+    final sources = await repository.listLiveSources();
+    final match = sources.where((source) => source.id == sourceId).firstOrNull;
+    if (!context.mounted) return;
+    if (match == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Perfil del medio no disponible.')),
+      );
+      return;
+    }
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) =>
+            MediaPublicProfileScreen(source: match, repository: repository),
+      ),
+    );
+  } on Exception {
+    if (context.mounted)
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se pudo abrir el perfil.')),
+      );
+  }
+}
 
 class MediaPublicProfileScreen extends StatefulWidget {
   const MediaPublicProfileScreen({
@@ -30,6 +60,8 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
   Map<String, int> opponents = {};
   bool loading = true, following = false, busy = false;
   String? error;
+  SocialSummary? socialSummary;
+  Timer? refreshTimer;
   int tab = 0;
   FollowingRepository? get follows =>
       widget.repository is FollowingRepository &&
@@ -40,6 +72,17 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
   void initState() {
     super.initState();
     unawaited(_load());
+    if (widget.repository is SocialRepository)
+      refreshTimer = Timer.periodic(
+        const Duration(seconds: 30),
+        (_) => unawaited(_loadSocial()),
+      );
+  }
+
+  @override
+  void dispose() {
+    refreshTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -57,6 +100,7 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
         });
       }
       unawaited(_loadDuels());
+      unawaited(_loadSocial());
     } on Exception {
       if (mounted) {
         setState(() {
@@ -64,6 +108,19 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
           error = 'No se pudo cargar el perfil.';
         });
       }
+    }
+  }
+
+  Future<void> _loadSocial() async {
+    final repo = widget.repository;
+    if (repo is! SocialRepository) return;
+    try {
+      final value = await (repo as SocialRepository).socialSummary(
+        sourceId: widget.source.id,
+      );
+      if (mounted) setState(() => socialSummary = value);
+    } on Exception {
+      /* Keep the profile readable. */
     }
   }
 
@@ -135,6 +192,7 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
     try {
       await repo.setFollowing(widget.source.id, following: !following);
       if (mounted) setState(() => following = !following);
+      unawaited(_loadSocial());
     } on Exception {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -175,18 +233,26 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 CircleAvatar(
-                  radius: 41,
+                  radius: 44,
                   backgroundColor: DialektikSocialTheme.navy,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Padding(
-                      padding: const EdgeInsets.all(8),
-                      child: Text(
-                        initials,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 23,
-                          fontWeight: FontWeight.bold,
+                  child: CircleAvatar(
+                    radius: 41,
+                    backgroundColor: Colors.white,
+                    child: CircleAvatar(
+                      radius: 38,
+                      backgroundColor: DialektikSocialTheme.navy,
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Padding(
+                          padding: const EdgeInsets.all(8),
+                          child: Text(
+                            initials,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 23,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
                       ),
                     ),
@@ -209,7 +275,7 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
                         ),
                       ),
                       Text(
-                        '${items.length}${items.length == 50 ? '+' : ''} publicaciones cargadas · ${duels.length} contrastes cargados',
+                        '${socialSummary?.followers == null ? '' : '${socialSummary!.followers} seguidores · '}${items.length}${items.length == 50 ? '+' : ''} publicaciones cargadas · ${duels.length} contrastes cargados',
                       ),
                     ],
                   ),
@@ -241,9 +307,41 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
                     style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 8),
-                  const Text(
-                    'Aún no hay evaluaciones comunitarias disponibles.',
-                  ),
+                  if (socialSummary == null ||
+                      socialSummary!.solid + socialSummary!.biased == 0)
+                    const Text(
+                      'Aún no hay evaluaciones comunitarias disponibles.',
+                    )
+                  else ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(5),
+                      child: SizedBox(
+                        height: 10,
+                        child: Row(
+                          children: [
+                            if (socialSummary!.solid > 0)
+                              Expanded(
+                                flex: socialSummary!.solid,
+                                child: Container(
+                                  color: DialektikSocialTheme.navy,
+                                ),
+                              ),
+                            if (socialSummary!.biased > 0)
+                              Expanded(
+                                flex: socialSummary!.biased,
+                                child: Container(
+                                  color: const Color(0xffbe123c),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Evaluación ciudadana de acontecimientos cubiertos: ${(100 * socialSummary!.solid / (socialSummary!.solid + socialSummary!.biased)).round()}% Sólido · ${(100 * socialSummary!.biased / (socialSummary!.solid + socialSummary!.biased)).round()}% Sesgado',
+                    ),
+                  ],
                   if (opponents.isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Text(
@@ -293,7 +391,10 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
                             child: InkWell(
                               onTap: () => Navigator.of(context).push(
                                 MaterialPageRoute<void>(
-                                  builder: (_) => _ProfileDuel(event: event),
+                                  builder: (_) => _ProfileDuel(
+                                    event: event,
+                                    repository: widget.repository,
+                                  ),
                                 ),
                               ),
                               child: Container(
@@ -361,8 +462,9 @@ class _MediaPublicProfileScreenState extends State<MediaPublicProfileScreen> {
 }
 
 class _ProfileDuel extends StatelessWidget {
-  const _ProfileDuel({required this.event});
+  const _ProfileDuel({required this.event, required this.repository});
   final EventDetailDto event;
+  final LiveNewsRepository repository;
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(title: const Text('Dialektik')),
@@ -378,10 +480,20 @@ class _ProfileDuel extends StatelessWidget {
           event: event,
           positions: event.coveragePositions,
           relation: event.synthesisRelation,
+          onOpenSource: (id) => openMediaPublicProfile(context, repository, id),
         ),
         for (final article in event.articles)
           ListTile(
-            title: Text(article.sourceName),
+            title: InkWell(
+              onTap: article.sourceId == null
+                  ? null
+                  : () => openMediaPublicProfile(
+                      context,
+                      repository,
+                      article.sourceId!,
+                    ),
+              child: Text(article.sourceName),
+            ),
             subtitle: Text(article.title),
             trailing: const Icon(Icons.open_in_new),
             onTap: () => unawaited(openExternalHttpLink(article.url)),

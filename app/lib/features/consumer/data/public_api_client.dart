@@ -25,6 +25,7 @@ import 'package:dialektik/features/semantic_shadow/data/semantic_graph_models.da
 import 'package:dialektik/features/semantic_shadow/data/semantic_graph_repository.dart';
 import 'package:dialektik/features/semantic_shadow/data/semantic_shadow_models.dart';
 import 'package:dialektik/features/semantic_shadow/data/semantic_shadow_repository.dart';
+import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -37,6 +38,7 @@ final class PublicApiClient
     implements
         ConsumerRepository,
         FollowingRepository,
+        SocialRepository,
         SourceSyncRepository,
         SemanticRepository,
         LiveNewsRepository,
@@ -87,6 +89,33 @@ final class PublicApiClient
   @override
   Listenable get followingChanges => _followingVersion;
   bool get _personalizationEnabled => authorizationTokenProvider != null;
+  @override
+  Future<SocialSummary> socialSummary({String? eventId, String? sourceId}) => _get<SocialSummary>(
+    '/v1/social/summary', query: {'event_id':?eventId, 'source_id':?sourceId},
+    decoder: (value) => SocialSummary.fromJson(value as Map<String,dynamic>), refresh:true, requestToken:null);
+
+  Future<SocialSummary> _socialPost(String path, Map<String,Object?> body) async {
+    final token = await authorizationTokenProvider?.call();
+    if (token == null || token.isEmpty) throw const PublicApiFailure(kind: PublicFailureKind.unauthorized);
+    late http.Response response;
+    try {
+      response = await _httpClient.post(_configuration.resolve(path),
+        headers: {'accept':'application/json','content-type':'application/json','authorization':'Bearer $token'},
+        body:jsonEncode(body)).timeout(timeout);
+    } on TimeoutException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+      on http.ClientException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode == 401) onAuthorizationRejected?.call();
+      throw _decodeFailure(response);
+    }
+    return SocialSummary.fromJson(jsonDecode(response.body) as Map<String,dynamic>);
+  }
+  @override
+  Future<SocialSummary> setSocialReaction(String eventId, String? reaction) =>
+    _socialPost('/v1/social/reactions', {'event_id':eventId,'reaction':reaction});
+  @override
+  Future<SocialSummary> addSocialComment(String eventId, String articleId, String body) =>
+    _socialPost('/v1/social/comments', {'event_id':eventId,'article_id':articleId,'body':body});
   @override
   bool get followingAvailable => _personalizationEnabled;
   LiveNewsPageDto? _cachedMirrorNews;

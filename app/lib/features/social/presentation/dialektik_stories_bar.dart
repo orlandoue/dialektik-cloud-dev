@@ -274,13 +274,27 @@ class _StoryViewerState extends State<_StoryViewer> {
                                 mainAxisSize: MainAxisSize.min,
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    p.assertions.isEmpty
-                                        ? 'Medio no disponible'
-                                        : p.assertions.first.sourceName,
-                                    style: const TextStyle(
-                                      color: Color(0xffd4a359),
-                                      fontWeight: FontWeight.bold,
+                                  InkWell(
+                                    onTap:
+                                        p.assertions.firstOrNull?.sourceId !=
+                                                null &&
+                                            widget.repository
+                                                is LiveNewsRepository
+                                        ? () => openMediaPublicProfile(
+                                            context,
+                                            widget.repository
+                                                as LiveNewsRepository,
+                                            p.assertions.first.sourceId!,
+                                          )
+                                        : null,
+                                    child: Text(
+                                      p.assertions.isEmpty
+                                          ? 'Medio no disponible'
+                                          : p.assertions.first.sourceName,
+                                      style: const TextStyle(
+                                        color: Color(0xffd4a359),
+                                        fontWeight: FontWeight.bold,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(height: 20),
@@ -314,6 +328,15 @@ class _StoryViewerState extends State<_StoryViewer> {
                                   event: event,
                                   positions: positions,
                                   relation: event.synthesisRelation,
+                                  onOpenSource:
+                                      widget.repository is LiveNewsRepository
+                                      ? (id) => openMediaPublicProfile(
+                                          context,
+                                          widget.repository
+                                              as LiveNewsRepository,
+                                          id,
+                                        )
+                                      : null,
                                 ),
                               ),
                               const SizedBox(height: 16),

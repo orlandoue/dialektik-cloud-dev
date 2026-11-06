@@ -1,4 +1,5 @@
 import 'dart:async';
+
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/story_follow_store.dart';
@@ -9,6 +10,7 @@ import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/widgets/youtube_thumbnail.dart';
+import 'package:dialektik/features/social/presentation/media_public_profile.dart';
 import 'package:flutter/material.dart';
 
 class MirrorScreen extends StatefulWidget {
@@ -169,14 +171,14 @@ class _MirrorScreenState extends State<MirrorScreen> {
               Container(width:3,decoration:const BoxDecoration(color:gold,borderRadius:BorderRadius.horizontal(left:Radius.circular(12)))),
               Expanded(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
                 Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:4),decoration:BoxDecoration(color:const Color(0xffe6e4f8),borderRadius:BorderRadius.circular(6)),
-                  child:Text('FUERA DE TUS FUENTES · ${item.source.name.toUpperCase()}',style:const TextStyle(color:Color(0xff162032),fontSize:11,fontWeight:FontWeight.w700))),
+                  child:InkWell(onTap:()=>openMediaPublicProfile(context,widget.repository,item.source.id),child:Text('FUERA DE TUS FUENTES · ${item.source.name.toUpperCase()}',style:const TextStyle(color:Color(0xff162032),fontSize:11,fontWeight:FontWeight.w700)))),
                 const SizedBox(height:8),
                 if (extractYouTubeVideoId(item.canonicalUrl.toString()) case final String id) ...[
                   YouTubeThumbnail(videoId:id,onTap:()=>_openItem(item)), const SizedBox(height:8),
                 ],
                 GestureDetector(onTap:()=>_openItem(item),child:Text(item.headline,style:const TextStyle(color:ivory,fontFamily:'serif',fontSize:20,height:1.3))),
                 if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null)
-                  Text('${item.source.name} · ${item.publishedAt.toLocal().toString().substring(0,16)}'),
+                  InkWell(onTap:()=>openMediaPublicProfile(context,widget.repository,item.source.id),child:Text('${item.source.name} · ${item.publishedAt.toLocal().toString().substring(0,16)}')),
                 const SizedBox(height:8),
                 if (_eventByArticle[item.id] case final event?)
                   TextButton(onPressed:widget.onOpenEvent == null ? null : () => widget.onOpenEvent!(event.id),

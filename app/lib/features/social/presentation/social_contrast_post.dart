@@ -1,14 +1,12 @@
 import 'dart:async';
-import 'dart:convert';
+
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
-import 'package:dialektik/features/consumer/data/story_storage_io.dart'
-    if (dart.library.js_interop) 'package:dialektik/features/consumer/data/story_storage_web.dart'
-    as storage;
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/dialectical_thread.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
+import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:dialektik/features/social/presentation/media_public_profile.dart';
 import 'package:dialektik/features/social/theme/dialektik_social_theme.dart';
 import 'package:flutter/material.dart';
@@ -38,38 +36,122 @@ class SocialContrastPost extends StatefulWidget {
 class _SocialContrastPostState extends State<SocialContrastPost> {
   final controller = PageController();
   int page = 0;
-  String? reaction;
-  bool changed = false;
-  Future<void> writes = Future.value();
-  String get key =>
-      'social_reaction_${base64Url.encode(utf8.encode(widget.event.id))}';
+  SocialSummary? summary;
+  bool busy = false;
+  Timer? refreshTimer;
+  SocialRepository? get social => widget.sourcesRepository is SocialRepository
+      ? widget.sourcesRepository as SocialRepository
+      : null;
   @override
   void initState() {
     super.initState();
     unawaited(_load());
+    if (social != null)
+      refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+        if (!busy) unawaited(_load());
+      });
   }
 
   Future<void> _load() async {
     try {
-      final value = await storage.readStories(key);
-      if (mounted && !changed && (value == '✓ Sólido' || value == '⚖ Sesgado')) {
-        setState(() => reaction = value);
-      }
+      final value = await social?.socialSummary(eventId: widget.event.id);
+      if (mounted) setState(() => summary = value);
     } on Exception {
-      /* The post remains usable offline. */
+      /* The post remains readable while community data is unavailable. */
     }
   }
 
-  void _react(String label) {
-    setState(() {
-      changed = true;
-      reaction = reaction == label ? null : label;
-    });
-    final value = reaction ?? '';
-    writes = writes
-        .catchError((Object _) {})
-        .then((_) => storage.writeStories(key, value));
-    unawaited(writes.catchError((Object _) {}));
+  Future<void> _react(String reaction) async {
+    final repo = social;
+    if (repo == null || busy) return;
+    setState(() => busy = true);
+    try {
+      final updated = await repo.setSocialReaction(
+        widget.event.id,
+        summary?.mine == reaction ? null : reaction,
+      );
+      if (mounted) setState(() => summary = updated);
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo guardar tu reacción.')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> _comment() async {
+    final repo = social;
+    final articles = widget.event.articles;
+    if (repo == null || articles.isEmpty) return;
+    String text = '';
+    String selected = articles.first.id;
+    final result = await showDialog<(String, String)>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Aportar al debate'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Elige la noticia que respalda tu aporte.'),
+                DropdownButton<String>(
+                  isExpanded: true,
+                  value: selected,
+                  items: [
+                    for (final article in articles)
+                      DropdownMenuItem(
+                        value: article.id,
+                        child: Text(
+                          article.sourceName,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null) setDialogState(() => selected = value);
+                  },
+                ),
+                TextField(
+                  onChanged: (value) => text = value,
+                  maxLength: 600,
+                  maxLines: 4,
+                  decoration: const InputDecoration(labelText: 'Tu aporte'),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(context, (selected, text.trim())),
+              child: const Text('Publicar'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (result == null || result.$2.isEmpty || !mounted) return;
+    try {
+      final updated = await repo.addSocialComment(
+        widget.event.id,
+        result.$1,
+        result.$2,
+      );
+      if (mounted) setState(() => summary = updated);
+    } on Exception {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo publicar el aporte.')),
+        );
+      }
+    }
   }
 
   Future<void> _openProfile(EventCoveragePositionDto position) async {
@@ -103,6 +185,7 @@ class _SocialContrastPostState extends State<SocialContrastPost> {
 
   @override
   void dispose() {
+    refreshTimer?.cancel();
     controller.dispose();
     super.dispose();
   }
@@ -131,6 +214,14 @@ class _SocialContrastPostState extends State<SocialContrastPost> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Align(
+            alignment: Alignment.centerRight,
+            child: Text(
+              '${page + 1}/3 · Desliza para ver el otro lado →',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ),
+          const SizedBox(height: 8),
           if (relation == 'CONTRADICTION' || relation == 'DIFFERENT_FOCUS')
             Padding(
               padding: const EdgeInsets.only(bottom: 8),
@@ -204,10 +295,13 @@ class _SocialContrastPostState extends State<SocialContrastPost> {
                           style: const TextStyle(fontWeight: FontWeight.bold),
                         ),
                       ),
+                    const Text(
+                      '· En duelo VS',
+                      style: TextStyle(fontWeight: FontWeight.w500),
+                    ),
                   ],
                 ),
               ),
-              Text('${page + 1}/3', style: const TextStyle(color: Colors.grey)),
             ],
           ),
           const SizedBox(height: 10),
@@ -222,6 +316,13 @@ class _SocialContrastPostState extends State<SocialContrastPost> {
                   Container(
                     decoration: BoxDecoration(
                       color: DialektikSocialTheme.navy,
+                      gradient: video == null
+                          ? const LinearGradient(
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                              colors: [Color(0xff35455b), Color(0xff0b1320)],
+                            )
+                          : null,
                       image: video == null
                           ? null
                           : DecorationImage(
@@ -287,6 +388,13 @@ class _SocialContrastPostState extends State<SocialContrastPost> {
                       event: event,
                       positions: positions,
                       relation: event.synthesisRelation,
+                      onOpenSource: widget.sourcesRepository == null
+                          ? null
+                          : (id) => openMediaPublicProfile(
+                              context,
+                              widget.sourcesRepository!,
+                              id,
+                            ),
                     ),
                   ),
                   SingleChildScrollView(
@@ -331,28 +439,37 @@ class _SocialContrastPostState extends State<SocialContrastPost> {
             spacing: 8,
             runSpacing: 4,
             children: [
-              for (final label in ['✓ Sólido', '⚖ Sesgado'])
+              for (final entry in [
+                ('SOLID', '✓ Sólido', summary?.solid),
+                ('BIASED', '⚖ Sesgado', summary?.biased),
+              ])
                 ActionChip(
-                  backgroundColor: reaction == label
+                  backgroundColor: summary?.mine == entry.$1
                       ? DialektikSocialTheme.navy
                       : const Color(0xffede9df),
                   label: Text(
-                    label,
+                    '${entry.$2}${entry.$3 == null ? '' : ' ${entry.$3}'}',
                     style: TextStyle(
-                      color: reaction == label
+                      color: summary?.mine == entry.$1
                           ? Colors.white
                           : DialektikSocialTheme.navy,
                     ),
                   ),
-                  onPressed: () => _react(label),
+                  onPressed: social == null || busy
+                      ? null
+                      : () => _react(entry.$1),
                 ),
               ActionChip(
-                label: const Text('💬 Debate'),
-                onPressed: () => controller.animateToPage(
-                  1,
-                  duration: const Duration(milliseconds: 200),
-                  curve: Curves.easeOut,
+                label: Text(
+                  '💬 Debate${summary == null ? '' : ' ${summary!.comments.length}'}',
                 ),
+                onPressed: social == null
+                    ? () => controller.animateToPage(
+                        1,
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOut,
+                      )
+                    : _comment,
               ),
               ActionChip(
                 label: const Text('↗ Compartir story'),
@@ -364,10 +481,20 @@ class _SocialContrastPostState extends State<SocialContrastPost> {
               ),
             ],
           ),
-          const Text(
-            'Tu reacción se guarda solo en este dispositivo.',
-            style: TextStyle(fontSize: 11, color: Colors.black54),
-          ),
+          if (summary?.comments.isNotEmpty == true) ...[
+            const Divider(),
+            const Text(
+              'Aportes de la comunidad · sin verificación editorial',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            for (final comment in summary!.comments) ...[
+              Text(comment.body),
+              TextButton(
+                onPressed: () => openExternalHttpLink(comment.url),
+                child: const Text('Ver evidencia ↗'),
+              ),
+            ],
+          ],
           TextButton(
             onPressed: widget.onOpenEvent,
             child: const Text('Ver fuentes originales →'),
