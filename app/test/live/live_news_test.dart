@@ -21,6 +21,7 @@ Future<void> mountLive(
 }) async {
   await tester.pumpWidget(
     DialektikApp(
+      arenaEnabled: false,
       key: UniqueKey(),
       environment: AppEnvironment.test,
       loadInterFromDependency: false,
@@ -325,6 +326,7 @@ void main() {
       final PublicApiClient client = liveTestClient(calls: calls);
       await tester.pumpWidget(
         DialektikApp(
+          arenaEnabled: false,
           environment: AppEnvironment.development,
           loadInterFromDependency: false,
           consumerRepository: client,

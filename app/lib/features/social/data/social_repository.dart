@@ -2,10 +2,19 @@ class SocialComment {
   factory SocialComment.fromJson(Map<String, dynamic> json) => SocialComment(
     body: json['body'] as String,
     url: Uri.parse(json['url'] as String),
+    createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+    articleId: json['article_id'] as String?,
   );
-  const SocialComment({required this.body, required this.url});
+  const SocialComment({
+    required this.body,
+    required this.url,
+    this.createdAt,
+    this.articleId,
+  });
   final String body;
   final Uri url;
+  final DateTime? createdAt;
+  final String? articleId;
 }
 
 class SocialSummary {

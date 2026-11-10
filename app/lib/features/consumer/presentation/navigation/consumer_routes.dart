@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:dialektik/features/arena/data/arena_store.dart';
+import 'package:dialektik/features/arena/presentation/arena_shell.dart';
+import 'package:dialektik/features/arena/presentation/living_event_screen.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
@@ -89,7 +92,26 @@ final class ConsumerRouteFactory {
     this.personalOwnerOperationalRepository,
     this.personalOwnerTestShadowRepository,
     this.additionalNavigationActions = const <Widget>[],
+    this.arenaEnabled = true,
   });
+
+  /// Mounts «Dialektik Arena» (five bottom tabs) as the reader's home.
+  /// The classic top-tab reader stays available for explicit opt-out.
+  final bool arenaEnabled;
+  ArenaStore? _arenaStore;
+  ArenaStore _arena(LiveNewsRepository live) => _arenaStore ??= ArenaStore(
+    consumer: repository,
+    live: live,
+    openLink: externalLinkOpener,
+  );
+  static const Map<String, ArenaTab> _arenaTabs = <String, ArenaTab>{
+    ConsumerRoutes.feed: ArenaTab.inicio,
+    ConsumerRoutes.liveNews: ArenaTab.inicio,
+    ConsumerRoutes.mirror: ArenaTab.inicio,
+    ConsumerRoutes.contradictions: ArenaTab.vs,
+    ConsumerRoutes.development: ArenaTab.historias,
+    ConsumerRoutes.liveSources: ArenaTab.medios,
+  };
 
   final ConsumerRepository repository;
   final ExternalLinkOpener externalLinkOpener;
@@ -116,6 +138,41 @@ final class ConsumerRouteFactory {
 
   Route<dynamic> generate(RouteSettings settings) {
     final Uri uri = Uri.parse(settings.name ?? ConsumerRoutes.feed);
+    final LiveNewsRepository? arenaLive = arenaEnabled
+        ? liveNewsRepository
+        : null;
+    if (arenaLive != null && uri.queryParameters.isEmpty) {
+      final ArenaTab? arenaTab = _arenaTabs[uri.path];
+      if (arenaTab != null) {
+        return _page(
+          settings,
+          ArenaShell(
+            consumer: repository,
+            live: arenaLive,
+            store: _arena(arenaLive),
+            externalLinkOpener: externalLinkOpener,
+            initialTab: arenaTab,
+            extraActions: additionalNavigationActions,
+            includeSource: isChileBetaPublisher,
+            onOpenAdmin: personalOwnerStatusRepository == null
+                ? null
+                : () => _navigatorKey.currentState?.pushNamed(
+                    ConsumerRoutes.personalOwner,
+                  ),
+          ),
+        );
+      }
+      final List<String> arenaSegments = uri.pathSegments;
+      if (arenaSegments.length == 2 && arenaSegments.first == 'events') {
+        return _page(
+          settings,
+          LivingEventScreen(
+            eventId: Uri.decodeComponent(arenaSegments[1]),
+            store: _arena(arenaLive),
+          ),
+        );
+      }
+    }
     if (liveNewsRepository != null && !_buildingTab && _mainTabs.contains(uri.path) && uri.queryParameters.isEmpty) {
       return _page(settings, _PersistentReaderTabs(factory:this, initialTab:uri.path));
     }

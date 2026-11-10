@@ -110,6 +110,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       DialektikApp(
+        arenaEnabled: false,
         environment: AppEnvironment.test,
         loadInterFromDependency: false,
         consumerRepository: FakeConsumerRepository(event: pendingEventDetail),
@@ -133,6 +134,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       DialektikApp(
+        arenaEnabled: false,
         environment: AppEnvironment.test,
         loadInterFromDependency: false,
         consumerRepository: FakeConsumerRepository(
@@ -174,6 +176,7 @@ void main() {
           _ControlledLiveNewsRepository(liveTestClient());
       await tester.pumpWidget(
         DialektikApp(
+          arenaEnabled: false,
           environment: AppEnvironment.test,
           loadInterFromDependency: false,
           consumerRepository: FakeConsumerRepository(

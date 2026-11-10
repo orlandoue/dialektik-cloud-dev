@@ -84,7 +84,7 @@ void main() {
   });
   testWidgets('welcome radar opens for a new reader and can be skipped', (tester) async {
     final repo=_FollowingLiveRepository(); addTearDown(repo.changes.dispose);
-    await tester.pumpWidget(DialektikApp(environment:AppEnvironment.test,loadInterFromDependency:false,
+    await tester.pumpWidget(DialektikApp(arenaEnabled: false, environment:AppEnvironment.test,loadInterFromDependency:false,
       consumerRepository:FakeConsumerRepository(),liveNewsRepository:repo,initialRoute:'/live/sources',locale:const Locale('es')));
     await tester.pumpAndSettle();
     expect(find.text('Saltar'),findsOneWidget);
@@ -156,7 +156,7 @@ void main() {
   });
   testWidgets('welcome is not shown when a source is already followed', (tester) async {
     final repo=_FollowingLiveRepository(); repo.ids.add(liveTestSourceId); addTearDown(repo.changes.dispose);
-    await tester.pumpWidget(DialektikApp(environment:AppEnvironment.test,loadInterFromDependency:false,
+    await tester.pumpWidget(DialektikApp(arenaEnabled: false, environment:AppEnvironment.test,loadInterFromDependency:false,
       consumerRepository:FakeConsumerRepository(),liveNewsRepository:repo,initialRoute:'/live/sources',locale:const Locale('es')));
     await tester.pumpAndSettle();
     expect(find.text('Saltar'),findsNothing);
@@ -166,6 +166,7 @@ void main() {
     final repo = _FollowingFeedRepository();
     addTearDown(repo.changes.dispose);
     await tester.pumpWidget(DialektikApp(
+      arenaEnabled: false,
       environment:AppEnvironment.test, loadInterFromDependency:false, consumerRepository:repo,
       locale:const Locale('es'),
     ));
