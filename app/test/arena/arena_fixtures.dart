@@ -512,6 +512,125 @@ class ArenaFullCore extends ArenaFakeCore implements ArenaSocialRepository {
   }
 }
 
+const String steinertTitle =
+    'El arte de caer parado: Steinert vuelve al Gobierno';
+const String steinertHeadline =
+    '"Trinidad Steinert vuelve al Gobierno": Su polémico paso por Seguridad '
+    'y nuevo cargo en Paraguay';
+const LiveSourceDto terceraVideo = LiveSourceDto(
+  id: '01K4W4M7R0B000000000000034',
+  name: 'La Tercera (YouTube)',
+  sourceType: 'video',
+  canonicalDomain: 'youtube.com',
+);
+
+/// A duel exactly as Core serves it: prefixed title, lowercase relation
+/// and a two-word quote extracted before the minimum length existed.
+final EventDetailDto steinertEvent = EventDetailDto.fromJson(<String, Object?>{
+  ...eventDetailJson(
+    id: duelEventId,
+    title: steinertTitle,
+    analysisState: 'PUBLISHED',
+    positionCount: 2,
+    withPrimaryFact: false,
+  ),
+  'category': 'pais',
+  'source_count': 2,
+  'positions': <Object?>[
+    <String, Object?>{
+      'id': positionAId,
+      'title': 'Steinert regresa al Ejecutivo tras su salida de Seguridad',
+      'assertions': <Object?>[
+        _assertion(
+          'as1',
+          'La exsubsecretaria regresa al Ejecutivo meses después de su salida',
+          'art1',
+          biobio,
+        ),
+      ],
+    },
+    <String, Object?>{
+      'id': positionBId,
+      'title': 'nuevo cargo',
+      'assertions': <Object?>[
+        <String, Object?>{
+          ..._assertion('as2', 'nuevo cargo', 'art2', t13),
+          'assertion_text': 'nuevo cargo',
+        },
+      ],
+    },
+  ],
+  'articles': <Object?>[
+    _article(
+      'art1',
+      'Steinert vuelve al Gobierno como agregada en Paraguay',
+      biobio,
+      '2026-11-08T12:00:00.000Z',
+    ),
+    _article('art2', steinertHeadline, t13, '2026-11-09T09:30:00.000Z'),
+  ],
+  'contrasts': <Object?>[
+    <String, Object?>{
+      'id': 'c1',
+      'position_a_id': positionAId,
+      'position_b_id': positionBId,
+      'kind': 'contrast',
+    },
+  ],
+});
+
+class ArenaServedCore extends ArenaFakeCore {
+  @override
+  Future<PublicPage<EventCardDto>> listFeed({
+    String? category,
+    String? topic,
+    String? cursor,
+    int limit = 20,
+    bool refresh = false,
+    dynamic requestToken,
+  }) async => PublicPage<EventCardDto>(
+    items: <EventCardDto>[storyEvent, steinertEvent],
+    nextCursor: null,
+  );
+
+  @override
+  Future<PublicPage<ContradictionDto>> listContradictions({
+    String? cursor,
+    int limit = 20,
+    bool refresh = false,
+    dynamic requestToken,
+  }) async => PublicPage<ContradictionDto>(
+    items: <ContradictionDto>[
+      ContradictionDto.fromJson(<String, Object?>{
+        ...contradictionJson(),
+        'event_id': duelEventId,
+        'event_title': 'Contraste de enfoques: $steinertTitle',
+        'threshold_rule': 'v1:editorial_focus_contrast',
+        'confirmed_at': '2026-11-09T10:00:00.000Z',
+        'position_b': <String, Object?>{
+          'id': positionBId,
+          'ordinal': 2,
+          'title': 'nuevo cargo',
+        },
+      }),
+    ],
+    nextCursor: null,
+  );
+
+  @override
+  Future<EventDetailDto> getEvent(
+    String eventId, {
+    bool refresh = false,
+    dynamic requestToken,
+  }) async => eventId == duelEventId ? steinertEvent : storyEvent;
+
+  @override
+  Future<List<LiveSourceDto>> listLiveSources({
+    bool refresh = false,
+    dynamic requestToken,
+  }) async => const <LiveSourceDto>[tercera, biobio, t13, terceraVideo];
+}
+
 /// Mounts the Arena on a phone-sized surface with the requested text scale.
 Future<List<Uri>> pumpArena(
   WidgetTester tester,

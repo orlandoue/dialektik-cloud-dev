@@ -35,83 +35,92 @@ String arenaKindLabel(String? kind) {
   return 'Contraste';
 }
 
-/// `[Emblema] Medio 1   VS   [Emblema] Medio 2`.
+/// `[Emblema] Medio 1   VS   [Emblema] Medio 2`, always on one row.
 class DuelFaceOff extends StatelessWidget {
   const DuelFaceOff({required this.duel, required this.store, super.key});
 
   final ArenaDuel duel;
   final ArenaStore store;
 
-  @override
-  Widget build(BuildContext context) {
-    final String? idA = ArenaDuel.sourceIdOf(duel.positionA);
-    final String? idB = ArenaDuel.sourceIdOf(duel.positionB);
-    const Widget versus = Text(
-      'VS',
-      style: TextStyle(
-        fontFamily: ArenaText.serif,
-        fontSize: 15,
-        fontWeight: FontWeight.w800,
-        color: ArenaColors.violet,
+  Widget _side(BuildContext context, String name, String? sourceId) {
+    final String label = arenaSourceName(name);
+    const TextStyle style = TextStyle(
+      fontSize: 14,
+      fontWeight: FontWeight.w700,
+      color: ArenaColors.ink,
+    );
+    // A one-word or short name shrinks to fit instead of breaking inside a
+    // word; a long name wraps at its spaces.
+    final bool compact = !label.contains(' ') || label.length <= 14;
+    return Expanded(
+      child: Semantics(
+        button: sourceId != null,
+        label: 'Abrir perfil de $label',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: sourceId == null
+              ? null
+              : () => openArenaMedia(context, store, sourceId),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: <Widget>[
+                MediaEmblem(name: name, size: 30),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: compact
+                      ? FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            label,
+                            maxLines: 1,
+                            softWrap: false,
+                            style: style,
+                          ),
+                        )
+                      : Text(
+                          label,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: style,
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
-    // With large system text two names no longer fit on one line, so the
-    // face-off stacks instead of breaking a name in the middle of a word.
-    if (MediaQuery.textScalerOf(context).scale(14) > 17) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          MediaNameRow(
-            name: duel.nameA,
-            onTap: idA == null
-                ? null
-                : () => openArenaMedia(context, store, idA),
-          ),
-          const Padding(
-            padding: EdgeInsets.only(left: 6, top: 2, bottom: 2),
-            child: versus,
-          ),
-          MediaNameRow(
-            name: duel.nameB,
-            onTap: idB == null
-                ? null
-                : () => openArenaMedia(context, store, idB),
-          ),
-        ],
-      );
-    }
-    return Row(
-      children: <Widget>[
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerLeft,
-            child: MediaNameRow(
-              name: duel.nameA,
-              onTap: idA == null
-                  ? null
-                  : () => openArenaMedia(context, store, idA),
-            ),
-          ),
-        ),
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 8),
-          child: versus,
-        ),
-        Expanded(
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: MediaNameRow(
-              name: duel.nameB,
-              alignEnd: true,
-              onTap: idB == null
-                  ? null
-                  : () => openArenaMedia(context, store, idB),
-            ),
-          ),
-        ),
-      ],
-    );
   }
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: <Widget>[
+      _side(context, duel.nameA, ArenaDuel.sourceIdOf(duel.positionA)),
+      const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 8),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: ArenaColors.violetSoft,
+            borderRadius: BorderRadius.all(Radius.circular(999)),
+          ),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            child: Text(
+              'VS',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                color: ArenaColors.violet,
+              ),
+            ),
+          ),
+        ),
+      ),
+      _side(context, duel.nameB, ArenaDuel.sourceIdOf(duel.positionB)),
+    ],
+  );
 }
 
 /// Thermometer of a duel: support of each posture when Core serves
@@ -408,9 +417,9 @@ class _DuelScreenState extends State<DuelScreen> {
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
-              Expanded(child: _PostureCard(duel.positionA, store)),
+              Expanded(child: _PostureCard(duel.event, duel.positionA, store)),
               const SizedBox(width: 8),
-              Expanded(child: _PostureCard(duel.positionB, store)),
+              Expanded(child: _PostureCard(duel.event, duel.positionB, store)),
             ],
           ),
         ),
@@ -495,7 +504,7 @@ class _DuelScreenState extends State<DuelScreen> {
             ),
             const SizedBox(height: 8),
             Text(
-              event.primaryFact?.statement ?? event.titleDescriptive,
+              event.primaryFact?.statement ?? event.arenaTitle,
               style: ArenaText.body,
             ),
             const SizedBox(height: 8),
@@ -567,8 +576,8 @@ class _DuelScreenState extends State<DuelScreen> {
         'Las posturas de ambos medios son compatibles entre sí: describen '
             'el mismo acontecimiento sin afirmaciones que se opongan.',
       _ =>
-        'La relación entre estas posturas todavía no tiene una '
-            'clasificación publicada.',
+        'Los dos medios cubren el mismo acontecimiento desde ángulos '
+            'distintos. Revisa las citas y los originales enlazados.',
     };
     Widget posture(EventCoveragePositionDto? position) => Padding(
       padding: const EdgeInsets.only(top: 10),
@@ -587,9 +596,11 @@ class _DuelScreenState extends State<DuelScreen> {
           Text(
             position == null
                 ? 'Postura no disponible.'
-                : position.assertions.isEmpty
-                ? position.title
-                : position.assertions.first.assertionText,
+                : position.assertions.isNotEmpty &&
+                      position.assertions.first.assertionText.trim().length >=
+                          arenaMinimumQuoteLength
+                ? position.assertions.first.assertionText
+                : arenaPostureText(duel.event, position).text,
             style: ArenaText.body,
           ),
         ],
@@ -604,7 +615,7 @@ class _DuelScreenState extends State<DuelScreen> {
             const SizedBox(height: 8),
             Text(
               'Los dos medios cubren el mismo acontecimiento: '
-              '«${duel.event.titleDescriptive}».',
+              '«${duel.event.arenaTitle}».',
               style: ArenaText.body,
             ),
           ],
@@ -686,17 +697,20 @@ class _KindPills extends StatelessWidget {
 }
 
 class _PostureCard extends StatelessWidget {
-  const _PostureCard(this.position, this.store);
+  const _PostureCard(this.event, this.position, this.store);
 
+  final EventDetailDto event;
   final EventCoveragePositionDto? position;
   final ArenaStore store;
 
   @override
   Widget build(BuildContext context) {
     final String? sourceId = ArenaDuel.sourceIdOf(position);
-    final String quote = position == null || position!.assertions.isEmpty
-        ? ''
-        : arenaQuote(position!.assertions.first.quotedText);
+    final ({String text, bool literal}) posture = arenaPostureText(
+      event,
+      position,
+    );
+    final String quote = posture.literal ? arenaQuote(posture.text) : '';
     return DecoratedBox(
       decoration: arenaCardDecoration(),
       child: Padding(
@@ -734,9 +748,7 @@ class _PostureCard extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Text(
-              quote.isNotEmpty
-                  ? quote
-                  : position?.title ?? 'Postura no disponible.',
+              quote.isNotEmpty ? quote : posture.text,
               style: const TextStyle(
                 fontFamily: ArenaText.serif,
                 fontSize: 13,
@@ -744,10 +756,13 @@ class _PostureCard extends StatelessWidget {
                 color: ArenaColors.ink,
               ),
             ),
-            if (quote.isNotEmpty) ...<Widget>[
-              const SizedBox(height: 8),
-              const Text('Cita literal verificada', style: ArenaText.meta),
-            ],
+            const SizedBox(height: 8),
+            Text(
+              quote.isNotEmpty
+                  ? 'Cita literal verificada'
+                  : 'Titular de su publicación',
+              style: ArenaText.meta,
+            ),
           ],
         ),
       ),
@@ -1018,12 +1033,12 @@ class _VoteSheetState extends State<_VoteSheet> {
           (
             id: duel.contrast.positionA.id,
             name: duel.nameA,
-            title: duel.positionA?.title ?? duel.contrast.positionA.title,
+            title: arenaPostureText(duel.event, duel.positionA).text,
           ),
           (
             id: duel.contrast.positionB.id,
             name: duel.nameB,
-            title: duel.positionB?.title ?? duel.contrast.positionB.title,
+            title: arenaPostureText(duel.event, duel.positionB).text,
           ),
         ];
     return Column(

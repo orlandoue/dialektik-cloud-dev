@@ -191,7 +191,7 @@ class ArenaPill extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(minHeight: 40),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Center(
               widthFactor: 1,
               child: FittedBox(
@@ -213,6 +213,93 @@ class ArenaPill extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// Compact dropdown pill (`🇨🇱 Chile ▾`, `Tema ▾`) that opens a sheet.
+class ArenaDropdownPill extends StatelessWidget {
+  const ArenaDropdownPill({
+    required this.label,
+    required this.onTap,
+    this.leading,
+    this.active = false,
+    this.semanticsLabel,
+    super.key,
+  });
+
+  final String label;
+  final Widget? leading;
+  final bool active;
+  final VoidCallback onTap;
+  final String? semanticsLabel;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color foreground = active ? ArenaColors.violetDeep : ArenaColors.ink;
+    // A compact control: large system text is capped here so the dropdown
+    // does not squeeze the logo or the section pills beside it.
+    return Semantics(
+      button: true,
+      label: semanticsLabel ?? label,
+      child: ExcludeSemantics(
+        child: MediaQuery.withClampedTextScaling(
+          maxScaleFactor: 1.1,
+          child: Material(
+            color: active ? ArenaColors.violetSoft : ArenaColors.card,
+            shape: StadiumBorder(
+              side: BorderSide(
+                color: active
+                    ? ArenaColors.violetSoft
+                    : const Color(0xFFE2E2EC),
+              ),
+            ),
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: onTap,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(minHeight: 40),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        if (leading != null) ...<Widget>[
+                          IconTheme(
+                            data: IconThemeData(color: foreground, size: 16),
+                            child: leading!,
+                          ),
+                          const SizedBox(width: 5),
+                        ],
+                        Text(
+                          label,
+                          maxLines: 1,
+                          softWrap: false,
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: foreground,
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_drop_down,
+                          size: 18,
+                          color: foreground,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// Row of pills that never wraps or overflows.
@@ -483,6 +570,7 @@ Color _topicTone(ArenaTopic topic) => switch (topic) {
   ArenaTopic.politica => const Color(0xFF312E81),
   ArenaTopic.justicia => const Color(0xFF3B1D5E),
   ArenaTopic.economia => const Color(0xFF134E4A),
+  ArenaTopic.seguridad => const Color(0xFF1E3A8A),
   ArenaTopic.medioambiente => const Color(0xFF14532D),
   ArenaTopic.ciencia => const Color(0xFF0C4A6E),
   ArenaTopic.deportes => const Color(0xFF7C2D12),
@@ -494,6 +582,7 @@ IconData arenaTopicIcon(ArenaTopic topic) => switch (topic) {
   ArenaTopic.politica => Icons.account_balance_outlined,
   ArenaTopic.justicia => Icons.gavel_outlined,
   ArenaTopic.economia => Icons.show_chart,
+  ArenaTopic.seguridad => Icons.shield_outlined,
   ArenaTopic.medioambiente => Icons.eco_outlined,
   ArenaTopic.ciencia => Icons.science_outlined,
   ArenaTopic.deportes => Icons.sports_soccer,
@@ -564,7 +653,14 @@ class ArenaCover extends StatelessWidget {
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
-                  colors: <Color>[Color(0x660F172A), Color(0xE60F172A)],
+                  // The lower third is almost opaque so the white title wins over
+                  // any text burned into a YouTube thumbnail.
+                  stops: <double>[0, 0.45, 1],
+                  colors: <Color>[
+                    Color(0x59000000),
+                    Color(0x99000000),
+                    Color(0xD1000000),
+                  ],
                 ),
               ),
             ),

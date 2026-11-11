@@ -36,19 +36,36 @@ final class ArenaDuel {
   EventCoveragePositionDto? get positionA => _position(contrast.positionA.id);
   EventCoveragePositionDto? get positionB => _position(contrast.positionB.id);
 
-  /// `CONTRADICTION`, `DIFFERENT_FOCUS` or another reviewed relation.
-  String? get kind {
+  /// `CONTRADICTION`, `DIFFERENT_FOCUS` or `COMPATIBLE`.
+  ///
+  /// Core names the relation of a published contrast `contrast` or
+  /// `contradiction`; a publication without one is read from its rule.
+  String get kind {
+    String? raw;
     for (final EventContrastDto item in event.contrasts) {
       final Set<String> pair = <String>{item.positionAId, item.positionBId};
       if (pair.contains(contrast.positionA.id) &&
           pair.contains(contrast.positionB.id)) {
-        return item.kind;
+        raw = item.kind;
       }
     }
-    return event.synthesisRelation;
+    switch ((raw ?? event.synthesisRelation)?.toUpperCase()) {
+      case 'CONTRAST' || 'DIFFERENT_FOCUS':
+        return 'DIFFERENT_FOCUS';
+      case 'CONTRADICTION' || 'CONFLICTING':
+        return 'CONTRADICTION';
+      case 'COMPATIBLE':
+        return 'COMPATIBLE';
+    }
+    final bool focus =
+        contrast.thresholdRule == 'v1:editorial_focus_contrast' ||
+        contrast.eventTitle.trimLeft().toLowerCase().startsWith(
+          'contraste de enfoques',
+        );
+    return focus ? 'DIFFERENT_FOCUS' : 'CONTRADICTION';
   }
 
-  String get title => contrast.eventTitle;
+  String get title => arenaTitle(contrast.eventTitle);
 
   static String nameOf(EventCoveragePositionDto? position) =>
       position == null || position.assertions.isEmpty
@@ -183,6 +200,46 @@ final class ArenaStore extends ChangeNotifier {
       if (item.id == id) return item;
     }
     return null;
+  }
+
+  /// A medium registered twice (press feed and YouTube channel) is one brand.
+  static String brandKey(String name) =>
+      arenaSourceName(name).toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  /// Every registered source of the same medium, [source] included.
+  List<LiveSourceDto> brandOf(LiveSourceDto source) {
+    final String key = brandKey(source.name);
+    final List<LiveSourceDto> same = sources
+        .where((LiveSourceDto s) => brandKey(s.name) == key)
+        .toList();
+    return same.isEmpty ? <LiveSourceDto>[source] : same;
+  }
+
+  /// Sources grouped by medium, in directory order.
+  List<List<LiveSourceDto>> brands(Iterable<LiveSourceDto> from) {
+    final Map<String, List<LiveSourceDto>> grouped =
+        <String, List<LiveSourceDto>>{};
+    for (final LiveSourceDto source in from) {
+      grouped
+          .putIfAbsent(brandKey(source.name), () => <LiveSourceDto>[])
+          .add(source);
+    }
+    return grouped.values.toList();
+  }
+
+  bool followsBrand(List<LiveSourceDto> brand) =>
+      brand.any((LiveSourceDto s) => followed.contains(s.id));
+
+  /// Follows or unfollows every source of a medium together.
+  Future<void> setBrandFollowing(
+    List<LiveSourceDto> brand, {
+    required bool value,
+  }) async {
+    for (final LiveSourceDto source in brand) {
+      if (followed.contains(source.id) != value) {
+        await setFollowing(source.id, value: value);
+      }
+    }
   }
 
   ArenaDuel? duelForEvent(String eventId) {

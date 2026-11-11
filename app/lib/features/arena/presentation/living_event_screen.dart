@@ -173,7 +173,7 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
                         Semantics(
                           header: true,
                           child: Text(
-                            event.titleDescriptive,
+                            event.arenaTitle,
                             style: const TextStyle(
                               fontFamily: ArenaText.serif,
                               fontSize: 20,
@@ -201,21 +201,17 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          alignment: WrapAlignment.spaceBetween,
+        // Sources on the left and the follow button on the right, one row.
+        Row(
           children: <Widget>[
-            Text(
-              '📚 ${event.sourceCount} '
-              '${event.sourceCount == 1 ? 'fuente' : 'fuentes'}',
-              style: ArenaText.cardTitle,
+            Expanded(
+              child: Text(
+                '📚 ${event.sourceCount} '
+                '${event.sourceCount == 1 ? 'fuente' : 'fuentes'}',
+                style: ArenaText.cardTitle,
+              ),
             ),
-            Text(
-              followingStory ? '👥 Siguiendo' : '👥 Sin seguir',
-              style: ArenaText.cardTitle,
-            ),
+            const SizedBox(width: 12),
             FilledButton.icon(
               key: const Key('arena-follow-story'),
               onPressed: _followBusy ? null : () => _toggleFollow(event),
@@ -229,9 +225,7 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
                 minimumSize: const Size(48, 44),
               ),
               icon: Icon(
-                followingStory
-                    ? Icons.notifications_active
-                    : Icons.notifications_none,
+                followingStory ? Icons.check : Icons.notifications_none,
                 size: 18,
               ),
               label: Text(followingStory ? 'Siguiendo' : 'Seguir'),
@@ -258,6 +252,32 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
     );
   }
 
+  /// What the coverage says happened, never the header title repeated.
+  String _whatHappened(
+    EventDetailDto event,
+    List<EventCoverageArticleDto> timeline,
+  ) {
+    final String? fact = event.primaryFact?.statement.trim();
+    if (fact != null && fact.isNotEmpty) return fact;
+    final String header = event.arenaTitle.toLowerCase();
+    final List<String> lines = <String>[
+      for (final EventCoveragePositionDto position
+          in event.coveragePositions.take(2))
+        if (arenaPositionSummary(event, position).toLowerCase() != header)
+          'Según ${ArenaDuel.nameOf(position)}: '
+              '${arenaPositionSummary(event, position)}',
+    ];
+    if (lines.isNotEmpty) return lines.join('\n');
+    for (final EventCoverageArticleDto article in timeline) {
+      if (arenaTitle(article.title).toLowerCase() != header) {
+        return '${arenaSourceName(article.sourceName)} informó: '
+            '${article.title.trim()}';
+      }
+    }
+    return 'La cobertura registrada todavía no detalla el hecho más allá '
+        'de su titular.';
+  }
+
   List<Widget> _summary(
     BuildContext context,
     EventDetailDto event,
@@ -266,8 +286,9 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
     final EventCoverageArticleDto? latest = timeline.lastOrNull;
     final ArenaDuel? duel = store.duelForEvent(event.id);
     final List<String> actors = arenaNamedActors(<String>[
-      event.titleDescriptive,
-      for (final EventCoveragePositionDto p in event.coveragePositions) p.title,
+      event.arenaTitle,
+      for (final EventCoveragePositionDto p in event.coveragePositions)
+        arenaPositionSummary(event, p),
       for (final EventCoverageArticleDto a in event.articles) a.title,
     ]);
     final Set<String> media = event.articles
@@ -291,13 +312,16 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
             if (event.primaryFact != null)
               Text(event.primaryFact!.statement, style: ArenaText.body)
             else if (event.coveragePositions.isEmpty)
-              Text(event.titleDescriptive, style: ArenaText.body)
+              Text(event.arenaTitle, style: ArenaText.body)
             else
               for (final EventCoveragePositionDto position
                   in event.coveragePositions)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 4),
-                  child: Text('• ${position.title}', style: ArenaText.body),
+                  child: Text(
+                    '• ${arenaPositionSummary(event, position)}',
+                    style: ArenaText.body,
+                  ),
                 ),
             const SizedBox(height: 8),
             Text(
@@ -350,10 +374,7 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             const Text('Claves del caso', style: ArenaText.section),
-            _Key(
-              label: 'Qué pasó',
-              text: event.primaryFact?.statement ?? event.titleDescriptive,
-            ),
+            _Key(label: 'Qué pasó', text: _whatHappened(event, timeline)),
             _Key(
               label: 'Quiénes están involucrados',
               text: actors.isEmpty
@@ -475,7 +496,7 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
         body:
             '${event.sourceCount} fuentes y ${event.articles.length} '
             'publicaciones. '
-            '${event.coveragePositions.isEmpty ? 'Aún sin posturas con cita literal.' : 'Posturas registradas: ${event.coveragePositions.map((EventCoveragePositionDto p) => p.title).join(' · ')}.'}'
+            '${event.coveragePositions.isEmpty ? 'Aún sin posturas con cita literal.' : 'Posturas registradas: ${event.coveragePositions.map((EventCoveragePositionDto p) => arenaPositionSummary(event, p)).join(' · ')}.'}'
             '${snapshot == null
                 ? ''
                 : newSources > 0
@@ -519,7 +540,9 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                arenaQuote(quote.quotedText),
+                arenaAssertionText(event, quote).literal
+                    ? arenaQuote(quote.quotedText)
+                    : arenaAssertionText(event, quote).text,
                 style: const TextStyle(
                   fontFamily: ArenaText.serif,
                   fontSize: 15,
@@ -528,17 +551,19 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
                 ),
               ),
               const SizedBox(height: 8),
-              const Row(
+              Row(
                 children: <Widget>[
-                  Icon(
+                  const Icon(
                     Icons.check_circle,
                     size: 16,
                     color: ArenaColors.emerald,
                   ),
-                  SizedBox(width: 6),
+                  const SizedBox(width: 6),
                   Expanded(
                     child: Text(
-                      'Cita literal verificada contra el original',
+                      arenaAssertionText(event, quote).literal
+                          ? 'Cita literal verificada contra el original'
+                          : 'Titular de la publicación original',
                       style: ArenaText.meta,
                     ),
                   ),

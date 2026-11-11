@@ -12,11 +12,11 @@ void main() {
       final DateTime now = DateTime(2026, 11, 10, 12);
       expect(
         arenaAgo(now.subtract(const Duration(days: 4)), now: now),
-        'hace 4 d',
+        'hace\u00A04\u00A0d',
       );
       expect(
         arenaAgo(now.subtract(const Duration(hours: 3)), now: now),
-        'hace 3 h',
+        'hace\u00A03\u00A0h',
       );
     });
 

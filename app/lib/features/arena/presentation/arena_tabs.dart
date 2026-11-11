@@ -243,9 +243,6 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
   }
 }
 
-String _brandKey(String name) =>
-    arenaSourceName(name).toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
-
 int _styleGroup(LiveSourceDto source) {
   final String name = source.name.toLowerCase();
   bool any(List<String> needles) => needles.any(name.contains);
@@ -299,18 +296,16 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
     context,
   ).showSnackBar(SnackBar(content: Text(message)));
 
-  Future<void> _toggle(LiveSourceDto source) async {
-    if (_busy.contains(source.id)) return;
-    setState(() => _busy.add(source.id));
+  Future<void> _toggle(List<LiveSourceDto> brand) async {
+    final String key = ArenaStore.brandKey(brand.first.name);
+    if (_busy.contains(key)) return;
+    setState(() => _busy.add(key));
     try {
-      await store.setFollowing(
-        source.id,
-        value: !store.followed.contains(source.id),
-      );
+      await store.setBrandFollowing(brand, value: !store.followsBrand(brand));
     } on Object {
       if (mounted) _say('No se pudo actualizar el seguimiento.');
     } finally {
-      if (mounted) setState(() => _busy.remove(source.id));
+      if (mounted) setState(() => _busy.remove(key));
     }
   }
 
@@ -329,13 +324,13 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
     if (selected == null || !mounted) return;
     final Set<String> brands = store.sources
         .where((LiveSourceDto s) => selected.ids.contains(s.id))
-        .map((LiveSourceDto s) => _brandKey(s.name))
+        .map((LiveSourceDto s) => ArenaStore.brandKey(s.name))
         .toSet();
     final List<String> ids = store.sources
         .where(
           (LiveSourceDto s) =>
               (selected.ids.contains(s.id) ||
-                  brands.contains(_brandKey(s.name))) &&
+                  brands.contains(ArenaStore.brandKey(s.name))) &&
               !store.followed.contains(s.id),
         )
         .map((LiveSourceDto s) => s.id)
@@ -367,9 +362,19 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
       listenable: store,
       builder: (BuildContext context, _) {
         final String needle = _query.trim().toLowerCase();
-        final List<LiveSourceDto> visible = store.sources
-            .where((LiveSourceDto s) => s.name.toLowerCase().contains(needle))
+        // One card per medium: a press feed and its YouTube channel merge.
+        final List<List<LiveSourceDto>> visible = store
+            .brands(store.sources)
+            .where(
+              (List<LiveSourceDto> brand) => brand.any(
+                (LiveSourceDto s) => s.name.toLowerCase().contains(needle),
+              ),
+            )
             .toList();
+        final int followedBrands = store
+            .brands(store.sources)
+            .where(store.followsBrand)
+            .length;
         final bool canFollow = store.following != null;
         return ListView(
           key: const Key('arena-media-tab-scroll'),
@@ -379,7 +384,7 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
               title: 'Medios',
               subtitle:
                   '${store.sources.length} fuentes registradas · sigues '
-                  '${store.followed.length}',
+                  '$followedBrands',
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -452,7 +457,7 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
               (2, '⚡ Minuto a minuto'),
             ])
               if (visible.any(
-                (LiveSourceDto s) => _styleGroup(s) == group,
+                (List<LiveSourceDto> b) => _styleGroup(b.first) == group,
               )) ...<Widget>[
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -466,23 +471,26 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: <Widget>[
-                        for (final LiveSourceDto source in visible.where(
-                          (LiveSourceDto s) => _styleGroup(s) == group,
+                        for (final List<LiveSourceDto> brand in visible.where(
+                          (List<LiveSourceDto> b) =>
+                              _styleGroup(b.first) == group,
                         ))
                           _MediaCard(
-                            source: source,
-                            following: store.followed.contains(source.id),
-                            busy: _busy.contains(source.id),
+                            source: brand.first,
+                            following: store.followsBrand(brand),
+                            busy: _busy.contains(
+                              ArenaStore.brandKey(brand.first.name),
+                            ),
                             canFollow: canFollow,
                             onOpen: () => Navigator.of(context).push(
                               MaterialPageRoute<void>(
                                 builder: (_) => MediaProfileScreen(
-                                  source: source,
+                                  source: brand.first,
                                   store: store,
                                 ),
                               ),
                             ),
-                            onToggle: () => _toggle(source),
+                            onToggle: () => _toggle(brand),
                           ),
                       ],
                     ),
@@ -517,7 +525,8 @@ class _MediaCard extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(right: 10),
     child: SizedBox(
-      width: 156,
+      // Wide enough for «El Desconcierto» on one line.
+      width: 168,
       child: Material(
         key: ValueKey<String>('arena-media-${source.id}'),
         color: ArenaColors.card,
@@ -631,8 +640,11 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
           final List<EventCardDto> followedStories = store.events
               .where((EventCardDto e) => stories.contains(e.id))
               .toList();
-          final List<LiveSourceDto> followedMedia = store.sources
-              .where((LiveSourceDto s) => store.followed.contains(s.id))
+          // One entry per medium, even when it is registered twice.
+          final List<LiveSourceDto> followedMedia = store
+              .brands(store.sources)
+              .where(store.followsBrand)
+              .map((List<LiveSourceDto> brand) => brand.first)
               .toList();
           final List<ArenaDuel> savedDuels = store.duels
               .where((ArenaDuel d) => store.saved.contains(d.event.id))

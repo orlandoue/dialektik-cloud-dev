@@ -135,7 +135,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('La Tercera · 2 votos'), findsOneWidget);
     expect(find.text('BioBioChile · 1 voto'), findsOneWidget);
-    expect(find.text('La fiscalía descarta cualquier acuerdo'), findsOneWidget);
+    expect(
+      find.text('no existe ni existirá un acuerdo con el imputado'),
+      findsOneWidget,
+    );
 
     await tester.tap(
       find.byKey(const ValueKey<String>('arena-vote-position-$positionBId')),
@@ -175,7 +178,7 @@ void main() {
 
     // Aportes: author alias, relative time, PDF badge and shared counts.
     expect(find.textContaining('Ana P.'), findsOneWidget);
-    expect(find.textContaining('hace 3 h'), findsOneWidget);
+    expect(find.textContaining('hace\u00A03\u00A0h'), findsOneWidget);
     expect(find.text('PDF'), findsOneWidget);
     await tester.tap(find.text('https://www.pjud.cl/docs/acta-audiencia.pdf'));
     expect(opened.single.host, 'www.pjud.cl');
@@ -228,7 +231,7 @@ void main() {
       find.text('Para mí ambos medios dicen cosas compatibles.'),
       findsOneWidget,
     );
-    expect(find.textContaining('hace 4 d'), findsOneWidget);
+    expect(find.textContaining('hace\u00A04\u00A0d'), findsOneWidget);
     expect(
       find.text('La Tercera 67% · BioBioChile 33% · 3 votos'),
       findsOneWidget,
