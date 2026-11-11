@@ -181,7 +181,7 @@ class DuelOfTheDayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => ArenaCard(
-    key: const Key('arena-duel-of-the-day'),
+    margin: EdgeInsets.zero,
     padding: EdgeInsets.zero,
     onTap: () => openArenaDuel(context, store, duel),
     child: Column(
@@ -228,6 +228,140 @@ class DuelOfTheDayCard extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// Swipeable carousel of the most recent duels with its page dots.
+///
+/// A `PageView` needs a fixed height, which clips cards under large system
+/// text. Pages are laid out side by side at the viewport width inside a
+/// paging scroll view instead, so the carousel is as tall as its tallest
+/// card and still snaps page by page.
+class DuelCarousel extends StatefulWidget {
+  const DuelCarousel({required this.duels, required this.store, super.key});
+
+  static const int maximumPages = 5;
+
+  final List<ArenaDuel> duels;
+  final ArenaStore store;
+
+  @override
+  State<DuelCarousel> createState() => _DuelCarouselState();
+}
+
+class _DuelCarouselState extends State<DuelCarousel> {
+  final ScrollController _controller = ScrollController();
+  int _page = 0;
+  double _pageWidth = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.addListener(_scrolled);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _scrolled() {
+    final int page = (_controller.offset / _pageWidth).round();
+    if (page != _page && mounted) setState(() => _page = page);
+  }
+
+  void _goTo(int page) => unawaited(
+    _controller.animateTo(
+      page * _pageWidth,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOut,
+    ),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final List<ArenaDuel> pages = widget.duels
+        .take(DuelCarousel.maximumPages)
+        .toList();
+    final int current = _page.clamp(0, pages.length - 1);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        LayoutBuilder(
+          builder: (BuildContext context, BoxConstraints constraints) {
+            _pageWidth = constraints.maxWidth;
+            return SingleChildScrollView(
+              key: const Key('arena-duel-carousel'),
+              controller: _controller,
+              scrollDirection: Axis.horizontal,
+              physics: pages.length > 1
+                  ? const PageScrollPhysics()
+                  : const NeverScrollableScrollPhysics(),
+              child: IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: <Widget>[
+                    for (int i = 0; i < pages.length; i++)
+                      SizedBox(
+                        width: constraints.maxWidth,
+                        child: DuelOfTheDayCard(
+                          key: Key(
+                            i == 0
+                                ? 'arena-duel-of-the-day'
+                                : 'arena-duel-page-$i',
+                          ),
+                          duel: pages[i],
+                          store: widget.store,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+        if (pages.length > 1)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Semantics(
+              label:
+                  'Duelo ${current + 1} de ${pages.length}. Desliza para '
+                  'ver más',
+              child: Row(
+                key: const Key('arena-duel-dots'),
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: <Widget>[
+                  for (int i = 0; i < pages.length; i++)
+                    GestureDetector(
+                      behavior: HitTestBehavior.opaque,
+                      onTap: () => _goTo(i),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 6,
+                        ),
+                        child: AnimatedContainer(
+                          key: ValueKey<String>('arena-duel-dot-$i'),
+                          duration: const Duration(milliseconds: 200),
+                          width: i == current ? 18 : 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            color: i == current
+                                ? ArenaColors.violet
+                                : ArenaColors.track,
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
 }
 
 /// Share, save and open actions of a duel card.
@@ -377,9 +511,10 @@ class _DuelScreenState extends State<DuelScreen> {
     ),
     bottomNavigationBar: SafeArea(
       minimum: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-      child: ArenaPrimaryButton(
+      child: ArenaGradientButton(
         key: const Key('arena-vote-button'),
-        label: '🗳️ ¿Qué postura tiene más respaldo?',
+        icon: Icons.bolt,
+        label: '¿A qué versión le crees más?',
         onPressed: () => showArenaVoteSheet(context, store, duel.event),
       ),
     ),
@@ -411,7 +546,10 @@ class _DuelScreenState extends State<DuelScreen> {
           ),
         ),
         const SizedBox(height: 12),
-        _KindPills(kind: duel.kind),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: DuelKindBadge(kind: duel.kind),
+        ),
         const SizedBox(height: 14),
         IntrinsicHeight(
           child: Row(
@@ -439,123 +577,99 @@ class _DuelScreenState extends State<DuelScreen> {
 
   List<Widget> _evidence(BuildContext context) {
     final EventDetailDto event = duel.event;
-    final Set<String> quoted = <String>{
-      for (final EventCoveragePositionDto position in event.coveragePositions)
-        for (final EventCoverageAssertionDto a in position.assertions)
-          arenaSourceName(a.sourceName),
-    };
-    final List<String> unquoted = event.articles
-        .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
-        .toSet()
-        .difference(quoted)
-        .toList();
-    final Set<String> names = event.articles
-        .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
-        .toSet();
     return <Widget>[
       for (final EventCoverageArticleDto article in event.articles)
-        _EvidenceTile(
-          icon: Icons.check_circle,
-          color: ArenaColors.emerald,
-          title: article.title,
-          subtitle:
-              '${arenaSourceName(article.sourceName)} · '
-              '${arenaAgo(article.publishedAt)} · Abrir original',
-          onTap: () => unawaited(store.openLink(article.url)),
+        _SourceLinkCard(
+          article: article,
+          onOpen: () => unawaited(store.openLink(article.url)),
+          onOpenSource: article.sourceId == null
+              ? null
+              : () => openArenaMedia(context, store, article.sourceId!),
         ),
-      _EvidenceTile(
-        icon: Icons.description_outlined,
-        color: ArenaColors.violet,
-        title: 'Cobertura comparada',
-        subtitle:
-            '${names.length} ${names.length == 1 ? 'fuente cubre' : 'fuentes cubren'} '
-            'este caso: ${names.join(', ')}. Ver acontecimiento completo.',
-        onTap: () => openArenaEvent(context, store, event.id),
-      ),
-      _EvidenceTile(
-        icon: Icons.help_outline,
-        color: ArenaColors.muted,
-        title: '¿Qué falta por saber?',
-        subtitle: unquoted.isEmpty
-            ? 'Todas las fuentes del caso tienen al menos una cita literal '
-                  'verificada. Si conoces un documento que falte, apórtalo '
-                  'en la comunidad del caso.'
-            : 'Aún no hay cita literal verificada de: ${unquoted.join(', ')}. '
-                  'Puedes aportar un enlace o documento en la comunidad del '
-                  'caso.',
-        onTap: () => openArenaCommunity(context, store, event),
+      OutlinedButton.icon(
+        key: const Key('arena-add-evidence'),
+        onPressed: () => showArenaContributionSheet(context, store, event),
+        style: OutlinedButton.styleFrom(
+          backgroundColor: ArenaColors.card,
+          foregroundColor: ArenaColors.violet,
+          side: const BorderSide(color: Color(0xFFD9D0FD)),
+          minimumSize: const Size(48, 48),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+        icon: const Icon(Icons.add_link_rounded),
+        label: const Text(
+          'Aportar enlace o evidencia verificable',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
       ),
     ];
   }
 
+  /// The essential facts in the order they were published.
   List<Widget> _context(BuildContext context) {
     final EventDetailDto event = duel.event;
-    final SocialSummary? summary = store.cachedSummary(event.id);
-    final List<SocialComment> notes =
-        summary?.comments.take(3).toList() ?? const <SocialComment>[];
+    final List<EventCoverageArticleDto> timeline = event.articles.toList()
+      ..sort(
+        (EventCoverageArticleDto a, EventCoverageArticleDto b) =>
+            a.publishedAt.compareTo(b.publishedAt),
+      );
+    final String? fact = event.primaryFact?.statement.trim();
     return <Widget>[
-      ArenaCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              'Antecedentes del acontecimiento',
-              style: ArenaText.section,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              event.primaryFact?.statement ?? event.arenaTitle,
-              style: ArenaText.body,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Cobertura registrada desde el ${arenaDate(event.window.from)}'
-              '${event.window.to == null ? '' : ' hasta el ${arenaDate(event.window.to!)}'}'
-              ' · ${event.sourceCount} fuentes · ${event.articles.length} '
-              'publicaciones.',
-              style: ArenaText.meta,
-            ),
-            const SizedBox(height: 6),
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: ArenaColors.violet,
-                padding: EdgeInsets.zero,
-              ),
-              onPressed: () => openArenaEvent(context, store, event.id),
-              child: const Text('Abrir acontecimiento vivo →'),
-            ),
-          ],
+      if (fact != null && fact.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Text(fact, style: ArenaText.body),
         ),
-      ),
-      ArenaCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              'Notas de contexto de la comunidad',
-              style: ArenaText.section,
-            ),
-            const SizedBox(height: 8),
-            if (notes.isEmpty)
-              const Text(
-                'Todavía no hay notas de contexto para este caso.',
-                style: ArenaText.body,
-              )
-            else
-              for (final SocialComment note in notes)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Text('• ${note.body}', style: ArenaText.body),
+      for (final EventCoverageArticleDto article in timeline)
+        Padding(
+          key: ValueKey<String>('arena-context-${article.id}'),
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Padding(
+                padding: EdgeInsets.only(top: 6),
+                child: SizedBox.square(
+                  dimension: 8,
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: ArenaColors.violet,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
                 ),
-            TextButton(
-              style: TextButton.styleFrom(
-                foregroundColor: ArenaColors.violet,
-                padding: EdgeInsets.zero,
               ),
-              onPressed: () => openArenaCommunity(context, store, event),
-              child: const Text('Ver comunidad del caso →'),
-            ),
-          ],
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      '${arenaDateTime(article.publishedAt)} · '
+                      '${arenaSourceName(article.sourceName)}',
+                      style: ArenaText.meta,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(article.title, style: ArenaText.body),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton(
+          style: TextButton.styleFrom(
+            foregroundColor: ArenaColors.violet,
+            padding: EdgeInsets.zero,
+          ),
+          onPressed: () => openArenaEvent(context, store, event.id),
+          child: const Text('Abrir acontecimiento vivo →'),
         ),
       ),
     ];
@@ -646,54 +760,63 @@ class _DuelScreenState extends State<DuelScreen> {
   }
 }
 
-class _KindPills extends StatelessWidget {
-  const _KindPills({required this.kind});
+/// The one classification of this duel, as an informative badge.
+///
+/// Only the label that applies is shown: three pills side by side looked
+/// like options the reader could switch.
+class DuelKindBadge extends StatelessWidget {
+  const DuelKindBadge({required this.kind, super.key});
 
-  final String? kind;
+  final String kind;
 
   @override
-  Widget build(BuildContext context) => Wrap(
-    spacing: 8,
-    runSpacing: 8,
-    children: <Widget>[
-      for (final ({String kind, String label}) item in arenaDuelKinds)
-        Semantics(
-          selected: item.kind == kind,
-          label: item.kind == kind
-              ? 'Clasificación: ${item.label}'
-              : '${item.label}, no aplica',
-          child: ExcludeSemantics(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: item.kind == kind
-                    ? ArenaColors.violet
-                    : ArenaColors.card,
-                borderRadius: BorderRadius.circular(999),
-                border: Border.all(
-                  color: item.kind == kind
-                      ? ArenaColors.violet
-                      : ArenaColors.border,
-                ),
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 7,
-                ),
-                child: Text(
-                  item.label,
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: item.kind == kind ? Colors.white : ArenaColors.muted,
-                  ),
-                ),
+  Widget build(BuildContext context) {
+    final ({String icon, String label, Color background, Color foreground})
+    style = switch (kind) {
+      'CONTRADICTION' => (
+        icon: '⚔️',
+        label: 'Contradicción factual',
+        background: const Color(0xFFFDE8E8),
+        foreground: const Color(0xFF9B1C1C),
+      ),
+      'COMPATIBLE' => (
+        icon: '🤝',
+        label: 'Cobertura compatible',
+        background: const Color(0xFFEDF2F7),
+        foreground: const Color(0xFF2D3748),
+      ),
+      _ => (
+        icon: '⚡',
+        label: 'Distinto enfoque',
+        background: ArenaColors.violetSoft,
+        foreground: ArenaColors.violet,
+      ),
+    };
+    return Semantics(
+      label: 'Clasificación: ${style.label}',
+      child: ExcludeSemantics(
+        child: DecoratedBox(
+          key: const Key('arena-duel-kind'),
+          decoration: BoxDecoration(
+            color: style.background,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: style.foreground.withValues(alpha: 0.18)),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Text(
+              '${style.icon} ${style.label}',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: style.foreground,
               ),
             ),
           ),
         ),
-    ],
-  );
+      ),
+    );
+  }
 }
 
 class _PostureCard extends StatelessWidget {
@@ -770,40 +893,256 @@ class _PostureCard extends StatelessWidget {
   }
 }
 
-class _EvidenceTile extends StatelessWidget {
-  const _EvidenceTile({
-    required this.icon,
-    required this.color,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
+/// An original publication shown as an obvious, tappable web link.
+class _SourceLinkCard extends StatelessWidget {
+  const _SourceLinkCard({
+    required this.article,
+    required this.onOpen,
+    required this.onOpenSource,
   });
 
-  final IconData icon;
-  final Color color;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+  final EventCoverageArticleDto article;
+  final VoidCallback onOpen;
+  final VoidCallback? onOpenSource;
 
   @override
   Widget build(BuildContext context) => ArenaCard(
-    onTap: onTap,
+    key: ValueKey<String>('arena-source-link-${article.id}'),
+    onTap: onOpen,
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Icon(icon, color: color, size: 22),
+        Semantics(
+          button: onOpenSource != null,
+          label: 'Abrir perfil de ${arenaSourceName(article.sourceName)}',
+          child: InkWell(
+            customBorder: const CircleBorder(),
+            onTap: onOpenSource,
+            child: MediaEmblem(name: article.sourceName, size: 40),
+          ),
+        ),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(title, style: ArenaText.cardTitle),
+              Text(
+                article.title,
+                style: const TextStyle(
+                  fontSize: 14.5,
+                  height: 1.3,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF1A1A1A),
+                ),
+              ),
               const SizedBox(height: 4),
-              Text(subtitle, style: ArenaText.meta),
+              Text(
+                '${arenaSourceName(article.sourceName)} · '
+                '${arenaAgo(article.publishedAt)}',
+                style: ArenaText.meta,
+              ),
+              const SizedBox(height: 6),
+              // The whole card opens the original; this row says so.
+              const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Flexible(
+                    child: Text(
+                      'Leer en medio original',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: ArenaColors.violet,
+                        decoration: TextDecoration.underline,
+                        decorationColor: ArenaColors.violet,
+                      ),
+                    ),
+                  ),
+                  SizedBox(width: 4),
+                  Icon(Icons.open_in_new, size: 16, color: ArenaColors.violet),
+                ],
+              ),
             ],
           ),
         ),
       ],
+    ),
+  );
+}
+
+/// Modal to contribute a link with a supporting note to the case.
+Future<void> showArenaContributionSheet(
+  BuildContext context,
+  ArenaStore store,
+  EventDetailDto event,
+) => showModalBottomSheet<void>(
+  context: context,
+  isScrollControlled: true,
+  backgroundColor: ArenaColors.card,
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+  ),
+  builder: (BuildContext sheetContext) =>
+      _ContributionSheet(store: store, event: event, hostContext: context),
+);
+
+class _ContributionSheet extends StatefulWidget {
+  const _ContributionSheet({
+    required this.store,
+    required this.event,
+    required this.hostContext,
+  });
+
+  final ArenaStore store;
+  final EventDetailDto event;
+  final BuildContext hostContext;
+
+  @override
+  State<_ContributionSheet> createState() => _ContributionSheetState();
+}
+
+class _ContributionSheetState extends State<_ContributionSheet> {
+  final TextEditingController _link = TextEditingController();
+  final TextEditingController _note = TextEditingController();
+  String? _error;
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _link.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final Uri? uri = Uri.tryParse(_link.text.trim());
+    final String note = _note.text.trim();
+    if (uri == null ||
+        (uri.scheme != 'https' && uri.scheme != 'http') ||
+        uri.host.isEmpty ||
+        uri.userInfo.isNotEmpty) {
+      setState(
+        () => _error = 'Pega un enlace completo que empiece con https://',
+      );
+      return;
+    }
+    if (note.isEmpty) {
+      setState(() => _error = 'Explica en una línea qué respalda este enlace.');
+      return;
+    }
+    final ArenaSocialRepository? arena = widget.store.arenaSocial;
+    if (arena == null) {
+      setState(() => _error = 'Inicia sesión para aportar evidencia.');
+      return;
+    }
+    setState(() {
+      _sending = true;
+      _error = null;
+    });
+    try {
+      widget.store.rememberCommunity(
+        widget.event.id,
+        await arena.addCommunityEntry(
+          widget.event.id,
+          channel: CommunityChannel.aporte,
+          body: note,
+          link: uri,
+        ),
+      );
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      if (widget.hostContext.mounted) {
+        ScaffoldMessenger.of(widget.hostContext).showSnackBar(
+          SnackBar(
+            content: const Text('Tu aporte quedó publicado en la comunidad.'),
+            action: SnackBarAction(
+              label: 'Ver',
+              onPressed: () => openArenaCommunity(
+                widget.hostContext,
+                widget.store,
+                widget.event,
+              ),
+            ),
+          ),
+        );
+      }
+    } on Exception {
+      if (mounted) {
+        setState(
+          () => _error =
+              'El servidor todavía no acepta enlaces externos. Puedes '
+              'adjuntar una publicación del caso desde la comunidad.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => SafeArea(
+    child: SingleChildScrollView(
+      padding: EdgeInsets.fromLTRB(
+        20,
+        20,
+        20,
+        20 + MediaQuery.viewInsetsOf(context).bottom,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const Text('Aportar evidencia', style: ArenaText.section),
+          const SizedBox(height: 4),
+          const Text(
+            'Suma un enlace o documento que respalde o contradiga una de las '
+            'versiones.',
+            style: ArenaText.meta,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            key: const Key('arena-evidence-link'),
+            controller: _link,
+            keyboardType: TextInputType.url,
+            decoration: InputDecoration(
+              labelText: 'Enlace',
+              hintText: 'https://…',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          TextField(
+            key: const Key('arena-evidence-note'),
+            controller: _note,
+            minLines: 2,
+            maxLines: 4,
+            maxLength: 600,
+            decoration: InputDecoration(
+              labelText: 'Nota de respaldo',
+              hintText: '¿Qué demuestra este enlace?',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                _error!,
+                style: const TextStyle(color: ArenaColors.amberDeep),
+              ),
+            ),
+          ArenaPrimaryButton(
+            key: const Key('arena-evidence-send'),
+            icon: Icons.add_link_rounded,
+            label: 'Publicar aporte',
+            onPressed: _sending ? null : _send,
+          ),
+        ],
+      ),
     ),
   );
 }
@@ -923,7 +1262,7 @@ class _VoteSheetState extends State<_VoteSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               const Text(
-                '¿Qué postura tiene más respaldo?',
+                '¿A qué versión le crees más?',
                 style: TextStyle(
                   fontSize: 19,
                   fontWeight: FontWeight.w800,
@@ -1046,7 +1385,7 @@ class _VoteSheetState extends State<_VoteSheet> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         const Text(
-          '¿Qué postura tiene más respaldo?',
+          '¿A qué versión le crees más?',
           style: TextStyle(
             fontSize: 19,
             fontWeight: FontWeight.w800,

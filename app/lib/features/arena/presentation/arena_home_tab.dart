@@ -166,21 +166,28 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
           padding: const EdgeInsets.fromLTRB(16, 6, 6, 2),
           child: Row(
             children: <Widget>[
-              const Flexible(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text('Dialektik', style: ArenaText.brand),
+              // Logo and country share what the two icons leave free; the
+              // logo keeps its size and only shrinks when it truly must.
+              Expanded(
+                child: Row(
+                  children: <Widget>[
+                    const Flexible(
+                      child: FittedBox(
+                        fit: BoxFit.scaleDown,
+                        alignment: Alignment.centerLeft,
+                        child: Text('Dialektik', style: ArenaText.brand),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    ArenaDropdownPill(
+                      key: const Key('arena-country'),
+                      label: '🇨🇱 Chile',
+                      semanticsLabel: 'País: Chile. Cambiar país',
+                      onTap: _chooseCountry,
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 10),
-              ArenaDropdownPill(
-                key: const Key('arena-country'),
-                label: '🇨🇱 Chile',
-                semanticsLabel: 'País: Chile. Cambiar país',
-                onTap: _chooseCountry,
-              ),
-              const Spacer(),
               IconButton(
                 key: const Key('arena-search'),
                 tooltip: 'Buscar',
@@ -312,7 +319,7 @@ class _Coliseo extends StatelessWidget {
               )
             else ...<Widget>[
               if (duels.isNotEmpty)
-                DuelOfTheDayCard(duel: duels.first, store: store)
+                DuelCarousel(duels: duels, store: store)
               else
                 ArenaMessage(
                   topic == null
@@ -321,10 +328,10 @@ class _Coliseo extends StatelessWidget {
                 ),
               if (developing.isNotEmpty) ...<Widget>[
                 const Padding(
-                  padding: EdgeInsets.only(top: 12, bottom: 10),
+                  padding: EdgeInsets.only(top: 4, bottom: 10),
                   child: Align(
                     alignment: Alignment.centerLeft,
-                    child: ArenaBadge.live('EN DESARROLLO'),
+                    child: ArenaSectionPill('Historias en desarrollo'),
                   ),
                 ),
                 for (final EventCardDto event in developing.take(5))

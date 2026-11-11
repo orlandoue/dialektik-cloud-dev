@@ -116,7 +116,7 @@ void main() {
       expect(find.byTooltip('Abrir duelo completo'), findsOneWidget);
 
       await reveal(tester, find.text(storyTitle), 'arena-coliseo-scroll');
-      expect(find.text('● EN DESARROLLO'), findsOneWidget);
+      expect(find.text('Historias en desarrollo'), findsOneWidget);
       expect(
         find.textContaining('3 fuentes · Actualizada hace'),
         findsOneWidget,
@@ -183,13 +183,10 @@ void main() {
 
     expect(find.text('VS · Duelo de Medios'), findsOneWidget);
     expect(find.textContaining('JUSTICIA · 9'), findsOneWidget);
-    for (final String pill in <String>[
-      'Contradicción',
-      'Distinto enfoque',
-      'Compatible',
-    ]) {
-      expect(find.text(pill), findsOneWidget);
-    }
+    // Only the classification that applies is shown, as a badge.
+    expect(find.text('⚡ Distinto enfoque'), findsOneWidget);
+    expect(find.textContaining('Contradicción'), findsNothing);
+    expect(find.textContaining('compatible'), findsNothing);
     expect(
       find.text(
         '“La defensa confirmó conversaciones con el Ministerio Público”',
@@ -223,10 +220,11 @@ void main() {
     expect(opened.single.toString(), 'https://biobiochile.cl/nota/art2');
     await reveal(
       tester,
-      find.text('¿Qué falta por saber?'),
+      find.byKey(const Key('arena-add-evidence')),
       'arena-duel-scroll',
     );
-    expect(find.text('Cobertura comparada'), findsOneWidget);
+    expect(find.text('¿Qué falta por saber?'), findsNothing);
+    expect(find.text('Cobertura comparada'), findsNothing);
 
     await reveal(
       tester,
@@ -237,10 +235,17 @@ void main() {
       find.byKey(const ValueKey<String>('arena-subtab-Contexto')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('Antecedentes del acontecimiento'), findsOneWidget);
+    // The facts in publication order, with no empty filler blocks.
+    expect(find.text('Antecedentes del acontecimiento'), findsNothing);
+    final Finder earlier = find.byKey(
+      const ValueKey<String>('arena-context-art1'),
+    );
+    final Finder later = find.byKey(
+      const ValueKey<String>('arena-context-art2'),
+    );
     expect(
-      find.text('• El acta del tribunal respalda esta versión.'),
-      findsOneWidget,
+      tester.getTopLeft(earlier).dy,
+      lessThan(tester.getTopLeft(later).dy),
     );
     await tester.tap(
       find.byKey(const ValueKey<String>('arena-subtab-Análisis IA')),
@@ -528,7 +533,7 @@ void main() {
 
       await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Debate')));
       await tester.pumpAndSettle();
-      expect(find.text('Opiniones e interpretaciones'), findsOneWidget);
+      expect(find.byKey(const Key('arena-community-vote')), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Notas')));
       await tester.pumpAndSettle();
       expect(
