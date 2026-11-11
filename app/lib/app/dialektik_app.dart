@@ -44,6 +44,7 @@ class DialektikApp extends StatefulWidget {
     this.betaNavigationActions = const <Widget>[],
     this.externalLinkOpener = openExternalHttpLink,
     this.initialRoute = ConsumerRoutes.feed,
+    this.arenaEnabled = true,
     this.locale,
     super.key,
   });
@@ -66,6 +67,9 @@ class DialektikApp extends StatefulWidget {
   final List<Widget> betaNavigationActions;
   final ExternalLinkOpener externalLinkOpener;
   final String initialRoute;
+
+  /// Shows «Dialektik Arena» with its bottom navigation as the reader home.
+  final bool arenaEnabled;
   final Locale? locale;
 
   @override
@@ -218,6 +222,7 @@ final class _DialektikAppState extends State<DialektikApp> {
             widget.personalOwnerTestShadowRepository ??
             _ownedPersonalOwnerTestShadowClient,
         additionalNavigationActions: widget.betaNavigationActions,
+        arenaEnabled: widget.arenaEnabled,
       );
     }
   }

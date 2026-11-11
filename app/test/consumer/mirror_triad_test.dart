@@ -92,17 +92,11 @@ void main(){
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
       home:SynthesisScreen(repository:repo,onOpenEvent:(_){})));
     await tester.pumpAndSettle();
-    expect(find.text('DISTINTO ENFOQUE · ${e.sourceCount} MEDIOS'),findsOneWidget);
+    expect(find.text('${e.sourceCount} MEDIOS · DISTINTO ENFOQUE'),findsOneWidget);
     expect(find.text('En tus fuentes'),findsNothing);
     expect(find.text('Punto ciego'),findsNothing);
-    await tester.ensureVisible(find.text('Distinto enfoque'));
-    await tester.tap(find.text('Distinto enfoque'));
-    await tester.pumpAndSettle();
-    expect(find.text(e.titleDescriptive),findsOneWidget);
-    await tester.ensureVisible(find.text('Contradicción'));
-    await tester.tap(find.text('Contradicción'));
-    await tester.pumpAndSettle();
-    expect(find.text('No hay acontecimientos en este filtro.'),findsOneWidget);
+    expect(find.text('Distinto enfoque'),findsNothing);
+    expect(find.text('En desarrollo'),findsNothing);
   });
   testWidgets('synthesis refreshes on return and on pull to refresh', (tester) async {
     final repo=FakeConsumerRepository(feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
@@ -127,13 +121,16 @@ void main(){
         {'id':'video','title':'Entrevista en video','source_name':'Canal (YouTube)',
           'published_at':'2026-10-30T12:00:00Z','url':'https://youtu.be/aB3_deF-123'},
       ]});
-    final repo=FakeConsumerRepository(event:event,feedPages:[PublicPage<EventCardDto>(items:[publishedEventCard],nextCursor:null)]);
+    final story=EventCardDto(id:'another-development-event',titleDescriptive:event.titleDescriptive,category:event.category,detectedAt:event.detectedAt,analysisState:event.analysisState,sourceCount:event.sourceCount,positionCount:event.positionCount,synthesisRelation:'DEVELOPING');
+    final repo=FakeConsumerRepository(event:event,feedPages:[PublicPage<EventCardDto>(items:[story],nextCursor:null)]);
     Uri? opened;
     await tester.pumpWidget(MaterialApp(theme:DialektikTheme.offWhite(loadInterFromDependency:false),
-      home:SynthesisScreen(repository:repo,onOpenEvent:(_){},externalLinkOpener:(uri) async {opened=uri;return true;})));
+      home:SynthesisScreen(repository:repo,onOpenEvent:(_){},development:true,externalLinkOpener:(uri) async {opened=uri;return true;})));
     await tester.pump();await tester.pump(const Duration(milliseconds:200));
+    await tester.tap(find.byType(ExpansionTile));
+    await tester.pumpAndSettle();
     final preview=tester.widget<YouTubeThumbnail>(find.byType(YouTubeThumbnail));
-    expect(preview.compact,isTrue);
+    expect(preview.compact,isFalse);
     await tester.ensureVisible(find.byType(YouTubeThumbnail));
     await tester.tap(find.byType(YouTubeThumbnail));
     await tester.pump();

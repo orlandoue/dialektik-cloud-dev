@@ -41,6 +41,7 @@ bool isAllowedShadowInitialRoute(String route) {
 /// Consumer startup may select only existing, non-authenticated section roots.
 bool isAllowedConsumerInitialRoute(String route) => const <String>{
   ConsumerRoutes.feed,
+  ConsumerRoutes.development,
   ConsumerRoutes.liveNews,
   ConsumerRoutes.liveSources,
   ConsumerRoutes.contradictions,

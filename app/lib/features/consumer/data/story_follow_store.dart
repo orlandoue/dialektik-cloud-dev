@@ -40,6 +40,7 @@ class StoryFollowStore extends ChangeNotifier {
   String? _userId;
   bool get available => _userId != null;
   bool contains(String id) => _items.containsKey(id);
+  List<String> get followedIds => _items.keys.toList(growable: false);
   StorySnapshot? snapshot(String id) => _items[id];
   Future<void> load() => _loading ??= _load().catchError((Object error, StackTrace stack) {
     _loading=null;

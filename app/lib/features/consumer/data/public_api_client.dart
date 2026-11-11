@@ -7,6 +7,7 @@ import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
+import 'package:dialektik/features/consumer/data/source_sync_repository.dart';
 import 'package:dialektik/features/live/data/chile_rss_chronology.dart';
 import 'package:dialektik/features/live/data/chile_rss_linked_news.dart';
 import 'package:dialektik/features/live/data/chile_rss_links.dart';
@@ -24,6 +25,8 @@ import 'package:dialektik/features/semantic_shadow/data/semantic_graph_models.da
 import 'package:dialektik/features/semantic_shadow/data/semantic_graph_repository.dart';
 import 'package:dialektik/features/semantic_shadow/data/semantic_shadow_models.dart';
 import 'package:dialektik/features/semantic_shadow/data/semantic_shadow_repository.dart';
+import 'package:dialektik/features/social/data/arena_social_repository.dart';
+import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 
@@ -36,6 +39,9 @@ final class PublicApiClient
     implements
         ConsumerRepository,
         FollowingRepository,
+        SocialRepository,
+        ArenaSocialRepository,
+        SourceSyncRepository,
         SemanticRepository,
         LiveNewsRepository,
         ScopedLiveNewsRepository,
@@ -86,6 +92,60 @@ final class PublicApiClient
   Listenable get followingChanges => _followingVersion;
   bool get _personalizationEnabled => authorizationTokenProvider != null;
   @override
+  Future<SocialSummary> socialSummary({String? eventId, String? sourceId}) => _get<SocialSummary>(
+    '/v1/social/summary', query: {'event_id':?eventId, 'source_id':?sourceId},
+    decoder: (value) => SocialSummary.fromJson(value as Map<String,dynamic>), refresh:true, requestToken:null);
+
+  Future<SocialSummary> _socialPost(String path, Map<String,Object?> body) =>
+    _postJson(path, body, (value) => SocialSummary.fromJson(value! as Map<String,dynamic>));
+
+  @override
+  Future<PositionVotes> positionVotes(String eventId) => _get<PositionVotes>(
+    '/v1/social/position-votes', query: {'event_id': eventId},
+    decoder: (value) => PositionVotes.fromJson(value! as Map<String,dynamic>), refresh: true, requestToken: null);
+  @override
+  Future<PositionVotes> votePosition(String eventId, String? positionId) => _postJson(
+    '/v1/social/position-votes', {'event_id': eventId, 'position_id': positionId},
+    (value) => PositionVotes.fromJson(value! as Map<String,dynamic>));
+  @override
+  Future<List<CommunityEntry>> communityEntries(String eventId) => _get<List<CommunityEntry>>(
+    '/v1/social/community', query: {'event_id': eventId},
+    decoder: CommunityEntry.listFromJson, refresh: true, requestToken: null);
+  @override
+  Future<List<CommunityEntry>> addCommunityEntry(String eventId, {required CommunityChannel channel, required String body, String? articleId, Uri? link}) =>
+    _postJson('/v1/social/community', {'event_id': eventId, 'channel': channel.wire, 'body': body,
+      'article_id': ?articleId, 'link_url': ?link?.toString()}, CommunityEntry.listFromJson);
+  @override
+  Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote) =>
+    _postJson('/v1/social/community/votes', {'entry_id': entryId, 'vote': vote}, CommunityEntry.listFromJson);
+
+  Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder) async {
+    final token = await authorizationTokenProvider?.call();
+    if (token == null || token.isEmpty) throw const PublicApiFailure(kind: PublicFailureKind.unauthorized);
+    late http.Response response;
+    try {
+      response = await _httpClient.post(_configuration.resolve(path),
+        headers: {'accept':'application/json','content-type':'application/json','authorization':'Bearer $token'},
+        body:jsonEncode(body)).timeout(timeout);
+    } on TimeoutException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+      on http.ClientException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      if (response.statusCode == 401) onAuthorizationRejected?.call();
+      throw _decodeFailure(response);
+    }
+    try {
+      return decoder(jsonDecode(response.body));
+    } on Object {
+      throw const PublicApiFailure(kind: PublicFailureKind.invalidResponse);
+    }
+  }
+  @override
+  Future<SocialSummary> setSocialReaction(String eventId, String? reaction) =>
+    _socialPost('/v1/social/reactions', {'event_id':eventId,'reaction':reaction});
+  @override
+  Future<SocialSummary> addSocialComment(String eventId, String articleId, String body) =>
+    _socialPost('/v1/social/comments', {'event_id':eventId,'article_id':articleId,'body':body});
+  @override
   bool get followingAvailable => _personalizationEnabled;
   LiveNewsPageDto? _cachedMirrorNews;
   Set<String>? _cachedFollowedSources;
@@ -116,6 +176,25 @@ final class PublicApiClient
     if (version != _followingVersion.value) return listFollowedSources();
     _cachedFollowedSources = Set.of(result);
     return result;
+  }
+
+  @override
+  Future<YouTubeSourceMatches> lookupPublicYouTubeSubscriptions(String channel) async {
+    final token = await authorizationTokenProvider?.call();
+    if (token == null || token.isEmpty) throw const PublicApiFailure(kind: PublicFailureKind.unauthorized);
+    final uri = _configuration.resolve('/v1/source-sync/youtube');
+    late http.Response response;
+    try {
+      response=await _httpClient.post(uri,headers:{'accept':'application/json','content-type':'application/json','authorization':'Bearer $token'},body:jsonEncode({'channel':channel})).timeout(timeout);
+    } on TimeoutException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+      on http.ClientException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
+    if(response.statusCode<200 || response.statusCode>=300) {
+      if(response.statusCode==401) onAuthorizationRejected?.call();
+      throw _decodeFailure(response);
+    }
+    final data=jsonDecode(response.body);
+    if(data is! Map<String,dynamic> || data['source_ids'] is! List || data['truncated'] is! bool || (data['source_ids'] as List).any((id)=>id is! String)) throw const FormatException('Invalid source matches.');
+    return YouTubeSourceMatches(sourceIds:(data['source_ids'] as List).cast<String>().toSet(),truncated:data['truncated'] as bool);
   }
 
   @override
@@ -168,6 +247,7 @@ final class PublicApiClient
     String? cursor,
     int limit = 20,
     bool refresh = false,
+    bool personalized = true,
     PublicRequestToken? requestToken,
   }) {
     if (_otherMarket) {
@@ -179,7 +259,7 @@ final class PublicApiClient
       '/v1/feed',
       query: <String, String>{
         'synthesis': '1',
-        if (_personalizationEnabled) 'personalized': '1',
+        if (_personalizationEnabled && personalized) 'personalized': '1',
         'category': ?category,
         'topic': ?topic,
         'cursor': ?cursor,
@@ -196,6 +276,7 @@ final class PublicApiClient
     String? cursor,
     int limit = 20,
     bool refresh = false,
+    bool personalized = true,
     PublicRequestToken? requestToken,
   }) {
     if (_otherMarket) {
@@ -205,7 +286,7 @@ final class PublicApiClient
     }
     return _get<PublicPage<ContradictionDto>>(
       '/v1/contradictions',
-      query: <String, String>{if (_personalizationEnabled) 'personalized': '1', 'cursor': ?cursor, 'limit': '$limit'},
+      query: <String, String>{if (_personalizationEnabled && personalized) 'personalized': '1', 'cursor': ?cursor, 'limit': '$limit'},
       decoder: (Object? value) => _page(value, ContradictionDto.fromJson),
       refresh: refresh,
       requestToken: requestToken,
@@ -216,10 +297,11 @@ final class PublicApiClient
   Future<EventDetailDto> getEvent(
     String eventId, {
     bool refresh = false,
+    bool personalized = true,
     PublicRequestToken? requestToken,
   }) => _get<EventDetailDto>(
     '/v1/events/${Uri.encodeComponent(eventId)}',
-    query: {'include': 'coverage', if (_personalizationEnabled) 'personalized': '1'},
+    query: {'include': 'coverage', if (_personalizationEnabled && personalized) 'personalized': '1'},
     decoder: EventDetailDto.fromJson,
     refresh: refresh,
     requestToken: requestToken,

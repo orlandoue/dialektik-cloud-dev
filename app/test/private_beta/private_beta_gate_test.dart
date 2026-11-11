@@ -32,7 +32,7 @@ void main() {
     );
 
     expect(find.text('Beta privada'), findsOneWidget);
-    expect(find.text('Contradicciones'), findsNothing);
+    expect(find.text('VS'), findsNothing);
     expect(authRequests, 0);
     expect(coreRequests, 0);
   });
@@ -311,9 +311,9 @@ void main() {
       await tester.pumpAndSettle();
     }
     testerEnabled = false;
-    await tester.ensureVisible(find.text('Síntesis').last);
+    await tester.ensureVisible(find.text('VS').last);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Síntesis').last);
+    await tester.tap(find.text('VS').last);
     await tester.pumpAndSettle();
     expect(
       find.text(
@@ -327,6 +327,107 @@ void main() {
     await _signIn(tester);
     expect(find.text('Aún no hay contradicciones publicadas.'), findsOneWidget);
     expect(find.text('Beta privada'), findsNothing);
+  });
+
+  testWidgets('Arena: sign out lives in Perfil and returns to login', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(390, 844);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final List<http.Request> authRequests = <http.Request>[];
+    final List<http.Request> coreRequests = <http.Request>[];
+    await tester.pumpWidget(
+      _gate(
+        arenaEnabled: true,
+        authClient: MockClient((http.Request request) async {
+          authRequests.add(request);
+          if (request.url.path == '/auth/v1/logout') {
+            return http.Response('', 204);
+          }
+          return _sessionResponse('valid-access', 'valid-refresh', 3600);
+        }),
+        apiClient: MockClient((http.Request request) async {
+          coreRequests.add(request);
+          if (request.url.path == '/v1/sources/following') {
+            return http.Response('{"source_ids":[]}', 200);
+          }
+          return _emptyPage();
+        }),
+      ),
+    );
+    await _signIn(tester);
+
+    expect(find.text('Beta privada'), findsNothing);
+    final Finder bar = find.byKey(const Key('arena-bottom-navigation'));
+    expect(bar, findsOneWidget);
+    // `/contradictions` opens the VS tab of the Arena.
+    expect(find.text('VS · Duelos'), findsOneWidget);
+    expect(find.text('Todavía no hay duelos publicados.'), findsOneWidget);
+    expect(
+      coreRequests.every(
+        (http.Request request) =>
+            request.headers['authorization'] == 'Bearer valid-access',
+      ),
+      isTrue,
+    );
+    // Universal VS: the contrast list is never narrowed to followed sources.
+    expect(
+      coreRequests
+          .where((http.Request r) => r.url.path == '/v1/contradictions')
+          .every((http.Request r) => !r.url.query.contains('personalized')),
+      isTrue,
+    );
+
+    await tester.tap(find.descendant(of: bar, matching: find.text('Perfil')));
+    await tester.pumpAndSettle();
+    final Finder signOut = find.byTooltip('Cerrar sesión');
+    expect(signOut, findsOneWidget);
+    await tester.tap(signOut);
+    await tester.pumpAndSettle();
+    expect(find.text('Beta privada'), findsOneWidget);
+    expect(bar, findsNothing);
+    expect(authRequests.last.url.path, '/auth/v1/logout');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('Arena: a Core 401 returns the reader to the login gate', (
+    WidgetTester tester,
+  ) async {
+    var revoked = false;
+    await tester.pumpWidget(
+      _gate(
+        arenaEnabled: true,
+        authClient: MockClient(
+          (_) async => _sessionResponse('valid-access', 'refresh', 3600),
+        ),
+        apiClient: MockClient((http.Request request) async {
+          if (revoked) return _emptyPage(statusCode: 401);
+          if (request.url.path == '/v1/sources/following') {
+            return http.Response('{"source_ids":[]}', 200);
+          }
+          return _emptyPage();
+        }),
+      ),
+    );
+    await _signIn(tester);
+    expect(find.byKey(const Key('arena-bottom-navigation')), findsOneWidget);
+
+    revoked = true;
+    await tester.fling(
+      find.byKey(const Key('arena-vs-scroll')),
+      const Offset(0, 400),
+      1200,
+    );
+    await tester.pumpAndSettle();
+    expect(
+      find.text(
+        'La sesión venció o esta cuenta no está habilitada para la beta privada.',
+      ),
+      findsOneWidget,
+    );
+    expect(find.byKey(const Key('arena-bottom-navigation')), findsNothing);
   });
 
   testWidgets('expired access refreshes before the Core allowlist preflight', (
@@ -367,7 +468,9 @@ PrivateBetaGate _gate({
   required http.Client authClient,
   required http.Client apiClient,
   DateTime Function()? authClock,
+  bool arenaEnabled = false,
 }) => PrivateBetaGate(
+  arenaEnabled: arenaEnabled,
   apiConfiguration: ApiConfiguration.fromBaseUrl(_apiBase),
   supabaseUrl: _authBase,
   publishableKey: 'sb_publishable_test_key',

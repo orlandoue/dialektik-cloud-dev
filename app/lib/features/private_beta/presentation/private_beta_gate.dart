@@ -23,6 +23,7 @@ final class PrivateBetaGate extends StatefulWidget {
     required this.publishableKey,
     required this.initialRoute,
     this.readOnlyNewsReaderEnabled = false,
+    this.arenaEnabled = true,
     this.authHttpClient,
     this.apiHttpClient,
     this.authClock,
@@ -34,6 +35,9 @@ final class PrivateBetaGate extends StatefulWidget {
   final String publishableKey;
   final String initialRoute;
   final bool readOnlyNewsReaderEnabled;
+
+  /// Opens «Dialektik Arena» after sign-in instead of the classic reader.
+  final bool arenaEnabled;
   final http.Client? authHttpClient;
   final http.Client? apiHttpClient;
   final DateTime Function()? authClock;
@@ -201,6 +205,7 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
         apiConfiguration: widget.apiConfiguration,
         publicApiHttpClient: widget.apiHttpClient,
         readOnlyNewsReaderEnabled: widget.readOnlyNewsReaderEnabled,
+        arenaEnabled: widget.arenaEnabled,
         initialRoute: widget.initialRoute,
         apiAccessTokenProvider: () => _accessToken(_auth!),
         onAuthorizationRejected: _authorizationRejected,

@@ -110,6 +110,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       DialektikApp(
+        arenaEnabled: false,
         environment: AppEnvironment.test,
         loadInterFromDependency: false,
         consumerRepository: FakeConsumerRepository(event: pendingEventDetail),
@@ -133,6 +134,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       DialektikApp(
+        arenaEnabled: false,
         environment: AppEnvironment.test,
         loadInterFromDependency: false,
         consumerRepository: FakeConsumerRepository(
@@ -152,7 +154,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text('No hay acontecimientos en este filtro.'),
+      find.text(pendingEventDetail.titleDescriptive),
       findsOneWidget,
     );
     expect(find.text('Administración · estado local'), findsNothing);
@@ -174,6 +176,7 @@ void main() {
           _ControlledLiveNewsRepository(liveTestClient());
       await tester.pumpWidget(
         DialektikApp(
+          arenaEnabled: false,
           environment: AppEnvironment.test,
           loadInterFromDependency: false,
           consumerRepository: FakeConsumerRepository(
@@ -203,14 +206,14 @@ void main() {
       expect(find.text('Administración'), findsNothing);
       expect(find.byTooltip('Más opciones'), findsOneWidget);
 
-      await _tap(tester, find.text('Síntesis'));
+      await _tap(tester, find.text('VS').first);
       expect(
-        find.text('No hay acontecimientos en este filtro.'),
+        find.text(pendingEventDetail.titleDescriptive),
         findsOneWidget,
       );
       await _tap(tester, find.text('Actualidad'));
       expect(liveRepository.pendingSourceLoads, hasLength(1));
-      await _tap(tester, find.text('Síntesis'));
+      await _tap(tester, find.text('VS').first);
       await _tapAndResolveSources(tester, liveRepository);
       await _tap(tester, find.text('Espejo'));
       expect(find.textContaining('Elige al menos 2 medios'), findsOneWidget);
