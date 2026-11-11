@@ -25,7 +25,14 @@ const baseSchema=`create schema auth; create table auth.users(id uuid primary ke
 async function serviceOn(pg) {
   const { Kysely, PostgresDialect } = await import('kysely');
   const { SocialArenaService } = await import('../dist/public-api/social-arena.service.js');
-  const pool={async connect(){return {query:(query,values)=>pg.query(typeof query==='string'?query:query.text,values??query.values??[]),release(){}}},async end(){}};
+  // node-postgres sends a query without parameters through the simple protocol,
+  // which accepts several statements; PGlite needs exec() for that.
+  const run=async(query,values)=>{
+    const text=typeof query==='string'?query:query.text; const params=values??query.values??[];
+    if(params.length) return pg.query(text,params);
+    const results=await pg.exec(text); return results.at(-1)??{rows:[]};
+  };
+  const pool={async connect(){return {query:run,release(){}}},async end(){}};
   const database=new Kysely({dialect:new PostgresDialect({pool})});
   return { database, service:new SocialArenaService({database}) };
 }
@@ -152,5 +159,47 @@ test('before migration 085 the new endpoints answer 503 and earlier ones keep wo
     const legacy=new SocialService({database});
     await legacy.react(a,'event1','SOLID');
     assert.equal((await legacy.summary(a,'event1')).solid,1);
+  } finally { if(database) await database.destroy(); await pg.close(); }
+});
+
+test('startup creates the storage once, is idempotent and keeps the reader binding for an owning role', async () => {
+  const pg=new PGlite(); let database;
+  try {
+    await pg.exec(baseSchema); await pg.exec(socialCommunitySql);
+    const built=await serviceOn(pg); database=built.database; const service=built.service;
+    assert.equal(service.storage.state,'unknown');
+    await service.ensureStorage();
+    assert.deepEqual(service.storage,{state:'created',code:null});
+    await service.votePosition(a,'event1','posA');
+    // A restart finds the tables and leaves rows untouched.
+    await service.ensureStorage();
+    assert.deepEqual(service.storage,{state:'ready',code:null});
+    assert.equal((await service.positionVotes(a,'event1')).total,1);
+    // Running the migration again (owner path) is also harmless.
+    await pg.exec(socialArenaSql);
+    assert.equal((await service.positionVotes(a,'event1')).total,1);
+    // Forced row security: even the table owner cannot write as another reader.
+    await pg.exec(`create role arena_owner; grant usage, create on schema public to arena_owner;
+      grant select, references on all tables in schema public to arena_owner; grant usage on schema auth to arena_owner;
+      grant references on auth.users to arena_owner; grant dialektik_core_app to arena_owner;
+      drop table public.social_position_votes, public.social_community_entries, public.social_entry_votes;
+      set role arena_owner;`);
+    await pg.exec(socialArenaSql);
+    await pg.exec(`begin; select set_config('dialektik.social_user','${b}',true);`);
+    await assert.rejects(pg.exec(`insert into public.social_position_votes(event_id,user_id,position_id) values('event1','${a}','posA')`));
+    await pg.exec('rollback; reset role');
+  } finally { if(database) await database.destroy(); await pg.close(); }
+});
+
+test('a role without DDL privileges does not block startup and leaves the endpoints at 503', async () => {
+  const pg=new PGlite(); let database;
+  try {
+    await pg.exec(baseSchema); await pg.exec(socialCommunitySql);
+    await pg.exec('grant usage on schema public to dialektik_core_app; revoke create on schema public from public; set role dialektik_core_app');
+    const built=await serviceOn(pg); database=built.database; const service=built.service;
+    await service.onModuleInit();
+    assert.equal(service.storage.state,'unavailable');
+    assert.equal(service.storage.code,'42501');
+    await assert.rejects(service.community(a,'event1'),error=>error.getStatus?.()===503);
   } finally { if(database) await database.destroy(); await pg.close(); }
 });

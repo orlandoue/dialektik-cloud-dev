@@ -32,6 +32,15 @@ export class SocialArenaController {
   constructor(@Inject(SocialArenaService) private readonly arena: SocialArenaService,
     @Inject(PublicRateLimitService) private readonly rateLimit: PublicRateLimitService) {}
 
+  /** Lets an authenticated reader see whether the Arena storage exists. */
+  @Get('arena-status')
+  status(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    this.rateLimit.assertAllowed(request.ip);
+    betaUserId(request);
+    void reply.header('cache-control', 'private, no-store');
+    return { storage: this.arena.storage };
+  }
+
   @Get('position-votes')
   async positionVotes(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply,
     @Query('event_id') eventId?: string) {

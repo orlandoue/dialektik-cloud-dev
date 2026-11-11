@@ -1,5 +1,6 @@
-import { Inject, Injectable, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
-import { sql, type Transaction } from 'kysely';
+import { createDatabase, destroyDatabase, socialArenaSql } from '@dialektik/database';
+import { Inject, Injectable, Logger, NotFoundException, ServiceUnavailableException, type OnModuleInit } from '@nestjs/common';
+import { sql, type Kysely, type Transaction } from 'kysely';
 import { CoreDatabaseService } from '../database/core-database.service.js';
 
 export type CommunityChannel = 'DEBATE' | 'APORTE' | 'NOTA';
@@ -36,9 +37,75 @@ export interface NewCommunityEntry {
 // and every earlier social endpoint keeps working unchanged.
 const UNDEFINED_TABLE = '42P01';
 
+export type ArenaStorageState = 'unknown' | 'ready' | 'created' | 'unavailable';
+
 @Injectable()
-export class SocialArenaService {
+export class SocialArenaService implements OnModuleInit {
+  readonly #logger = new Logger(SocialArenaService.name);
+  #storage: { state: ArenaStorageState; code: string | null } = { state: 'unknown', code: null };
+
   constructor(@Inject(CoreDatabaseService) private readonly db: CoreDatabaseService) {}
+
+  /** Outcome of the startup storage check; `code` is a SQLSTATE, never SQL text. */
+  get storage(): { state: ArenaStorageState; code: string | null } {
+    return { ...this.#storage };
+  }
+
+  async onModuleInit(): Promise<void> {
+    // Startup never waits on this for long: a slow database leaves the state
+    // as it is and the endpoints keep answering from what exists.
+    let timer: NodeJS.Timeout | undefined;
+    const limit = new Promise<void>(resolve => { timer = setTimeout(resolve, 20_000); });
+    try {
+      await Promise.race([this.ensureStorage(), limit]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  /**
+   * Creates the Arena tables when they are missing. It never blocks startup:
+   * a role without DDL privileges leaves the endpoints answering 503 until
+   * the owner applies migration 085. SOCIAL_ARENA_BOOTSTRAP_DATABASE_URL may
+   * name a connection that is allowed to create them.
+   */
+  async ensureStorage(): Promise<void> {
+    const bootstrapUrl = process.env.SOCIAL_ARENA_BOOTSTRAP_DATABASE_URL?.trim();
+    const dedicated = bootstrapUrl
+      ? createDatabase({
+          connectionString: bootstrapUrl,
+          applicationName: 'dialektik-social-arena-bootstrap',
+          maxConnections: 1,
+          // Same certificate authority the Core connection verifies against.
+          ...(process.env.DATABASE_CA_CERT?.trim() ? { caCertificate: process.env.DATABASE_CA_CERT } : {}),
+        })
+      : undefined;
+    const database = (dedicated ?? this.db.database) as Kysely<unknown>;
+    try {
+      const present = await sql<{ ready: boolean }>`select to_regclass('public.social_position_votes') is not null
+        and to_regclass('public.social_community_entries') is not null
+        and to_regclass('public.social_entry_votes') is not null as ready`.execute(database);
+      if (present.rows[0]?.ready === true) {
+        this.#storage = { state: 'ready', code: null };
+        return;
+      }
+      await database.transaction().setAccessMode('read write').execute(async tx => {
+        await sql`set local lock_timeout = '10s'`.execute(tx);
+        // Serialises concurrent instances starting at the same time.
+        await sql`select pg_advisory_xact_lock(850085)`.execute(tx);
+        await sql.raw(socialArenaSql).execute(tx);
+      });
+      this.#storage = { state: 'created', code: null };
+      this.#logger.log('Arena social storage created at startup.');
+    } catch (error) {
+      const code = typeof error === 'object' && error !== null && typeof (error as { code?: unknown }).code === 'string'
+        ? (error as { code: string }).code : null;
+      this.#storage = { state: 'unavailable', code };
+      this.#logger.warn(`Arena social storage is unavailable (SQLSTATE ${code ?? 'unknown'}); apply migration 085.`);
+    } finally {
+      if (dedicated) await destroyDatabase(dedicated).catch(() => undefined);
+    }
+  }
 
   async #guarded<T>(work: () => Promise<T>): Promise<T> {
     try {
