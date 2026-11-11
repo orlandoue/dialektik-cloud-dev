@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import {
   groundLiveClaim,
   groundLiveClaims,
+  widenShortQuote,
   validateLivePairAssessment,
   validateLiveStancePairAssessment,
   LIVE_STANCE_PAIR_PROMPT,
@@ -138,5 +139,27 @@ describe("live semantic production grounding", () => {
   it("allows different relevant angles of the same controversy without requiring negation", () => {
     expect(LIVE_STANCE_PAIR_PROMPT).toContain('Different relevant angles of the same controversy are comparable');
     expect(LIVE_STANCE_PAIR_PROMPT).toContain('DIVERGENT, not CONTRADICTORY');
+  });
+
+  it("widens a two-word fragment to its sentence and keeps it literal", () => {
+    const text =
+      '"Trinidad Steinert vuelve al Gobierno": Su polémico paso por Seguridad y nuevo cargo en Paraguay. Más detalles en el programa.';
+    const result = groundLiveClaim(claim("nuevo cargo"), text, "Trinidad Steinert vuelve al Gobierno");
+    expect(result.quotedText).toBe(
+      '"Trinidad Steinert vuelve al Gobierno": Su polémico paso por Seguridad y nuevo cargo en Paraguay.',
+    );
+    expect(
+      Array.from(text).slice(result.charStart!, result.charEnd!).join(""),
+    ).toBe(result.quotedText);
+    expect(result.positionSummary).toBe(result.quotedText);
+  });
+
+  it("falls back to the opening of the text when the sentence is still too short", () => {
+    const text = "Steinert asume. El nuevo cargo es en Paraguay y comienza en marzo.";
+    expect(widenShortQuote(text, "asume")).toBe(text);
+    // A short but complete sentence is a legitimate quote.
+    expect(widenShortQuote(text, "Steinert asume.")).toBe("Steinert asume.");
+    // Text that does not contain the quote is never rewritten.
+    expect(widenShortQuote(text, "otro cargo")).toBe("otro cargo");
   });
 });

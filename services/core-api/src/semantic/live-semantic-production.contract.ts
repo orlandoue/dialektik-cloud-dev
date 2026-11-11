@@ -129,6 +129,37 @@ function firstExcerptSentence(textOriginal: string, headline: string): string {
   return sentence || bounded.trim();
 }
 
+/** A quote shorter than this says too little to stand as a position. */
+export const MINIMUM_QUOTE_CODE_POINTS = 45;
+
+const codePoints = (text: string): number => Array.from(text).length;
+
+/**
+ * Widens a too-short fragment without leaving the source text: first to the
+ * sentence that contains it, then to the opening of the text (headline and
+ * excerpt). A complete sentence is kept as it is. The result is always an
+ * exact substring of `textOriginal`.
+ */
+export function widenShortQuote(textOriginal: string, quotedText: string): string {
+  if (codePoints(quotedText.trim()) >= MINIMUM_QUOTE_CODE_POINTS) return quotedText;
+  const start = quotedText ? textOriginal.indexOf(quotedText) : -1;
+  if (start < 0) return quotedText;
+  let left = start;
+  while (left > 0 && !/[.!?\n]/u.test(textOriginal[left - 1] ?? "")) left -= 1;
+  let right = start + quotedText.length;
+  // A quote that already ends its sentence must not swallow the next one.
+  if (!/[.!?]\s*$/u.test(quotedText)) {
+    while (right < textOriginal.length && !/[.!?\n]/u.test(textOriginal[right] ?? "")) right += 1;
+    if (right < textOriginal.length && /[.!?]/u.test(textOriginal[right] ?? "")) right += 1;
+  }
+  let widened = textOriginal.slice(left, right).trim();
+  // A short but complete sentence is a legitimate quote; only a fragment grows.
+  if (widened === quotedText.trim()) return quotedText;
+  if (codePoints(widened) < MINIMUM_QUOTE_CODE_POINTS) widened = textOriginal.trim();
+  widened = Array.from(widened).slice(0, 300).join("").trim();
+  return codePoints(widened) > codePoints(quotedText.trim()) ? widened : quotedText;
+}
+
 /** Model quotes are accepted only when exact; fallback is a literal excerpt substring. */
 export function groundLiveClaim(
   raw: unknown,
@@ -181,6 +212,14 @@ export function groundLiveClaim(
     quotedText = firstExcerptSentence(textOriginal, headline);
     utf16Start = quotedText ? textOriginal.indexOf(quotedText) : -1;
     usedFallback = true;
+  }
+  if (utf16Start >= 0 && quotedText) {
+    // Two loose words are not a position: keep the quote literal but complete.
+    const widened = widenShortQuote(textOriginal, quotedText);
+    if (widened !== quotedText) {
+      quotedText = widened;
+      utf16Start = textOriginal.indexOf(quotedText);
+    }
   }
   if (utf16Start < 0 || !quotedText || Array.from(quotedText).length > 300)
     throw new Error("LIVE_SEMANTIC_EVIDENCE_INVALID");

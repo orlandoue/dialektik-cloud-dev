@@ -34,11 +34,11 @@ export class SocialArenaController {
 
   /** Lets an authenticated reader see whether the Arena storage exists. */
   @Get('arena-status')
-  status(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+  async status(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     this.rateLimit.assertAllowed(request.ip);
     betaUserId(request);
     void reply.header('cache-control', 'private, no-store');
-    return { storage: this.arena.storage };
+    return { storage: await this.arena.currentStorage() };
   }
 
   @Get('position-votes')
