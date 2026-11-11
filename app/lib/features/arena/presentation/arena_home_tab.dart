@@ -41,8 +41,105 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
     'Explorar',
     'Siguiendo',
   ];
+  static const List<ArenaTopic?> _topics = <ArenaTopic?>[
+    null,
+    ArenaTopic.politica,
+    ArenaTopic.justicia,
+    ArenaTopic.economia,
+    ArenaTopic.seguridad,
+    ArenaTopic.deportes,
+    ArenaTopic.sociedad,
+  ];
+  // Only Chile has licensed coverage today; the others are announced.
+  static const List<({String flag, String name, bool available})> _countries =
+      <({String flag, String name, bool available})>[
+        (flag: '🇨🇱', name: 'Chile', available: true),
+        (flag: '🇵🇪', name: 'Perú', available: false),
+        (flag: '🇦🇷', name: 'Argentina', available: false),
+        (flag: '🇨🇴', name: 'Colombia', available: false),
+        (flag: '🇲🇽', name: 'México', available: false),
+      ];
   final Set<int> _built = <int>{0};
   int _pill = 0;
+  ArenaTopic? _topic;
+
+  Future<void> _chooseTopic() async {
+    final int? chosen = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ArenaColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('Filtrar por tema', style: ArenaText.section),
+            ),
+            for (int i = 0; i < _topics.length; i++)
+              ListTile(
+                key: ValueKey<String>(
+                  'arena-topic-option-${_topics[i]?.name ?? 'todos'}',
+                ),
+                title: Text(
+                  _topics[i]?.label ?? 'Todos',
+                  style: ArenaText.cardTitle,
+                ),
+                trailing: _topics[i] == _topic
+                    ? const Icon(Icons.check, color: ArenaColors.violet)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(i),
+              ),
+          ],
+        ),
+      ),
+    );
+    if (chosen != null && mounted) setState(() => _topic = _topics[chosen]);
+  }
+
+  void _chooseCountry() => unawaited(
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ArenaColors.card,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (BuildContext sheetContext) => SafeArea(
+        child: ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          children: <Widget>[
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+              child: Text('País', style: ArenaText.section),
+            ),
+            for (final ({String flag, String name, bool available}) country
+                in _countries)
+              ListTile(
+                enabled: country.available,
+                leading: Text(
+                  country.flag,
+                  style: const TextStyle(fontSize: 22),
+                ),
+                title: Text(country.name, style: ArenaText.cardTitle),
+                subtitle: country.available
+                    ? null
+                    : const Text('Próximamente', style: ArenaText.meta),
+                trailing: country.available
+                    ? const Icon(Icons.check, color: ArenaColors.violet)
+                    : null,
+                onTap: () => Navigator.of(sheetContext).pop(),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 
   ArenaStore get store => widget.store;
 
@@ -69,15 +166,21 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
           padding: const EdgeInsets.fromLTRB(16, 6, 6, 2),
           child: Row(
             children: <Widget>[
-              const Expanded(
-                child: Align(
+              const Flexible(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text('Dialektik', style: ArenaText.brand),
-                  ),
+                  child: Text('Dialektik', style: ArenaText.brand),
                 ),
               ),
+              const SizedBox(width: 10),
+              ArenaDropdownPill(
+                key: const Key('arena-country'),
+                label: '🇨🇱 Chile',
+                semanticsLabel: 'País: Chile. Cambiar país',
+                onTap: _chooseCountry,
+              ),
+              const Spacer(),
               IconButton(
                 key: const Key('arena-search'),
                 tooltip: 'Buscar',
@@ -99,28 +202,55 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
             ],
           ),
         ),
+        // Section pills and the topic dropdown share one row: the filter
+        // costs no vertical space above the duel of the day.
         Padding(
-          padding: const EdgeInsets.only(bottom: 8),
-          child: ArenaPillBar(
-            labels: _pills,
-            selected: _pill,
-            onSelected: (int value) => setState(() {
-              _built.add(value);
-              _pill = value;
-            }),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Row(
+            children: <Widget>[
+              Expanded(
+                child: ArenaPillBar(
+                  padding: EdgeInsets.zero,
+                  labels: _pills,
+                  selected: _pill,
+                  onSelected: (int value) => setState(() {
+                    _built.add(value);
+                    _pill = value;
+                  }),
+                ),
+              ),
+              const SizedBox(width: 8),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 124),
+                child: ArenaDropdownPill(
+                  key: const Key('arena-topic-filter'),
+                  label: _topic?.label ?? 'Tema',
+                  leading: Icon(_topic == null ? Icons.tune : Icons.check),
+                  active: _topic != null,
+                  semanticsLabel: _topic == null
+                      ? 'Filtrar por tema'
+                      : 'Tema: ${_topic!.label}. Cambiar tema',
+                  onTap: _chooseTopic,
+                ),
+              ),
+            ],
           ),
         ),
         Expanded(
           child: IndexedStack(
             index: _pill,
             children: <Widget>[
-              _Coliseo(store: store),
+              _Coliseo(store: store, topic: _topic),
               if (_built.contains(1))
-                _Explore(store: store)
+                _Explore(store: store, topic: _topic)
               else
                 const SizedBox.shrink(),
               if (_built.contains(2))
-                _FollowingFeed(store: store, onOpenMedia: widget.onOpenMedia)
+                _FollowingFeed(
+                  store: store,
+                  topic: _topic,
+                  onOpenMedia: widget.onOpenMedia,
+                )
               else
                 const SizedBox.shrink(),
             ],
@@ -133,17 +263,32 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
 
 /// Pantalla 1 — panorama of the day.
 class _Coliseo extends StatelessWidget {
-  const _Coliseo({required this.store});
+  const _Coliseo({required this.store, required this.topic});
 
   final ArenaStore store;
+  final ArenaTopic? topic;
+
+  bool _matches(EventCardDto event) =>
+      topic == null || arenaTopicOfEvent(event) == topic;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: store,
     builder: (BuildContext context, _) {
-      final List<EventCardDto> developing = store.developing.isEmpty
-          ? store.events
-          : store.developing;
+      final List<EventCardDto> developing =
+          (store.developing.isEmpty ? store.events : store.developing)
+              .where(_matches)
+              .toList();
+      final List<ArenaDuel> duels = store.duels
+          .where((ArenaDuel duel) => _matches(duel.event))
+          .toList();
+      final List<LiveNewsItemDto> videos = store.videos
+          .where(
+            (LiveNewsItemDto v) =>
+                topic == null ||
+                arenaTopicOfText('${v.headline} ${v.excerpt ?? ''}') == topic,
+          )
+          .toList();
       return RefreshIndicator(
         color: ArenaColors.violet,
         onRefresh: () => store.load(refresh: true),
@@ -166,10 +311,14 @@ class _Coliseo extends StatelessWidget {
                 onAction: () => unawaited(store.load(refresh: true)),
               )
             else ...<Widget>[
-              if (store.duels.isNotEmpty)
-                DuelOfTheDayCard(duel: store.duels.first, store: store)
+              if (duels.isNotEmpty)
+                DuelOfTheDayCard(duel: duels.first, store: store)
               else
-                const ArenaMessage('Hoy todavía no hay duelos publicados.'),
+                ArenaMessage(
+                  topic == null
+                      ? 'Hoy todavía no hay duelos publicados.'
+                      : 'No hay duelos publicados en ${topic!.label}.',
+                ),
               if (developing.isNotEmpty) ...<Widget>[
                 const Padding(
                   padding: EdgeInsets.only(top: 12, bottom: 10),
@@ -181,9 +330,9 @@ class _Coliseo extends StatelessWidget {
                 for (final EventCardDto event in developing.take(5))
                   DevelopingEventCard(event: event, store: store),
               ],
-              if (store.videos.isNotEmpty) ...<Widget>[
+              if (videos.isNotEmpty) ...<Widget>[
                 const ArenaSectionTitle('Videos'),
-                for (final LiveNewsItemDto video in store.videos)
+                for (final LiveNewsItemDto video in videos)
                   ArenaVideoCard(
                     item: video,
                     onOpen: () => unawaited(store.openLink(video.canonicalUrl)),
@@ -286,7 +435,7 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Text(event.titleDescriptive, style: ArenaText.cardTitle),
+                Text(event.arenaTitle, style: ArenaText.cardTitle),
                 const SizedBox(height: 6),
                 Text(
                   '${event.sourceCount} '
@@ -316,9 +465,10 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
 
 /// Pantalla 6 — discovery outside the reader's usual media.
 class _Explore extends StatelessWidget {
-  const _Explore({required this.store});
+  const _Explore({required this.store, required this.topic});
 
   final ArenaStore store;
+  final ArenaTopic? topic;
 
   static const List<ArenaTopic> _topics = <ArenaTopic>[
     ArenaTopic.politica,
@@ -334,11 +484,17 @@ class _Explore extends StatelessWidget {
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: store,
     builder: (BuildContext context, _) {
-      final List<EventCardDto> trending = store.events.toList()
-        ..sort(
-          (EventCardDto a, EventCardDto b) =>
-              b.sourceCount.compareTo(a.sourceCount),
-        );
+      final List<EventCardDto> trending =
+          store.events
+              .where(
+                (EventCardDto e) =>
+                    topic == null || arenaTopicOfEvent(e) == topic,
+              )
+              .toList()
+            ..sort(
+              (EventCardDto a, EventCardDto b) =>
+                  b.sourceCount.compareTo(a.sourceCount),
+            );
       final SeismicObservationRepository? seismic = store.seismic;
       return ListView(
         key: const Key('arena-explore-scroll'),
@@ -422,7 +578,7 @@ class _Explore extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
                         Text(
-                          trending[i].titleDescriptive,
+                          trending[i].arenaTitle,
                           style: ArenaText.cardTitle,
                         ),
                         const SizedBox(height: 4),
@@ -800,9 +956,14 @@ class _TopicScreenState extends State<TopicScreen> {
 
 /// Píldora `Siguiendo`: publications and stories of followed sources.
 class _FollowingFeed extends StatefulWidget {
-  const _FollowingFeed({required this.store, required this.onOpenMedia});
+  const _FollowingFeed({
+    required this.store,
+    required this.onOpenMedia,
+    required this.topic,
+  });
 
   final ArenaStore store;
+  final ArenaTopic? topic;
   final VoidCallback onOpenMedia;
 
   @override
@@ -867,8 +1028,20 @@ class _FollowingFeedState extends State<_FollowingFeed> {
   @override
   Widget build(BuildContext context) {
     final StoryFollowStore stories = store.stories;
+    final ArenaTopic? topic = widget.topic;
     final List<EventCardDto> followedStories = store.events
-        .where((EventCardDto e) => stories.contains(e.id))
+        .where(
+          (EventCardDto e) =>
+              stories.contains(e.id) &&
+              (topic == null || arenaTopicOfEvent(e) == topic),
+        )
+        .toList();
+    final List<LiveNewsItemDto> items = _items
+        .where(
+          (LiveNewsItemDto n) =>
+              topic == null ||
+              arenaTopicOfText('${n.headline} ${n.excerpt ?? ''}') == topic,
+        )
         .toList();
     return RefreshIndicator(
       color: ArenaColors.violet,
@@ -909,9 +1082,9 @@ class _FollowingFeedState extends State<_FollowingFeed> {
                 DevelopingEventCard(event: event, store: store),
             ],
             ArenaSectionTitle('De tus ${store.followed.length} medios'),
-            if (_items.isEmpty)
+            if (items.isEmpty)
               const ArenaMessage('Tus medios no tienen publicaciones nuevas.'),
-            for (final LiveNewsItemDto item in _items)
+            for (final LiveNewsItemDto item in items)
               ArenaNewsCard(item: item, store: store),
           ],
         ],
@@ -954,7 +1127,7 @@ class _AlertsSheet extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               leading: const Icon(Icons.bolt, color: ArenaColors.amber),
-              title: Text(event.titleDescriptive, style: ArenaText.cardTitle),
+              title: Text(event.arenaTitle, style: ArenaText.cardTitle),
               subtitle: Text(
                 '$added ${added == 1 ? 'fuente nueva' : 'fuentes nuevas'} '
                 'desde tu última visita',
@@ -1026,8 +1199,7 @@ class _ArenaSearchScreenState extends State<ArenaSearchScreen> {
         ? const <EventCardDto>[]
         : store.events
               .where(
-                (EventCardDto e) =>
-                    e.titleDescriptive.toLowerCase().contains(needle),
+                (EventCardDto e) => e.arenaTitle.toLowerCase().contains(needle),
               )
               .toList();
     return Scaffold(

@@ -9,10 +9,94 @@ String arenaSourceName(String name) => name
 String arenaAgo(DateTime moment, {DateTime? now}) {
   final Duration age = (now ?? DateTime.now()).difference(moment);
   if (age.isNegative || age.inMinutes < 1) return 'hace un momento';
-  if (age.inMinutes < 60) return 'hace ${age.inMinutes} min';
-  if (age.inHours < 24) return 'hace ${age.inHours} h';
-  if (age.inDays < 30) return 'hace ${age.inDays} d';
-  return 'hace ${age.inDays ~/ 30} mes${age.inDays ~/ 30 == 1 ? '' : 'es'}';
+  // Fully non-breaking, so «hace 1 h» never splits across two lines.
+  if (age.inMinutes < 60) return 'hace\u00A0${age.inMinutes}\u00A0min';
+  if (age.inHours < 24) return 'hace\u00A0${age.inHours}\u00A0h';
+  if (age.inDays < 30) return 'hace\u00A0${age.inDays}\u00A0d';
+  return 'hace\u00A0${age.inDays ~/ 30}\u00A0mes${age.inDays ~/ 30 == 1 ? '' : 'es'}';
+}
+
+final RegExp _titlePrefix = RegExp(
+  r'^\s*(?:Contraste de enfoques|Contradicci[oó]n)\s*:\s*',
+  caseSensitive: false,
+);
+
+/// Title without the relation prefix Core adds; the pill already says it.
+String arenaTitle(String title) => title.replaceFirst(_titlePrefix, '').trim();
+
+extension ArenaEventTitle on EventCardDto {
+  String get arenaTitle => arenaTitleOf(titleDescriptive);
+}
+
+String arenaTitleOf(String title) => arenaTitle(title);
+
+/// Below this length a quote or summary is a loose fragment, not a position.
+const int arenaMinimumQuoteLength = 40;
+
+/// Text that represents one posture. A literal quote is used when it says
+/// enough; otherwise the headline of that source's publication, so a card
+/// never shows two loose words such as «nuevo cargo».
+({String text, bool literal}) arenaPostureText(
+  EventDetailDto event,
+  EventCoveragePositionDto? position,
+) {
+  if (position == null) return (text: 'Postura no disponible.', literal: false);
+  final EventCoverageAssertionDto? first = position.assertions.firstOrNull;
+  final String quote = first?.quotedText.trim() ?? '';
+  if (quote.length >= arenaMinimumQuoteLength) {
+    return (text: quote, literal: true);
+  }
+  if (first != null) {
+    final ({String text, bool literal}) fallback = arenaAssertionText(
+      event,
+      first,
+    );
+    if (!fallback.literal || fallback.text.length > quote.length) {
+      return fallback;
+    }
+  }
+  final String title = position.title.trim();
+  if (title.length >= quote.length && title.isNotEmpty) {
+    return (text: title, literal: false);
+  }
+  return (text: quote, literal: quote.isNotEmpty);
+}
+
+/// The quote of one assertion, or its publication headline when too short.
+({String text, bool literal}) arenaAssertionText(
+  EventDetailDto event,
+  EventCoverageAssertionDto assertion,
+) {
+  final String quote = assertion.quotedText.trim();
+  if (quote.length >= arenaMinimumQuoteLength) {
+    return (text: quote, literal: true);
+  }
+  for (final EventCoverageArticleDto article in event.articles) {
+    if (article.id == assertion.articleId &&
+        article.title.trim().length > quote.length) {
+      return (text: article.title.trim(), literal: false);
+    }
+  }
+  for (final EventCoverageArticleDto article in event.articles) {
+    final bool sameSource = assertion.sourceId != null
+        ? article.sourceId == assertion.sourceId
+        : article.sourceName == assertion.sourceName;
+    if (sameSource && article.title.trim().length > quote.length) {
+      return (text: article.title.trim(), literal: false);
+    }
+  }
+  return (text: quote, literal: quote.isNotEmpty);
+}
+
+/// Substantive summary of a posture: its title when it says enough.
+String arenaPositionSummary(
+  EventDetailDto event,
+  EventCoveragePositionDto position,
+) {
+  final String title = position.title.trim();
+  return title.length >= arenaMinimumQuoteLength
+      ? title
+      : arenaPostureText(event, position).text;
 }
 
 const List<String> _months = <String>[
@@ -55,6 +139,7 @@ enum ArenaTopic {
   politica('Política', 'politica'),
   justicia('Justicia', 'justicia'),
   economia('Economía', 'economia'),
+  seguridad('Seguridad', 'seguridad'),
   medioambiente('Medioambiente', null),
   ciencia('Ciencia', null),
   deportes('Deportes', 'deportes'),
@@ -68,11 +153,18 @@ enum ArenaTopic {
   final String? serverKey;
 }
 
-// Mirrors LIVE_NEWS_TOPIC_PATTERNS in Core so both sides agree on a topic.
+// Based on LIVE_NEWS_TOPIC_PATTERNS in Core. Political process words come
+// first so a constitutional accusation or a committee vote is not filed
+// under «Otros» or mistaken for a court case.
 final Map<ArenaTopic, RegExp> _topicPatterns = <ArenaTopic, RegExp>{
+  ArenaTopic.politica: RegExp(
+    'polític|politic|gobierno|presidente|ministr|congreso|diputad|senado|'
+    'elecci|alcald|subsecretar|partido republican|oposición|oposicion|'
+    'comisión|comision|acusación constitucional|acusacion constitucional|'
+    'rabat|oficialismo|parlamentari',
+  ),
   ArenaTopic.justicia: RegExp(
-    'justicia|judicial|tribunal|corte|juez|jueza|fiscal|condena|'
-    'acusación constitucional|acusacion constitucional|querella',
+    'justicia|judicial|tribunal|corte|juez|jueza|fiscal|condena|querella',
   ),
   ArenaTopic.deportes: RegExp(
     'deporte|fútbol|futbol|tenis|colo.colo|campeonato|selección|seleccion|'
@@ -82,6 +174,10 @@ final Map<ArenaTopic, RegExp> _topicPatterns = <ArenaTopic, RegExp>{
     'econom|inflación|inflacion|empleo|desempleo|pensión|pension|afp|banco|'
     'dólar|dolar|codelco|empresa|salario|sueldo|despido',
   ),
+  ArenaTopic.seguridad: RegExp(
+    'seguridad|delito|polic|carabinero|crimen|robo|asalto|homicid|detenido|'
+    'balacera|siniestro',
+  ),
   ArenaTopic.medioambiente: RegExp(
     'medio ?ambiente|ambiental|clima|climátic|climatic|contaminación|'
     'contaminacion|incendio forestal|sequía|sequia|biodiversidad|glaciar',
@@ -90,15 +186,14 @@ final Map<ArenaTopic, RegExp> _topicPatterns = <ArenaTopic, RegExp>{
     'ciencia|científic|cientific|investigador|astronom|tecnolog|'
     'inteligencia artificial|vacuna|estudio revela',
   ),
-  ArenaTopic.politica: RegExp(
-    'polític|politic|gobierno|presidente|ministro|congreso|diputad|senador|'
-    'elecci|alcald|subsecretar|partido republican',
-  ),
   ArenaTopic.sociedad: RegExp(
     'sociedad|salud|educación|educacion|colegio|escuela|vivienda|familia|'
-    'niñez|ninez|cultura|mujer|sala cuna|seguridad|delito|carabinero',
+    'niñez|ninez|cultura|mujer|sala cuna',
   ),
 };
+
+// «AC» as the usual abbreviation of a constitutional accusation.
+final RegExp _accusationAbbreviation = RegExp(r'\bAC\b');
 
 ArenaTopic arenaTopicOfText(String text, {String category = ''}) {
   final String normalized = category.toLowerCase();
@@ -108,6 +203,7 @@ ArenaTopic arenaTopicOfText(String text, {String category = ''}) {
       return topic;
     }
   }
+  if (_accusationAbbreviation.hasMatch(text)) return ArenaTopic.politica;
   final String haystack = text.toLowerCase();
   for (final MapEntry<ArenaTopic, RegExp> entry in _topicPatterns.entries) {
     if (entry.value.hasMatch(haystack)) return entry.key;

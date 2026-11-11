@@ -40,7 +40,10 @@ final class MediaCoverage {
       final ArenaTopic topic = arenaTopicOfText(
         '${item.headline} ${item.excerpt ?? ''}',
       );
-      final ArenaTopic bucket = shown.contains(topic)
+      // Security news counts with society in the six-slice ring.
+      final ArenaTopic bucket = topic == ArenaTopic.seguridad
+          ? ArenaTopic.sociedad
+          : shown.contains(topic)
           ? topic
           : ArenaTopic.otros;
       counts[bucket] = (counts[bucket] ?? 0) + 1;
@@ -62,12 +65,11 @@ final class MediaCoverage {
 }
 
 bool _covers(EventDetailDto event, LiveSourceDto source) {
-  final String name = arenaSourceName(source.name).toLowerCase();
+  // Matching by name also covers the medium's other registered source.
+  final String key = ArenaStore.brandKey(source.name);
   return event.articles.any(
     (EventCoverageArticleDto a) =>
-        a.sourceId == source.id ||
-        (a.sourceId == null &&
-            arenaSourceName(a.sourceName).toLowerCase() == name),
+        a.sourceId == source.id || ArenaStore.brandKey(a.sourceName) == key,
   );
 }
 
@@ -77,18 +79,25 @@ Future<MediaCoverage> loadMediaCoverage(
 ) async {
   final DateTime monthAgo = DateTime.now().subtract(const Duration(days: 30));
   final List<LiveNewsItemDto> items = <LiveNewsItemDto>[];
-  String? cursor;
-  var pages = 0;
-  do {
-    final LiveNewsPageDto page = await store.live.listLiveNews(
-      sourceId: source.id,
-      limit: 50,
-      cursor: cursor,
-      publishedFrom: monthAgo,
-    );
-    items.addAll(page.items);
-    cursor = page.nextCursor == cursor ? null : page.nextCursor;
-  } while (cursor != null && ++pages < 3);
+  // Press feed and YouTube channel of the same medium are read together.
+  for (final LiveSourceDto member in store.brandOf(source)) {
+    String? cursor;
+    var pages = 0;
+    do {
+      final LiveNewsPageDto page = await store.live.listLiveNews(
+        sourceId: member.id,
+        limit: 50,
+        cursor: cursor,
+        publishedFrom: monthAgo,
+      );
+      items.addAll(page.items);
+      cursor = page.nextCursor == cursor ? null : page.nextCursor;
+    } while (cursor != null && ++pages < 3);
+  }
+  items.sort(
+    (LiveNewsItemDto a, LiveNewsItemDto b) =>
+        b.publishedAt.compareTo(a.publishedAt),
+  );
   final List<EventDetailDto?> details = await Future.wait(
     store.events.map((EventCardDto event) async {
       try {
@@ -174,10 +183,8 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
-      await store.setFollowing(
-        source.id,
-        value: !store.followed.contains(source.id),
-      );
+      final List<LiveSourceDto> brand = store.brandOf(source);
+      await store.setBrandFollowing(brand, value: !store.followsBrand(brand));
       unawaited(_loadFollowers());
     } on Object {
       if (mounted) {
@@ -213,8 +220,12 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
                   style: ArenaText.section,
                 ),
                 const SizedBox(height: 8),
-                for (final LiveSourceDto item in store.sources)
-                  if (item.id != source.id)
+                for (final LiveSourceDto item
+                    in store
+                        .brands(store.sources)
+                        .map((List<LiveSourceDto> b) => b.first))
+                  if (ArenaStore.brandKey(item.name) !=
+                      ArenaStore.brandKey(source.name))
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: MediaEmblem(name: item.name, size: 34),
@@ -249,7 +260,7 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
       body: ListenableBuilder(
         listenable: store,
         builder: (BuildContext context, _) {
-          final bool following = store.followed.contains(source.id);
+          final bool following = store.followsBrand(store.brandOf(source));
           return ListView(
             key: const Key('arena-media-scroll'),
             padding: EdgeInsets.zero,
@@ -597,7 +608,7 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
             children: <Widget>[
               const ArenaBadge.live('ACONTECIMIENTO VIVO'),
               const SizedBox(height: 8),
-              Text(event.titleDescriptive, style: ArenaText.cardTitle),
+              Text(event.arenaTitle, style: ArenaText.cardTitle),
               const SizedBox(height: 4),
               Text(
                 '${event.sourceCount} fuentes · '
@@ -730,10 +741,7 @@ class _MediaCompareScreenState extends State<MediaCompareScreen> {
                   ArenaCard(
                     onTap: () =>
                         openArenaEvent(context, widget.store, event.id),
-                    child: Text(
-                      event.titleDescriptive,
-                      style: ArenaText.cardTitle,
-                    ),
+                    child: Text(event.arenaTitle, style: ArenaText.cardTitle),
                   ),
               ],
             );

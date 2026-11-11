@@ -211,7 +211,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               Text(
-                event.titleDescriptive,
+                event.arenaTitle,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: ArenaText.cardTitle,
