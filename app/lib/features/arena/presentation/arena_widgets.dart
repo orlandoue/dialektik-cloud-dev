@@ -649,6 +649,91 @@ class EvidenceThermometer extends StatelessWidget {
   }
 }
 
+/// Share of support of the two postures of a duel, as voted in Core.
+class PostureThermometer extends StatelessWidget {
+  const PostureThermometer({
+    required this.nameA,
+    required this.nameB,
+    required this.votesA,
+    required this.votesB,
+    super.key,
+  });
+
+  final String nameA;
+  final String nameB;
+  final int votesA;
+  final int votesB;
+
+  @override
+  Widget build(BuildContext context) {
+    final int total = votesA + votesB;
+    final int shareA = total == 0 ? 0 : (votesA * 100 / total).round();
+    final String caption = total == 0
+        ? 'Sin votos todavía'
+        : '$nameA $shareA% · $nameB ${100 - shareA}% · $total '
+              '${total == 1 ? 'voto' : 'votos'}';
+    return Semantics(
+      label: 'Termómetro de evidencia. $caption',
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              'Termómetro de evidencia',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: ArenaColors.muted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(6),
+              child: SizedBox(
+                height: 10,
+                child: total == 0
+                    ? const ColoredBox(
+                        color: ArenaColors.track,
+                        child: SizedBox.expand(),
+                      )
+                    : Row(
+                        children: <Widget>[
+                          if (votesA > 0)
+                            Expanded(
+                              flex: votesA,
+                              child: const ColoredBox(
+                                color: ArenaColors.violet,
+                                child: SizedBox.expand(),
+                              ),
+                            ),
+                          if (votesB > 0)
+                            Expanded(
+                              flex: votesB,
+                              child: const ColoredBox(
+                                color: ArenaColors.amberBright,
+                                child: SizedBox.expand(),
+                              ),
+                            ),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              caption,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: ArenaColors.ink,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 /// A YouTube publication with its 16:9 frame and ▶ button.
 class ArenaVideoCard extends StatelessWidget {
   const ArenaVideoCard({

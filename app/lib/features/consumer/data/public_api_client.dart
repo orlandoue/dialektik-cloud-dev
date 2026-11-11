@@ -25,6 +25,7 @@ import 'package:dialektik/features/semantic_shadow/data/semantic_graph_models.da
 import 'package:dialektik/features/semantic_shadow/data/semantic_graph_repository.dart';
 import 'package:dialektik/features/semantic_shadow/data/semantic_shadow_models.dart';
 import 'package:dialektik/features/semantic_shadow/data/semantic_shadow_repository.dart';
+import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -39,6 +40,7 @@ final class PublicApiClient
         ConsumerRepository,
         FollowingRepository,
         SocialRepository,
+        ArenaSocialRepository,
         SourceSyncRepository,
         SemanticRepository,
         LiveNewsRepository,
@@ -94,7 +96,30 @@ final class PublicApiClient
     '/v1/social/summary', query: {'event_id':?eventId, 'source_id':?sourceId},
     decoder: (value) => SocialSummary.fromJson(value as Map<String,dynamic>), refresh:true, requestToken:null);
 
-  Future<SocialSummary> _socialPost(String path, Map<String,Object?> body) async {
+  Future<SocialSummary> _socialPost(String path, Map<String,Object?> body) =>
+    _postJson(path, body, (value) => SocialSummary.fromJson(value! as Map<String,dynamic>));
+
+  @override
+  Future<PositionVotes> positionVotes(String eventId) => _get<PositionVotes>(
+    '/v1/social/position-votes', query: {'event_id': eventId},
+    decoder: (value) => PositionVotes.fromJson(value! as Map<String,dynamic>), refresh: true, requestToken: null);
+  @override
+  Future<PositionVotes> votePosition(String eventId, String? positionId) => _postJson(
+    '/v1/social/position-votes', {'event_id': eventId, 'position_id': positionId},
+    (value) => PositionVotes.fromJson(value! as Map<String,dynamic>));
+  @override
+  Future<List<CommunityEntry>> communityEntries(String eventId) => _get<List<CommunityEntry>>(
+    '/v1/social/community', query: {'event_id': eventId},
+    decoder: CommunityEntry.listFromJson, refresh: true, requestToken: null);
+  @override
+  Future<List<CommunityEntry>> addCommunityEntry(String eventId, {required CommunityChannel channel, required String body, String? articleId, Uri? link}) =>
+    _postJson('/v1/social/community', {'event_id': eventId, 'channel': channel.wire, 'body': body,
+      'article_id': ?articleId, 'link_url': ?link?.toString()}, CommunityEntry.listFromJson);
+  @override
+  Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote) =>
+    _postJson('/v1/social/community/votes', {'entry_id': entryId, 'vote': vote}, CommunityEntry.listFromJson);
+
+  Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder) async {
     final token = await authorizationTokenProvider?.call();
     if (token == null || token.isEmpty) throw const PublicApiFailure(kind: PublicFailureKind.unauthorized);
     late http.Response response;
@@ -108,7 +133,11 @@ final class PublicApiClient
       if (response.statusCode == 401) onAuthorizationRejected?.call();
       throw _decodeFailure(response);
     }
-    return SocialSummary.fromJson(jsonDecode(response.body) as Map<String,dynamic>);
+    try {
+      return decoder(jsonDecode(response.body));
+    } on Object {
+      throw const PublicApiFailure(kind: PublicFailureKind.invalidResponse);
+    }
   }
   @override
   Future<SocialSummary> setSocialReaction(String eventId, String? reaction) =>

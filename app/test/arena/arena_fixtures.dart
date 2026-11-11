@@ -4,6 +4,7 @@ import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -386,6 +387,128 @@ class ArenaFakeCore extends Fake
         ...summary.comments,
       ],
     );
+  }
+}
+
+/// Core with migration 085: posture votes and the three community channels.
+class ArenaFullCore extends ArenaFakeCore implements ArenaSocialRepository {
+  final Map<String, int> otherVotes = <String, int>{
+    positionAId: 2,
+    positionBId: 1,
+  };
+  String? myPosition;
+  final List<String?> positionVoteCalls = <String?>[];
+  int _nextId = 10;
+  List<CommunityEntry> entries = <CommunityEntry>[
+    CommunityEntry(
+      id: 'e1',
+      channel: CommunityChannel.debate,
+      author: 'Lector-3F9A',
+      body: 'Para mí ambos medios dicen cosas compatibles.',
+      createdAt: DateTime.now().subtract(const Duration(days: 4)),
+      upvotes: 2,
+    ),
+    CommunityEntry(
+      id: 'e2',
+      channel: CommunityChannel.aporte,
+      author: 'Ana P.',
+      body: 'Acta de la audiencia publicada por el Poder Judicial.',
+      url: Uri.parse('https://www.pjud.cl/docs/acta-audiencia.pdf'),
+      createdAt: DateTime.now().subtract(const Duration(hours: 3)),
+      upvotes: 5,
+      downvotes: 1,
+    ),
+    CommunityEntry(
+      id: 'e3',
+      channel: CommunityChannel.nota,
+      author: 'Lector-77C2',
+      body: 'El procedimiento abreviado exige aceptar los hechos.',
+      articleId: 'art1',
+      url: Uri.parse('https://latercera.com/nota/art1'),
+      createdAt: DateTime.now().subtract(const Duration(hours: 1)),
+    ),
+  ];
+
+  PositionVotes get _votes {
+    final Map<String, int> counts = Map<String, int>.of(otherVotes);
+    if (myPosition case final String mine) {
+      counts[mine] = (counts[mine] ?? 0) + 1;
+    }
+    return PositionVotes(
+      total: counts.values.fold<int>(0, (int a, int b) => a + b),
+      mine: myPosition,
+      byPosition: counts,
+    );
+  }
+
+  @override
+  Future<PositionVotes> positionVotes(String eventId) async => _votes;
+
+  @override
+  Future<PositionVotes> votePosition(String eventId, String? positionId) async {
+    positionVoteCalls.add(positionId);
+    myPosition = positionId;
+    return _votes;
+  }
+
+  @override
+  Future<List<CommunityEntry>> communityEntries(String eventId) async =>
+      List<CommunityEntry>.of(entries);
+
+  @override
+  Future<List<CommunityEntry>> addCommunityEntry(
+    String eventId, {
+    required CommunityChannel channel,
+    required String body,
+    String? articleId,
+    Uri? link,
+  }) async {
+    entries = <CommunityEntry>[
+      CommunityEntry(
+        id: 'e${_nextId++}',
+        channel: channel,
+        author: 'Lector-AB12',
+        body: body,
+        articleId: articleId,
+        url:
+            link ??
+            (articleId == null
+                ? null
+                : Uri.parse('https://biobiochile.cl/nota/$articleId')),
+        createdAt: DateTime.now(),
+        mine: true,
+      ),
+      ...entries,
+    ];
+    return communityEntries(eventId);
+  }
+
+  @override
+  Future<List<CommunityEntry>> voteCommunityEntry(
+    String entryId,
+    int? vote,
+  ) async {
+    entries = <CommunityEntry>[
+      for (final CommunityEntry e in entries)
+        if (e.id != entryId)
+          e
+        else
+          CommunityEntry(
+            id: e.id,
+            channel: e.channel,
+            author: e.author,
+            body: e.body,
+            articleId: e.articleId,
+            url: e.url,
+            createdAt: e.createdAt,
+            mine: e.mine,
+            myVote: vote,
+            upvotes: e.upvotes - (e.myVote == 1 ? 1 : 0) + (vote == 1 ? 1 : 0),
+            downvotes:
+                e.downvotes - (e.myVote == -1 ? 1 : 0) + (vote == -1 ? 1 : 0),
+          ),
+    ];
+    return communityEntries(duelEventId);
   }
 }
 

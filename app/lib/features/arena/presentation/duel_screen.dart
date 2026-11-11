@@ -8,6 +8,7 @@ import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
+import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/material.dart';
 
@@ -113,16 +114,13 @@ class DuelFaceOff extends StatelessWidget {
   }
 }
 
-/// Loads and renders the community thermometer of one event.
+/// Thermometer of a duel: support of each posture when Core serves
+/// posture votes, otherwise the case-level support votes.
 class DuelThermometer extends StatefulWidget {
-  const DuelThermometer({
-    required this.store,
-    required this.eventId,
-    super.key,
-  });
+  const DuelThermometer({required this.store, required this.duel, super.key});
 
   final ArenaStore store;
-  final String eventId;
+  final ArenaDuel duel;
 
   @override
   State<DuelThermometer> createState() => _DuelThermometerState();
@@ -132,12 +130,14 @@ class _DuelThermometerState extends State<DuelThermometer> {
   @override
   void initState() {
     super.initState();
-    if (widget.store.cachedSummary(widget.eventId) == null) {
+    final ArenaStore store = widget.store;
+    final String eventId = widget.duel.event.id;
+    if (store.cachedPositionVotes(eventId) == null) {
+      unawaited(store.positionVotes(eventId));
+    }
+    if (store.cachedSummary(eventId) == null) {
       unawaited(
-        widget.store
-            .summary(widget.eventId)
-            .then<void>((_) {})
-            .catchError((Object _) {}),
+        store.summary(eventId).then<void>((_) {}).catchError((Object _) {}),
       );
     }
   }
@@ -145,9 +145,21 @@ class _DuelThermometerState extends State<DuelThermometer> {
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: widget.store,
-    builder: (BuildContext context, _) => EvidenceThermometer(
-      summary: widget.store.cachedSummary(widget.eventId),
-    ),
+    builder: (BuildContext context, _) =>
+        arenaDuelThermometer(widget.store, widget.duel),
+  );
+}
+
+Widget arenaDuelThermometer(ArenaStore store, ArenaDuel duel) {
+  final PositionVotes? votes = store.cachedPositionVotes(duel.event.id);
+  if (votes == null) {
+    return EvidenceThermometer(summary: store.cachedSummary(duel.event.id));
+  }
+  return PostureThermometer(
+    nameA: duel.nameA,
+    nameB: duel.nameB,
+    votesA: votes.votesFor(duel.contrast.positionA.id),
+    votesB: votes.votesFor(duel.contrast.positionB.id),
   );
 }
 
@@ -199,7 +211,7 @@ class DuelOfTheDayCard extends StatelessWidget {
             children: <Widget>[
               DuelFaceOff(duel: duel, store: store),
               const SizedBox(height: 12),
-              DuelThermometer(store: store, eventId: duel.event.id),
+              DuelThermometer(store: store, duel: duel),
               DuelActions(duel: duel, store: store),
             ],
           ),
@@ -324,6 +336,7 @@ class _DuelScreenState extends State<DuelScreen> {
     unawaited(
       store.summary(duel.event.id).then<void>((_) {}).catchError((Object _) {}),
     );
+    unawaited(store.positionVotes(duel.event.id));
   }
 
   @override
@@ -815,6 +828,37 @@ class _VoteSheetState extends State<_VoteSheet> {
   bool _busy = false;
   String? _error;
 
+  ArenaDuel? get _duel => widget.store.duelForEvent(widget.event.id);
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(widget.store.positionVotes(widget.event.id, refresh: true));
+  }
+
+  Future<void> _votePosition(String positionId) async {
+    final ArenaSocialRepository? social = widget.store.arenaSocial;
+    if (social == null || _busy) return;
+    final String? mine = widget.store
+        .cachedPositionVotes(widget.event.id)
+        ?.mine;
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final PositionVotes updated = await social.votePosition(
+        widget.event.id,
+        mine == positionId ? null : positionId,
+      );
+      widget.store.rememberPositionVotes(widget.event.id, updated);
+    } on Exception {
+      if (mounted) setState(() => _error = 'No se pudo guardar tu voto.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   Future<void> _vote(String reaction) async {
     final SocialRepository? social = widget.store.social;
     if (social == null || _busy) return;
@@ -851,6 +895,13 @@ class _VoteSheetState extends State<_VoteSheet> {
           final SocialSummary? summary = widget.store.cachedSummary(
             widget.event.id,
           );
+          final ArenaDuel? duel = _duel;
+          final PositionVotes? votes = widget.store.cachedPositionVotes(
+            widget.event.id,
+          );
+          if (duel != null && votes != null) {
+            return _postureVote(context, duel, votes);
+          }
           final bool canVote = widget.store.social != null;
           return Column(
             mainAxisSize: MainAxisSize.min,
@@ -920,43 +971,124 @@ class _VoteSheetState extends State<_VoteSheet> {
                   _error!,
                   style: const TextStyle(color: ArenaColors.amberDeep),
                 ),
-              const Divider(height: 24, color: ArenaColors.border),
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: ArenaColors.violet,
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  openArenaCommunity(
-                    widget.hostContext,
-                    widget.store,
-                    widget.event,
-                  );
-                },
-                icon: const Icon(Icons.forum_outlined),
-                label: const Text('Abrir comunidad del caso'),
-              ),
-              TextButton.icon(
-                style: TextButton.styleFrom(
-                  foregroundColor: ArenaColors.violet,
-                ),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  unawaited(
-                    showSynthesisSharePreview(
-                      widget.hostContext,
-                      widget.event,
-                      relation: widget.event.synthesisRelation,
-                    ),
-                  );
-                },
-                icon: const Icon(Icons.ios_share),
-                label: const Text('Crear tarjeta para X y WhatsApp'),
-              ),
+              ..._footer(context),
             ],
           );
         },
       ),
     ),
   );
+
+  List<Widget> _footer(BuildContext context) => <Widget>[
+    const Divider(height: 24, color: ArenaColors.border),
+    TextButton.icon(
+      style: TextButton.styleFrom(foregroundColor: ArenaColors.violet),
+      onPressed: () {
+        Navigator.of(context).pop();
+        openArenaCommunity(widget.hostContext, widget.store, widget.event);
+      },
+      icon: const Icon(Icons.forum_outlined),
+      label: const Text('Abrir comunidad del caso'),
+    ),
+    TextButton.icon(
+      style: TextButton.styleFrom(foregroundColor: ArenaColors.violet),
+      onPressed: () {
+        Navigator.of(context).pop();
+        unawaited(
+          showSynthesisSharePreview(
+            widget.hostContext,
+            widget.event,
+            relation: widget.event.synthesisRelation,
+          ),
+        );
+      },
+      icon: const Icon(Icons.ios_share),
+      label: const Text('Crear tarjeta para X y WhatsApp'),
+    ),
+  ];
+
+  /// One vote per reader between the two postures of the duel.
+  Widget _postureVote(
+    BuildContext context,
+    ArenaDuel duel,
+    PositionVotes votes,
+  ) {
+    final List<({String id, String name, String title})> sides =
+        <({String id, String name, String title})>[
+          (
+            id: duel.contrast.positionA.id,
+            name: duel.nameA,
+            title: duel.positionA?.title ?? duel.contrast.positionA.title,
+          ),
+          (
+            id: duel.contrast.positionB.id,
+            name: duel.nameB,
+            title: duel.positionB?.title ?? duel.contrast.positionB.title,
+          ),
+        ];
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        const Text(
+          '¿Qué postura tiene más respaldo?',
+          style: TextStyle(
+            fontSize: 19,
+            fontWeight: FontWeight.w800,
+            color: ArenaColors.ink,
+          ),
+        ),
+        const SizedBox(height: 6),
+        const Text(
+          'Elige la postura que, según la evidencia enlazada, está mejor '
+          'respaldada. Tienes un voto por caso y puedes cambiarlo.',
+          style: ArenaText.body,
+        ),
+        const SizedBox(height: 14),
+        arenaDuelThermometer(widget.store, duel),
+        const SizedBox(height: 14),
+        for (final ({String id, String name, String title}) side in sides)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: OutlinedButton(
+              key: ValueKey<String>('arena-vote-position-${side.id}'),
+              onPressed: _busy ? null : () => _votePosition(side.id),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size(48, 48),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 12,
+                ),
+                foregroundColor: votes.mine == side.id
+                    ? Colors.white
+                    : ArenaColors.ink,
+                backgroundColor: votes.mine == side.id
+                    ? ArenaColors.violet
+                    : ArenaColors.card,
+                side: const BorderSide(color: ArenaColors.violet),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: <Widget>[
+                  Text(
+                    '${votes.mine == side.id ? '✓ ' : ''}${side.name} · '
+                    '${votes.votesFor(side.id)} '
+                    '${votes.votesFor(side.id) == 1 ? 'voto' : 'votos'}',
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(side.title, style: const TextStyle(fontSize: 13)),
+                ],
+              ),
+            ),
+          ),
+        if (_error != null)
+          Text(_error!, style: const TextStyle(color: ArenaColors.amberDeep)),
+        ..._footer(context),
+      ],
+    );
+  }
 }

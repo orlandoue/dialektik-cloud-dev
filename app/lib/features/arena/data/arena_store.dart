@@ -15,6 +15,7 @@ import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/foundation.dart';
 
@@ -114,12 +115,65 @@ final class ArenaStore extends ChangeNotifier {
   }
 
   SocialRepository? get social => _capability<SocialRepository>();
+  ArenaSocialRepository? get arenaSocial =>
+      _capability<ArenaSocialRepository>();
   ScopedLiveNewsRepository? get scoped =>
       _capability<ScopedLiveNewsRepository>();
   SeismicObservationRepository? get seismic =>
       _capability<SeismicObservationRepository>();
   SourceSyncRepository? get sourceSync => _capability<SourceSyncRepository>();
   StoryFollowStore get stories => StoryFollowStore.forRepository(consumer);
+
+  final Map<String, PositionVotes> _positionVotes = <String, PositionVotes>{};
+  final Map<String, List<CommunityEntry>> _community =
+      <String, List<CommunityEntry>>{};
+
+  PositionVotes? cachedPositionVotes(String eventId) => _positionVotes[eventId];
+  List<CommunityEntry>? cachedCommunity(String eventId) => _community[eventId];
+
+  /// Posture votes of a case, or null while Core does not serve them yet
+  /// (the screens then fall back to the case-level support votes).
+  Future<PositionVotes?> positionVotes(
+    String eventId, {
+    bool refresh = false,
+  }) async {
+    final ArenaSocialRepository? repository = arenaSocial;
+    if (repository == null) return null;
+    final PositionVotes? cached = _positionVotes[eventId];
+    if (cached != null && !refresh) return cached;
+    try {
+      final PositionVotes value = await repository.positionVotes(eventId);
+      rememberPositionVotes(eventId, value);
+      return value;
+    } on Exception {
+      return cached;
+    }
+  }
+
+  void rememberPositionVotes(String eventId, PositionVotes value) {
+    _positionVotes[eventId] = value;
+    _notify();
+  }
+
+  /// The three community channels, or null while Core lacks them.
+  Future<List<CommunityEntry>?> community(String eventId) async {
+    final ArenaSocialRepository? repository = arenaSocial;
+    if (repository == null) return null;
+    try {
+      final List<CommunityEntry> value = await repository.communityEntries(
+        eventId,
+      );
+      rememberCommunity(eventId, value);
+      return value;
+    } on Exception {
+      return _community[eventId];
+    }
+  }
+
+  void rememberCommunity(String eventId, List<CommunityEntry> value) {
+    _community[eventId] = value;
+    _notify();
+  }
 
   EventDetailDto? cachedDetail(String id) => _details[id];
   SocialSummary? cachedSummary(String eventId) => _summaries[eventId];

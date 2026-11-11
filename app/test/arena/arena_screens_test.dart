@@ -469,69 +469,75 @@ void main() {
     expect(find.byKey(const Key('arena-media-compare')), findsOneWidget);
   });
 
-  testWidgets('Pantalla 5 · Comunidad del caso separa y publica aportes', (
-    WidgetTester tester,
-  ) async {
-    final ArenaFakeCore core = ArenaFakeCore();
-    final List<Uri> opened = await pumpArena(
-      tester,
-      core,
-      initialTab: ArenaTab.vs,
-    );
-    await tester.tap(find.text(duelTitle));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('arena-vote-button')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Abrir comunidad del caso'));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'Pantalla 5 · Comunidad sigue publicando aportes con un Core anterior',
+    (WidgetTester tester) async {
+      final ArenaFakeCore core = ArenaFakeCore();
+      final List<Uri> opened = await pumpArena(
+        tester,
+        core,
+        initialTab: ArenaTab.vs,
+      );
+      await tester.tap(find.text(duelTitle));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('arena-vote-button')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Abrir comunidad del caso'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Comunidad del caso'), findsOneWidget);
-    for (final String pill in <String>['Debate', 'Aportes', 'Notas']) {
-      expect(find.byKey(ValueKey<String>('arena-pill-$pill')), findsOneWidget);
-    }
-    expect(
-      find.text('El acta del tribunal respalda esta versión.'),
-      findsOneWidget,
-    );
-    expect(find.text('Enlace'), findsOneWidget);
-    expect(find.text('https://latercera.com/nota/art1'), findsOneWidget);
-    expect(find.text('Responder'), findsOneWidget);
-    await tester.tap(find.text('https://latercera.com/nota/art1'));
-    expect(opened.single.toString(), 'https://latercera.com/nota/art1');
+      expect(find.text('Comunidad del caso'), findsOneWidget);
+      for (final String pill in <String>['Debate', 'Aportes', 'Notas']) {
+        expect(
+          find.byKey(ValueKey<String>('arena-pill-$pill')),
+          findsOneWidget,
+        );
+      }
+      expect(
+        find.text('El acta del tribunal respalda esta versión.'),
+        findsOneWidget,
+      );
+      expect(find.text('Enlace'), findsOneWidget);
+      expect(find.text('https://latercera.com/nota/art1'), findsOneWidget);
+      expect(find.text('Responder'), findsOneWidget);
+      await tester.tap(find.text('https://latercera.com/nota/art1'));
+      expect(opened.single.toString(), 'https://latercera.com/nota/art1');
 
-    expect(
-      find.text('Aporta contexto, evidencia o tu análisis...'),
-      findsOneWidget,
-    );
-    await tester.enterText(
-      find.byKey(const Key('arena-community-input')),
-      'BioBio publicó el comunicado completo de la fiscalía.',
-    );
-    await tester.tap(find.byKey(const Key('arena-community-attach')));
-    await tester.pumpAndSettle();
-    await tester.tap(find.text('Fiscalía descarta acuerdo en el caso Audios'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('arena-community-send')));
-    await tester.pumpAndSettle();
-    expect(core.postedComments, <(String, String)>[
-      ('art2', 'BioBio publicó el comunicado completo de la fiscalía.'),
-    ]);
-    expect(
-      find.text('BioBio publicó el comunicado completo de la fiscalía.'),
-      findsOneWidget,
-    );
+      expect(
+        find.text('Aporta contexto, evidencia o tu análisis...'),
+        findsOneWidget,
+      );
+      await tester.enterText(
+        find.byKey(const Key('arena-community-input')),
+        'BioBio publicó el comunicado completo de la fiscalía.',
+      );
+      await tester.tap(find.byKey(const Key('arena-community-attach')));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.text('Fiscalía descarta acuerdo en el caso Audios'),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('arena-community-send')));
+      await tester.pumpAndSettle();
+      expect(core.postedComments, <(String, String)>[
+        ('art2', 'BioBio publicó el comunicado completo de la fiscalía.'),
+      ]);
+      expect(
+        find.text('BioBio publicó el comunicado completo de la fiscalía.'),
+        findsOneWidget,
+      );
 
-    await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Debate')));
-    await tester.pumpAndSettle();
-    expect(find.text('Opiniones e interpretaciones'), findsOneWidget);
-    await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Notas')));
-    await tester.pumpAndSettle();
-    expect(
-      find.textContaining('notas de contexto verificadas'),
-      findsOneWidget,
-    );
-    expect(tester.takeException(), isNull);
-  });
+      await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Debate')));
+      await tester.pumpAndSettle();
+      expect(find.text('Opiniones e interpretaciones'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Notas')));
+      await tester.pumpAndSettle();
+      expect(
+        find.textContaining('todavía no están habilitadas en el servidor'),
+        findsOneWidget,
+      );
+      expect(tester.takeException(), isNull);
+    },
+  );
 
   testWidgets('Pantalla 6 · Explorar con banner, tendencias y temas', (
     WidgetTester tester,
