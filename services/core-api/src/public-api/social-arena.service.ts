@@ -51,6 +51,21 @@ export class SocialArenaService implements OnModuleInit {
     return { ...this.#storage };
   }
 
+  /** Re-checks for the tables, e.g. after the owner applied migration 085. */
+  async currentStorage(): Promise<{ state: ArenaStorageState; code: string | null }> {
+    if (this.#storage.state !== 'ready' && this.#storage.state !== 'created') {
+      try {
+        const present = await sql<{ ready: boolean }>`select to_regclass('public.social_position_votes') is not null
+          and to_regclass('public.social_community_entries') is not null
+          and to_regclass('public.social_entry_votes') is not null as ready`.execute(this.db.database);
+        if (present.rows[0]?.ready === true) this.#storage = { state: 'ready', code: null };
+      } catch {
+        /* Keep the last known state. */
+      }
+    }
+    return this.storage;
+  }
+
   async onModuleInit(): Promise<void> {
     // Startup never waits on this for long: a slow database leaves the state
     // as it is and the endpoints keep answering from what exists.

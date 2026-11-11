@@ -25,6 +25,7 @@ import type {
   SourceDto,
   TombstoneDto,
 } from './public-api.types.js';
+import { MINIMUM_QUOTE_CODE_POINTS, widenShortQuote } from '../semantic/live-semantic-production.contract.js';
 import { encodeCursor } from './public-api.validation.js';
 import type { PageRequest } from './public-api.validation.js';
 
@@ -189,7 +190,11 @@ export class PublicApiService {
     const articles = new Map<string, {id:string;title:string;source_name:string;published_at:string;url:string;source_id?:string;is_followed?:boolean}>();
     for (const item of coverage) {
       const position=positions.get(item.position_id) ?? {id:item.position_id,title:item.position_title,assertions:[]};
-      position.assertions.push({id:item.assertion_id,assertion_text:item.assertion_text,quoted_text:item.quoted_text,article_id:item.article_id,source_name:item.source_name,
+      // Records extracted before the minimum length existed are completed
+      // here from the same source text, so no client shows a two-word quote.
+      const quoted=completeQuote(item.quoted_text,item.article_text,item.article_title);
+      if (codePointLength(position.title) < MINIMUM_QUOTE_CODE_POINTS && position.assertions.length === 0) position.title=quoted;
+      position.assertions.push({id:item.assertion_id,assertion_text:codePointLength(item.assertion_text) < MINIMUM_QUOTE_CODE_POINTS ? quoted : item.assertion_text,quoted_text:quoted,article_id:item.article_id,source_name:item.source_name,
         ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)})});
       positions.set(item.position_id,position);
       articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url,
@@ -437,4 +442,15 @@ export class PublicApiService {
     }
     return row;
   }
+}
+
+function codePointLength(text: string): number {
+  return Array.from(text.trim()).length;
+}
+
+/** Literal quote of at least the minimum length, else the publication headline. */
+function completeQuote(quotedText: string, articleText: string | null | undefined, headline: string): string {
+  const widened = widenShortQuote(articleText ?? '', quotedText);
+  if (codePointLength(widened) >= MINIMUM_QUOTE_CODE_POINTS) return widened;
+  return codePointLength(headline) > codePointLength(widened) ? headline.trim() : widened;
 }

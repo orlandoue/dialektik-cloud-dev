@@ -79,6 +79,7 @@ export interface EventCoverageRow {
   readonly assertion_id: string; readonly assertion_text: string; readonly quoted_text: string;
   readonly article_id: string; readonly article_title: string; readonly url: string;
   readonly published_at: Date; readonly source_name: string; readonly source_id: string;
+  readonly article_text: string;
 }
 
 export interface AttributionRow {
@@ -559,7 +560,8 @@ export class PublicApiRepository {
       select p.id::text as position_id,p.title_text as position_title,a.id::text as assertion_id,
         ev.summary as assertion_text,span.quoted_text,article.id::text as article_id,
         version.headline as article_title,article.url_canonical as url,
-        article.published_at,source.name as source_name,source.id::text as source_id
+        article.published_at,source.name as source_name,source.id::text as source_id,
+        article.text_original as article_text
       from public.positions p
       join public.assertions a on a.position_id=p.id and a.lifecycle_state='active'
         and not exists(select 1 from public.assertions successor where successor.supersedes_id=a.id)

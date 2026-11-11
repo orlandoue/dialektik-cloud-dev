@@ -51,6 +51,8 @@ alter table public.social_community_entries force row level security;
 alter table public.social_entry_votes force row level security;
 revoke all on public.social_position_votes, public.social_community_entries, public.social_entry_votes
   from public, anon, authenticated, service_role;
+-- The Core role operates on these tables; it needs no sequence (uuid keys).
+grant usage on schema public to dialektik_core_app;
 grant select, insert, update, delete on public.social_position_votes to dialektik_core_app;
 grant select, insert on public.social_community_entries to dialektik_core_app;
 grant select, insert, update, delete on public.social_entry_votes to dialektik_core_app;
