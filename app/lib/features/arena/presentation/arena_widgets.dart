@@ -1104,3 +1104,120 @@ class ArenaPrimaryButton extends StatelessWidget {
     ),
   );
 }
+
+/// Call to action with the violet gradient, a soft shadow and an icon.
+class ArenaGradientButton extends StatelessWidget {
+  const ArenaGradientButton({
+    required this.label,
+    required this.onPressed,
+    required this.icon,
+    super.key,
+  });
+
+  final String label;
+  final IconData icon;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    button: true,
+    label: label,
+    child: ExcludeSemantics(
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: ArenaColors.violetGradient,
+          borderRadius: BorderRadius.circular(24),
+          boxShadow: const <BoxShadow>[
+            BoxShadow(
+              color: Color(0x404F46E5),
+              blurRadius: 14,
+              offset: Offset(0, 6),
+            ),
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(24),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: onPressed,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 52),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 18,
+                  vertical: 12,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: <Widget>[
+                    Icon(icon, color: Colors.white, size: 22),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        label,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// Section heading pill in the same refined style as the country dropdown.
+class ArenaSectionPill extends StatelessWidget {
+  const ArenaSectionPill(this.label, {super.key});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    header: true,
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F7F0),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFBBE5D0)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            const SizedBox.square(
+              dimension: 8,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: ArenaColors.emerald,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  color: ArenaColors.emeraldDeep,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
+}

@@ -631,6 +631,116 @@ class ArenaServedCore extends ArenaFakeCore {
   }) async => const <LiveSourceDto>[tercera, biobio, t13, terceraVideo];
 }
 
+/// Core with several published duels, to exercise the carousel.
+class ArenaManyDuelsCore extends ArenaFullCore {
+  static const int count = 7;
+  static String idOf(int i) =>
+      '01K4W4M7R0B0000000000001${i.toString().padLeft(2, '0')}';
+  static String titleOf(int i) => 'Duelo número ${i + 1} sobre el presupuesto';
+
+  EventDetailDto _event(int i) => EventDetailDto.fromJson(<String, Object?>{
+    ...eventDetailJson(
+      id: idOf(i),
+      title: titleOf(i),
+      analysisState: 'PUBLISHED',
+      positionCount: 2,
+      withPrimaryFact: false,
+    ),
+    'category': 'economia',
+    'source_count': 2,
+    'positions': <Object?>[
+      <String, Object?>{
+        'id': positionAId,
+        'title': 'El presupuesto crece según el Ejecutivo',
+        'assertions': <Object?>[
+          _assertion(
+            'a$i',
+            'El gasto público crecerá el próximo año según Hacienda',
+            'x$i',
+            tercera,
+          ),
+        ],
+      },
+      <String, Object?>{
+        'id': positionBId,
+        'title': 'El presupuesto se contrae en términos reales',
+        'assertions': <Object?>[
+          _assertion(
+            'b$i',
+            'En términos reales el presupuesto se contrae, dicen economistas',
+            'y$i',
+            biobio,
+          ),
+        ],
+      },
+    ],
+    'articles': <Object?>[
+      _article(
+        'x$i',
+        'Hacienda presenta el presupuesto',
+        tercera,
+        '2026-11-0${i + 1}T12:00:00.000Z',
+      ),
+      _article(
+        'y$i',
+        'Economistas cuestionan el presupuesto',
+        biobio,
+        '2026-11-0${i + 1}T15:00:00.000Z',
+      ),
+    ],
+    'contrasts': <Object?>[
+      <String, Object?>{
+        'id': 'c$i',
+        'position_a_id': positionAId,
+        'position_b_id': positionBId,
+        'kind': i.isEven ? 'contradiction' : 'contrast',
+      },
+    ],
+  });
+
+  @override
+  Future<PublicPage<EventCardDto>> listFeed({
+    String? category,
+    String? topic,
+    String? cursor,
+    int limit = 20,
+    bool refresh = false,
+    dynamic requestToken,
+  }) async => PublicPage<EventCardDto>(
+    items: <EventCardDto>[for (int i = 0; i < count; i++) _event(i)],
+    nextCursor: null,
+  );
+
+  @override
+  Future<PublicPage<ContradictionDto>> listContradictions({
+    String? cursor,
+    int limit = 20,
+    bool refresh = false,
+    dynamic requestToken,
+  }) async => PublicPage<ContradictionDto>(
+    items: <ContradictionDto>[
+      for (int i = 0; i < count; i++)
+        ContradictionDto.fromJson(<String, Object?>{
+          ...contradictionJson(),
+          'id': '01K4W4M7R0B0000000000002${i.toString().padLeft(2, '0')}',
+          'event_id': idOf(i),
+          'event_title': titleOf(i),
+          // The first duel is the most recent one.
+          'confirmed_at':
+              '2026-11-${(20 - i).toString().padLeft(2, '0')}T10:00:00.000Z',
+        }),
+    ],
+    nextCursor: null,
+  );
+
+  @override
+  Future<EventDetailDto> getEvent(
+    String eventId, {
+    bool refresh = false,
+    dynamic requestToken,
+  }) async => _event(int.parse(eventId.substring(eventId.length - 2)));
+}
+
 /// Mounts the Arena on a phone-sized surface with the requested text scale.
 Future<List<Uri>> pumpArena(
   WidgetTester tester,

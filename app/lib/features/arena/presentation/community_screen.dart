@@ -280,24 +280,30 @@ class _CommunityScreenState extends State<CommunityScreen> {
     final List<CommunityEntry> entries = _entries();
     final ArenaDuel? duel = store.duelForEvent(event.id);
     return <Widget>[
+      // The thermometer rides along the debate as a slim strip, not a form.
       if (_channel == CommunityChannel.debate)
-        ArenaCard(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: <Widget>[
-              const Text(
-                'Opiniones e interpretaciones',
-                style: ArenaText.section,
+              Expanded(
+                child: duel != null
+                    ? arenaDuelThermometer(store, duel)
+                    : EvidenceThermometer(
+                        summary: store.cachedSummary(event.id),
+                      ),
               ),
-              const SizedBox(height: 10),
-              if (duel != null)
-                arenaDuelThermometer(store, duel)
-              else
-                EvidenceThermometer(summary: store.cachedSummary(event.id)),
-              const SizedBox(height: 12),
-              ArenaPrimaryButton(
-                label: 'Votar en el termómetro',
+              const SizedBox(width: 8),
+              FilledButton.tonal(
+                key: const Key('arena-community-vote'),
+                style: FilledButton.styleFrom(
+                  backgroundColor: ArenaColors.violetSoft,
+                  foregroundColor: ArenaColors.violetDeep,
+                  minimumSize: const Size(48, 44),
+                ),
                 onPressed: () => showArenaVoteSheet(context, store, event),
+                child: const Text('Votar'),
               ),
             ],
           ),
@@ -314,7 +320,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
       else if (entries.isEmpty)
         ArenaMessage(switch (_channel) {
           CommunityChannel.debate =>
-            'Aún no hay opiniones. Abre el debate con tu interpretación.',
+            'Nadie ha opinado todavía. Rompe el hielo con tu lectura del caso.',
           CommunityChannel.aporte =>
             'Aún no hay aportes. Sé la primera persona en sumar un enlace '
                 'o documento.',
@@ -572,144 +578,199 @@ class _ContributionCard extends StatelessWidget {
         title = article.title;
       }
     }
-    return ArenaCard(
-      child: Column(
+    final String initials = entry.author
+        .split(RegExp(r'[\s._-]+'))
+        .where((String part) => part.isNotEmpty)
+        .take(2)
+        .map((String part) => part.characters.first.toUpperCase())
+        .join();
+    // A chat bubble: avatar with initials on the left, the message beside it.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Row(
-            children: <Widget>[
-              const CircleAvatar(
-                radius: 16,
-                backgroundColor: ArenaColors.violetSoft,
-                child: Icon(
-                  Icons.person,
-                  size: 18,
-                  color: ArenaColors.violetDeep,
-                ),
+          SizedBox.square(
+            dimension: 36,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: entry.mine ? ArenaColors.violet : ArenaColors.violetSoft,
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text.rich(
-                  TextSpan(
-                    text: entry.mine ? '${entry.author} (tú)' : entry.author,
-                    style: const TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
-                      color: ArenaColors.ink,
-                    ),
-                    children: <InlineSpan>[
-                      if (entry.createdAt != null)
-                        TextSpan(
-                          text: ' · ${arenaAgo(entry.createdAt!)}',
-                          style: ArenaText.meta,
+              child: Center(
+                child: MediaQuery.withNoTextScaling(
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Padding(
+                      padding: const EdgeInsets.all(6),
+                      child: Text(
+                        initials.isEmpty ? '?' : initials,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: entry.mine
+                              ? Colors.white
+                              : ArenaColors.violetDeep,
                         ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(entry.body, style: ArenaText.body),
-          if (url != null) ...<Widget>[
-            const SizedBox(height: 10),
-            Semantics(
-              button: true,
-              label: 'Abrir fuente adjunta: $title',
-              child: InkWell(
-                onTap: onOpen,
-                borderRadius: BorderRadius.circular(12),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: ArenaColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: ArenaColors.border),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: pdf
-                                ? const Color(0xFFDC2626)
-                                : const Color(0xFF2563EB),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 7,
-                              vertical: 4,
-                            ),
-                            child: Text(
-                              pdf ? 'PDF' : 'Enlace',
-                              style: const TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.white,
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(title, style: ArenaText.cardTitle),
-                              Text(
-                                url.toString(),
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: ArenaColors.violet,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                 ),
               ),
             ),
-          ],
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: <Widget>[
-              if (showVotes) ...<Widget>[
-                _VoteButton(
-                  key: ValueKey<String>('arena-entry-up-${entry.id}'),
-                  icon: entry.myVote == 1
-                      ? Icons.thumb_up
-                      : Icons.thumb_up_outlined,
-                  count: entry.upvotes,
-                  active: entry.myVote == 1,
-                  label: 'Útil',
-                  onPressed: votable ? () => onVote(1) : null,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: entry.mine ? const Color(0xFFF5F3FF) : ArenaColors.card,
+                border: Border.all(color: ArenaColors.border),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(4),
+                  topRight: Radius.circular(16),
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
                 ),
-                _VoteButton(
-                  key: ValueKey<String>('arena-entry-down-${entry.id}'),
-                  icon: entry.myVote == -1
-                      ? Icons.thumb_down
-                      : Icons.thumb_down_outlined,
-                  count: entry.downvotes,
-                  active: entry.myVote == -1,
-                  label: 'No útil',
-                  onPressed: votable ? () => onVote(-1) : null,
-                ),
-              ],
-              TextButton(
-                style: TextButton.styleFrom(
-                  foregroundColor: ArenaColors.violet,
-                ),
-                onPressed: onReply,
-                child: const Text('Responder'),
               ),
-            ],
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text.rich(
+                            TextSpan(
+                              text: entry.mine
+                                  ? '${entry.author} (tú)'
+                                  : entry.author,
+                              style: const TextStyle(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w700,
+                                color: ArenaColors.ink,
+                              ),
+                              children: <InlineSpan>[
+                                if (entry.createdAt != null)
+                                  TextSpan(
+                                    text: ' · ${arenaAgo(entry.createdAt!)}',
+                                    style: ArenaText.meta,
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(entry.body, style: ArenaText.body),
+                    if (url != null) ...<Widget>[
+                      const SizedBox(height: 10),
+                      Semantics(
+                        button: true,
+                        label: 'Abrir fuente adjunta: $title',
+                        child: InkWell(
+                          onTap: onOpen,
+                          borderRadius: BorderRadius.circular(12),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: ArenaColors.background,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: ArenaColors.border),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(10),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      color: pdf
+                                          ? const Color(0xFFDC2626)
+                                          : const Color(0xFF2563EB),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: Padding(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 7,
+                                        vertical: 4,
+                                      ),
+                                      child: Text(
+                                        pdf ? 'PDF' : 'Enlace',
+                                        style: const TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w800,
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: <Widget>[
+                                        Text(title, style: ArenaText.cardTitle),
+                                        Text(
+                                          url.toString(),
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: ArenaColors.violet,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: <Widget>[
+                        if (showVotes) ...<Widget>[
+                          _VoteButton(
+                            key: ValueKey<String>('arena-entry-up-${entry.id}'),
+                            icon: entry.myVote == 1
+                                ? Icons.thumb_up
+                                : Icons.thumb_up_outlined,
+                            count: entry.upvotes,
+                            active: entry.myVote == 1,
+                            label: 'Útil',
+                            onPressed: votable ? () => onVote(1) : null,
+                          ),
+                          _VoteButton(
+                            key: ValueKey<String>(
+                              'arena-entry-down-${entry.id}',
+                            ),
+                            icon: entry.myVote == -1
+                                ? Icons.thumb_down
+                                : Icons.thumb_down_outlined,
+                            count: entry.downvotes,
+                            active: entry.myVote == -1,
+                            label: 'No útil',
+                            onPressed: votable ? () => onVote(-1) : null,
+                          ),
+                        ],
+                        TextButton(
+                          style: TextButton.styleFrom(
+                            foregroundColor: ArenaColors.violet,
+                          ),
+                          onPressed: onReply,
+                          child: const Text('Responder'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
       ),
