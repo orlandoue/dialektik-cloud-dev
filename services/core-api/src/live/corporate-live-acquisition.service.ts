@@ -1,4 +1,4 @@
-import { Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import { parseUlid, type Database, type SourceType } from '@dialektik/database';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import type { CoreApiConfig } from '../config/core-api-config.js';
@@ -256,6 +256,7 @@ async function mapWithConcurrency<T, R>(
 export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | undefined;
   private inFlight = false;
+  private readonly logger = new Logger(CorporateLiveAcquisitionService.name);
 
   constructor(
     private readonly config: Readonly<CoreApiConfig>,
@@ -263,7 +264,9 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   ) {}
 
   onModuleInit(): void {
-    void this.startIfEnabled().catch(() => undefined);
+    void this.startIfEnabled().catch(error => {
+      this.logger.error(`Acquisition scheduler failed to start: ${postgresDiagnostic(error).sqlState ?? 'UNKNOWN'}`);
+    });
   }
 
   public async startIfEnabled(): Promise<CorporateAcquisitionStartResult> {
@@ -289,7 +292,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       };
     }
     if (!this.timer) {
-      this.timer = setInterval(() => void this.pollOneDueSource(), CORPORATE_ACQUISITION_TICK_MS);
+      this.timer = setInterval(() => void this.pollSafely(), CORPORATE_ACQUISITION_TICK_MS);
       this.timer.unref();
     }
     try {
@@ -298,7 +301,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       await this.recordClaimFailure(error);
       return { enabled: true, scheduled: false, disabledReason: null, ...postgresDiagnostic(error) };
     }
-    void this.pollOneDueSource();
+    void this.pollSafely();
     return {
       enabled: true,
       scheduled: true,
@@ -582,6 +585,11 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
     return totalPersisted;
   }
 
+  private async pollSafely(): Promise<void> {
+    try { await this.pollOneDueSource(); }
+    catch (error) { this.logger.error(`Acquisition poll failed to record its result: ${postgresDiagnostic(error).sqlState ?? 'UNKNOWN'}`); }
+  }
+
   private async pollOneDueSource(): Promise<void> {
     if (this.inFlight) return;
     this.inFlight = true;
@@ -687,7 +695,7 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
     const interval = row.canonicalDomain === 'elmostrador.cl' && backfilled > 0
       ? 30
       : row.discoveryChannel === 'youtube_data_api_v3'
-        ? 86_400
+        ? 7_200
         : 900;
     await sql`update public.corporate_live_source_poll_state
       set etag=${feed.etag},last_modified=${feed.lastModified},poll_interval_seconds=${interval},
