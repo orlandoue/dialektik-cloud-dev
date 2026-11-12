@@ -103,6 +103,59 @@ export function diversifySemanticPairs(pairs: readonly SemanticCandidatePair[], 
   return selected;
 }
 
+export interface ScheduledPairPlan {
+  readonly pairs: readonly SemanticCandidatePair[];
+  readonly articleIds: readonly string[];
+  readonly newExtractions: number;
+}
+
+/**
+ * Chooses the pairs of one scheduled batch within its model-call budget.
+ *
+ * Each article that still needs extraction costs one model call; articles
+ * already extracted are reused for free, so a pair joining a new article to
+ * an extracted one is cheap. Distinct named entities are preferred first
+ * (topic diversity), then the batch is filled by rank. Extraction calls are
+ * capped so the rest of the shared budget remains for the case and stance
+ * assessments that can actually lead to a publication.
+ */
+export function planScheduledSemanticPairs(
+  pairs: readonly SemanticCandidatePair[],
+  pendingArticleIds: ReadonlySet<string>,
+  limits: { readonly maxPairs: number; readonly maxNewExtractions: number },
+): ScheduledPairPlan {
+  const selected: SemanticCandidatePair[] = [];
+  const articleIds = new Set<string>();
+  const usedEntities = new Set<string>();
+  const pairKeys = new Set<string>();
+  let newExtractions = 0;
+  const cost = (pair: SemanticCandidatePair) =>
+    [pair.left.articleId, pair.right.articleId].filter(
+      id => pendingArticleIds.has(id) && !articleIds.has(id),
+    ).length;
+  const add = (pair: SemanticCandidatePair): boolean => {
+    if (selected.length >= limits.maxPairs) return false;
+    const key = pairKey(pair.left.articleId, pair.right.articleId);
+    if (pairKeys.has(key)) return false;
+    const extra = cost(pair);
+    if (newExtractions + extra > limits.maxNewExtractions) return false;
+    selected.push(pair);
+    pairKeys.add(key);
+    newExtractions += extra;
+    articleIds.add(pair.left.articleId);
+    articleIds.add(pair.right.articleId);
+    sharedSemanticEntities(pair).forEach(entity => usedEntities.add(entity));
+    return true;
+  };
+  for (const pair of pairs) {
+    const entities = sharedSemanticEntities(pair);
+    if (entities.length === 0 || entities.some(entity => usedEntities.has(entity))) continue;
+    add(pair);
+  }
+  for (const pair of pairs) add(pair);
+  return { pairs: selected, articleIds: [...articleIds], newExtractions };
+}
+
 function incidentTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {
   const text = [
     article.headline,
