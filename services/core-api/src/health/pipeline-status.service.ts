@@ -29,6 +29,9 @@ export interface PipelineStatus {
   readonly lastRunCandidatePairs: number | null;
   readonly lastRunArticlesProcessed: number | null;
   readonly lastRunPairsEvaluated: number | null;
+  /** Strong pairs left in the queue for later batches. */
+  readonly lastRunPairsDeferred: number | null;
+  readonly lastRunSubBatches: number | null;
   readonly lastRunModelCalls: number | null;
   readonly lastRunEventGroupsFormed: number | null;
   readonly lastRunEventsPromoted: number | null;
@@ -130,6 +133,8 @@ export class PipelineStatusService {
       lastRunCandidatePairs: sameRun ? run!.candidatePairs : null,
       lastRunArticlesProcessed: sameRun ? run!.articlesProcessed : record?.processed ?? null,
       lastRunPairsEvaluated: sameRun ? run!.pairsEvaluated : record?.pairAssessments ?? null,
+      lastRunPairsDeferred: sameRun ? run!.pairsDeferred : null,
+      lastRunSubBatches: sameRun ? run!.subBatches : null,
       lastRunModelCalls: sameRun ? run!.modelCalls : null,
       lastRunEventGroupsFormed: sameRun ? run!.eventGroupsFormed : null,
       lastRunEventsPromoted: sameRun ? run!.eventsPromoted : record?.eventsPromotedSince ?? null,

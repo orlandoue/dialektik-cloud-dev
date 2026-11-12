@@ -32,7 +32,7 @@ function core(answer: (query: string) => Row | Error) {
 const summary = {
   trigger: 'startup', startedAt: '2026-11-12T20:00:00.000Z', finishedAt: '2026-11-12T20:03:00.000Z',
   status: 'COMPLETED_FOR_EDITORIAL_REVIEW', targetDay: '2026-11-11', candidateArticles: 180,
-  candidatePairs: 40, pairsEvaluated: 7, articlesSelected: 13, articlesProcessed: 9, modelCalls: 25,
+  candidatePairs: 40, pairsEvaluated: 7, pairsDeferred: 22, subBatches: 2, articlesSelected: 13, articlesProcessed: 9, modelCalls: 25,
   eventGroupsFormed: 3, eventsPromoted: 2, contrastsPromoted: 1,
   skipOrRejectReasons: { PAIR_HEADLINES_TOO_GENERIC: 20, AUTO_SCOPE_ASSESSMENT_INVALID: 1 },
 };
@@ -66,6 +66,8 @@ describe('public pipeline status', () => {
       lastRunTrigger: 'startup',
       lastRunArticlesProcessed: 9,
       lastRunPairsEvaluated: 7,
+      lastRunPairsDeferred: 22,
+      lastRunSubBatches: 2,
       lastRunModelCalls: 25,
       lastRunEventsPromoted: 2,
       lastRunContrastsPromoted: 1,

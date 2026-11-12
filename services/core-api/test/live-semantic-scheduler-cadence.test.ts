@@ -2,10 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HealthController } from '../src/health/health.controller.js';
 import {
   planScheduledSemanticPairs,
+  planSubBatches,
+  sourcesPerCluster,
   type SemanticCandidatePair,
   type SemanticPreclusterArticle,
 } from '../src/semantic/live-semantic-precluster.js';
-import { AutoPromotionTally, LiveSemanticProductionService, SCHEDULED_MAX_NEW_EXTRACTIONS } from '../src/semantic/live-semantic-production.service.js';
+import { AutoPromotionTally, LiveSemanticProductionService, SCHEDULED_MAX_NEW_EXTRACTIONS, SCHEDULED_SUB_BATCHES } from '../src/semantic/live-semantic-production.service.js';
+import { hasStrongPairOverlap, isSportsText } from '../src/semantic/live-semantic-scheduler-prefilter.js';
 
 const article = (id: string, source: string, headline: string): SemanticPreclusterArticle => ({
   articleId: id, sourceId: source, publishedAt: new Date('2026-11-11T12:00:00Z'), headline,
@@ -60,7 +63,83 @@ describe('scheduled batch planning', () => {
   });
 });
 
+describe('two chained sub-batches per run', () => {
+  const topics = ['Steinert', 'Gajardo', 'Rabat', 'Codelco', 'Hermosilla', 'Kast', 'Boric', 'Matthei'];
+  const pairs = topics.map((name, i) => pair(
+    article(`a${i}`, 'press', `${name} responde`), article(`b${i}`, 'video', `${name} responde`)));
+  const allNew = new Set(pairs.flatMap(p => [p.left.articleId, p.right.articleId]));
+
+  const limits = { maxPairs: 8, maxNewPerBatch: SCHEDULED_MAX_NEW_EXTRACTIONS, batches: SCHEDULED_SUB_BATCHES };
+
+  it('fills two sub-batches of at most five new extractions each', () => {
+    const plans = planSubBatches(pairs, allNew, limits);
+    expect(plans).toHaveLength(2);
+    for (const plan of plans) expect(plan.newExtractions).toBeLessThanOrEqual(5);
+    // Two new articles per pair: two pairs fit in each sub-batch.
+    expect(plans.flatMap(plan => plan.pairs)).toHaveLength(4);
+  });
+
+  it('treats an article extracted in the first sub-batch as free in the second', () => {
+    const hub = article('hub', 'press', 'Steinert responde');
+    const star = ['x1', 'x2', 'x3', 'x4', 'x5', 'x6'].map(id => pair(hub, article(id, `s-${id}`, 'Steinert responde')));
+    const pending = new Set(['hub', 'x1', 'x2', 'x3', 'x4', 'x5', 'x6']);
+    const plans = planSubBatches(star, pending, limits);
+    expect(plans[0]?.newExtractions).toBe(5);
+    // «hub» was extracted in the first sub-batch; the rest are new.
+    expect(plans[1]?.articleIds).toContain('hub');
+    expect(plans[1]?.newExtractions).toBe(2);
+    expect(plans.flatMap(plan => plan.pairs)).toHaveLength(6);
+  });
+
+  it('reaches eight pairs when one side of each is already extracted', () => {
+    const halfNew = new Set(pairs.map(p => p.left.articleId));
+    const plans = planSubBatches(pairs, halfNew, limits);
+    expect(plans.flatMap(plan => plan.pairs)).toHaveLength(8);
+    expect(plans.map(plan => plan.newExtractions)).toEqual([5, 3]);
+  });
+
+  it('stops when nothing new remains to extract', () => {
+    expect(planSubBatches(pairs, new Set(), limits)).toHaveLength(0);
+  });
+
+  it('counts the distinct media of each candidate case', () => {
+    const a = article('a', 'press', 'x'), b = article('b', 'video', 'x'), c = article('c', 'radio', 'x');
+    const map = sourcesPerCluster([{ left: a, right: b, clusterKey: 'k' }, { left: a, right: c, clusterKey: 'k' }]);
+    expect(map.get('k')).toBe(3);
+  });
+});
+
+describe('pre-model pruning', () => {
+  it('keeps sports and non-sports items apart, without mistaking a political party', () => {
+    expect(isSportsText('Colo Colo gana el campeonato')).toBe(true);
+    expect(isSportsText('El partido terminó con goles en el estadio')).toBe(true);
+    expect(isSportsText('Partido Republicano presenta su candidatura')).toBe(false);
+    expect(isSportsText('Senado aprueba reforma de pensiones')).toBe(false);
+  });
+
+  it('requires shared specifics in the headline and across the excerpt', () => {
+    // Two headline words, but nothing else in common: too weak.
+    expect(hasStrongPairOverlap(
+      'Steinert viaja a Paraguay', 'La exsubsecretaria fue nombrada.',
+      'Steinert en Paraguay', 'Hoy llueve en Santiago.',
+    )).toBe(false);
+    expect(hasStrongPairOverlap(
+      'Steinert asume en Paraguay', 'Nombrada agregada tras su salida de Seguridad.',
+      'Steinert asume cargo en Paraguay', 'La exsubsecretaria fue nombrada agregada.',
+    )).toBe(true);
+    expect(hasStrongPairOverlap('Lluvia en Santiago', 'texto', 'Steinert en Paraguay', 'texto')).toBe(false);
+  });
+});
+
 describe('adaptive spacing between batches', () => {
+  it('drains a backlog every fifteen minutes', () => {
+    const gap = LiveSemanticProductionService.minimumGapMs;
+    expect(gap('tick', true, 16)).toBe(15 * 60 * 1000);
+    expect(gap('tick', false, 468)).toBe(15 * 60 * 1000);
+    expect(gap('tick', true, 15)).toBe(45 * 60 * 1000);
+    expect(gap('startup', true, 468)).toBe(10 * 60 * 1000);
+  });
+
   it('retries sooner after an empty batch and runs soon after a deploy', () => {
     const gap = LiveSemanticProductionService.minimumGapMs;
     expect(gap('tick', true)).toBe(45 * 60 * 1000);
