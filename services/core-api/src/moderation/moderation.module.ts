@@ -34,5 +34,6 @@ import { LiveSemanticProductionService } from '../semantic/live-semantic-product
     HeadlineContextAnalysisService,
     LiveSemanticProductionService,
   ],
+  exports: [LiveSemanticProductionService],
 })
 export class ModerationModule {}

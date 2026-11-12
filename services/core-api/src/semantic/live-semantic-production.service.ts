@@ -229,6 +229,7 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
   private scheduler: ReturnType<typeof setInterval> | undefined;
   private startup: ReturnType<typeof setTimeout> | undefined;
   private schedulerBusy = false;
+  private lastSchedulerAttemptAt = 0;
   private readonly logger = new Logger(LiveSemanticProductionService.name);
   constructor(
     @Inject(HeadlineReviewService)
@@ -242,15 +243,25 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
   onModuleInit(): void {
     if(process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED !== 'true') return;
     this.startup=setTimeout(()=>void this.runScheduledSafely(),30_000); this.startup.unref();
-    this.scheduler=setInterval(()=>void this.runScheduledSafely(),4*60*60*1000); this.scheduler.unref();
+    this.scheduler=setInterval(()=>void this.runScheduledSafely(),60*60*1000); this.scheduler.unref();
   }
   onModuleDestroy(): void { if(this.startup) clearTimeout(this.startup); if(this.scheduler) clearInterval(this.scheduler); }
   private async runScheduledSafely(): Promise<void> {
     if(this.schedulerBusy) return;
+    this.lastSchedulerAttemptAt=Date.now();
     this.schedulerBusy=true;
     try { const result=await this.runScheduled(); this.logger.log(`Semantic scheduled run: ${result}`); }
-    catch(error) { this.logger.warn(`Semantic scheduled run failed: ${error instanceof Error ? error.name : 'unknown'}`); }
+    catch(error) {
+      const reason = error instanceof Error && /^[A-Z0-9_]{1,80}$/u.test(error.message) ? error.message : error instanceof Error ? error.name : 'unknown';
+      this.logger.warn(`Semantic scheduled run failed: ${reason}`);
+    }
     finally { this.schedulerBusy=false; }
+  }
+  /** Best-effort wake-up; the work remains guarded by the existing DB lock and budget. */
+  public wakeFromHealthPing(): void {
+    if (process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED !== 'true' || this.schedulerBusy) return;
+    if (Date.now()-this.lastSchedulerAttemptAt < 60*60*1000) return;
+    void this.runScheduledSafely();
   }
   async runAutomatic(authorization: string | undefined, body: unknown): Promise<{status:string}> {
     this.ensureEnabled();
@@ -279,8 +290,8 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
       try {
         const editor=await sql<{allowed:boolean}>`select exists(select 1 from public.users u join public.editorial_single_editor_authorizations a on a.editor_user_id=u.id where u.id=${actor}::dialektik_ulid and u.role='editor' and a.revoked_at is null) as allowed`.execute(connection);
         if(editor.rows[0]?.allowed!==true) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
-        // Render may restart or wake repeatedly: do not spend the budget again within four hours.
-        const recent=await sql<{present:boolean}>`select exists(select 1 from public.live_semantic_production_runs where started_at>clock_timestamp()-interval '4 hours') as present`.execute(connection);
+        // Shared database guard prevents duplicate model spending across restarts and replicas.
+        const recent=await sql<{present:boolean}>`select exists(select 1 from public.live_semantic_production_runs where started_at>clock_timestamp()-interval '2 hours') as present`.execute(connection);
         if(!manual && recent.rows[0]?.present===true) return 'RECENT_SEMANTIC_RUN';
         const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean}>`
           select * from (
