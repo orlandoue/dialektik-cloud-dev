@@ -11,7 +11,7 @@ describe('freshness wake', () => {
     service = new LiveSemanticProductionService({} as never, {} as never, {} as never);
   });
   afterEach(() => { service.onModuleDestroy(); delete process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED; vi.useRealTimers(); vi.restoreAllMocks(); });
-  it('wakes asynchronously only once an hour and never overlaps', async () => {
+  it('rechecks at most every five minutes and never overlaps', async () => {
     let finish!: (value:string)=>void;
     const run=vi.spyOn(service,'runScheduled').mockImplementationOnce(() => new Promise(resolve=>{finish=resolve;})).mockResolvedValue('RECENT_SEMANTIC_RUN');
     service.wakeFromHealthPing(); service.wakeFromHealthPing();
@@ -24,6 +24,12 @@ describe('freshness wake', () => {
     expect(run).toHaveBeenCalledTimes(2);
     service.wakeFromHealthPing();
     expect(run).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(4*60*1000);
+    service.wakeFromHealthPing();
+    expect(run).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(60*1000);
+    service.wakeFromHealthPing();
+    expect(run).toHaveBeenCalledTimes(3);
   });
   it('does nothing when the scheduler is disabled', () => {
     delete process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED;
