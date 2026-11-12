@@ -260,7 +260,8 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
   /** Best-effort wake-up; the work remains guarded by the existing DB lock and budget. */
   public wakeFromHealthPing(): void {
     if (process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED !== 'true' || this.schedulerBusy) return;
-    if (Date.now()-this.lastSchedulerAttemptAt < 60*60*1000) return;
+    // Pings recheck the shared two-hour guard without making model calls meanwhile.
+    if (Date.now()-this.lastSchedulerAttemptAt < 5*60*1000) return;
     void this.runScheduledSafely();
   }
   async runAutomatic(authorization: string | undefined, body: unknown): Promise<{status:string}> {
