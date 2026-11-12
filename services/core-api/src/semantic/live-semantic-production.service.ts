@@ -6,7 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
   Logger,
-  type OnModuleInit,
+  type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from "@nestjs/common";
 import { generateUlid, parseUlid, setTransactionAuditContext } from "@dialektik/database";
@@ -28,7 +28,7 @@ import { parseLegacyContradictionReview, parseSemanticPromotionDecision, parseSe
 import {
   canAddSemanticPairToClique,
   canJoinSemanticEventGroup,
-  diversifySemanticPairs,
+  planScheduledSemanticPairs,
   publishedEntityCount,
   preclusterLiveSemanticArticles,
 } from "./live-semantic-precluster.js";
@@ -54,7 +54,7 @@ const MAX_BATCH = 5;
 const MAX_PAIR_ASSESSMENTS = 20;
 const MAX_CLAIM_PAIR_ASSESSMENTS = 95;
 const MAX_STANCE_PAIR_ASSESSMENTS = 8;
-const MAX_CASE_PAIR_ASSESSMENTS = 5;
+const MAX_CASE_PAIR_ASSESSMENTS = 8;
 const MAX_ORIGINAL_CLAIM_PAIR_ASSESSMENTS = 12;
 const THRESHOLD_RULE =
   "review-only:same-event>=70;conflict>=50/comparable>=60;divergence>=50/comparable>=60";
@@ -121,6 +121,61 @@ interface ReviewGroupRow {
   createdAt: Date;
   editorialDecision: string | null;
   editorialReason: string | null;
+}
+
+/** One scheduled batch: at most 25 Workers AI calls shared by every stage. */
+const SCHEDULED_CALL_BUDGET = 25;
+const SCHEDULED_MAX_PAIRS = 8;
+/** Extraction calls are capped so case and stance assessments keep budget. */
+const SCHEDULED_MAX_NEW_EXTRACTIONS = 12;
+const SCHEDULER_STARTUP_DELAY_MS = 15_000;
+/** Each tick only checks the shared database guard; it spends nothing by itself. */
+const SCHEDULER_TICK_MS = 5 * 60 * 1000;
+const HEALTH_WAKE_THROTTLE_MS = 5 * 60 * 1000;
+/** Spacing after a batch that published something. */
+const GAP_AFTER_PUBLISHING_MS = 45 * 60 * 1000;
+/** Shorter spacing after a batch that published nothing, so fresh news is retried. */
+const GAP_AFTER_EMPTY_MS = 30 * 60 * 1000;
+/** A deploy or restart runs soon, but a crash loop cannot spend repeatedly. */
+const GAP_AT_STARTUP_MS = 10 * 60 * 1000;
+const MAX_AUTO_PROMOTION_GROUPS = 12;
+
+export type SchedulerTrigger = 'startup' | 'tick' | 'health' | 'manual';
+
+/** Safe, public summary of the last scheduled batch: counts and codes only. */
+export interface SemanticRunSummary {
+  readonly trigger: SchedulerTrigger;
+  readonly startedAt: string;
+  readonly finishedAt: string;
+  readonly status: string;
+  readonly targetDay: string;
+  readonly candidateArticles: number;
+  readonly candidatePairs: number;
+  readonly pairsEvaluated: number;
+  readonly articlesSelected: number;
+  readonly articlesProcessed: number;
+  readonly modelCalls: number;
+  readonly eventGroupsFormed: number;
+  readonly eventsPromoted: number;
+  readonly contrastsPromoted: number;
+  readonly skipOrRejectReasons: Readonly<Record<string, number>>;
+}
+
+/** Collects the outcome of automatic promotion attempts. */
+export class AutoPromotionTally {
+  events = 0;
+  contrasts = 0;
+  readonly reasons: Record<string, number> = {};
+  reject(code: string): void {
+    this.reasons[code] = (this.reasons[code] ?? 0) + 1;
+  }
+}
+
+function safeReasonCode(error: unknown): string {
+  if (error instanceof Error && /^[A-Z0-9_]{1,80}$/u.test(error.message)) return error.message;
+  const sqlState = safeDatabaseErrorCode(error);
+  if (sqlState) return `DATABASE_${sqlState}`;
+  return error instanceof Error ? error.name.toUpperCase().slice(0, 40) : 'UNKNOWN';
 }
 
 function sha256(value: string): string {
@@ -225,10 +280,10 @@ function normalizedEventKey(value: string): string {
 }
 
 @Injectable()
-export class LiveSemanticProductionService implements OnModuleInit, OnModuleDestroy {
+export class LiveSemanticProductionService implements OnApplicationBootstrap, OnModuleDestroy {
   private scheduler: ReturnType<typeof setInterval> | undefined;
   private startup: ReturnType<typeof setTimeout> | undefined;
-  private schedulerBusy = false;
+  private busy = false;
   private lastSchedulerAttemptAt = 0;
   private readonly logger = new Logger(LiveSemanticProductionService.name);
   constructor(
@@ -240,29 +295,56 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
     private readonly moderationWriter: ModerationDatabaseService,
   ) {}
 
-  onModuleInit(): void {
-    if(process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED !== 'true') return;
-    this.startup=setTimeout(()=>void this.runScheduledSafely(),30_000); this.startup.unref();
-    this.scheduler=setInterval(()=>void this.runScheduledSafely(),60*60*1000); this.scheduler.unref();
+  private lastRun: SemanticRunSummary | undefined;
+  private lastSkip: { readonly at: string; readonly trigger: SchedulerTrigger; readonly status: string } | undefined;
+
+  /** Last completed batch, for the public pipeline status. */
+  get lastRunSummary(): SemanticRunSummary | undefined { return this.lastRun; }
+  /** Last tick that decided not to spend (guard, no pairs, lock). */
+  get lastSkippedTick() { return this.lastSkip; }
+  get schedulerEnabled(): boolean { return process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED === 'true'; }
+  get schedulerBusy(): boolean { return this.busy; }
+
+  /** Latest batch as recorded in the database; survives restarts. */
+  async latestRunRecord(): Promise<{startedAt:string;completedAt:string|null;processed:number;pairAssessments:number;eventsPromotedSince:number}|null> {
+    const rows=await sql<{startedAt:Date;completedAt:Date|null;processed:number;pairAssessments:number;promoted:number}>`
+      select r.started_at as "startedAt",r.completed_at as "completedAt",r.processed_count as processed,
+        r.pair_assessment_count as "pairAssessments",
+        (select count(*)::int from public.live_semantic_editorial_decisions d
+          where d.decision='APPROVED' and d.decided_at>=r.started_at) as promoted
+      from public.live_semantic_production_runs r order by r.started_at desc limit 1`.execute(this.writer.database);
+    const row=rows.rows[0];
+    if(!row) return null;
+    return {startedAt:new Date(row.startedAt).toISOString(),completedAt:row.completedAt===null ? null : new Date(row.completedAt).toISOString(),
+      processed:row.processed,pairAssessments:row.pairAssessments,eventsPromotedSince:row.promoted};
+  }
+
+  onApplicationBootstrap(): void {
+    if(!this.schedulerEnabled) return;
+    // Starts shortly after boot so /health/ready answers first; the shorter
+    // startup guard lets a fresh deploy run without waiting for the cadence.
+    this.startup=setTimeout(()=>void this.runScheduledSafely('startup'),SCHEDULER_STARTUP_DELAY_MS); this.startup.unref();
+    this.scheduler=setInterval(()=>void this.runScheduledSafely('tick'),SCHEDULER_TICK_MS); this.scheduler.unref();
   }
   onModuleDestroy(): void { if(this.startup) clearTimeout(this.startup); if(this.scheduler) clearInterval(this.scheduler); }
-  private async runScheduledSafely(): Promise<void> {
-    if(this.schedulerBusy) return;
+  private async runScheduledSafely(trigger: SchedulerTrigger = 'tick'): Promise<void> {
+    if(this.busy) return;
     this.lastSchedulerAttemptAt=Date.now();
-    this.schedulerBusy=true;
-    try { const result=await this.runScheduled(); this.logger.log(`Semantic scheduled run: ${result}`); }
+    this.busy=true;
+    try { const result=await this.runScheduled(false,undefined,trigger); this.logger.log(`Semantic scheduled run (${trigger}): ${result}`); }
     catch(error) {
-      const reason = error instanceof Error && /^[A-Z0-9_]{1,80}$/u.test(error.message) ? error.message : error instanceof Error ? error.name : 'unknown';
+      const reason=safeReasonCode(error);
+      this.lastSkip={at:new Date().toISOString(),trigger,status:`FAILED:${reason}`};
       this.logger.warn(`Semantic scheduled run failed: ${reason}`);
     }
-    finally { this.schedulerBusy=false; }
+    finally { this.busy=false; }
   }
   /** Best-effort wake-up; the work remains guarded by the existing DB lock and budget. */
   public wakeFromHealthPing(): void {
-    if (process.env.DIALEKTIK_LIVE_SEMANTIC_SCHEDULER_ENABLED !== 'true' || this.schedulerBusy) return;
-    // Pings recheck the shared two-hour guard without making model calls meanwhile.
-    if (Date.now()-this.lastSchedulerAttemptAt < 5*60*1000) return;
-    void this.runScheduledSafely();
+    if (!this.schedulerEnabled || this.busy) return;
+    // Pings only recheck the shared database guard; they never bypass it.
+    if (Date.now()-this.lastSchedulerAttemptAt < HEALTH_WAKE_THROTTLE_MS) return;
+    void this.runScheduledSafely('health');
   }
   async runAutomatic(authorization: string | undefined, body: unknown): Promise<{status:string}> {
     this.ensureEnabled();
@@ -273,27 +355,53 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
     const request = (body ?? {}) as Record<string,unknown>;
     if (Object.keys(request).some(key => key !== 'targetDay')) throw new ModerationHttpError(400, 'MOD_INVALID_REQUEST');
     if (request.targetDay !== undefined) targetDay = parseSemanticBatchBody({targetDay:request.targetDay}).targetDay;
-    return {status:await this.runScheduled(true,targetDay)};
+    return {status:await this.runScheduled(true,targetDay,'manual')};
   }
-  async runScheduled(manual = false, targetDayOverride?: string): Promise<string> {
+  /**
+   * Minimum spacing since the last batch. A batch that published nothing is
+   * retried sooner; at startup a short guard lets a deploy run right away
+   * while still stopping a crash loop from spending repeatedly.
+   */
+  static minimumGapMs(trigger: SchedulerTrigger, lastRunPublished: boolean): number {
+    if (trigger === 'startup') return GAP_AT_STARTUP_MS;
+    return lastRunPublished ? GAP_AFTER_PUBLISHING_MS : GAP_AFTER_EMPTY_MS;
+  }
+
+  private skip(trigger: SchedulerTrigger, status: string): string {
+    this.lastSkip={at:new Date().toISOString(),trigger,status};
+    return status;
+  }
+
+  async runScheduled(manual = false, targetDayOverride?: string, trigger: SchedulerTrigger = manual ? 'manual' : 'tick'): Promise<string> {
     this.ensureEnabled();
     const actor=process.env.DIALEKTIK_SEMANTIC_AUTOMATION_ACTOR_ID ?? '';
     if(!/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(actor)) throw new Error('SEMANTIC_AUTOMATION_ACTOR_REQUIRED');
     const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Santiago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
     const date=new Date(`${today}T00:00:00.000Z`); date.setUTCDate(date.getUTCDate()-1);
     const targetDay=targetDayOverride ?? date.toISOString().slice(0,10); const configSha=this.configSha256();
+    const startedAt=new Date().toISOString();
     return this.writer.database.connection().execute(async connection=>{
       const global=await sql<{locked:boolean}>`select pg_try_advisory_lock(hashtextextended('dialektik-live-semantic-automation',0)) as locked`.execute(connection);
-      if(global.rows[0]?.locked!==true) return 'ALREADY_RUNNING';
+      if(global.rows[0]?.locked!==true) return this.skip(trigger,'ALREADY_RUNNING');
       try {
       const locked=await sql<{locked:boolean}>`select pg_try_advisory_lock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0)) as locked`.execute(connection);
-      if(locked.rows[0]?.locked!==true) return 'ALREADY_RUNNING';
+      if(locked.rows[0]?.locked!==true) return this.skip(trigger,'ALREADY_RUNNING');
       try {
         const editor=await sql<{allowed:boolean}>`select exists(select 1 from public.users u join public.editorial_single_editor_authorizations a on a.editor_user_id=u.id where u.id=${actor}::dialektik_ulid and u.role='editor' and a.revoked_at is null) as allowed`.execute(connection);
         if(editor.rows[0]?.allowed!==true) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
-        // Shared database guard prevents duplicate model spending across restarts and replicas.
-        const recent=await sql<{present:boolean}>`select exists(select 1 from public.live_semantic_production_runs where started_at>clock_timestamp()-interval '2 hours') as present`.execute(connection);
-        if(!manual && recent.rows[0]?.present===true) return 'RECENT_SEMANTIC_RUN';
+        // Shared database guard prevents duplicate model spending across
+        // restarts and replicas; its length depends on whether the previous
+        // batch published anything.
+        if(!manual) {
+          const last=await sql<{elapsedMs:number;published:boolean}>`
+            select (extract(epoch from clock_timestamp()-r.started_at)*1000)::float8 as "elapsedMs",
+              exists(select 1 from public.live_semantic_editorial_decisions d
+                where d.decision='APPROVED' and d.decided_at>=r.started_at) as published
+            from public.live_semantic_production_runs r order by r.started_at desc limit 1`.execute(connection);
+          const previous=last.rows[0];
+          if(previous && previous.elapsedMs < LiveSemanticProductionService.minimumGapMs(trigger,previous.published))
+            return this.skip(trigger,'RECENT_SEMANTIC_RUN');
+        }
         const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean}>`
           select * from (
           select i.article_id as "articleId",i.source_id as "sourceId",i.published_at as "publishedAt",i.headline,i.excerpt,
@@ -312,30 +420,73 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
           where analysis_state='PUBLISHED' and origin='LIVE_REAL' and merged_into is null
           order by detected_at desc limit 150`.execute(connection);
         const publishedTitles=published.rows.map(row=>row.title);
-        const pairs=preclusterLiveSemanticArticles(proposals,targetDay).filter(pair =>
-          (pendingIds.has(pair.left.articleId) || pendingIds.has(pair.right.articleId)) &&
-          hasSpecificHeadlineOverlap(pair.left.headline,pair.right.headline)).map(pair=>({pair,
+        const reasons:Record<string,number>={};
+        const count=(code:string,n=1)=>{ if(n>0) reasons[code]=(reasons[code] ?? 0)+n; };
+        const clustered=preclusterLiveSemanticArticles(proposals,targetDay);
+        const withPending=clustered.filter(pair=>pendingIds.has(pair.left.articleId) || pendingIds.has(pair.right.articleId));
+        count('PAIR_ALREADY_ANALYZED',clustered.length-withPending.length);
+        const overlapping=withPending.filter(pair=>hasSpecificHeadlineOverlap(pair.left.headline,pair.right.headline));
+        count('PAIR_HEADLINES_TOO_GENERIC',withPending.length-overlapping.length);
+        const pairs=overlapping.map(pair=>({pair,
             coverage:publishedEntityCount(pair,publishedTitles),
             tension:controversyScore(pair.left.headline,excerpts.get(pair.left.articleId) ?? '',pair.right.headline,excerpts.get(pair.right.articleId) ?? ''),
             newest:Math.max(pair.left.publishedAt.getTime(),pair.right.publishedAt.getTime()),
           })).sort((a,b)=>a.coverage-b.coverage || b.tension-a.tension || b.newest-a.newest).map(item=>item.pair);
-        const selected=new Set(diversifySemanticPairs(pairs,4).flatMap(pair=>[pair.left.articleId,pair.right.articleId]));
-        if(selected.size<2) return 'NO_PENDING_MULTISOURCE_PAIRS';
-        const budget=new LiveSemanticCallBudget(25);
-        const result=await this.runLocked(connection,actor,targetDay,selected.size,configSha,[...selected],budget);
-        if ('runId' in result && result.runId) {
-          const automaticActor=process.env.SYSTEM_AUTO_EDITOR_ID ?? '01M4YDQK00ED1T0R0R1AND0VE1';
-          const published=await this.autoPromoteRun(connection,result.runId,automaticActor,configSha);
-          this.logger.log(`Semantic automatic promotions: ${published}`);
+        const plan=planScheduledSemanticPairs(pairs,pendingIds,{maxPairs:SCHEDULED_MAX_PAIRS,maxNewExtractions:SCHEDULED_MAX_NEW_EXTRACTIONS});
+        count('PAIR_DEFERRED_TO_NEXT_BATCH',pairs.length-plan.pairs.length);
+        const summary=(status:string,extra:Partial<SemanticRunSummary>={}):SemanticRunSummary=>({
+          trigger,startedAt,finishedAt:new Date().toISOString(),status,targetDay,
+          candidateArticles:candidates.rows.length,candidatePairs:clustered.length,
+          pairsEvaluated:plan.pairs.length,articlesSelected:plan.articleIds.length,articlesProcessed:0,modelCalls:0,
+          eventGroupsFormed:0,eventsPromoted:0,contrastsPromoted:0,skipOrRejectReasons:{...reasons},...extra,
+        });
+        const tally=new AutoPromotionTally();
+        // Groups whose assessments finished in a later batch are promoted too.
+        const windowStart=new Date(`${targetDay}T00:00:00.000Z`); windowStart.setUTCDate(windowStart.getUTCDate()-1);
+        const promoteWindow=async(runId:string|null)=>{
+          const promoted=await this.autoPromoteRun(connection,runId,process.env.SYSTEM_AUTO_EDITOR_ID ?? '01M4YDQK00ED1T0R0R1AND0VE1',configSha,tally,windowStart.toISOString().slice(0,10));
+          this.logger.log(`Semantic automatic promotions: ${promoted}`);
+        };
+        if(plan.articleIds.length<2) {
+          // Nothing new to spend on, but earlier groups may now be complete.
+          await promoteWindow(null);
+          for (const [code,n] of Object.entries(tally.reasons)) count(code,n);
+          if(tally.events>0) {
+            this.lastRun=summary('PROMOTED_PENDING_GROUPS',{eventsPromoted:tally.events,contrastsPromoted:tally.contrasts,skipOrRejectReasons:{...reasons}});
+            return 'PROMOTED_PENDING_GROUPS';
+          }
+          return this.skip(trigger,'NO_PENDING_MULTISOURCE_PAIRS');
         }
-        this.logger.log(`Semantic scheduled model calls: ${budget.used}/25`);
+        const budget=new LiveSemanticCallBudget(SCHEDULED_CALL_BUDGET);
+        const result=await this.runLocked(connection,actor,targetDay,plan.articleIds.length,configSha,[...plan.articleIds],budget);
+        const runId='runId' in result && result.runId ? result.runId : null;
+        if (runId) await promoteWindow(runId);
+        const details=result as Partial<{processed:number;extracted:number;insufficientEvidence:number;rejectedOrUnavailable:number;pairAssessments:number;providerHalted:boolean}>;
+        count('ARTICLE_NO_CLAIM_WORTHY_CONTENT',details.insufficientEvidence ?? 0);
+        count('ARTICLE_REJECTED_OR_UNAVAILABLE',details.rejectedOrUnavailable ?? 0);
+        if(details.providerHalted) count('PROVIDER_HALTED');
+        if(!budget.available && !details.providerHalted) count('CALL_BUDGET_EXHAUSTED');
+        let groups=0;
+        if(runId) {
+          const formed=await sql<{n:number}>`select count(*)::int as n from public.live_semantic_event_group_candidates where origin_run_id=${runId}::dialektik_ulid`.execute(connection);
+          groups=formed.rows[0]?.n ?? 0;
+          count('PAIR_NOT_SAME_EVENT',Math.max(0,(details.pairAssessments ?? 0)-groups));
+        }
+        for (const [code,n] of Object.entries(tally.reasons)) count(code,n);
+        this.lastRun=summary(result.status,{
+          articlesProcessed:(details.extracted ?? 0)+(details.insufficientEvidence ?? 0),
+          modelCalls:budget.used,eventGroupsFormed:groups,
+          eventsPromoted:tally.events,contrastsPromoted:tally.contrasts,skipOrRejectReasons:{...reasons},
+        });
+        this.logger.log(`Semantic scheduled model calls: ${budget.used}/${SCHEDULED_CALL_BUDGET}`);
         return result.status;
       } finally {await sql`select pg_advisory_unlock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0))`.execute(connection);}
       } finally {await sql`select pg_advisory_unlock(hashtextextended('dialektik-live-semantic-automation',0))`.execute(connection);}
     });
   }
 
-  private async autoPromoteRun(connection: Kysely<Database>, runId: string, actor: string, configSha: string): Promise<number> {
+  private async autoPromoteRun(connection: Kysely<Database>, runId: string | null, actor: string, configSha: string,
+    tally: AutoPromotionTally = new AutoPromotionTally(), windowStartDay?: string): Promise<number> {
     if (!/^[0-7][0-9A-HJKMNP-TV-Z]{25}$/u.test(actor)) throw new Error('SEMANTIC_AUTOMATION_ACTOR_INVALID');
     type Candidate = {
       groupId:string; title:string; pairId:string; relation:string; sameEvent:boolean;
@@ -361,14 +512,16 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
       join public.assertion_extraction_generations rg on rg.id=rm.extraction_generation_id and rg.id=p.right_extraction_generation_id and rg.state='active'
       join public.live_semantic_excerpt_inputs li on li.article_id=lm.article_id::text and li.input_sha256=lg.input_hash
       join public.live_semantic_excerpt_inputs ri on ri.article_id=rm.article_id::text and ri.input_sha256=rg.input_hash
-      where g.origin_run_id=${runId}::dialektik_ulid and g.config_sha256=${configSha}
+      where (g.origin_run_id=${runId}::dialektik_ulid or (${windowStartDay ?? null}::date is not null and g.target_day>=${windowStartDay ?? null}::date))
+        and g.config_sha256=${configSha}
         and p.config_sha256=${stanceConfigSha256(configSha)} and lm.source_id<>rm.source_id
         and (select count(*) from public.live_semantic_event_group_members m where m.group_id=g.id)=2
         and not exists(select 1 from public.live_semantic_editorial_decisions d where d.group_id=g.id)
-      order by g.id,p.ratio_comparable desc,p.id limit 50`.execute(connection);
+      order by g.id desc,p.ratio_comparable desc,p.id limit 120`.execute(connection);
     const tried=new Set<string>(); let published=0;
     for (const row of rows.rows) {
       if (tried.has(row.groupId)) continue;
+      if (tried.size >= MAX_AUTO_PROMOTION_GROUPS) break;
       try {
         const article=(sourceId:string,textOriginal:string,publishedAt:Date,span:Record<string,unknown>) => ({
           sourceId,textOriginal,publishedAt,selectedQuote:String(span?.quoted_text ?? ''),
@@ -393,8 +546,13 @@ export class LiveSemanticProductionService implements OnModuleInit, OnModuleDest
         });
         tried.add(row.groupId);
         published++;
+        tally.events++;
+        if (conflictIds.length>0) tally.contrasts++;
       } catch (error) {
-        this.logger.warn(`Semantic automatic group not promoted: ${error instanceof Error ? error.name : 'unknown'}`);
+        // A group may have several claim pairs; the next pair is tried.
+        const reason=safeReasonCode(error);
+        tally.reject(reason);
+        this.logger.warn(`Semantic automatic group not promoted: ${reason}`);
       }
     }
     return published;
