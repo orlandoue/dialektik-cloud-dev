@@ -156,6 +156,49 @@ export function planScheduledSemanticPairs(
   return { pairs: selected, articleIds: [...articleIds], newExtractions };
 }
 
+/**
+ * Plans consecutive sub-batches, each within its own extraction cap. An
+ * article selected in an earlier sub-batch counts as extracted in the next,
+ * and the pair cap applies to the whole run.
+ */
+export function planSubBatches(
+  pairs: readonly SemanticCandidatePair[],
+  pendingArticleIds: ReadonlySet<string>,
+  limits: { readonly maxPairs: number; readonly maxNewPerBatch: number; readonly batches: number },
+): readonly ScheduledPairPlan[] {
+  const plans: ScheduledPairPlan[] = [];
+  const extracted = new Set<string>();
+  let remaining = [...pairs];
+  let total = 0;
+  for (let index = 0; index < limits.batches && total < limits.maxPairs; index += 1) {
+    const stillPending = new Set([...pendingArticleIds].filter(id => !extracted.has(id)));
+    const plan = planScheduledSemanticPairs(remaining, stillPending, {
+      maxPairs: limits.maxPairs - total,
+      maxNewExtractions: limits.maxNewPerBatch,
+    });
+    // A sub-batch with no new extraction adds nothing the next run would not.
+    if (plan.pairs.length === 0 || plan.newExtractions === 0) break;
+    plans.push(plan);
+    total += plan.pairs.length;
+    plan.articleIds.forEach(id => extracted.add(id));
+    const chosen = new Set(plan.pairs);
+    remaining = remaining.filter(pair => !chosen.has(pair));
+  }
+  return plans;
+}
+
+/** Distinct sources per candidate case, keyed like the pre-cluster. */
+export function sourcesPerCluster(pairs: readonly SemanticCandidatePair[]): ReadonlyMap<string, number> {
+  const sources = new Map<string, Set<string>>();
+  for (const pair of pairs) {
+    const set = sources.get(pair.clusterKey) ?? new Set<string>();
+    set.add(pair.left.sourceId);
+    set.add(pair.right.sourceId);
+    sources.set(pair.clusterKey, set);
+  }
+  return new Map([...sources].map(([key, set]) => [key, set.size]));
+}
+
 function incidentTokens(article: SemanticPreclusterArticle): ReadonlySet<string> {
   const text = [
     article.headline,

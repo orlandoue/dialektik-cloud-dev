@@ -13,7 +13,7 @@ import { generateUlid, parseUlid, setTransactionAuditContext } from "@dialektik/
 import { sql, type Kysely } from "kysely";
 import type { Database } from "@dialektik/database";
 import { LiveSemanticCallBudget } from "./live-semantic-call-budget.js";
-import { controversyScore, hasSpecificHeadlineOverlap } from "./live-semantic-scheduler-prefilter.js";
+import { controversyScore, hasSpecificHeadlineOverlap, hasStrongPairOverlap, isSportsText } from "./live-semantic-scheduler-prefilter.js";
 import { validateAutoScope } from "./live-semantic-auto-guard.js";
 import { CloudflareWorkersAITransport } from "../llm-shadow/llm.cloudflare.js";
 import {
@@ -28,7 +28,8 @@ import { parseLegacyContradictionReview, parseSemanticPromotionDecision, parseSe
 import {
   canAddSemanticPairToClique,
   canJoinSemanticEventGroup,
-  planScheduledSemanticPairs,
+  planSubBatches,
+  sourcesPerCluster,
   publishedEntityCount,
   preclusterLiveSemanticArticles,
 } from "./live-semantic-precluster.js";
@@ -132,6 +133,17 @@ const SCHEDULED_MAX_PAIRS = 8;
  * the shared budget for the case and stance stages that lead to publication.
  */
 export const SCHEDULED_MAX_NEW_EXTRACTIONS = MAX_BATCH;
+/**
+ * Sub-batches chained within one scheduled run. Each records its own run row
+ * (requested_count<=5) and all share the single 25-call budget.
+ */
+export const SCHEDULED_SUB_BATCHES = 2;
+/** Queued pairs above which the batch spacing shortens to drain the day. */
+export const BACKLOG_PAIRS_THRESHOLD = 15;
+/** Spacing while a backlog of strong pairs remains. */
+const GAP_WITH_BACKLOG_MS = 15 * 60 * 1000;
+/** Pairs whose newest item is within this window are evaluated first. */
+const FRESH_PAIR_WINDOW_MS = 18 * 60 * 60 * 1000;
 const SCHEDULER_STARTUP_DELAY_MS = 15_000;
 /** Each tick only checks the shared database guard; it spends nothing by itself. */
 const SCHEDULER_TICK_MS = 5 * 60 * 1000;
@@ -156,6 +168,8 @@ export interface SemanticRunSummary {
   readonly candidateArticles: number;
   readonly candidatePairs: number;
   readonly pairsEvaluated: number;
+  readonly pairsDeferred: number;
+  readonly subBatches: number;
   readonly articlesSelected: number;
   readonly articlesProcessed: number;
   readonly modelCalls: number;
@@ -366,10 +380,16 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
    * retried sooner; at startup a short guard lets a deploy run right away
    * while still stopping a crash loop from spending repeatedly.
    */
-  static minimumGapMs(trigger: SchedulerTrigger, lastRunPublished: boolean): number {
+  static minimumGapMs(trigger: SchedulerTrigger, lastRunPublished: boolean, queuedPairs = 0): number {
     if (trigger === 'startup') return GAP_AT_STARTUP_MS;
+    // A queue of strong pairs drains every 15 minutes; each batch keeps its
+    // own 25-call budget, and a tick with nothing pending spends nothing.
+    if (queuedPairs > BACKLOG_PAIRS_THRESHOLD) return GAP_WITH_BACKLOG_MS;
     return lastRunPublished ? GAP_AFTER_PUBLISHING_MS : GAP_AFTER_EMPTY_MS;
   }
+
+  /** Strong pairs left for later by the last planned batch. */
+  private queuedPairs = 0;
 
   private skip(trigger: SchedulerTrigger, status: string): string {
     this.lastSkip={at:new Date().toISOString(),trigger,status};
@@ -403,7 +423,7 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
                 where d.decision='APPROVED' and d.decided_at>=r.started_at) as published
             from public.live_semantic_production_runs r order by r.started_at desc limit 1`.execute(connection);
           const previous=last.rows[0];
-          if(previous && previous.elapsedMs < LiveSemanticProductionService.minimumGapMs(trigger,previous.published))
+          if(previous && previous.elapsedMs < LiveSemanticProductionService.minimumGapMs(trigger,previous.published,this.queuedPairs))
             return this.skip(trigger,'RECENT_SEMANTIC_RUN');
         }
         const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean}>`
@@ -429,19 +449,39 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
         const clustered=preclusterLiveSemanticArticles(proposals,targetDay);
         const withPending=clustered.filter(pair=>pendingIds.has(pair.left.articleId) || pendingIds.has(pair.right.articleId));
         count('PAIR_ALREADY_ANALYZED',clustered.length-withPending.length);
-        const overlapping=withPending.filter(pair=>hasSpecificHeadlineOverlap(pair.left.headline,pair.right.headline));
-        count('PAIR_HEADLINES_TOO_GENERIC',withPending.length-overlapping.length);
-        const pairs=overlapping.map(pair=>({pair,
-            coverage:publishedEntityCount(pair,publishedTitles),
-            tension:controversyScore(pair.left.headline,excerpts.get(pair.left.articleId) ?? '',pair.right.headline,excerpts.get(pair.right.articleId) ?? ''),
-            newest:Math.max(pair.left.publishedAt.getTime(),pair.right.publishedAt.getTime()),
-          })).sort((a,b)=>a.coverage-b.coverage || b.tension-a.tension || b.newest-a.newest).map(item=>item.pair);
-        const plan=planScheduledSemanticPairs(pairs,pendingIds,{maxPairs:SCHEDULED_MAX_PAIRS,maxNewExtractions:SCHEDULED_MAX_NEW_EXTRACTIONS});
-        count('PAIR_DEFERRED_TO_NEXT_BATCH',pairs.length-plan.pairs.length);
+        const text=(id:string,headline:string)=>`${headline} ${excerpts.get(id) ?? ''}`;
+        // A sports item and a non-sports item are never the same case; the
+        // promotion guard would reject them after spending model calls.
+        const sameDomain=withPending.filter(pair=>
+          isSportsText(text(pair.left.articleId,pair.left.headline))===isSportsText(text(pair.right.articleId,pair.right.headline)));
+        count('PAIR_SPORTS_MISMATCH',withPending.length-sameDomain.length);
+        const generic=sameDomain.filter(pair=>!hasSpecificHeadlineOverlap(pair.left.headline,pair.right.headline));
+        count('PAIR_HEADLINES_TOO_GENERIC',generic.length);
+        const overlapping=sameDomain.filter(pair=>hasStrongPairOverlap(
+          pair.left.headline,excerpts.get(pair.left.articleId) ?? '',pair.right.headline,excerpts.get(pair.right.articleId) ?? ''));
+        count('PAIR_OVERLAP_TOO_WEAK',sameDomain.length-generic.length-overlapping.length);
+        const clusterSources=sourcesPerCluster(clustered);
+        const nowMs=Date.now();
+        const pairs=overlapping.map(pair=>{
+            const newest=Math.max(pair.left.publishedAt.getTime(),pair.right.publishedAt.getTime());
+            return {pair,newest,
+              fresh:nowMs-newest<=FRESH_PAIR_WINDOW_MS ? 0 : 1,
+              // One side already extracted, or a case three media cover.
+              priority:!pendingIds.has(pair.left.articleId) || !pendingIds.has(pair.right.articleId) || (clusterSources.get(pair.clusterKey) ?? 0)>=3 ? 0 : 1,
+              coverage:publishedEntityCount(pair,publishedTitles),
+              tension:controversyScore(pair.left.headline,excerpts.get(pair.left.articleId) ?? '',pair.right.headline,excerpts.get(pair.right.articleId) ?? ''),
+            };
+          }).sort((a,b)=>a.fresh-b.fresh || a.priority-b.priority || a.coverage-b.coverage || b.tension-a.tension || b.newest-a.newest).map(item=>item.pair);
+        const plans=planSubBatches(pairs,pendingIds,{maxPairs:SCHEDULED_MAX_PAIRS,maxNewPerBatch:SCHEDULED_MAX_NEW_EXTRACTIONS,batches:SCHEDULED_SUB_BATCHES});
+        const subBatches=plans.map(item=>item.articleIds);
+        const plan={pairs:plans.flatMap(item=>item.pairs),articleIds:[...new Set(subBatches.flat())]};
+        const deferred=pairs.length-plan.pairs.length;
+        count('PAIR_DEFERRED_TO_NEXT_BATCH',deferred);
+        this.queuedPairs=deferred;
         const summary=(status:string,extra:Partial<SemanticRunSummary>={}):SemanticRunSummary=>({
           trigger,startedAt,finishedAt:new Date().toISOString(),status,targetDay,
           candidateArticles:candidates.rows.length,candidatePairs:clustered.length,
-          pairsEvaluated:plan.pairs.length,articlesSelected:plan.articleIds.length,articlesProcessed:0,modelCalls:0,
+          pairsEvaluated:plan.pairs.length,pairsDeferred:deferred,subBatches:0,articlesSelected:plan.articleIds.length,articlesProcessed:0,modelCalls:0,
           eventGroupsFormed:0,eventsPromoted:0,contrastsPromoted:0,skipOrRejectReasons:{...reasons},...extra,
         });
         const tally=new AutoPromotionTally();
@@ -451,7 +491,7 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
           const promoted=await this.autoPromoteRun(connection,runId,process.env.SYSTEM_AUTO_EDITOR_ID ?? '01M4YDQK00ED1T0R0R1AND0VE1',configSha,tally,windowStart.toISOString().slice(0,10));
           this.logger.log(`Semantic automatic promotions: ${promoted}`);
         };
-        if(plan.articleIds.length<2) {
+        if(subBatches.length===0) {
           // Nothing new to spend on, but earlier groups may now be complete.
           await promoteWindow(null);
           for (const [code,n] of Object.entries(tally.reasons)) count(code,n);
@@ -462,30 +502,38 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
           return this.skip(trigger,'NO_PENDING_MULTISOURCE_PAIRS');
         }
         const budget=new LiveSemanticCallBudget(SCHEDULED_CALL_BUDGET);
-        // The pending query is also capped at MAX_BATCH, so the run row always
-        // satisfies requested_count<=5 even if the plan saw fewer pending.
-        const result=await this.runLocked(connection,actor,targetDay,MAX_BATCH,configSha,[...plan.articleIds],budget);
-        const runId='runId' in result && result.runId ? result.runId : null;
-        if (runId) await promoteWindow(runId);
-        const details=result as Partial<{processed:number;extracted:number;insufficientEvidence:number;rejectedOrUnavailable:number;pairAssessments:number;providerHalted:boolean}>;
-        count('ARTICLE_NO_CLAIM_WORTHY_CONTENT',details.insufficientEvidence ?? 0);
-        count('ARTICLE_REJECTED_OR_UNAVAILABLE',details.rejectedOrUnavailable ?? 0);
-        if(details.providerHalted) count('PROVIDER_HALTED');
-        if(!budget.available && !details.providerHalted) count('CALL_BUDGET_EXHAUSTED');
+        type RunDetails=Partial<{runId:string;status:string;extracted:number;insufficientEvidence:number;rejectedOrUnavailable:number;pairAssessments:number;providerHalted:boolean}>;
+        const results:RunDetails[]=[];
+        for (const ids of subBatches) {
+          if(!budget.available) break;
+          // Each sub-batch caps its pending query at MAX_BATCH, so its run row
+          // always satisfies requested_count<=5.
+          results.push(await this.runLocked(connection,actor,targetDay,MAX_BATCH,configSha,[...ids],budget) as RunDetails);
+        }
+        const runIds=results.flatMap(r=>r.runId ? [r.runId] : []);
+        await promoteWindow(runIds.at(-1) ?? null);
+        const sum=(key:'extracted'|'insufficientEvidence'|'rejectedOrUnavailable'|'pairAssessments')=>results.reduce((t,r)=>t+(r[key] ?? 0),0);
+        count('ARTICLE_NO_CLAIM_WORTHY_CONTENT',sum('insufficientEvidence'));
+        count('ARTICLE_REJECTED_OR_UNAVAILABLE',sum('rejectedOrUnavailable'));
+        const halted=results.some(r=>r.providerHalted);
+        if(halted) count('PROVIDER_HALTED');
+        if(!budget.available && !halted) count('CALL_BUDGET_EXHAUSTED');
         let groups=0;
-        if(runId) {
-          const formed=await sql<{n:number}>`select count(*)::int as n from public.live_semantic_event_group_candidates where origin_run_id=${runId}::dialektik_ulid`.execute(connection);
+        if(runIds.length>0) {
+          const formed=await sql<{n:number}>`select count(*)::int as n from public.live_semantic_event_group_candidates where origin_run_id::text=any(${runIds}::text[])`.execute(connection);
           groups=formed.rows[0]?.n ?? 0;
-          count('PAIR_NOT_SAME_EVENT',Math.max(0,(details.pairAssessments ?? 0)-groups));
+          count('PAIR_NOT_SAME_EVENT',Math.max(0,sum('pairAssessments')-groups));
         }
         for (const [code,n] of Object.entries(tally.reasons)) count(code,n);
-        this.lastRun=summary(result.status,{
-          articlesProcessed:(details.extracted ?? 0)+(details.insufficientEvidence ?? 0),
+        const status=results.at(-1)?.status ?? 'NO_PENDING_ARTICLES';
+        this.lastRun=summary(status,{
+          subBatches:results.length,
+          articlesProcessed:sum('extracted')+sum('insufficientEvidence'),
           modelCalls:budget.used,eventGroupsFormed:groups,
           eventsPromoted:tally.events,contrastsPromoted:tally.contrasts,skipOrRejectReasons:{...reasons},
         });
         this.logger.log(`Semantic scheduled model calls: ${budget.used}/${SCHEDULED_CALL_BUDGET}`);
-        return result.status;
+        return status;
       } finally {await sql`select pg_advisory_unlock(hashtextextended(${'dialektik-live-semantic:'+targetDay},0))`.execute(connection);}
       } finally {await sql`select pg_advisory_unlock(hashtextextended('dialektik-live-semantic-automation',0))`.execute(connection);}
     });
