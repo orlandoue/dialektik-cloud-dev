@@ -8,6 +8,7 @@ import { CoreDatabaseService } from '../database/core-database.service.js';
 import {
   PrivateBetaAuthGuard,
   PrivateBetaAuthorizationService,
+  privateBetaOpenEnrollment,
 } from './private-beta-auth.guard.js';
 import { PrivateBetaTesterRepository } from './private-beta-tester.repository.js';
 import { SupabaseJwtVerifier } from './supabase-jwt-verifier.js';
@@ -26,7 +27,7 @@ const providers: Provider[] = [
     useFactory: (
       verifier: SupabaseJwtVerifier,
       testers: PrivateBetaTesterRepository,
-    ) => new PrivateBetaAuthorizationService(verifier, testers),
+    ) => new PrivateBetaAuthorizationService(verifier, testers, privateBetaOpenEnrollment()),
   },
   PrivateBetaAuthGuard,
 ];

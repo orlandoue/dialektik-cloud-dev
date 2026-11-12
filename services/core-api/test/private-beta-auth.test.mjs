@@ -7,7 +7,7 @@ import {
   InvalidSupabaseAccessTokenError,
   SupabaseJwtVerifier,
 } from '../dist/private-beta/supabase-jwt-verifier.js';
-import { PrivateBetaAuthorizationService } from '../dist/private-beta/private-beta-auth.guard.js';
+import { PrivateBetaAuthorizationService, privateBetaOpenEnrollment } from '../dist/private-beta/private-beta-auth.guard.js';
 
 const issuer = 'https://example-project.supabase.co/auth/v1';
 const subject = '2f0db489-178a-4fe0-9e6a-0e69f1d8be5c';
@@ -85,4 +85,30 @@ test('valid identity is denied until enabled and is denied immediately after rev
   await assert.doesNotReject(authorization.authorize(await token()));
   enabled = false;
   await assert.rejects(authorization.authorize(await token()), InvalidSupabaseAccessTokenError);
+});
+
+test('open enrollment admits any verified account except those the owner blocked', async () => {
+  const statuses = new Map();
+  const testers = {
+    isEnabledTester: async () => { throw new Error('closed-mode lookup must not run'); },
+    testerStatus: async (id) => statuses.get(id) ?? 'absent',
+  };
+  const authorization = new PrivateBetaAuthorizationService(verifier(), testers, true);
+  // A brand-new Google or email account is admitted without being listed.
+  assert.equal(await authorization.authorize(await token()), subject);
+  statuses.set(subject, 'enabled');
+  assert.equal(await authorization.authorize(await token()), subject);
+  // Disabling or revoking the row still blocks the account.
+  statuses.set(subject, 'blocked');
+  await assert.rejects(authorization.authorize(await token()), InvalidSupabaseAccessTokenError);
+  // Anonymous and forged tokens never pass, open enrollment or not.
+  await assert.rejects(authorization.authorize(await token({ is_anonymous: true })), InvalidSupabaseAccessTokenError);
+  await assert.rejects(authorization.authorize('not-a-jwt'), InvalidSupabaseAccessTokenError);
+});
+
+test('open enrollment is on by default and turned off by an explicit false', () => {
+  assert.equal(privateBetaOpenEnrollment({}), true);
+  assert.equal(privateBetaOpenEnrollment({ DIALEKTIK_PRIVATE_BETA_OPEN_ENROLLMENT: 'true' }), true);
+  assert.equal(privateBetaOpenEnrollment({ DIALEKTIK_PRIVATE_BETA_OPEN_ENROLLMENT: 'false' }), false);
+  assert.equal(privateBetaOpenEnrollment({ DIALEKTIK_PRIVATE_BETA_OPEN_ENROLLMENT: ' FALSE ' }), false);
 });

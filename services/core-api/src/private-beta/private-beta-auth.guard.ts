@@ -15,17 +15,31 @@ import {
 } from './supabase-jwt-verifier.js';
 import { PrivateBetaTesterRepository } from './private-beta-tester.repository.js';
 
+/** Open enrollment is on unless DIALEKTIK_PRIVATE_BETA_OPEN_ENROLLMENT=false. */
+export function privateBetaOpenEnrollment(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.DIALEKTIK_PRIVATE_BETA_OPEN_ENROLLMENT?.trim().toLowerCase() !== 'false';
+}
+
 export class PrivateBetaAuthorizationService {
+  /**
+   * With open enrollment, any verified, non-anonymous Supabase account is
+   * allowed unless the owner blocked it in private_beta_testers (disabled or
+   * revoked). Without it, only listed and enabled accounts are allowed.
+   */
   constructor(
     private readonly verifier: SupabaseJwtVerifier,
-    private readonly testers: PrivateBetaTesterRepository,
+    private readonly testers: Pick<PrivateBetaTesterRepository, 'isEnabledTester'> &
+      Partial<Pick<PrivateBetaTesterRepository, 'testerStatus'>>,
+    private readonly openEnrollment = false,
   ) {}
 
   async authorize(token: string): Promise<string> {
     const identity = await this.verifier.verify(token);
     let allowed: boolean;
     try {
-      allowed = await this.testers.isEnabledTester(identity.sub);
+      allowed = this.openEnrollment && this.testers.testerStatus
+        ? (await this.testers.testerStatus(identity.sub)) !== 'blocked'
+        : await this.testers.isEnabledTester(identity.sub);
     } catch {
       throw new ServiceUnavailableException('Private beta authorization is unavailable.');
     }
