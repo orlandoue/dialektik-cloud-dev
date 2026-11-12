@@ -314,4 +314,33 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  testWidgets('community entries are signed with the account alias', (
+    WidgetTester tester,
+  ) async {
+    final ArenaFullCore core = ArenaFullCore();
+    await pumpArena(
+      tester,
+      core,
+      initialTab: ArenaTab.vs,
+      account: FakeArenaAccount(alias: 'Ana P.'),
+    );
+    await tester.tap(find.text(duelTitle));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('arena-vote-button')));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Abrir comunidad del caso'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Abrir comunidad del caso'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Debate')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const Key('arena-community-input')),
+      'Lo leo como distinto enfoque.',
+    );
+    await tester.tap(find.byKey(const Key('arena-community-send')));
+    await tester.pumpAndSettle();
+    expect(core.aliases, <String?>['Ana P.']);
+  });
 }

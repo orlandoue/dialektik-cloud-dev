@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_home_tab.dart';
 import 'package:dialektik/features/arena/presentation/arena_tabs.dart';
@@ -27,6 +28,7 @@ class ArenaShell extends StatefulWidget {
     this.externalLinkOpener = openExternalHttpLink,
     this.initialTab = ArenaTab.inicio,
     this.extraActions = const <Widget>[],
+    this.account,
     this.onOpenAdmin,
     this.includeSource,
     this.offerWelcomeRadar = true,
@@ -41,6 +43,9 @@ class ArenaShell extends StatefulWidget {
   final ExternalLinkOpener externalLinkOpener;
   final ArenaTab initialTab;
   final List<Widget> extraActions;
+
+  /// The signed-in reader, when the shell creates its own store.
+  final ArenaAccount? account;
   final VoidCallback? onOpenAdmin;
   final bool Function(LiveSourceDto)? includeSource;
   final bool offerWelcomeRadar;
@@ -56,6 +61,7 @@ class _ArenaShellState extends State<ArenaShell> {
         consumer: widget.consumer,
         live: widget.live,
         openLink: widget.externalLinkOpener,
+        account: widget.account,
       );
   late ArenaTab _tab = widget.initialTab;
   late final Set<ArenaTab> _built = <ArenaTab>{widget.initialTab};

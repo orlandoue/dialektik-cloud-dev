@@ -1,6 +1,7 @@
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
 import 'package:dialektik/design_system/theme/dialektik_theme.dart';
+import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_client.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
@@ -45,6 +46,7 @@ class DialektikApp extends StatefulWidget {
     this.externalLinkOpener = openExternalHttpLink,
     this.initialRoute = ConsumerRoutes.feed,
     this.arenaEnabled = true,
+    this.account,
     this.locale,
     super.key,
   });
@@ -70,6 +72,9 @@ class DialektikApp extends StatefulWidget {
 
   /// Shows «Dialektik Arena» with its bottom navigation as the reader home.
   final bool arenaEnabled;
+
+  /// The signed-in reader, provided by the sign-in screen.
+  final ArenaAccount? account;
   final Locale? locale;
 
   @override
@@ -223,6 +228,7 @@ final class _DialektikAppState extends State<DialektikApp> {
             _ownedPersonalOwnerTestShadowClient,
         additionalNavigationActions: widget.betaNavigationActions,
         arenaEnabled: widget.arenaEnabled,
+        account: widget.account,
       );
     }
   }

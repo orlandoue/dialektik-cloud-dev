@@ -130,6 +130,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             body: body,
             articleId: _attached?.id,
             link: _attachedLink,
+            alias: store.alias,
           ),
         );
       } else {

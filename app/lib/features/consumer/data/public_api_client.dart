@@ -112,9 +112,9 @@ final class PublicApiClient
     '/v1/social/community', query: {'event_id': eventId},
     decoder: CommunityEntry.listFromJson, refresh: true, requestToken: null);
   @override
-  Future<List<CommunityEntry>> addCommunityEntry(String eventId, {required CommunityChannel channel, required String body, String? articleId, Uri? link}) =>
+  Future<List<CommunityEntry>> addCommunityEntry(String eventId, {required CommunityChannel channel, required String body, String? articleId, Uri? link, String? alias}) =>
     _postJson('/v1/social/community', {'event_id': eventId, 'channel': channel.wire, 'body': body,
-      'article_id': ?articleId, 'link_url': ?link?.toString()}, CommunityEntry.listFromJson);
+      'article_id': ?articleId, 'link_url': ?link?.toString(), 'alias': ?alias}, CommunityEntry.listFromJson);
   @override
   Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote) =>
     _postJson('/v1/social/community/votes', {'entry_id': entryId, 'vote': vote}, CommunityEntry.listFromJson);

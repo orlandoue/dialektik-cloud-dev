@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_shell.dart';
 import 'package:dialektik/features/arena/presentation/living_event_screen.dart';
@@ -93,16 +94,21 @@ final class ConsumerRouteFactory {
     this.personalOwnerTestShadowRepository,
     this.additionalNavigationActions = const <Widget>[],
     this.arenaEnabled = true,
+    this.account,
   });
 
   /// Mounts «Dialektik Arena» (five bottom tabs) as the reader's home.
   /// The classic top-tab reader stays available for explicit opt-out.
   final bool arenaEnabled;
+
+  /// The signed-in reader, shown in Perfil and used as community alias.
+  final ArenaAccount? account;
   ArenaStore? _arenaStore;
   ArenaStore _arena(LiveNewsRepository live) => _arenaStore ??= ArenaStore(
     consumer: repository,
     live: live,
     openLink: externalLinkOpener,
+    account: account,
   );
   static const Map<String, ArenaTab> _arenaTabs = <String, ArenaTab>{
     ConsumerRoutes.feed: ArenaTab.inicio,

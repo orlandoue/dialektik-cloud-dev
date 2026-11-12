@@ -278,9 +278,14 @@ void main() {
             return _emptyPage();
           }
           if (request.url.path == '/v1/feed/blindspots' && testerEnabled) {
-            return http.Response('{"items":[],"next_cursor":null,"total":0,"followed_source_count":0}', 200);
+            return http.Response(
+              '{"items":[],"next_cursor":null,"total":0,"followed_source_count":0}',
+              200,
+            );
           }
-          if ((request.url.path == '/v1/feed' || request.url.path == '/live/observations/chile/seismic') && testerEnabled) {
+          if ((request.url.path == '/v1/feed' ||
+                  request.url.path == '/live/observations/chile/seismic') &&
+              testerEnabled) {
             return _emptyPage();
           }
           if (request.url.path == '/v1/contradictions' && testerEnabled) {
@@ -321,7 +326,10 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(coreRequests.any((request) => request.url.path == '/v1/feed'), isTrue);
+    expect(
+      coreRequests.any((request) => request.url.path == '/v1/feed'),
+      isTrue,
+    );
 
     testerEnabled = true;
     await _signIn(tester);
@@ -329,7 +337,7 @@ void main() {
     expect(find.text('Beta privada'), findsNothing);
   });
 
-  testWidgets('Arena: sign out lives in Perfil and returns to login', (
+  testWidgets('Arena: the Perfil account card signs out and returns to login', (
     WidgetTester tester,
   ) async {
     tester.view.physicalSize = const Size(390, 844);
@@ -382,8 +390,11 @@ void main() {
 
     await tester.tap(find.descendant(of: bar, matching: find.text('Perfil')));
     await tester.pumpAndSettle();
-    final Finder signOut = find.byTooltip('Cerrar sesión');
+    // In the Arena, sign-out lives in the account card at the top of Perfil.
+    expect(find.byTooltip('Cerrar sesión'), findsNothing);
+    final Finder signOut = find.byKey(const Key('arena-account-sign-out'));
     expect(signOut, findsOneWidget);
+    expect(find.text('tester'), findsOneWidget);
     await tester.tap(signOut);
     await tester.pumpAndSettle();
     expect(find.text('Beta privada'), findsOneWidget);
@@ -482,13 +493,17 @@ PrivateBetaGate _gate({
 );
 
 Future<void> _signIn(WidgetTester tester) async {
-  final List<Finder> fields = <Finder>[
-    find.byType(TextFormField).first,
-    find.byType(TextFormField).last,
-  ];
-  await tester.enterText(fields[0], 'tester@example.test');
-  await tester.enterText(fields[1], 'test-only-password');
-  await tester.tap(find.text('Iniciar sesión'));
+  await tester.enterText(
+    find.byKey(const Key('login-email')),
+    'tester@example.test',
+  );
+  await tester.enterText(
+    find.byKey(const Key('login-password')),
+    'test-only-password',
+  );
+  await tester.ensureVisible(find.byKey(const Key('login-submit')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.byKey(const Key('login-submit')));
   await tester.pumpAndSettle();
 }
 

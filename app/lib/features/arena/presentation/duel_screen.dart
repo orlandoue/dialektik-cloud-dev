@@ -1047,6 +1047,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
           channel: CommunityChannel.aporte,
           body: note,
           link: uri,
+          alias: widget.store.alias,
         ),
       );
       if (!mounted) return;

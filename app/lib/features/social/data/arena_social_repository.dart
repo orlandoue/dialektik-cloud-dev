@@ -107,6 +107,9 @@ abstract interface class ArenaSocialRepository {
     required String body,
     String? articleId,
     Uri? link,
+
+    /// Public alias; Core derives a pseudonym when it is null.
+    String? alias,
   });
   Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote);
 }
