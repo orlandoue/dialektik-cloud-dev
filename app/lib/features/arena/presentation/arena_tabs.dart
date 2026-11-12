@@ -1,7 +1,9 @@
 import 'dart:async';
 
+import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
+import 'package:dialektik/features/arena/presentation/account_card.dart';
 import 'package:dialektik/features/arena/presentation/arena_home_tab.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
@@ -672,6 +674,11 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
+                    if (store.account
+                        case final ArenaAccount account) ...<Widget>[
+                      ArenaAccountCard(account: account),
+                      const SizedBox(height: 12),
+                    ],
                     ArenaCard(
                       child: Wrap(
                         alignment: WrapAlignment.spaceAround,

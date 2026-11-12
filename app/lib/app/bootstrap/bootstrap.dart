@@ -1,3 +1,4 @@
+import 'package:app_links/app_links.dart';
 import 'package:dialektik/app/dialektik_app.dart';
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
@@ -127,6 +128,8 @@ void bootstrap() {
           'DIALEKTIK_NEWS_READER_ENABLED',
           defaultValue: false,
         ),
+        // Google sign-in returns to the app through this deep link.
+        deepLinks: AppLinks().uriLinkStream,
       ),
     );
     return;

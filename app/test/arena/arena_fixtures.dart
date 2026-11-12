@@ -1,3 +1,4 @@
+import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/presentation/arena_shell.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
@@ -398,6 +399,7 @@ class ArenaFullCore extends ArenaFakeCore implements ArenaSocialRepository {
   };
   String? myPosition;
   final List<String?> positionVoteCalls = <String?>[];
+  final List<String?> aliases = <String?>[];
   int _nextId = 10;
   List<CommunityEntry> entries = <CommunityEntry>[
     CommunityEntry(
@@ -462,7 +464,9 @@ class ArenaFullCore extends ArenaFakeCore implements ArenaSocialRepository {
     required String body,
     String? articleId,
     Uri? link,
+    String? alias,
   }) async {
+    aliases.add(alias);
     entries = <CommunityEntry>[
       CommunityEntry(
         id: 'e${_nextId++}',
@@ -741,6 +745,26 @@ class ArenaManyDuelsCore extends ArenaFullCore {
   }) async => _event(int.parse(eventId.substring(eventId.length - 2)));
 }
 
+/// A signed-in reader for tests.
+class FakeArenaAccount extends ArenaAccount {
+  FakeArenaAccount({this.alias = 'Ana P.', this.email = 'ana@example.test'});
+
+  @override
+  String alias;
+  @override
+  final String? email;
+  int signOuts = 0;
+
+  @override
+  Future<void> updateAlias(String value) async {
+    alias = value;
+    notifyListeners();
+  }
+
+  @override
+  Future<void> signOut() async => signOuts++;
+}
+
 /// Mounts the Arena on a phone-sized surface with the requested text scale.
 Future<List<Uri>> pumpArena(
   WidgetTester tester,
@@ -749,6 +773,7 @@ Future<List<Uri>> pumpArena(
   Size size = const Size(390, 844),
   ArenaTab initialTab = ArenaTab.inicio,
   List<Widget> extraActions = const <Widget>[],
+  ArenaAccount? account,
 }) async {
   tester.view.physicalSize = size;
   tester.view.devicePixelRatio = 1;
@@ -768,6 +793,7 @@ Future<List<Uri>> pumpArena(
         live: core,
         initialTab: initialTab,
         extraActions: extraActions,
+        account: account,
         offerWelcomeRadar: false,
         externalLinkOpener: (Uri uri) async {
           opened.add(uri);

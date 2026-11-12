@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
@@ -90,6 +91,7 @@ final class ArenaStore extends ChangeNotifier {
     required this.consumer,
     required this.live,
     this.openLink = openExternalHttpLink,
+    this.account,
   }) {
     following?.followingChanges.addListener(_followsChanged);
   }
@@ -97,6 +99,12 @@ final class ArenaStore extends ChangeNotifier {
   final ConsumerRepository consumer;
   final LiveNewsRepository live;
   final ExternalLinkOpener openLink;
+
+  /// The signed-in reader, when the app runs behind the sign-in screen.
+  final ArenaAccount? account;
+
+  /// Alias sent with community entries; null lets Core derive one.
+  String? get alias => account?.alias;
 
   static const String _savedKey = 'dialektik_arena_saved';
 
