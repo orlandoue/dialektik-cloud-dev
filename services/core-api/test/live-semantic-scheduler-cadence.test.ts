@@ -5,7 +5,7 @@ import {
   type SemanticCandidatePair,
   type SemanticPreclusterArticle,
 } from '../src/semantic/live-semantic-precluster.js';
-import { AutoPromotionTally, LiveSemanticProductionService } from '../src/semantic/live-semantic-production.service.js';
+import { AutoPromotionTally, LiveSemanticProductionService, SCHEDULED_MAX_NEW_EXTRACTIONS } from '../src/semantic/live-semantic-production.service.js';
 
 const article = (id: string, source: string, headline: string): SemanticPreclusterArticle => ({
   articleId: id, sourceId: source, publishedAt: new Date('2026-11-11T12:00:00Z'), headline,
@@ -21,18 +21,25 @@ describe('scheduled batch planning', () => {
     article(`b${i}`, 'video', `${name} responde por el caso ante la prensa`),
   ));
 
-  it('evaluates up to eight distinct pairs, not two', () => {
-    const plan = planScheduledSemanticPairs(pairs, new Set(pairs.map(p => p.left.articleId)), { maxPairs: 8, maxNewExtractions: 12 });
-    expect(plan.pairs).toHaveLength(8);
-    expect(plan.newExtractions).toBe(8);
-    expect(plan.articleIds).toHaveLength(16);
+  it('respects the runs table: at most five new extractions per batch', () => {
+    // live_semantic_production_runs.requested_count is checked 1..5.
+    expect(SCHEDULED_MAX_NEW_EXTRACTIONS).toBe(5);
   });
 
-  it('caps new extractions so assessments keep budget', () => {
+  it('evaluates up to eight distinct pairs when articles are already extracted', () => {
+    // One new article per pair: five pairs fit in five extractions.
+    const plan = planScheduledSemanticPairs(pairs, new Set(pairs.map(p => p.left.articleId)), { maxPairs: 8, maxNewExtractions: SCHEDULED_MAX_NEW_EXTRACTIONS });
+    expect(plan.pairs).toHaveLength(5);
+    expect(plan.newExtractions).toBe(5);
+    // With more budget the same planner reaches the pair cap.
+    expect(planScheduledSemanticPairs(pairs, new Set(pairs.map(p => p.left.articleId)), { maxPairs: 8, maxNewExtractions: 12 }).pairs).toHaveLength(8);
+  });
+
+  it('never plans more new extractions than the cap', () => {
     const allNew = new Set(pairs.flatMap(p => [p.left.articleId, p.right.articleId]));
-    const plan = planScheduledSemanticPairs(pairs, allNew, { maxPairs: 8, maxNewExtractions: 12 });
-    expect(plan.newExtractions).toBeLessThanOrEqual(12);
-    expect(plan.pairs).toHaveLength(6);
+    const plan = planScheduledSemanticPairs(pairs, allNew, { maxPairs: 8, maxNewExtractions: SCHEDULED_MAX_NEW_EXTRACTIONS });
+    expect(plan.newExtractions).toBeLessThanOrEqual(5);
+    expect(plan.pairs).toHaveLength(2);
   });
 
   it('reuses an extracted article for free and prefers distinct topics first', () => {

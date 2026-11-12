@@ -126,8 +126,12 @@ interface ReviewGroupRow {
 /** One scheduled batch: at most 25 Workers AI calls shared by every stage. */
 const SCHEDULED_CALL_BUDGET = 25;
 const SCHEDULED_MAX_PAIRS = 8;
-/** Extraction calls are capped so case and stance assessments keep budget. */
-const SCHEDULED_MAX_NEW_EXTRACTIONS = 12;
+/**
+ * New extractions per batch. live_semantic_production_runs.requested_count
+ * is constrained to 1..5 (migration 058), and the cap also leaves most of
+ * the shared budget for the case and stance stages that lead to publication.
+ */
+export const SCHEDULED_MAX_NEW_EXTRACTIONS = MAX_BATCH;
 const SCHEDULER_STARTUP_DELAY_MS = 15_000;
 /** Each tick only checks the shared database guard; it spends nothing by itself. */
 const SCHEDULER_TICK_MS = 5 * 60 * 1000;
@@ -458,7 +462,9 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
           return this.skip(trigger,'NO_PENDING_MULTISOURCE_PAIRS');
         }
         const budget=new LiveSemanticCallBudget(SCHEDULED_CALL_BUDGET);
-        const result=await this.runLocked(connection,actor,targetDay,plan.articleIds.length,configSha,[...plan.articleIds],budget);
+        // The pending query is also capped at MAX_BATCH, so the run row always
+        // satisfies requested_count<=5 even if the plan saw fewer pending.
+        const result=await this.runLocked(connection,actor,targetDay,MAX_BATCH,configSha,[...plan.articleIds],budget);
         const runId='runId' in result && result.runId ? result.runId : null;
         if (runId) await promoteWindow(runId);
         const details=result as Partial<{processed:number;extracted:number;insufficientEvidence:number;rejectedOrUnavailable:number;pairAssessments:number;providerHalted:boolean}>;
