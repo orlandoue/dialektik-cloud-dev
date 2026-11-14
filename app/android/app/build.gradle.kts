@@ -12,6 +12,11 @@ val releaseKeyPassword = providers.environmentVariable("DIALEKTIK_ANDROID_KEY_PA
 val releaseSigningReady = listOf(
     releaseStorePath, releaseStorePassword, releaseKeyAlias, releaseKeyPassword
 ).all { !it.isNullOrBlank() }
+// Beta builds shared by hand (not the store) may be signed with the debug key,
+// but only on explicit request: an unset key never silently falls back to it.
+val betaDebugSignedRelease = providers.environmentVariable(
+    "DIALEKTIK_ANDROID_BETA_DEBUG_SIGNING"
+).orNull == "true"
 
 android {
     namespace = "com.dialektik.dialektik"
@@ -53,6 +58,8 @@ android {
         release {
             if (releaseSigningReady) {
                 signingConfig = signingConfigs.getByName("dialektikRelease")
+            } else if (betaDebugSignedRelease) {
+                signingConfig = signingConfigs.getByName("debug")
             }
         }
     }
@@ -63,11 +70,11 @@ flutter {
 }
 
 // A production build must never silently fall back to a debug or unsigned key.
-if (!releaseSigningReady) {
+if (!releaseSigningReady && !betaDebugSignedRelease) {
     tasks.configureEach {
         if (name.contains("Release", ignoreCase = true)) {
             doFirst {
-                throw GradleException("Android release signing requires DIALEKTIK_ANDROID_KEYSTORE_PATH, DIALEKTIK_ANDROID_KEYSTORE_PASSWORD, DIALEKTIK_ANDROID_KEY_ALIAS and DIALEKTIK_ANDROID_KEY_PASSWORD.")
+                throw GradleException("Android release signing requires DIALEKTIK_ANDROID_KEYSTORE_PATH, DIALEKTIK_ANDROID_KEYSTORE_PASSWORD, DIALEKTIK_ANDROID_KEY_ALIAS and DIALEKTIK_ANDROID_KEY_PASSWORD (or DIALEKTIK_ANDROID_BETA_DEBUG_SIGNING=true for a hand-shared beta).")
             }
         }
     }

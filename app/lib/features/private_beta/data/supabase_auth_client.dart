@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:math';
 
 import 'package:crypto/crypto.dart';
+import 'package:dialektik/features/private_beta/data/auth_session_store.dart';
 import 'package:http/http.dart' as http;
 
 final class SupabaseAuthFailure implements Exception {
@@ -45,6 +46,23 @@ final class SupabaseAuthUser {
   final String? email;
   final String? alias;
   final String? displayName;
+
+  Map<String, Object?> _toStored() => <String, Object?>{
+    'email': email,
+    'alias': alias,
+    'display_name': displayName,
+  };
+
+  static SupabaseAuthUser _fromStored(Object? value) {
+    if (value is! Map<String, Object?>) return const SupabaseAuthUser();
+    String? text(Object? candidate) =>
+        candidate is String && candidate.isNotEmpty ? candidate : null;
+    return SupabaseAuthUser(
+      email: text(value['email']),
+      alias: text(value['alias']),
+      displayName: text(value['display_name']),
+    );
+  }
 }
 
 /// Public alias accepted by Core: 2-30 letters, digits, spaces or `._-`,
@@ -104,6 +122,41 @@ final class SupabaseAuthSession {
   final DateTime expiresAt;
   final SupabaseAuthUser user;
 
+  /// The device copy: tokens, expiry and the profile shown in Perfil.
+  String toStored() => jsonEncode(<String, Object?>{
+    'version': 1,
+    'access_token': accessToken,
+    'refresh_token': refreshToken,
+    'expires_at': expiresAt.toUtc().toIso8601String(),
+    'user': user._toStored(),
+  });
+
+  /// Reads [toStored]; `null` when the copy is missing fields or corrupt.
+  static SupabaseAuthSession? fromStored(String raw) {
+    try {
+      final Object? value = jsonDecode(raw);
+      if (value is! Map<String, Object?> ||
+          value['version'] != 1 ||
+          value['access_token'] is! String ||
+          value['refresh_token'] is! String ||
+          value['expires_at'] is! String) {
+        return null;
+      }
+      final DateTime? expiresAt = DateTime.tryParse(
+        value['expires_at']! as String,
+      );
+      if (expiresAt == null) return null;
+      return SupabaseAuthSession(
+        accessToken: value['access_token']! as String,
+        refreshToken: value['refresh_token']! as String,
+        expiresAt: expiresAt,
+        user: SupabaseAuthUser._fromStored(value['user']),
+      );
+    } on FormatException {
+      return null;
+    }
+  }
+
   SupabaseAuthSession withUser(SupabaseAuthUser value) => SupabaseAuthSession(
     accessToken: accessToken,
     refreshToken: refreshToken,
@@ -113,7 +166,8 @@ final class SupabaseAuthSession {
 }
 
 /// Minimal Supabase Auth client: password, sign-up, Google (OAuth with PKCE)
-/// and refresh. Sessions exist in memory only.
+/// and refresh. With an [AuthSessionStore] the session (tokens, email and
+/// alias) survives app restarts; see [restoreSession].
 final class SupabaseAuthClient {
   SupabaseAuthClient({
     required String supabaseUrl,
@@ -121,7 +175,9 @@ final class SupabaseAuthClient {
     http.Client? httpClient,
     DateTime Function()? clock,
     this.timeout = const Duration(seconds: 20),
-  }) : _baseUri = Uri.parse(supabaseUrl),
+    AuthSessionStore? sessionStore,
+  }) : _store = sessionStore,
+       _baseUri = Uri.parse(supabaseUrl),
        _httpClient = httpClient ?? http.Client(),
        _ownsClient = httpClient == null,
        _clock = clock ?? DateTime.now {
@@ -140,7 +196,56 @@ final class SupabaseAuthClient {
   final bool _ownsClient;
   final DateTime Function() _clock;
   final Duration timeout;
-  SupabaseAuthSession? _session;
+  final AuthSessionStore? _store;
+  SupabaseAuthSession? _current;
+  Future<void> _writes = Future<void>.value();
+
+  SupabaseAuthSession? get _session => _current;
+
+  /// Every change (sign-in, refresh with a rotated token, alias, sign-out or
+  /// a rejected refresh) is mirrored to the store, in order.
+  set _session(SupabaseAuthSession? value) {
+    _current = value;
+    final AuthSessionStore? store = _store;
+    if (store == null) return;
+    final String? stored = value?.toStored();
+    _writes = _writes
+        .then((_) => store.write(stored))
+        .catchError((Object _) {});
+  }
+
+  /// Completes when the latest session change reached the store.
+  Future<void> get persisted => _writes;
+
+  /// Restores the session saved on the device, renewing the access token with
+  /// the refresh token when it expired. Returns whether a session is ready.
+  /// A refresh the server rejects deletes the saved copy; a network failure
+  /// keeps it so the next request can renew it.
+  Future<bool> restoreSession() async {
+    final AuthSessionStore? store = _store;
+    if (store == null || _current != null) return _current != null;
+    final String? raw;
+    try {
+      raw = await store.read();
+    } on Object {
+      return false;
+    }
+    if (raw == null) return false;
+    final SupabaseAuthSession? saved = SupabaseAuthSession.fromStored(raw);
+    if (saved == null) {
+      _session = null;
+      return false;
+    }
+    _current = saved;
+    try {
+      await currentAccessToken();
+    } on SupabaseAuthNetworkFailure {
+      // Offline: keep the saved session; requests renew it later.
+    } on SupabaseAuthFailure {
+      return false;
+    }
+    return _current != null;
+  }
 
   Future<void> signInWithPassword({
     required String email,
@@ -280,6 +385,16 @@ final class SupabaseAuthClient {
     if (session.expiresAt.isAfter(_clock().add(const Duration(minutes: 1)))) {
       return session.accessToken;
     }
+    // Concurrent requests share one refresh: Supabase rotates the refresh
+    // token, so parallel refreshes would race each other.
+    return _refreshing ??= _refresh(session).whenComplete(() {
+      _refreshing = null;
+    });
+  }
+
+  Future<String?>? _refreshing;
+
+  Future<String?> _refresh(SupabaseAuthSession session) async {
     try {
       final SupabaseAuthSession refreshed = await _tokenRequest(
         'refresh_token',
