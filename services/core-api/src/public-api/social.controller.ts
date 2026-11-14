@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req, R
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import { parseUlidParameter } from './public-api.validation.js';
-import { PublicRateLimitService } from './public-rate-limit.service.js';
+import { PublicRateLimitService, rateLimitClient } from './public-rate-limit.service.js';
 import { SocialService, type SocialReaction } from './social.service.js';
 
 @Controller('v1/social')
@@ -13,7 +13,7 @@ export class SocialController {
 
   @Post('reactions')
   async react(@Req() request:FastifyRequest, @Body() body:unknown) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     if (!body || typeof body !== 'object') throw new BadRequestException('Invalid reaction.');
     const input=body as Record<string,unknown>;
     if (typeof input.event_id !== 'string' || ![null,'SOLID','BIASED'].includes(input.reaction as string | null)) throw new BadRequestException('Invalid reaction.');
@@ -25,7 +25,7 @@ export class SocialController {
   @Get('summary')
   async summary(@Req() request:FastifyRequest, @Res({passthrough:true}) reply:FastifyReply,
     @Query('event_id') eventId?:string, @Query('source_id') sourceId?:string) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     if ((eventId === undefined) === (sourceId === undefined)) throw new BadRequestException('Specify one event or source.');
     void reply.header('cache-control','private, no-store');
     return this.social.summary(betaUserId(request),eventId === undefined ? undefined : parseUlidParameter(eventId),sourceId === undefined ? undefined : parseUlidParameter(sourceId));
@@ -33,7 +33,7 @@ export class SocialController {
 
   @Post('comments')
   async comment(@Req() request:FastifyRequest, @Body() body:unknown) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     if (!body || typeof body !== 'object') throw new BadRequestException('Invalid comment.');
     const input=body as Record<string,unknown>;
     if (typeof input.event_id !== 'string' || typeof input.article_id !== 'string' || typeof input.body !== 'string' || input.body.trim().length < 1 || input.body.trim().length > 600) throw new BadRequestException('A brief comment and event article are required.');
