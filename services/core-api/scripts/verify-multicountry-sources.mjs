@@ -5,6 +5,9 @@
 // whose native Atom feed answers. Prints one JSON line per row and a summary.
 import { readFileSync } from 'node:fs';
 
+let parseLiveFeed = null;
+try { ({ parseLiveFeed } = await import('../dist/live/live.adapter.js')); } catch { /* parser not built */ }
+
 const CSV = new URL('../data/verified_multicountry_sources.csv', import.meta.url);
 const UA = 'Mozilla/5.0 (compatible; DialektikSourceVerifier/1.0)';
 const CHANNEL = /UC[A-Za-z0-9_-]{22}/u;
@@ -40,6 +43,32 @@ async function get(url, accept) {
     return { status: response.status, location: response.headers.get('location'), type: response.headers.get('content-type') ?? '', body, ms: Date.now() - started };
   } catch (error) {
     return { status: 0, location: null, type: '', body: '', ms: Date.now() - started, error: String(error?.cause?.code ?? error?.name ?? error) };
+  }
+}
+
+export function hostOf(url) {
+  return new URL(url).hostname.replace(/^www\./u, '');
+}
+
+/** Runs the production parser with the policy the import would record. */
+function parserStats(body, row, youtube) {
+  if (parseLiveFeed === null || body.length === 0) return { parser: 'unavailable' };
+  const domain = youtube ? 'youtube.com' : hostOf(row.website_url);
+  const policy = {
+    sourceId: '01M5MC0000000000000000TEST', registryKey: 'verify', publisherName: row.display_name,
+    canonicalDomain: domain, sourceType: 'other', publisherFamily: null, category: null,
+    discoveryChannel: 'rss_atom', endpoint: row.feed_url, rightsClass: 'LIVE_READY',
+    storagePolicy: 'METADATA_AND_FEED_EXCERPT', active: true, rightsEvidenceUrl: 'https://example.org',
+    rightsVerifiedAt: '2026-11-14T00:00:00.000Z', attribution: row.display_name, language: row.language,
+    allowedArticleDomains: [domain, `www.${domain}`],
+  };
+  try {
+    const items = parseLiveFeed(body, policy);
+    const errors = {};
+    for (const item of items) if (item.errorCode) errors[item.errorCode] = (errors[item.errorCode] ?? 0) + 1;
+    return { parsed: items.length, accepted: items.filter((item) => item.errorCode === null).length, parser_errors: errors };
+  } catch (error) {
+    return { parsed: 0, accepted: 0, parser_errors: { [String(error?.message ?? error)]: 1 } };
   }
 }
 
@@ -101,18 +130,19 @@ for (const row of rows) {
     const r = await followRss(row.feed_url);
     const stats = feedStats(r.body);
     const ok = r.status === 200 && stats.items > 0;
-    results.push({ ...base, ok, status: r.status, redirected: r.hops.length > 0, final_url: r.final, https: r.final.startsWith('https://'), content_type: r.type.split(';')[0], ...stats, error: r.error ?? null, ms: r.ms });
+    results.push({ ...base, ok, ...parserStats(r.body, row, false), status: r.status, redirected: r.hops.length > 0, final_url: r.final, https: r.final.startsWith('https://'), content_type: r.type.split(';')[0], ...stats, error: r.error ?? null, ms: r.ms });
   } else {
     const channel = await resolveChannel(row);
     let feed = { status: 0, body: '' };
     if (channel.id) feed = await get(`https://www.youtube.com/feeds/videos.xml?channel_id=${channel.id}`, 'application/atom+xml');
     const stats = feedStats(feed.body);
     const title = /<title>([^<]+)<\/title>/u.exec(feed.body)?.[1] ?? null;
-    results.push({ ...base, ok: feed.status === 200 && stats.items > 0, handle: row.youtube_handle, channel_id: channel.id, resolved_via: channel.via, catalog_id_matches: row.youtube_channel_id === '' || row.youtube_channel_id === channel.id, feed_status: feed.status, channel_title: title, ...stats });
+    results.push({ ...base, ok: feed.status === 200 && stats.items > 0, ...parserStats(feed.body, row, true), handle: row.youtube_handle, channel_id: channel.id, resolved_via: channel.via, catalog_id_matches: row.youtube_channel_id === '' || row.youtube_channel_id === channel.id, feed_status: feed.status, channel_title: title, ...stats });
   }
   console.log(JSON.stringify(results.at(-1)));
 }
 const failed = results.filter((r) => !r.ok);
+console.log(`PARSER ${JSON.stringify(results.map((r) => [r.slug, r.type, r.parsed ?? null, r.accepted ?? null, r.parser_errors ?? null]))}`);
 console.log(`SUMMARY total=${results.length} ok=${results.length - failed.length} failed=${failed.length}`);
 for (const r of failed) console.log(`FAILED ${r.country} ${r.type} ${r.slug} status=${r.status ?? r.feed_status} via=${r.resolved_via ?? ''} ${r.error ?? ''}`);
 console.log(`RESOLVED_CHANNELS ${JSON.stringify(Object.fromEntries(results.filter((r) => r.type === 'YOUTUBE' && r.channel_id).map((r) => [`${r.slug}`, r.channel_id])))}`);

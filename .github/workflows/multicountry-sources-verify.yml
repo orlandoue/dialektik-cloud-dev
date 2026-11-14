@@ -28,6 +28,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: "22"
+          cache: npm
+      - name: Build the production feed parser
+        run: |
+          npm install --global npm@11.6.2
+          npm ci --no-audit --no-fund
+          npm run build
       - name: Check every RSS feed and resolve every YouTube handle
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
