@@ -176,16 +176,18 @@ export class PublicApiService {
 
   public async event(id: string, includeCoverage = false, followedSourceIds?: readonly string[]): Promise<PublicReadResult<EventDetailDto>> {
     const row = await this.#requireCurrentEvent(id);
-    const primaryFacts = await this.repository.findPrimaryFacts(id);
+    // Every read below depends only on the event id, so they run together on
+    // the pool instead of paying one database round trip after another.
+    const withCoverage = includeCoverage && row.analysis_state === 'PUBLISHED';
+    const [primaryFacts, followedMatch, coverage, linkedArticles, related] = await Promise.all([
+      this.repository.findPrimaryFacts(id),
+      followedSourceIds === undefined ? Promise.resolve(undefined) : this.repository.eventHasFollowedSources(id, followedSourceIds),
+      withCoverage ? this.repository.listEventCoverage(id) : Promise.resolve([]),
+      withCoverage ? this.repository.listEventArticles(id) : Promise.resolve([]),
+      withCoverage ? this.repository.listContradictions({cursor:null,limit:100,eventId:id}) : Promise.resolve([]),
+    ]);
     if (primaryFacts.length > 1) throw new TypeError('Event has more than one primary fact.');
     const primary = primaryFacts[0];
-    const followedMatch = followedSourceIds === undefined ? undefined : await this.repository.eventHasFollowedSources(id, followedSourceIds);
-    const coverage = includeCoverage && row.analysis_state === 'PUBLISHED'
-      ? await this.repository.listEventCoverage(id) : [];
-    const linkedArticles = includeCoverage && row.analysis_state === 'PUBLISHED'
-      ? await this.repository.listEventArticles(id) : [];
-    const related = includeCoverage && row.analysis_state === 'PUBLISHED'
-      ? await this.repository.listContradictions({cursor:null,limit:100,eventId:id}) : [];
     const positions = new Map<string, {id:string;title:string;assertions:{id:string;assertion_text:string;quoted_text:string;article_id:string;source_name:string;source_id?:string;is_followed?:boolean}[]}>();
     const articles = new Map<string, {id:string;title:string;source_name:string;published_at:string;url:string;source_id?:string;is_followed?:boolean}>();
     for (const item of coverage) {
