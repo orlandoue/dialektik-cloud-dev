@@ -305,26 +305,61 @@ final class ArenaStore extends ChangeNotifier {
       stories.rememberRelations(allEvents);
       events = allEvents;
       _notify();
-      final List<ArenaDuel?> joined = await Future.wait(
-        contrasts.map((ContradictionDto contrast) async {
-          try {
-            return ArenaDuel(
-              contrast: contrast,
-              event: await detail(contrast.eventId, refresh: refresh),
-            );
-          } on Exception {
-            return null;
-          }
-        }),
+      // The carousel only needs its first pages: paint the Coliseo as soon
+      // as those details arrive, then join the remaining contrasts in small
+      // waves so a long backlog never blocks the first frame nor floods the
+      // Core with one event-detail request per contrast at once.
+      final List<ArenaDuel> joined = await _joinDuels(
+        contrasts.take(firstDuelWave),
+        refresh: refresh,
       );
-      duels = joined.whereType<ArenaDuel>().toList(growable: false);
+      duels = joined;
       loaded = true;
+      _notify();
+      final List<ContradictionDto> rest = contrasts
+          .skip(firstDuelWave)
+          .toList(growable: false);
+      for (var start = 0; start < rest.length; start += backgroundDuelWave) {
+        if (_disposed) break;
+        final List<ArenaDuel> more = await _joinDuels(
+          rest.skip(start).take(backgroundDuelWave),
+          refresh: refresh,
+        );
+        if (more.isEmpty) continue;
+        duels = List<ArenaDuel>.unmodifiable(<ArenaDuel>[...duels, ...more]);
+        _notify();
+      }
     } on Exception catch (failure) {
       error = failure;
     }
     await secondary;
     loading = false;
     _notify();
+  }
+
+  /// Contrasts joined before the Coliseo is shown (the carousel pages).
+  static const int firstDuelWave = 5;
+
+  /// Contrasts joined per background wave once the Coliseo is visible.
+  static const int backgroundDuelWave = 4;
+
+  Future<List<ArenaDuel>> _joinDuels(
+    Iterable<ContradictionDto> contrasts, {
+    required bool refresh,
+  }) async {
+    final List<ArenaDuel?> joined = await Future.wait(
+      contrasts.map((ContradictionDto contrast) async {
+        try {
+          return ArenaDuel(
+            contrast: contrast,
+            event: await detail(contrast.eventId, refresh: refresh),
+          );
+        } on Exception {
+          return null;
+        }
+      }),
+    );
+    return joined.whereType<ArenaDuel>().toList(growable: false);
   }
 
   Future<List<EventCardDto>> _allEvents({required bool refresh}) async {
