@@ -4,6 +4,7 @@
 // fetches with redirect:'error'); YouTube rows must resolve to a UC… channel
 // whose native Atom feed answers. Prints one JSON line per row and a summary.
 import { readFileSync } from 'node:fs';
+import { parseCsv } from './catalog-csv.mjs';
 
 let parseLiveFeed = null;
 try { ({ parseLiveFeed } = await import('../dist/live/live.adapter.js')); } catch { /* parser not built */ }
@@ -11,25 +12,6 @@ try { ({ parseLiveFeed } = await import('../dist/live/live.adapter.js')); } catc
 const CSV = new URL('../data/verified_multicountry_sources.csv', import.meta.url);
 const UA = 'Mozilla/5.0 (compatible; DialektikSourceVerifier/1.0)';
 const CHANNEL = /UC[A-Za-z0-9_-]{22}/u;
-
-export function parseCsv(text) {
-  const rows = [];
-  let row = [], field = '', quoted = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (quoted) {
-      if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
-      else if (c === '"') quoted = false;
-      else field += c;
-    } else if (c === '"') quoted = true;
-    else if (c === ',') { row.push(field); field = ''; }
-    else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
-    else if (c !== '\r') field += c;
-  }
-  if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
-  const [header, ...body] = rows;
-  return body.map((values) => Object.fromEntries(header.map((key, index) => [key, values[index] ?? ''])));
-}
 
 async function get(url, accept) {
   const started = Date.now();
