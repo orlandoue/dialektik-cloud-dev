@@ -2,7 +2,7 @@ import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req, R
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import { parseUlidParameter } from './public-api.validation.js';
-import { PublicRateLimitService } from './public-rate-limit.service.js';
+import { PublicRateLimitService, rateLimitClient } from './public-rate-limit.service.js';
 import { SocialArenaService, type CommunityChannel } from './social-arena.service.js';
 
 const CHANNELS: Record<string, CommunityChannel> = { debate: 'DEBATE', aporte: 'APORTE', nota: 'NOTA' };
@@ -35,7 +35,7 @@ export class SocialArenaController {
   /** Lets an authenticated reader see whether the Arena storage exists. */
   @Get('arena-status')
   async status(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     betaUserId(request);
     void reply.header('cache-control', 'private, no-store');
     return { storage: await this.arena.currentStorage() };
@@ -44,7 +44,7 @@ export class SocialArenaController {
   @Get('position-votes')
   async positionVotes(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply,
     @Query('event_id') eventId?: string) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     if (eventId === undefined) throw new BadRequestException('Specify one event.');
     void reply.header('cache-control', 'private, no-store');
     return this.arena.positionVotes(betaUserId(request), parseUlidParameter(eventId));
@@ -52,7 +52,7 @@ export class SocialArenaController {
 
   @Post('position-votes')
   async votePosition(@Req() request: FastifyRequest, @Body() body: unknown) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     const input = record(body, 'Invalid position vote.');
     if (typeof input.event_id !== 'string' || (input.position_id !== null && typeof input.position_id !== 'string')) {
       throw new BadRequestException('Invalid position vote.');
@@ -66,7 +66,7 @@ export class SocialArenaController {
   @Get('community')
   async community(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply,
     @Query('event_id') eventId?: string) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     if (eventId === undefined) throw new BadRequestException('Specify one event.');
     void reply.header('cache-control', 'private, no-store');
     return this.arena.community(betaUserId(request), parseUlidParameter(eventId));
@@ -74,7 +74,7 @@ export class SocialArenaController {
 
   @Post('community')
   async addEntry(@Req() request: FastifyRequest, @Body() body: unknown) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     const message = 'A channel, a brief text and, for contributions and notes, a source are required.';
     const input = record(body, message);
     const channel = typeof input.channel === 'string' ? CHANNELS[input.channel] : undefined;
@@ -100,7 +100,7 @@ export class SocialArenaController {
 
   @Post('community/votes')
   async voteEntry(@Req() request: FastifyRequest, @Body() body: unknown) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     const input = record(body, 'Invalid vote.');
     if (typeof input.entry_id !== 'string' || !UUID.test(input.entry_id) || ![1, -1, null].includes(input.vote as number | null)) {
       throw new BadRequestException('Invalid vote.');

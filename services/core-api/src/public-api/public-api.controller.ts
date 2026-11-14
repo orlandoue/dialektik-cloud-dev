@@ -4,7 +4,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { sendPublicRead } from './public-api.cache.js';
 import { PUBLIC_OPENAPI_DOCUMENT } from './public-api.openapi.js';
 import { PublicApiService } from './public-api.service.js';
-import { PublicRateLimitService } from './public-rate-limit.service.js';
+import { PublicRateLimitService, rateLimitClient } from './public-rate-limit.service.js';
 import { FollowedSourcesService } from './followed-sources.service.js';
 import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import {
@@ -31,7 +31,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, []);
     return sendPublicRead(request, reply, {
       body: PUBLIC_OPENAPI_DOCUMENT,
@@ -45,7 +45,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, ['category', 'topic', 'cursor', 'limit', 'personalized', 'synthesis']);
     if (query.synthesis !== undefined && query.synthesis !== '1') throw new BadRequestException('Invalid synthesis projection.');
     if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
@@ -76,7 +76,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, ['cursor', 'limit', 'personalized']);
     if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
     const userId = query.personalized === '1' ? betaUserId(request) : undefined;
@@ -91,7 +91,7 @@ export class PublicApiController {
 
   @Get('feed/blindspots')
   public async blindspots(@Query() query: PublicQuery, @Req() request: FastifyRequest, @Res({passthrough:true}) reply: FastifyReply) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, ['cursor','limit']);
     const userId=betaUserId(request);
     const followedSourceIds=await this.follows.list(userId);
@@ -109,7 +109,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, ['include','personalized']);
     if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
     if (query.include !== undefined && query.include !== 'coverage') {
@@ -130,7 +130,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,
@@ -146,7 +146,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,
@@ -162,7 +162,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,
@@ -178,7 +178,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,
@@ -194,7 +194,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(request.ip);
+    this.rateLimit.assertAllowed(rateLimitClient(request));
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,

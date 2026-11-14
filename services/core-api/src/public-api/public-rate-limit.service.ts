@@ -1,4 +1,5 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
+import type { FastifyRequest } from 'fastify';
 
 import { PublicApiHttpException } from './public-api.error.js';
 
@@ -10,6 +11,17 @@ interface RateWindow {
 const WINDOW_MILLISECONDS = 60_000;
 const MAXIMUM_REQUESTS = 300;
 const MAXIMUM_TRACKED_CLIENTS = 10_000;
+
+/**
+ * The quota bucket for a request. A signed-in reader (set by the private beta
+ * guard after verifying the JWT) gets their own bucket, so readers behind the
+ * same proxy or carrier NAT never consume each other's quota. Anything else
+ * falls back to the client address resolved through the trusted proxy hop.
+ */
+export function rateLimitClient(request: FastifyRequest): string {
+  const userId = (request as FastifyRequest & { betaUserId?: string }).betaUserId;
+  return typeof userId === 'string' && userId.length > 0 ? `user:${userId}` : `ip:${request.ip}`;
+}
 
 @Injectable()
 export class PublicRateLimitService {

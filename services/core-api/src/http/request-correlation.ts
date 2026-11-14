@@ -17,6 +17,13 @@ function requestIdFromHeader(request: IncomingMessage): string | undefined {
   return candidate;
 }
 
+function trustProxyHops(hops: number | undefined): ((address: string, hop: number) => boolean) | false {
+  const value = hops ?? 1;
+  if (!Number.isInteger(value) || value < 1) return false;
+  // Same semantics as a numeric hop count: trust the nearest `value` hops.
+  return (_address: string, hop: number) => hop < value;
+}
+
 export function createFastifyOptions(config: Readonly<CoreApiConfig>): FastifyServerOptions {
   return {
     bodyLimit: 1_048_576,
@@ -37,7 +44,11 @@ export function createFastifyOptions(config: Readonly<CoreApiConfig>): FastifySe
             },
           },
     requestTimeout: 15_000,
-    trustProxy: false,
+    // Render terminates TLS in one proxy that appends the real client to
+    // X-Forwarded-For. Trusting exactly that hop makes request.ip the caller
+    // instead of the proxy (so unauthenticated rate limits are per client),
+    // while addresses a client injects further left are still ignored.
+    trustProxy: trustProxyHops(config.trustedProxyHops),
   };
 }
 

@@ -18,6 +18,8 @@ export interface CoreApiConfig {
   readonly nodeEnvironment: NodeEnvironment;
   readonly port: number;
   readonly supabaseAuthIssuer: string;
+  /** Reverse proxies in front of the API whose X-Forwarded-For is trusted (Render: 1). */
+  readonly trustedProxyHops?: number;
   readonly semanticMode?: 'disabled' | 'fixture' | 'unassigned';
   readonly ownershipMode?: 'corporate' | 'personal';
   readonly personalOwnerId?: string;
@@ -26,6 +28,7 @@ export interface CoreApiConfig {
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_POOL_MAX = 10;
+const DEFAULT_TRUSTED_PROXY_HOPS = 1;
 const DEFAULT_SUPABASE_AUTH_ISSUER =
   'https://vclsswwfhljczxgnsciq.supabase.co/auth/v1';
 
@@ -234,5 +237,6 @@ export function loadCoreApiConfig(
     semanticMode: requestedMode as 'disabled' | 'fixture' | 'unassigned',
     port: readInteger(source, 'CORE_API_PORT', DEFAULT_PORT, 1, 65_535),
     supabaseAuthIssuer: readSupabaseAuthIssuer(source),
+    trustedProxyHops: readInteger(source, 'CORE_API_TRUSTED_PROXY_HOPS', DEFAULT_TRUSTED_PROXY_HOPS, 0, 5),
   });
 }
