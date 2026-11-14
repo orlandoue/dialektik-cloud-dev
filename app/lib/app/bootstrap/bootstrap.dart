@@ -3,6 +3,7 @@ import 'package:dialektik/app/dialektik_app.dart';
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
 import 'package:dialektik/features/consumer/presentation/navigation/consumer_routes.dart';
+import 'package:dialektik/features/private_beta/data/auth_session_store.dart';
 import 'package:dialektik/features/private_beta/presentation/private_beta_gate.dart';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, kReleaseMode, TargetPlatform;
@@ -130,6 +131,8 @@ void bootstrap() {
         ),
         // Google sign-in returns to the app through this deep link.
         deepLinks: AppLinks().uriLinkStream,
+        // Reopening the app keeps the tester signed in.
+        sessionStore: const DeviceAuthSessionStore(),
       ),
     );
     return;

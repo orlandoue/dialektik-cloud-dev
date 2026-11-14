@@ -11,6 +11,7 @@ import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/editorial/data/editorial_api.dart';
 import 'package:dialektik/features/editorial/presentation/editorial_review_screen.dart';
+import 'package:dialektik/features/private_beta/data/auth_session_store.dart';
 import 'package:dialektik/features/private_beta/data/supabase_auth_client.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -34,6 +35,7 @@ final class PrivateBetaGate extends StatefulWidget {
     this.authClock,
     this.deepLinks,
     this.openBrowser = openExternalHttpLink,
+    this.sessionStore,
     super.key,
   });
 
@@ -54,6 +56,9 @@ final class PrivateBetaGate extends StatefulWidget {
 
   /// Opens the Google sign-in page in the browser.
   final ExternalLinkOpener openBrowser;
+
+  /// Keeps the session across app restarts; `null` keeps it in memory only.
+  final AuthSessionStore? sessionStore;
 
   @override
   State<PrivateBetaGate> createState() => _PrivateBetaGateState();
@@ -83,10 +88,27 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
         publishableKey: widget.publishableKey,
         httpClient: widget.authHttpClient,
         clock: widget.authClock,
+        sessionStore: widget.sessionStore,
       );
     } on Object {
       _notice = 'La configuración de acceso privado no está disponible.';
     }
+    final SupabaseAuthClient? auth = _auth;
+    if (auth != null && widget.sessionStore != null) {
+      _busy = true;
+      unawaited(_restore(auth));
+    }
+  }
+
+  /// Reopens the saved session, so testers do not sign in on every launch.
+  Future<void> _restore(SupabaseAuthClient auth) async {
+    final bool restored = await auth.restoreSession();
+    if (!mounted) return;
+    if (!restored) {
+      setState(() => _busy = false);
+      return;
+    }
+    await _completeSignIn(auth, restored: true);
   }
 
   @override
@@ -220,7 +242,15 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
   }
 
   /// Mounts the app only after Core accepts the new session.
-  Future<void> _completeSignIn(SupabaseAuthClient auth) async {
+  ///
+  /// A [restored] session already passed this check on an earlier launch, so
+  /// a Core that is only unreachable (offline, cold start) does not send the
+  /// reader back to the sign-in screen; the app retries on its own. A 401
+  /// still signs out and deletes the saved session.
+  Future<void> _completeSignIn(
+    SupabaseAuthClient auth, {
+    bool restored = false,
+  }) async {
     final int generation = ++_sessionGeneration;
     final PublicApiClient preflight = _createApiClient(auth);
     try {
@@ -231,14 +261,19 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
       if (failure.kind == PublicFailureKind.unauthorized) {
         auth.clearSession();
       }
-      _fail(switch (failure.kind) {
-        PublicFailureKind.unauthorized =>
-          'La cuenta no está habilitada para la beta privada.',
-        PublicFailureKind.network || PublicFailureKind.serviceUnavailable =>
-          'La sesión se inició, pero Core no responde. Comprueba la conexión y vuelve a intentarlo.',
-        _ => 'No se pudo comprobar el acceso privado. Inténtalo nuevamente.',
-      });
-      return;
+      final bool unreachable =
+          failure.kind == PublicFailureKind.network ||
+          failure.kind == PublicFailureKind.serviceUnavailable;
+      if (!(restored && unreachable)) {
+        _fail(switch (failure.kind) {
+          PublicFailureKind.unauthorized =>
+            'La cuenta no está habilitada para la beta privada.',
+          PublicFailureKind.network || PublicFailureKind.serviceUnavailable =>
+            'La sesión se inició, pero Core no responde. Comprueba la conexión y vuelve a intentarlo.',
+          _ => 'No se pudo comprobar el acceso privado. Inténtalo nuevamente.',
+        });
+        return;
+      }
     } finally {
       preflight.close();
     }
