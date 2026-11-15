@@ -6,6 +6,11 @@ export interface SemanticPreclusterArticle {
   readonly eventKey: string;
   readonly eventTitle: string;
   readonly eventSummary: string;
+  /** Publisher country (CL, ES, AR, US); pairs never cross countries. */
+  readonly countryCode?: string | null;
+  /** Media group: a press feed and a YouTube channel of one outlet share it. */
+  readonly mediaGroup?: string | null;
+  readonly editorialLean?: string | null;
 }
 
 export interface SemanticCandidatePair {
@@ -41,6 +46,13 @@ const STOP_WORDS = new Set([
   "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
   "uno", "una", "dos", "tres", "cuatro", "cinco", "seis", "siete", "ocho",
   "nueve", "diez",
+  // English (US headlines are Title Case, so common words look like names).
+  "about", "against", "amid", "back", "breaking", "call", "calls", "could", "deal", "does",
+  "first", "have", "here", "into", "just", "last", "latest", "live", "make", "made", "more",
+  "news", "people", "plan", "plans", "report", "reports", "said", "says", "show", "shows",
+  "still", "take", "takes", "than", "that", "their", "them", "they", "this", "today", "update",
+  "video", "watch", "week", "what", "when", "where", "which", "while", "will", "would", "year",
+  "your", "white", "house", "administration", "congress", "senate", "court", "state", "states",
 ]);
 
 function normalized(value: string): string {
@@ -326,6 +338,7 @@ export function preclusterLiveSemanticArticles(
     if (left === undefined) continue;
     for (const right of eligible.slice(index + 1)) {
       if (left.sourceId === right.sourceId) continue;
+      if (!canPairAcrossOutlets(left, right)) continue;
       if (Math.abs(left.publishedAt.getTime() - right.publishedAt.getTime()) > 48 * 60 * 60 * 1000)
         continue;
       const key = clusterKey(left, right);
@@ -339,4 +352,62 @@ export function preclusterLiveSemanticArticles(
     a.left.articleId.localeCompare(b.left.articleId) ||
     a.right.articleId.localeCompare(b.right.articleId),
   );
+}
+
+/**
+ * Two items may form a candidate pair only within one country and between
+ * different media groups: a newspaper's article and its own YouTube video are
+ * multimodal evidence for one position, never two contenders.
+ */
+export function canPairAcrossOutlets(
+  left: Pick<SemanticPreclusterArticle, "countryCode" | "mediaGroup">,
+  right: Pick<SemanticPreclusterArticle, "countryCode" | "mediaGroup">,
+): boolean {
+  if ((left.countryCode ?? "CL") !== (right.countryCode ?? "CL")) return false;
+  if (left.mediaGroup && right.mediaGroup && left.mediaGroup === right.mediaGroup) return false;
+  return true;
+}
+
+const LEFT_LEANS = new Set(["progresista/izquierda", "centro-izquierda"]);
+const RIGHT_LEANS = new Set(["centro-derecha", "conservador/derecha"]);
+const NEUTRAL_LEANS = new Set(["centro", "centro/agencia neutral", "periodismo de investigacion/economico"]);
+
+/**
+ * Ranking bonus for pairs that cross the editorial spectrum: 2 for left versus
+ * right, 1 for a partisan outlet versus a neutral, agency or investigative
+ * one, 0 otherwise (same side or unknown).
+ */
+export function editorialLeanBonus(left?: string | null, right?: string | null): number {
+  if (!left || !right) return 0;
+  const side = (lean: string) => LEFT_LEANS.has(lean) ? "L" : RIGHT_LEANS.has(lean) ? "R" : NEUTRAL_LEANS.has(lean) ? "N" : "?";
+  const a = side(left), b = side(right);
+  if (a === "?" || b === "?" || a === b) return 0;
+  if ((a === "L" && b === "R") || (a === "R" && b === "L")) return 2;
+  return 1;
+}
+
+export const COUNTRY_ROUND_ROBIN = ["CL", "ES", "AR", "US"] as const;
+
+/**
+ * Interleaves already-ranked items by country (CL, ES, AR, US, CL, …) keeping
+ * each country's own order, so a batch of model calls is shared fairly.
+ */
+export function interleaveByCountry<T>(items: readonly T[], countryOf: (item: T) => string | null | undefined): T[] {
+  const queues = new Map<string, T[]>();
+  for (const item of items) {
+    const country = countryOf(item) ?? "CL";
+    const queue = queues.get(country) ?? [];
+    queue.push(item);
+    queues.set(country, queue);
+  }
+  const order = [...COUNTRY_ROUND_ROBIN.filter((code) => queues.has(code)),
+    ...[...queues.keys()].filter((code) => !(COUNTRY_ROUND_ROBIN as readonly string[]).includes(code)).sort()];
+  const result: T[] = [];
+  for (let round = 0; result.length < items.length; round += 1) {
+    for (const code of order) {
+      const item = queues.get(code)?.[round];
+      if (item !== undefined) result.push(item);
+    }
+  }
+  return result;
 }
