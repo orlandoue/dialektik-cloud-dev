@@ -1,0 +1,40 @@
+name: Multi-country source catalog verification
+
+on:
+  push:
+    branches:
+      - claude/multicountry-sources
+    paths:
+      - ".github/workflows/multicountry-sources-verify.yml"
+      - "services/core-api/data/verified_multicountry_sources.csv"
+      - "services/core-api/scripts/verify-multicountry-sources.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: multicountry-sources-verify
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Build the production feed parser
+        run: |
+          npm install --global npm@11.6.2
+          npm ci --no-audit --no-fund
+          npm run build
+      - name: Check every RSS feed and resolve every YouTube handle
+        env:
+          YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
+        run: node services/core-api/scripts/verify-multicountry-sources.mjs

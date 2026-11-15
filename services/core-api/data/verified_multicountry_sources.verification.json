@@ -1,0 +1,738 @@
+{
+ "verified_at": "2026-11-14T17:05:22Z",
+ "method": "services/core-api/scripts/verify-multicountry-sources.mjs on GitHub Actions (production feed parser)",
+ "rows": [
+  {
+   "media_group_slug": "cl-el-mostrador",
+   "source_type": "RSS",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-rss-elmostrador-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-el-mostrador",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-elmostrador-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-ex-ante",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.ex-ante.cl/feed/"
+  },
+  {
+   "media_group_slug": "cl-el-libero",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "cl-el-libero",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-ellibero-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-el-desconcierto",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://eldesconcierto.cl/rss/pages/actualidad.xml"
+  },
+  {
+   "media_group_slug": "cl-the-clinic",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.theclinic.cl/feed/"
+  },
+  {
+   "media_group_slug": "cl-the-clinic",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-theclinic-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-diario-financiero",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.df.cl/noticias/site/list/port/rss.xml"
+  },
+  {
+   "media_group_slug": "cl-diario-financiero",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UClsjSNCR-0KAFw0v5uVMCHQ"
+  },
+  {
+   "media_group_slug": "cl-cnn-chile",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-cnnchile-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-t13",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-t13-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-24-horas-tvn",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-24horas-tvn-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-meganoticias",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-meganoticias-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-chv-noticias",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-chvnoticias-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-radio-agricultura",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "cl-radio-agricultura",
+   "source_type": "YOUTUBE",
+   "status": "EXISTING_SOURCE",
+   "registry_key": "chile-yt-agriculturatv-v1",
+   "reason": "Covered by the source already in production"
+  },
+  {
+   "media_group_slug": "cl-radio-pauta",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "cl-radio-duna",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "cl-interferencia",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCYjy8VhFKDMKefKdKfpP6Mw"
+  },
+  {
+   "media_group_slug": "es-el-pais",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://feeds.elpais.com/mrss-s/pages/ep/site/elpais.com/section/espana/portada"
+  },
+  {
+   "media_group_slug": "es-el-pais",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCnsvJeZO4RigQ898WdDNoBw"
+  },
+  {
+   "media_group_slug": "es-el-mundo",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://e00-elmundo.uecdn.es/elmundo/rss/espana.xml",
+   "feed_host": "e00-elmundo.uecdn.es"
+  },
+  {
+   "media_group_slug": "es-el-mundo",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCGXbLrVe8vnkiFv7q2vYv3w"
+  },
+  {
+   "media_group_slug": "es-eldiario-es",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "es-eldiario-es",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCig8aKQHLt8E35_LJKwOscA"
+  },
+  {
+   "media_group_slug": "es-el-confidencial",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://rss.elconfidencial.com/espana/"
+  },
+  {
+   "media_group_slug": "es-el-confidencial",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "es-abc",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.abc.es/rss/2.0/espana/"
+  },
+  {
+   "media_group_slug": "es-abc",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "es-la-vanguardia",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.lavanguardia.com/rss/politica.xml"
+  },
+  {
+   "media_group_slug": "es-la-vanguardia",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UClLLRs_mFTsNT5U-DqTYAGg"
+  },
+  {
+   "media_group_slug": "es-the-objective",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://theobjective.com/feed/"
+  },
+  {
+   "media_group_slug": "es-the-objective",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCkCYv06O4w0GOfdW2Ey8jvg"
+  },
+  {
+   "media_group_slug": "es-libertad-digital",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-libertad-digital",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCUS73_bjTYwBFAfXbvIjM8Q"
+  },
+  {
+   "media_group_slug": "es-publico",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-publico",
+   "source_type": "YOUTUBE",
+   "status": "INACTIVE_STALE",
+   "channel_id": "UC9WiW-rkYhxl-04PeOEbf1w",
+   "reason": "Single video, newest from 2026-10-03"
+  },
+  {
+   "media_group_slug": "es-vozpopuli",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-vozpopuli",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "es-rtve-noticias",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-rtve-noticias",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UC7QZIf0dta-XPXsp9Hv4dTw"
+  },
+  {
+   "media_group_slug": "es-la-sexta",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-la-sexta",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCCJs5mITIqxqJGeFjt9N1Mg"
+  },
+  {
+   "media_group_slug": "es-antena-3-noticias",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-antena-3-noticias",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UC_Oni82GyYcabEr3rd-eJkg"
+  },
+  {
+   "media_group_slug": "es-cadena-ser",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-cadena-ser",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCQ2Fej5pr1ipVeBWTX8Sc_Q"
+  },
+  {
+   "media_group_slug": "es-cope",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.cope.es/api/es/news/rss.xml"
+  },
+  {
+   "media_group_slug": "es-cope",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UC-9V-k1ugOGSePgIw3UevTQ"
+  },
+  {
+   "media_group_slug": "es-onda-cero",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-onda-cero",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCPd-Lf5gQkAJD5XdTmT_GGA"
+  },
+  {
+   "media_group_slug": "es-agencia-efe",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "es-agencia-efe",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "es-cinco-dias",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "ar-infobae",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.infobae.com/arc/outboundfeeds/rss/"
+  },
+  {
+   "media_group_slug": "ar-infobae",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCvsU0EGXN7Su7MfNqcTGNHg"
+  },
+  {
+   "media_group_slug": "ar-clarin",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "ar-clarin",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCjMGMWnToRcQRqmyVB4R2xQ"
+  },
+  {
+   "media_group_slug": "ar-la-nacion",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.lanacion.com.ar/arc/outboundfeeds/rss/"
+  },
+  {
+   "media_group_slug": "ar-la-nacion",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCba3hpU7EFBSk817y9qZkiA"
+  },
+  {
+   "media_group_slug": "ar-pagina12",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.pagina12.com.ar/arc/outboundfeeds/rss/secciones/el-pais/notas/",
+   "reason": "Catalog URL redirects; the final feed URL is used because acquisition never follows redirects"
+  },
+  {
+   "media_group_slug": "ar-pagina12",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCJNDedOnljCssaiRZqg8-Dg"
+  },
+  {
+   "media_group_slug": "ar-perfil",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "ar-perfil",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "ar-ambito-financiero",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.ambito.com/rss/pages/ultimas-noticias.xml"
+  },
+  {
+   "media_group_slug": "ar-ambito-financiero",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "ar-el-cronista",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.cronista.com/arc/outboundfeeds/news/",
+   "reason": "Catalog URL redirects; the final feed URL is used because acquisition never follows redirects"
+  },
+  {
+   "media_group_slug": "ar-el-cronista",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "ar-tiempo-argentino",
+   "source_type": "RSS",
+   "status": "INACTIVE_STALE",
+   "reason": "Newest item is from 2025-07-22"
+  },
+  {
+   "media_group_slug": "ar-tiempo-argentino",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "ar-la-politica-online",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.lapoliticaonline.com/files/rss/ultimasnoticias.xml"
+  },
+  {
+   "media_group_slug": "ar-cenital",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://cenital.com/feed/"
+  },
+  {
+   "media_group_slug": "ar-cenital",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCxHSIJgKZ8xVXwLGaGZEmKg"
+  },
+  {
+   "media_group_slug": "ar-chequeado",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://chequeado.com/feed/"
+  },
+  {
+   "media_group_slug": "ar-chequeado",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCyxig93YR3E9UiGO8BZhugg"
+  },
+  {
+   "media_group_slug": "ar-tn",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCj6PcyLvpnIRT_2W_mwa9Aw"
+  },
+  {
+   "media_group_slug": "ar-ln-mas",
+   "source_type": "YOUTUBE",
+   "status": "DUPLICATE_CHANNEL",
+   "duplicate_of": "ar-la-nacion",
+   "channel_id": "UCba3hpU7EFBSk817y9qZkiA",
+   "reason": "Same YouTube channel as La Nación; ingested once under ar-la-nacion"
+  },
+  {
+   "media_group_slug": "ar-c5n",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCFgk2Q2mVO1BklRQhSv6p0w"
+  },
+  {
+   "media_group_slug": "ar-a24",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCR9120YBAqMfntqgRTKmkjQ"
+  },
+  {
+   "media_group_slug": "ar-cronica-tv",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCT7KFGv6s2a-rh2Jq8ZdM1g"
+  },
+  {
+   "media_group_slug": "ar-canal-26",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCrpMfcQNog595v5gAS-oUsQ"
+  },
+  {
+   "media_group_slug": "ar-urbana-play",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCC1kfsMJko54AqxtcFECt-A"
+  },
+  {
+   "media_group_slug": "ar-radio-mitre",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCYvINPByAdCcpA0sWrF3I_w"
+  },
+  {
+   "media_group_slug": "ar-el-destape",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "ar-cadena-3",
+   "source_type": "RSS",
+   "status": "INACTIVE_UNREACHABLE",
+   "reason": "Feed did not answer RSS/Atom XML on 2026-11-14 (404, 406, 500, HTML or redirect to the home page)"
+  },
+  {
+   "media_group_slug": "ar-cadena-3",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "us-ap",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UC52X5wxOL_s5yw0dQk7NtgA"
+  },
+  {
+   "media_group_slug": "us-reuters",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UChqUTb7kYRX8-EiaN3XFrSQ"
+  },
+  {
+   "media_group_slug": "us-npr",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "us-npr",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCJnS2EsPfv46u1JR8cnD0NA"
+  },
+  {
+   "media_group_slug": "us-pbs-newshour",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "us-pbs-newshour",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UC6ZFN9Tx6xh-skXCuRHCDpQ"
+  },
+  {
+   "media_group_slug": "us-the-new-york-times",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "us-the-new-york-times",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCqnbDFdCpuN8CMEg0VuEBqA"
+  },
+  {
+   "media_group_slug": "us-the-washington-post",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://feeds.washingtonpost.com/rss/politics"
+  },
+  {
+   "media_group_slug": "us-the-washington-post",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCHd62-u_v4DvJ8TCFtpi4GA"
+  },
+  {
+   "media_group_slug": "us-the-wall-street-journal",
+   "source_type": "RSS",
+   "status": "INACTIVE_STALE",
+   "reason": "Newest item is from 2025-01-24"
+  },
+  {
+   "media_group_slug": "us-the-wall-street-journal",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCK7tptUDHh-RYDsdxO1-5QQ"
+  },
+  {
+   "media_group_slug": "us-fox-news",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "us-fox-news",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCXIJgqnII2ZOINSWNOGFThA"
+  },
+  {
+   "media_group_slug": "us-cnn",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "us-cnn",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCupvZG-5ko_eiXAupbDfxWw"
+  },
+  {
+   "media_group_slug": "us-msnbc",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "us-politico",
+   "source_type": "RSS",
+   "status": "INACTIVE_PARSER",
+   "reason": "Items have no publication date the parser accepts"
+  },
+  {
+   "media_group_slug": "us-politico",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCgjtvMmHXbutALaw9XzRkAg"
+  },
+  {
+   "media_group_slug": "us-axios",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCfU4-ArXuSX0tpyApyklMAg"
+  },
+  {
+   "media_group_slug": "us-the-hill",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://thehill.com/feed/?feed=partnerfeed-news-feed&format=rss",
+   "reason": "Catalog URL redirects; the final feed URL is used because acquisition never follows redirects"
+  },
+  {
+   "media_group_slug": "us-the-hill",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCPWXiRWZ29zrxPFIQT7eHSA"
+  },
+  {
+   "media_group_slug": "us-new-york-post",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://nypost.com/feed/"
+  },
+  {
+   "media_group_slug": "us-new-york-post",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCrvhNP_lWuPIP6QZzJmM-bw"
+  },
+  {
+   "media_group_slug": "us-national-review",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://www.nationalreview.com/feed/"
+  },
+  {
+   "media_group_slug": "us-national-review",
+   "source_type": "YOUTUBE",
+   "status": "PENDING_CHANNEL",
+   "reason": "Handle did not resolve to a channel on 2026-11-14; the resolver retries with channels.list forHandle"
+  },
+  {
+   "media_group_slug": "us-jacobin",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://jacobin.com/feed/"
+  },
+  {
+   "media_group_slug": "us-jacobin",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCzGUT9PjV3SMBwjWXUYh4HA"
+  },
+  {
+   "media_group_slug": "us-the-intercept",
+   "source_type": "RSS",
+   "status": "ACTIVE",
+   "endpoint": "https://theintercept.com/feed/?rss"
+  },
+  {
+   "media_group_slug": "us-the-intercept",
+   "source_type": "YOUTUBE",
+   "status": "INACTIVE_STALE",
+   "channel_id": "UCTXHtWnYSONpnBpNPtbPv0w",
+   "reason": "Channel feed has no recent videos"
+  },
+  {
+   "media_group_slug": "us-propublica",
+   "source_type": "RSS",
+   "status": "INACTIVE_RIGHTS_MARKER",
+   "reason": "Every item carries a copyright/third-party marker, which the acquisition rights guard rejects"
+  },
+  {
+   "media_group_slug": "us-propublica",
+   "source_type": "YOUTUBE",
+   "status": "ACTIVE",
+   "channel_id": "UCtCL58_DaVdVRmev3yHK7pg"
+  }
+ ]
+}

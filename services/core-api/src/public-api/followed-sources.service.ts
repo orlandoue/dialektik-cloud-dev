@@ -2,6 +2,7 @@ import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { sql } from 'kysely';
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { publisherDomainsForMarket } from '../live/live.publisher-market.js';
+import { sourceProfilesAvailable } from './source-profiles.js';
 
 @Injectable()
 export class FollowedSourcesService {
@@ -19,11 +20,14 @@ export class FollowedSourcesService {
       await sql`select set_config('dialektik.follow_user',${userId},true)`.execute(tx);
       if (follow) {
         const domains=publisherDomainsForMarket('CL');
+        // Catalog outlets of any country can be followed once profiled.
+        const profiled=sourceProfilesAvailable()
+          ? sql`or exists(select 1 from public.media_source_profiles mp where mp.source_id=s.id)` : sql``;
         const eligible=await sql<{ok:boolean}>`select exists(select 1 from public.sources s
           join lateral(select p.* from public.live_source_policies p where p.source_id=s.id
             order by p.recorded_at desc,p.id desc limit 1) p on true
           where s.id=${sourceId}::dialektik_ulid and s.origin='LIVE_REAL'
-            and s.canonical_domain in (${sql.join(domains.map((d)=>sql`${d}`))})
+            and (s.canonical_domain in (${sql.join(domains.map((d)=>sql`${d}`))}) ${profiled})
             and p.active and p.rights_class='LIVE_READY' and p.policy->>'rightsReviewStatus'='APPROVED'
             and nullif(p.policy->>'authorizationReference','') is not null
             and nullif(p.policy->>'rightsEvidenceUrl','') is not null

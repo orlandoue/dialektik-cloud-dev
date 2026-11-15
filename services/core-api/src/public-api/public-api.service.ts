@@ -28,6 +28,7 @@ import type {
 import { MINIMUM_QUOTE_CODE_POINTS, widenShortQuote } from '../semantic/live-semantic-production.contract.js';
 import { encodeCursor } from './public-api.validation.js';
 import type { PageRequest } from './public-api.validation.js';
+import type { PublicCountry } from './source-profiles.js';
 
 const EDITORIAL_DISPLAY = 'equipo editorial' as const;
 
@@ -56,6 +57,7 @@ function eventCard(row: FeedRow | EventRow): EventCardDto {
     analysis_state: row.analysis_state,
     source_count: row.source_count,
     position_count: positionCount,
+    ...(row.country_code === undefined ? {} : { country_code: row.country_code }),
   };
 }
 
@@ -146,8 +148,10 @@ export class PublicApiService {
     readonly followedSourceIds?: readonly string[];
     readonly blindspots?: boolean;
     readonly includeSynthesis?: boolean;
+    readonly country?: PublicCountry;
   }): Promise<PublicReadResult<PublicPage<EventCardDto>>> {
     const rows = await this.repository.listFeed({
+      ...(input.country === undefined ? {} : { country: input.country }),
       ...(input.category === undefined ? {} : { category: input.category }),
       ...(input.topic === undefined ? {} : { topic: input.topic }),
       cursor: input.page.cursor,
@@ -170,6 +174,24 @@ export class PublicApiService {
     };
   }
 
+  public async mediaGroups(country: PublicCountry) {
+    const rows = await this.repository.listMediaGroups(country);
+    return {
+      country_code: country,
+      profiles_available: rows !== null,
+      items: (rows ?? []).map((row) => ({
+        media_group_slug: row.media_group_slug,
+        name: row.media_group_name,
+        country_code: row.country_code,
+        editorial_lean: row.editorial_lean,
+        modalities: row.modalities,
+        source_ids: row.source_ids,
+        items_last_7_days: row.items_last_7_days,
+        latest_published_at: row.latest_published_at === null ? null : iso(row.latest_published_at),
+      })),
+    };
+  }
+
   public async countBlindspots(followedSourceIds: readonly string[]): Promise<number> {
     return this.repository.countBlindspots(followedSourceIds);
   }
@@ -188,8 +210,16 @@ export class PublicApiService {
     ]);
     if (primaryFacts.length > 1) throw new TypeError('Event has more than one primary fact.');
     const primary = primaryFacts[0];
+    // Older repository doubles in tests may not provide profiles.
+    const profiles = withCoverage && typeof this.repository.sourceProfiles === 'function'
+      ? await this.repository.sourceProfiles([...coverage.map((item) => item.source_id), ...linkedArticles.map((item) => item.source_id)])
+      : new Map();
+    const outlet = (sourceId: string) => {
+      const profile = profiles.get(sourceId);
+      return profile === undefined ? {} : { country_code: profile.country_code, media_group_slug: profile.media_group_slug, editorial_lean: profile.editorial_lean };
+    };
     const positions = new Map<string, {id:string;title:string;assertions:{id:string;assertion_text:string;quoted_text:string;article_id:string;source_name:string;source_id?:string;is_followed?:boolean}[]}>();
-    const articles = new Map<string, {id:string;title:string;source_name:string;published_at:string;url:string;source_id?:string;is_followed?:boolean}>();
+    const articles = new Map<string, {id:string;title:string;source_name:string;published_at:string;url:string;source_id?:string;is_followed?:boolean;country_code?:string;media_group_slug?:string;editorial_lean?:string|null}>();
     for (const item of coverage) {
       const position=positions.get(item.position_id) ?? {id:item.position_id,title:item.position_title,assertions:[]};
       // Records extracted before the minimum length existed are completed
@@ -200,11 +230,11 @@ export class PublicApiService {
         ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)})});
       positions.set(item.position_id,position);
       articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url,
-        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)})});
+        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)}),...outlet(item.source_id)});
     }
     for (const item of linkedArticles) {
       articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url,
-        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)})});
+        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)}),...outlet(item.source_id)});
     }
     return {
       body: {
@@ -351,8 +381,10 @@ export class PublicApiService {
   public async contradictions(
     page: PageRequest,
     followedSourceIds?: readonly string[],
+    country?: PublicCountry,
   ): Promise<PublicReadResult<PublicPage<ContradictionDto>>> {
     const rows = await this.repository.listContradictions({
+      ...(country === undefined ? {} : { country }),
       cursor: page.cursor,
       limit: page.limit,
       ...(followedSourceIds === undefined ? {} : {followedSourceIds}),
@@ -369,6 +401,7 @@ export class PublicApiService {
           id: row.id,
           ...(followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true}),
           event_id: row.event_id,
+          ...(row.country_code === undefined ? {} : { country_code: row.country_code }),
           event_title: row.event_title,
           position_a: {
             id: row.position_a_id,

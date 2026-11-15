@@ -1,5 +1,7 @@
 /** Only narrows costly candidate pairs; it never proves two headlines are the same event. */
-const generic=new Set(['ante','entre','para','sobre','tras','desde','hacia','durante','segun','contra','llego','llega','hora','programa','radio','television','dice','afirma','anuncia','anuncian','responde','respuesta','critica','criticas','oposicion','derecha','izquierda','crisis','financiera','financiero','financieras','financieros','politica','politico','gobierno','presidente','presidenta','ministro','ministra','nuevo','nueva','chile','chilenos','declaraciones','noticias']);
+const generic=new Set(['ante','entre','para','sobre','tras','desde','hacia','durante','segun','contra','llego','llega','hora','programa','radio','television','dice','afirma','anuncia','anuncian','responde','respuesta','critica','criticas','oposicion','derecha','izquierda','crisis','financiera','financiero','financieras','financieros','politica','politico','gobierno','presidente','presidenta','ministro','ministra','nuevo','nueva','chile','chilenos','declaraciones','noticias',
+  // English
+  'about','after','against','amid','breaking','could','first','from','have','into','latest','live','more','news','over','report','said','says','than','that','their','they','this','today','update','video','watch','what','when','where','which','while','will','with','would','year','white','house','administration','government','president','congress','senate']);
 function tokens(text:string):Set<string> {
   const normalized=text.normalize('NFKD').replace(/[\u0300-\u036f]/gu,'').toLowerCase();
   return new Set((normalized.match(/[a-z0-9]{4,}/gu) ?? []).filter(token=>!generic.has(token)));
@@ -42,7 +44,7 @@ export function isSportsText(text:string):boolean {
 /** Ranking signal only; it does not prove conflict or permit publication. */
 export function controversyScore(...texts: string[]): number {
   const text = texts.join(' ').normalize('NFKD').replace(/[\u0300-\u036f]/gu, '').toLowerCase();
-  const strong = /\b(?:cuestion\w*|rechaz\w*|acus\w*|desmient\w*|respond\w*|replic\w*|polemic\w*|critic\w*|querell\w*|denunci\w*|defens\w*|imputad\w*)\b/gu;
-  const context = /\b(?:oposicion|gobierno|fiscalia|corte|investigacion)\b/gu;
+  const strong = /\b(?:cuestion\w*|rechaz\w*|acus\w*|desmient\w*|respond\w*|replic\w*|polemic\w*|critic\w*|querell\w*|denunci\w*|defens\w*|imputad\w*|reject\w*|accus\w*|deni\w*|slam\w*|blast\w*|clash\w*|disput\w*|indict\w*|sue[sd]?|lawsuit\w*)\b/gu;
+  const context = /\b(?:oposicion|gobierno|fiscalia|corte|investigacion|opposition|administration|prosecutor\w*|court|investigation)\b/gu;
   return new Set(text.match(strong) ?? []).size * 3 + new Set(text.match(context) ?? []).size;
 }

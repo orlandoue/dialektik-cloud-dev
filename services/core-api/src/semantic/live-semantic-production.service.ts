@@ -32,6 +32,9 @@ import {
   sourcesPerCluster,
   publishedEntityCount,
   preclusterLiveSemanticArticles,
+  canPairAcrossOutlets,
+  editorialLeanBonus,
+  interleaveByCountry,
 } from "./live-semantic-precluster.js";
 import {
   LIVE_CLAIM_EXTRACTION_PROMPT,
@@ -144,6 +147,8 @@ export const BACKLOG_PAIRS_THRESHOLD = 15;
 const GAP_WITH_BACKLOG_MS = 15 * 60 * 1000;
 /** Pairs whose newest item is within this window are evaluated first. */
 const FRESH_PAIR_WINDOW_MS = 18 * 60 * 60 * 1000;
+/** Newest items per source and window that may enter candidate pairing. */
+const CANDIDATES_PER_SOURCE = 20;
 const SCHEDULER_STARTUP_DELAY_MS = 15_000;
 /** Each tick only checks the shared database guard; it spends nothing by itself. */
 const SCHEDULER_TICK_MS = 5 * 60 * 1000;
@@ -426,17 +431,22 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
           if(previous && previous.elapsedMs < LiveSemanticProductionService.minimumGapMs(trigger,previous.published,this.queuedPairs))
             return this.skip(trigger,'RECENT_SEMANTIC_RUN');
         }
-        const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean}>`
+        const profile=await this.sourceProfiles(connection);
+        const candidates=await sql<{articleId:string;sourceId:string;publishedAt:Date;headline:string;excerpt:string;needsExtraction:boolean;countryCode:string;mediaGroup:string|null;editorialLean:string|null}>`
           select * from (
           select i.article_id as "articleId",i.source_id as "sourceId",i.published_at as "publishedAt",i.headline,i.excerpt,
-            row_number() over(partition by (i.published_at at time zone 'America/Santiago')::date order by i.published_at desc,i.article_id desc) as daily_rank,
+            ${profile.columns},
+            row_number() over(partition by (i.published_at at time zone 'America/Santiago')::date,${profile.country} order by i.published_at desc,i.article_id desc) as daily_rank,
+            -- Each outlet contributes only its newest items per window, so a
+            -- source publishing ten times more cannot take the whole queue.
+            row_number() over(partition by i.source_id,(i.published_at at time zone 'America/Santiago')::date order by i.published_at desc,i.article_id desc) as source_rank,
             not exists(select 1 from public.live_semantic_article_attempts a where a.article_id=i.article_id::dialektik_ulid and a.input_sha256=i.input_sha256 and a.config_sha256=${configSha})
             and not exists(select 1 from public.assertion_extraction_generations g where g.article_id=i.article_id::dialektik_ulid and g.input_hash=i.input_sha256 and g.provider_id=${PROVIDER} and g.model_id=${MODEL} and g.config_version=${configSha} and g.state='active') as "needsExtraction"
-          from public.live_semantic_excerpt_inputs i
+          from public.live_semantic_excerpt_inputs i ${profile.join}
           where (published_at at time zone 'America/Santiago')::date>=${targetDay}::date
             and (published_at at time zone 'America/Santiago')::date<${targetDay}::date+2
             and i.event_id is null
-          ) ranked where daily_rank<=300 order by "publishedAt" desc,"articleId" desc`.execute(connection);
+          ) ranked where daily_rank<=300 and source_rank<=${CANDIDATES_PER_SOURCE} order by "publishedAt" desc,"articleId" desc`.execute(connection);
         const proposals=candidates.rows.map(a=>({...a,eventKey:'',eventTitle:a.headline,eventSummary:''}));
         const pendingIds=new Set(candidates.rows.filter(a=>a.needsExtraction).map(a=>a.articleId));
         const excerpts=new Map(candidates.rows.map(a=>[a.articleId,a.excerpt]));
@@ -462,16 +472,19 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
         count('PAIR_OVERLAP_TOO_WEAK',sameDomain.length-generic.length-overlapping.length);
         const clusterSources=sourcesPerCluster(clustered);
         const nowMs=Date.now();
-        const pairs=overlapping.map(pair=>{
+        const rankedPairs=overlapping.map(pair=>{
             const newest=Math.max(pair.left.publishedAt.getTime(),pair.right.publishedAt.getTime());
             return {pair,newest,
               fresh:nowMs-newest<=FRESH_PAIR_WINDOW_MS ? 0 : 1,
+              lean:editorialLeanBonus(pair.left.editorialLean,pair.right.editorialLean),
               // One side already extracted, or a case three media cover.
               priority:!pendingIds.has(pair.left.articleId) || !pendingIds.has(pair.right.articleId) || (clusterSources.get(pair.clusterKey) ?? 0)>=3 ? 0 : 1,
               coverage:publishedEntityCount(pair,publishedTitles),
               tension:controversyScore(pair.left.headline,excerpts.get(pair.left.articleId) ?? '',pair.right.headline,excerpts.get(pair.right.articleId) ?? ''),
             };
-          }).sort((a,b)=>a.fresh-b.fresh || a.priority-b.priority || a.coverage-b.coverage || b.tension-a.tension || b.newest-a.newest).map(item=>item.pair);
+          }).sort((a,b)=>a.fresh-b.fresh || b.lean-a.lean || a.priority-b.priority || a.coverage-b.coverage || b.tension-a.tension || b.newest-a.newest).map(item=>item.pair);
+        // The shared call budget is spent round-robin across CL, ES, AR and US.
+        const pairs=interleaveByCountry(rankedPairs,pair=>pair.left.countryCode);
         const plans=planSubBatches(pairs,pendingIds,{maxPairs:SCHEDULED_MAX_PAIRS,maxNewPerBatch:SCHEDULED_MAX_NEW_EXTRACTIONS,batches:SCHEDULED_SUB_BATCHES});
         const subBatches=plans.map(item=>item.articleIds);
         const plan={pairs:plans.flatMap(item=>item.pairs),articleIds:[...new Set(subBatches.flat())]};
@@ -549,6 +562,13 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
       leftSource:string; rightSource:string; leftText:string; rightText:string;
       leftDate:Date; rightDate:Date; leftSpan:Record<string,unknown>; rightSpan:Record<string,unknown>;
     };
+    const profile=await this.sourceProfiles(connection);
+    const profileOf=new Map<string,{countryCode:string;mediaGroup:string|null}>();
+    if(profile.available) {
+      const known=await sql<{sourceId:string;countryCode:string;mediaGroup:string}>`select source_id::text as "sourceId",
+        country_code as "countryCode",media_group_slug as "mediaGroup" from public.media_source_profiles`.execute(connection);
+      for (const row of known.rows) profileOf.set(row.sourceId,row);
+    }
     const rows=await sql<Candidate>`select g.id::text as "groupId",g.proposed_title as title,
       p.id::text as "pairId",p.relation,p.same_event as "sameEvent",p.same_event_confidence as "sameEventConfidence",
       p.ratio_conflicting as "ratioConflicting",p.ratio_comparable as "ratioComparable",
@@ -576,6 +596,12 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
     for (const row of rows.rows) {
       if (tried.has(row.groupId)) continue;
       if (tried.size >= MAX_AUTO_PROMOTION_GROUPS) break;
+      // A VS duel needs two different outlets of the same country.
+      if (!canPairAcrossOutlets(profileOf.get(row.leftSource) ?? {}, profileOf.get(row.rightSource) ?? {})) {
+        tried.add(row.groupId);
+        tally.reject('PAIR_SAME_MEDIA_GROUP_OR_COUNTRY');
+        continue;
+      }
       try {
         const article=(sourceId:string,textOriginal:string,publishedAt:Date,span:Record<string,unknown>) => ({
           sourceId,textOriginal,publishedAt,selectedQuote:String(span?.quoted_text ?? ''),
@@ -610,6 +636,32 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
       }
     }
     return published;
+  }
+
+  #profilesAvailable: boolean | undefined;
+
+  /**
+   * Country, media group and lean of each source (migration 087). Before the
+   * migration exists every source counts as a Chilean outlet of its own.
+   */
+  private async sourceProfiles(connection: Kysely<Database>) {
+    if (this.#profilesAvailable !== true) {
+      const present = await sql<{ ok: boolean }>`select to_regclass('public.media_source_profiles') is not null as ok`.execute(connection);
+      this.#profilesAvailable = present.rows[0]?.ok === true;
+    }
+    return this.#profilesAvailable
+      ? {
+          available: true,
+          join: sql`left join public.media_source_profiles mp on mp.source_id=i.source_id::dialektik_ulid`,
+          country: sql`coalesce(mp.country_code,'CL')`,
+          columns: sql`coalesce(mp.country_code,'CL') as "countryCode",mp.media_group_slug as "mediaGroup",mp.editorial_lean as "editorialLean"`,
+        }
+      : {
+          available: false,
+          join: sql``,
+          country: sql`'CL'`,
+          columns: sql`'CL'::text as "countryCode",null::text as "mediaGroup",null::text as "editorialLean"`,
+        };
   }
 
   private ensureEnabled(): void {
@@ -1087,12 +1139,13 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
     budget?: LiveSemanticCallBudget,
   ): Promise<number> {
     articleIds ??= [];
-    const result = await sql<ProposalRow>`
-      select i.article_id as "articleId",i.source_id as "sourceId",i.source_name as "sourceName",
+    const profile = await this.sourceProfiles(connection);
+    const result = await sql<ProposalRow & { countryCode: string; mediaGroup: string | null; editorialLean: string | null }>`
+      select i.article_id as "articleId",i.source_id as "sourceId",i.source_name as "sourceName",${profile.columns},
         i.url_canonical as "canonicalUrl",i.headline,i.published_at as "publishedAt",
         i.event_id as "eventId",i.text_original as "textOriginal",
         g.id::text as "generationId",g.proposal_payload->'spans'->0 as span
-      from public.live_semantic_excerpt_inputs i
+      from public.live_semantic_excerpt_inputs i ${profile.join}
       join lateral(select generation.* from public.assertion_extraction_generations generation
         where generation.article_id=i.article_id::dialektik_ulid and generation.input_hash=i.input_sha256
           and generation.provider_id=${PROVIDER} and generation.model_id=${MODEL}
@@ -1114,6 +1167,9 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
         eventKey: String(row.span?.event_key ?? ""),
         eventTitle: String(row.span?.event_title ?? ""),
         eventSummary: String(row.span?.event_summary ?? ""),
+        countryCode: row.countryCode,
+        mediaGroup: row.mediaGroup,
+        editorialLean: row.editorialLean,
       })),
       targetDay,
     );

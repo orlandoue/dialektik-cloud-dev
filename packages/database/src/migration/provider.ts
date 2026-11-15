@@ -3,6 +3,7 @@ import { socialCommunityMigration } from './083_social_community.js';
 import { socialFollowerCountMigration } from './084_social_follower_count.js';
 import { socialArenaMigration } from './085_social_arena.js';
 import { semanticRunBatchSizeMigration } from './086_semantic_run_batch_size.js';
+import { multicountryMediaCatalogMigration } from './087_multicountry_media_catalog.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -87,6 +88,7 @@ import { userFollowedSourcesMigration } from './080_user_followed_sources';
 
 const migrations: Readonly<Record<string, Migration>> = {
   '086_semantic_run_batch_size': semanticRunBatchSizeMigration,
+  '087_multicountry_media_catalog': multicountryMediaCatalogMigration,
   '085_social_arena': socialArenaMigration,
   '084_social_follower_count': socialFollowerCountMigration,
   '083_social_community': socialCommunityMigration,

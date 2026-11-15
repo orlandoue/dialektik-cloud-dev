@@ -11,6 +11,13 @@ import {
 } from './live.registry.js';
 import { syncLivePayload } from './live.sync.js';
 import {
+  capNewestFeedBlocks,
+  fetchYouTubeVideoDetails,
+  feedBlocks,
+  filterYouTubeAtom,
+} from './feed-entry-filter.js';
+import { resolveYouTubeHandle } from './youtube-handle-resolver.js';
+import {
   fetchYouTubeDataApiItems,
   YouTubeDataApiError,
   youtubeDataApiRssPayload,
@@ -23,6 +30,32 @@ const CORPORATE_SOURCE_LEASE_MS = 15 * 60_000;
 const MAX_ELMOSTRADOR_BACKFILL = 100;
 const MAX_BACKFILL_BATCH = 25;
 const MAX_BACKFILL_CONCURRENCY = 4;
+/** Catalog outlets publish up to ten times more than others; keep the newest. */
+export const MAX_CATALOG_ITEMS_PER_POLL = 20;
+const HANDLE_RESOLUTION_INTERVAL_MS = 6 * 60 * 60_000;
+const HANDLE_RESOLUTION_RETRY = '24 hours';
+const HANDLE_RESOLUTIONS_PER_RUN = 4;
+
+/**
+ * Trims a fetched payload before the rights-gated parser: YouTube Atom feeds
+ * lose Shorts, live streams and (with a key) pieces outside 90 s – 45 min;
+ * catalog sources keep their newest items only.
+ */
+export async function trimCorporatePayload(
+  payload: string,
+  source: { readonly canonicalDomain: string; readonly discoveryChannel: string; readonly registryKey: string },
+  apiKey: string | null,
+  fetchImpl: typeof fetch = fetch,
+): Promise<string> {
+  let next = payload;
+  if (source.canonicalDomain === 'youtube.com' && source.discoveryChannel === 'rss_atom') {
+    const ids = feedBlocks(next).flatMap((block) => block.videoId === null ? [] : [block.videoId]);
+    next = filterYouTubeAtom(next, await fetchYouTubeVideoDetails(ids, apiKey, fetchImpl)).payload;
+  }
+  if (source.registryKey.replace(/^(?:corporate-)+/u, '').startsWith('catalog-'))
+    next = capNewestFeedBlocks(next, MAX_CATALOG_ITEMS_PER_POLL).payload;
+  return next;
+}
 
 interface CorporateFeedResponse {
   readonly status: number;
@@ -255,6 +288,8 @@ async function mapWithConcurrency<T, R>(
 @Injectable()
 export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | undefined;
+  private resolverTimer: ReturnType<typeof setInterval> | undefined;
+  private resolving = false;
   private inFlight = false;
   private readonly logger = new Logger(CorporateLiveAcquisitionService.name);
 
@@ -295,6 +330,12 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       this.timer = setInterval(() => void this.pollSafely(), CORPORATE_ACQUISITION_TICK_MS);
       this.timer.unref();
     }
+    if (!this.resolverTimer) {
+      this.resolverTimer = setInterval(() => void this.resolvePendingHandles(), HANDLE_RESOLUTION_INTERVAL_MS);
+      this.resolverTimer.unref();
+      const first = setTimeout(() => void this.resolvePendingHandles(), 120_000);
+      first.unref();
+    }
     try {
       await this.markPollScheduled();
     } catch (error) {
@@ -320,7 +361,9 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
         join public.sources due_source on due_source.id=pending.source_id
         where pending.next_poll_at<=clock_timestamp()
           and (pending.lease_until is null or pending.lease_until<=clock_timestamp())
-          and (${youtubeApiConfigured} or due_source.canonical_domain<>'youtube.com')
+          and (${youtubeApiConfigured} or coalesce((select c.discovery_channel
+            from public.corporate_live_source_connections c where c.source_id=pending.source_id
+            order by c.sequence_number desc limit 1),'')<>'youtube_data_api_v3')
         order by case when due_source.canonical_domain='elmostrador.cl' then 0
           when due_source.canonical_domain='youtube.com' then 2 else 1 end,
           pending.next_poll_at,pending.source_id limit 1)`.execute(this.database);
@@ -328,6 +371,40 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
 
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
+    if (this.resolverTimer) clearInterval(this.resolverTimer);
+  }
+
+  /**
+   * Resolves catalog YouTube rows that only have an @handle, once each, and
+   * records every attempt; a resolved channel is registered by the reviewed
+   * database function and then polled through its Atom feed. Before migration
+   * 087 exists this does nothing.
+   */
+  async resolvePendingHandles(fetchImpl: typeof fetch = fetch): Promise<number> {
+    if (this.resolving) return 0;
+    this.resolving = true;
+    let activated = 0;
+    try {
+      const pending = await sql<{ slug: string; handle: string }>`
+        select media_group_slug as slug, youtube_handle as handle from public.media_catalog_entries
+        where source_type='YOUTUBE' and verification_status='PENDING_CHANNEL' and youtube_handle is not null
+          and (last_resolution_at is null or last_resolution_at<clock_timestamp()-${HANDLE_RESOLUTION_RETRY}::interval)
+        order by resolution_attempts, media_group_slug limit ${HANDLE_RESOLUTIONS_PER_RUN}`.execute(this.database);
+      for (const row of pending.rows) {
+        const resolution = await resolveYouTubeHandle(row.handle, youtubeApiKey(), fetchImpl);
+        const outcome = await sql<{ outcome: string }>`select public.dialektik_resolve_media_catalog_channel(
+          ${row.slug}, ${resolution.channelId}, ${resolution.status}) as outcome`.execute(this.database);
+        if (outcome.rows[0]?.outcome === 'REGISTERED') activated += 1;
+      }
+      if (activated > 0) this.logger.log(`YouTube catalog channels activated: ${activated}`);
+    } catch (error) {
+      const { sqlState } = postgresDiagnostic(error);
+      if (sqlState !== '42P01' && sqlState !== '42883')
+        this.logger.warn(`YouTube handle resolution failed: ${sqlState ?? 'UNKNOWN'}`);
+    } finally {
+      this.resolving = false;
+    }
+    return activated;
   }
 
   private get database(): Kysely<Database> {
@@ -367,7 +444,8 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
             and decision.scopes->>'fulltext_persistence'='false'
             and state.next_poll_at<=clock_timestamp()
             and (state.lease_until is null or state.lease_until<=clock_timestamp())
-            and (${youtubeApiConfigured} or source.canonical_domain<>'youtube.com')
+            -- Only Data API connections need the key; Atom feeds are free.
+            and (${youtubeApiConfigured} or connection.discovery_channel<>'youtube_data_api_v3')
           order by case when source.canonical_domain='elmostrador.cl' then 0
             when source.canonical_domain='youtube.com' then 2 else 1 end,state.next_poll_at,source.id
           for update of state skip locked limit 1
@@ -651,7 +729,10 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
         return;
       }
       if (feed.content === null) throw new Error('PUBLISHER_FEED_EMPTY');
-      const summary = await this.persistPayload(row, policy, feed.content, new Date(), discoveryUrl);
+      const content = row.discoveryChannel === 'youtube_data_api_v3'
+        ? feed.content
+        : await trimCorporatePayload(feed.content, row, apiKey);
+      const summary = await this.persistPayload(row, policy, content, new Date(), discoveryUrl);
       await this.recordSuccess(row, feed, backfilled, summary.failedSources > 0 || summary.failedItems > 0
         ? 'PARTIAL_SUCCESS'
         : 'SUCCEEDED');
@@ -696,7 +777,11 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       ? 30
       : row.discoveryChannel === 'youtube_data_api_v3'
         ? 7_200
-        : 900;
+        : row.canonicalDomain === 'youtube.com'
+          ? 3_600
+          : row.registryKey.replace(/^(?:corporate-)+/u, '').startsWith('catalog-')
+            ? 1_800
+            : 900;
     await sql`update public.corporate_live_source_poll_state
       set etag=${feed.etag},last_modified=${feed.lastModified},poll_interval_seconds=${interval},
           consecutive_failures=0,last_http_status=${feed.status},last_status=${status},
