@@ -65,6 +65,7 @@ const entities: Readonly<Record<string, string>> = {
 };
 
 const EXCERPT_MAX_CHARACTERS = 700;
+export const CITATION_EXCERPT_MAX_CHARACTERS = 300;
 
 function excerptKey(value: string): string {
   return value
@@ -74,13 +75,17 @@ function excerptKey(value: string): string {
     .trim();
 }
 
-function boundedFeedExcerpt(value: string | null, headline: string | null): string | null {
+function boundedFeedExcerpt(
+  value: string | null,
+  headline: string | null,
+  maximum = EXCERPT_MAX_CHARACTERS,
+): string | null {
   if (value === null || headline === null || excerptKey(value) === excerptKey(headline)) return null;
   const characters = Array.from(value);
-  if (characters.length <= EXCERPT_MAX_CHARACTERS) return value;
-  const bounded = characters.slice(0, EXCERPT_MAX_CHARACTERS).join('');
+  if (characters.length <= maximum) return value;
+  const bounded = characters.slice(0, maximum).join('');
   const lastWordBoundary = bounded.lastIndexOf(' ');
-  return (lastWordBoundary >= 500 ? bounded.slice(0, lastWordBoundary) : bounded).trim();
+  return (lastWordBoundary >= Math.floor(maximum * 0.7) ? bounded.slice(0, lastWordBoundary) : bounded).trim();
 }
 
 export function cleanLiveText(input: string | null): string | null {
@@ -217,14 +222,25 @@ function itemFromEntry(
       headline !== null &&
       excerptKey(candidate) !== excerptKey(headline),
   ) ?? null;
-  const rawExcerpt = boundedFeedExcerpt(excerptCandidate, headline);
+  // headline_and_citation_only sources keep a shorter excerpt: enough to
+  // match the occurrence and quote it, never a substitute for the article.
+  const citationOnly = policy.ingestionMode === 'headline_and_citation_only';
+  const rawExcerpt = boundedFeedExcerpt(
+    excerptCandidate,
+    headline,
+    citationOnly ? CITATION_EXCERPT_MAX_CHARACTERS : EXCERPT_MAX_CHARACTERS,
+  );
   const declaredRights = textValue(item.rights ?? item.copyright ?? item['dc:rights']);
   const declaredUpstream = cleanLiveText(textValue(item['dc:source'] ?? item.source));
   const decodedRights = [
     textValue(item.title),
     rawExcerpt,
     declaredRights,
-    feedRights,
+    // A publisher's own feed-wide notice («Copyright 2026 The New York Times
+    // Company») does not mark third-party material; for sources the owner
+    // reviewed as headline_and_citation_only it is not a rejection reason.
+    // Item-level rights, credits and external upstreams still are.
+    citationOnly && policy.publisherCopyrightNotice === 'ACCEPTED' ? null : feedRights,
     declaredUpstream,
   ]
     .map(cleanLiveText)

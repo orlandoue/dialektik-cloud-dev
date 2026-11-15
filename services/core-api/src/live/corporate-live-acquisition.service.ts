@@ -35,6 +35,10 @@ export const MAX_CATALOG_ITEMS_PER_POLL = 20;
 const HANDLE_RESOLUTION_INTERVAL_MS = 6 * 60 * 60_000;
 const HANDLE_RESOLUTION_RETRY = '24 hours';
 const HANDLE_RESOLUTIONS_PER_RUN = 4;
+/** Raw-article retention (migration 088): every 6 h, up to 5 × 500 articles. */
+const RETENTION_INTERVAL_MS = 6 * 60 * 60_000;
+const RETENTION_BATCH = 500;
+const RETENTION_MAX_BATCHES = 5;
 
 /**
  * Trims a fetched payload before the rights-gated parser: YouTube Atom feeds
@@ -94,6 +98,8 @@ interface CorporateSourceRow {
   readonly etag: string | null;
   readonly lastModified: string | null;
   readonly pollIntervalSeconds: number;
+  readonly ingestionMode: string | null;
+  readonly publisherCopyrightNotice: string | null;
 }
 
 interface BackfillArticle {
@@ -289,6 +295,8 @@ async function mapWithConcurrency<T, R>(
 export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDestroy {
   private timer: ReturnType<typeof setInterval> | undefined;
   private resolverTimer: ReturnType<typeof setInterval> | undefined;
+  private retentionTimer: ReturnType<typeof setInterval> | undefined;
+  private purging = false;
   private resolving = false;
   private inFlight = false;
   private readonly logger = new Logger(CorporateLiveAcquisitionService.name);
@@ -336,6 +344,12 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       const first = setTimeout(() => void this.resolvePendingHandles(), 120_000);
       first.unref();
     }
+    if (!this.retentionTimer) {
+      this.retentionTimer = setInterval(() => void this.purgeRawArticles(), RETENTION_INTERVAL_MS);
+      this.retentionTimer.unref();
+      const first = setTimeout(() => void this.purgeRawArticles(), 15 * 60_000);
+      first.unref();
+    }
     try {
       await this.markPollScheduled();
     } catch (error) {
@@ -372,6 +386,36 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
   onModuleDestroy(): void {
     if (this.timer) clearInterval(this.timer);
     if (this.resolverTimer) clearInterval(this.resolverTimer);
+    if (this.retentionTimer) clearInterval(this.retentionTimer);
+  }
+
+  /**
+   * Deletes raw live articles older than 14 days that nothing but their own
+   * provenance refers to (published events, positions, contrasts, semantic
+   * groups and community entries are kept). The reviewed database function
+   * does the work; before migration 088 exists this does nothing.
+   */
+  async purgeRawArticles(): Promise<number> {
+    if (this.purging) return 0;
+    this.purging = true;
+    let total = 0;
+    try {
+      for (let batch = 0; batch < RETENTION_MAX_BATCHES; batch += 1) {
+        const result = await sql<{ outcome: { status?: string; purged?: number } }>`
+          select public.dialektik_purge_raw_articles(interval '14 days', ${RETENTION_BATCH}) as outcome`
+          .execute(this.database);
+        const purged = Number(result.rows[0]?.outcome?.purged ?? 0);
+        total += purged;
+        if (result.rows[0]?.outcome?.status !== 'DONE' || purged < RETENTION_BATCH) break;
+      }
+      if (total > 0) this.logger.log(`Raw article retention purged ${total} articles older than 14 days.`);
+    } catch (error) {
+      const { sqlState } = postgresDiagnostic(error);
+      if (sqlState !== '42883') this.logger.warn(`Raw article retention failed: ${sqlState ?? 'UNKNOWN'}`);
+    } finally {
+      this.purging = false;
+    }
+    return total;
   }
 
   /**
@@ -474,6 +518,8 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
         policy.policy->>'authorizationReference' as "authorizationReference",
         coalesce(policy.policy->>'language','es') as language,
         policy.policy->>'publisherFamily' as "publisherFamily",policy.policy->>'category' as category,
+        policy.policy->>'ingestionMode' as "ingestionMode",
+        policy.policy->>'publisherCopyrightNotice' as "publisherCopyrightNotice",
         state.etag,state.last_modified as "lastModified",state.poll_interval_seconds as "pollIntervalSeconds"
       from public.sources source
       join lateral(select c.* from public.corporate_live_source_connections c
@@ -515,6 +561,12 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       attribution: row.attribution,
       language: row.language,
       allowedArticleDomains: row.allowedArticleDomains,
+      ...(row.ingestionMode === 'headline_and_citation_only'
+        ? {
+            ingestionMode: 'headline_and_citation_only' as const,
+            ...(row.publisherCopyrightNotice === 'ACCEPTED' ? { publisherCopyrightNotice: 'ACCEPTED' as const } : {}),
+          }
+        : {}),
     };
     assertLiveSourceReady(policy);
     if (

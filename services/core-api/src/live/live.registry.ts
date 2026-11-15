@@ -30,6 +30,10 @@ export interface LiveSourcePolicy {
   readonly language: string;
   readonly allowedArticleDomains: readonly string[];
   readonly canonicalPathAliases?: Readonly<Record<string, string>>;
+  /** Owner-reviewed mode: title, a short excerpt for the quote, link back. */
+  readonly ingestionMode?: 'headline_and_citation_only';
+  /** The feed-wide notice names the publisher itself (reviewed per source). */
+  readonly publisherCopyrightNotice?: 'ACCEPTED';
 }
 
 // These legacy candidates are discovery-only until consultation, storage and
