@@ -81,3 +81,14 @@ test('data are observations, not journalistic articles, corroborations or contra
  assert.equal(Object.hasOwn(result,'articles'),false);
  assert.equal(Object.hasOwn(result,'positions'),false);
 });
+test('incomplete live features are skipped instead of failing the whole feed',async()=>{
+ const base=feature('us6000u4x2');
+ const data=await fetchChileUsgsObservations(mock(feed([
+  base,
+  {...feature('us6000u4x4'),properties:{...feature('us6000u4x4').properties,mag:null}},
+  {...feature('us6000u4x5'),properties:{...feature('us6000u4x5').properties,type:'quarry blast'}},
+  {...feature('us6000u4x6','140 km W of Hanga Roa, Chile'),geometry:{type:'Point',coordinates:[-110.6,-27.2,10]}},
+  {...feature('us6000u4x7'),properties:{...feature('us6000u4x7').properties,status:'deleted'}},
+ ])),fixed);
+ assert.deepEqual(data.items.map(item=>item.observation_id),['us6000u4x2']);
+});

@@ -61,23 +61,38 @@ function decode(data: unknown, now: Date): SeismicObservation[] {
         geo.coordinates.length < 3 || geo.coordinates.length > 4) {
       throw Error('USGS_IDENTITY_INVALID');
     }
+    // Spoofing protection: a Chile observation must point at its own USGS
+    // event page. Anything else rejects the whole response.
+    if (prop.url !== 'https://earthquake.usgs.gov/earthquakes/eventpage/' + id) {
+      throw Error('USGS_OBSERVATION_INVALID');
+    }
     const [lng,lat,depth] = geo.coordinates;
+    // A "Chile" label far from Chile's whole territory (islands included),
+    // or a revision time in the future, is inconsistent: fail closed.
+    if (typeof lng === 'number' && typeof lat === 'number' &&
+        (lng < -115 || lng > -60 || lat < -62 || lat > -15)) {
+      throw Error('USGS_OBSERVATION_INVALID');
+    }
+    if ((typeof prop.time === 'number' && prop.time > now.getTime() + MAX_FUTURE_SKEW_MS) ||
+        (typeof prop.updated === 'number' && prop.updated > now.getTime() + MAX_FUTURE_SKEW_MS)) {
+      throw Error('USGS_OBSERVATION_INVALID');
+    }
+    // Ordinary gaps in a single feature skip that observation only: no
+    // magnitude yet, a quarry blast or explosion, an island outside the
+    // mainland map bounds, an unknown review status or an old revision.
     if (![lng,lat,depth,prop.mag,prop.time,prop.updated].every(
       x => typeof x === 'number' && Number.isFinite(x)) ||
       Number(lng) < -80 || Number(lng) > -65 || Number(lat) < -58 ||
       Number(lat) > -17 || Number(depth) < -5 || Number(depth) > 800 ||
       Number(prop.mag) < -2 || Number(prop.mag) > 10 ||
       !Number.isSafeInteger(prop.time) || !Number.isSafeInteger(prop.updated) ||
-      Number(prop.time) > now.getTime() + MAX_FUTURE_SKEW_MS ||
-      Number(prop.updated) > now.getTime() + MAX_FUTURE_SKEW_MS ||
       Number(prop.updated) < Number(prop.time) ||
       Number(prop.time) < now.getTime() - 9 * 86_400_000 ||
-      prop.url !== 'https://earthquake.usgs.gov/earthquakes/eventpage/' + id ||
       !['reviewed','automatic'].includes(String(prop.status)) ||
       typeof prop.type !== 'string' || prop.type !== 'earthquake' ||
       prop.place.trim().length < 3 || prop.place.length > 180 ||
       /[\u0000-\u001f\u007f]/u.test(prop.place)) {
-      throw Error('USGS_OBSERVATION_INVALID');
+      continue;
     }
     ids.add(id);
     out.push(Object.freeze({
