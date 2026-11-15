@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - claude/multicountry-sources
+      - claude/catalog-hardening
     paths:
       - ".github/workflows/multicountry-sources-verify.yml"
       - "services/core-api/data/verified_multicountry_sources.csv"
       - "services/core-api/scripts/verify-multicountry-sources.mjs"
+      - "services/core-api/scripts/discover-catalog-repairs.mjs"
   workflow_dispatch:
 
 permissions:
@@ -38,3 +40,5 @@ jobs:
         env:
           YOUTUBE_API_KEY: ${{ secrets.YOUTUBE_API_KEY }}
         run: node services/core-api/scripts/verify-multicountry-sources.mjs
+      - name: Look for working replacements of failing rows
+        run: node services/core-api/scripts/discover-catalog-repairs.mjs
