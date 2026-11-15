@@ -11,10 +11,11 @@ import { SocialArenaController } from './social-arena.controller.js';
 import { SocialArenaService } from './social-arena.service.js';
 import { SocialController } from './social.controller.js';
 import { SocialService } from './social.service.js';
+import { SourceProfilesMonitor } from './source-profiles.js';
 
 @Module({
   imports: [PrivateBetaAuthModule],
   controllers: [FollowedSourcesController, PublicApiController, SocialController, SocialArenaController],
-  providers: [PublicApiRepository, PublicApiService, PublicRateLimitService, FollowedSourcesService, SocialService, SocialArenaService],
+  providers: [SourceProfilesMonitor, PublicApiRepository, PublicApiService, PublicRateLimitService, FollowedSourcesService, SocialService, SocialArenaService],
 })
 export class PublicApiModule {}

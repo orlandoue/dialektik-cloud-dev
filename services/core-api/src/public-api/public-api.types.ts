@@ -15,6 +15,7 @@ export interface EventCardDto {
   readonly position_count: number | null;
   readonly synthesis_relation?: 'CONTRADICTION' | 'DIFFERENT_FOCUS' | 'DEVELOPING' | 'TREND' | null;
   readonly is_followed_source_match?: boolean;
+  readonly country_code?: string;
 }
 
 export interface EventDetailDto extends EventCardDto {
@@ -125,6 +126,7 @@ export interface RelationshipEndpointDto {
 
 export interface ContradictionDto {
   readonly is_followed_source_match?: boolean;
+  readonly country_code?: string;
   readonly id: string;
   readonly event_id: string;
   readonly event_title: string;

@@ -1,6 +1,7 @@
 import type { Database, Ulid } from '@dialektik/database';
 import { sql, type Kysely } from 'kysely';
-import { publisherDomainsForMarket, UK_BETA_SOURCE_IDS, type PublisherMarket } from './live.publisher-market.js';
+import { sourceProfilesAvailable } from '../public-api/source-profiles.js';
+import { CHILE_PUBLISHER_DOMAINS, isCatalogMarket, publisherDomainsForMarket, UK_BETA_SOURCE_IDS, type PublisherMarket } from './live.publisher-market.js';
 
 function publisherIdentityFilter(market: PublisherMarket, sourceColumn: string) {
   return market === 'UK'
@@ -11,6 +12,9 @@ function publisherIdentityFilter(market: PublisherMarket, sourceColumn: string) 
 export interface LiveReadRow {
   id: Ulid;
   event_id: Ulid | null;
+  country_code?: string | null;
+  media_group_slug?: string | null;
+  editorial_lean?: string | null;
   headline: string;
   excerpt: string | null;
   author: string | null;
@@ -41,6 +45,9 @@ export interface LiveSourceReadRow {
   source_type: string;
   canonical_domain: string;
   policy: Record<string, unknown>;
+  country_code?: string | null;
+  media_group_slug?: string | null;
+  editorial_lean?: string | null;
 }
 
 /** Directory records, never license, operational readiness or publisher approval. */
@@ -78,6 +85,42 @@ export interface LiveNewsQuery {
 
 export class LiveRepository {
   constructor(private readonly database: Kysely<Database>) {}
+
+  /** Whether migration 087 is applied (see SourceProfilesMonitor). */
+  profilesReady(): boolean {
+    return sourceProfilesAvailable();
+  }
+
+  /**
+   * Publisher-market scope of a source. With profiles, the catalog country
+   * decides (Chilean sources without a profile keep their domain mapping);
+   * without them only the original domain mapping applies. null: no rows.
+   */
+  marketScope(market: PublisherMarket, sourceColumn: string, domainColumn: string) {
+    // Internal column names only; rendered unquoted like the original filter.
+    const source = sql.raw(sourceColumn);
+    const domain = sql.raw(domainColumn);
+    const chile = sql`${domain} in (${sql.join(CHILE_PUBLISHER_DOMAINS.map((value) => sql`${value}`))})`;
+    if (isCatalogMarket(market) && this.profilesReady()) {
+      return sql`(exists(select 1 from media_source_profiles market_profile
+          where market_profile.source_id = ${source} and market_profile.country_code = ${market})
+        or (${market === 'CL'} and ${chile} and not exists(select 1 from media_source_profiles market_profile
+          where market_profile.source_id = ${source})))`;
+    }
+    const domains = publisherDomainsForMarket(market);
+    if (domains.length === 0) return null;
+    return sql`${domain} in (${sql.join(domains.map((value) => sql`${value}`))}) and ${publisherIdentityFilter(market, sourceColumn)}`;
+  }
+
+  /** Country, media group and lean columns for a source column. */
+  profileColumns(sourceColumn: string) {
+    const source = sql.ref(sourceColumn);
+    if (!this.profilesReady())
+      return sql`null::text as country_code, null::text as media_group_slug, null::text as editorial_lean`;
+    return sql`(select country_code from media_source_profiles where source_id = ${source}) as country_code,
+      (select media_group_slug from media_source_profiles where source_id = ${source}) as media_group_slug,
+      (select editorial_lean from media_source_profiles where source_id = ${source}) as editorial_lean`;
+  }
 
   private newsProjection() {
     return sql`select a.id, a.event_id, v.headline,
@@ -125,18 +168,17 @@ export class LiveRepository {
 
   async list(query: LiveNewsQuery): Promise<LiveReadRow[]> {
     const market = query.market ?? 'CL';
-    const domains = publisherDomainsForMarket(market);
-    if (domains.length === 0) return [];
-    const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
+    const scope = this.marketScope(market, 'source_id', 'canonical_domain');
+    if (scope === null) return [];
+    const profile = this.profileColumns('source_id');
     const cursor =
       query.cursor === undefined
         ? sql`true`
         : sql`(published_at, id) <
       (select published_at, id from news where id = ${query.cursor})`;
-    const result = await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news
+    const result = await sql<LiveReadRow>`with news as (${this.newsProjection()}) select news.*, ${profile} from news
       where ${cursor}
-        and canonical_domain in (${marketFilter})
-        and ${publisherIdentityFilter(market, 'source_id')}
+        and ${scope}
         and ${query.sourceScope === undefined ? sql`true` : query.sourceScope === 'following' ? sql`source_id::text = any(${query.followedSourceIds ?? []}::text[])` : sql`not (source_id::text = any(${query.followedSourceIds ?? []}::text[]))`}
         and ${query.format === undefined ? sql`true` : query.format === 'videos' ? sql`canonical_domain = 'youtube.com'` : sql`canonical_domain <> 'youtube.com'`}
         and ${query.topic === undefined ? sql`true` : sql`(headline || ' ' || coalesce(excerpt, '')) ~* ${LIVE_NEWS_TOPIC_PATTERNS[query.topic]}`}
@@ -149,13 +191,12 @@ export class LiveRepository {
   }
 
   async article(id: Ulid, market: PublisherMarket = 'CL'): Promise<LiveReadRow | undefined> {
-    const domains = publisherDomainsForMarket(market);
-    if (domains.length === 0) return undefined;
-    const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
+    const scope = this.marketScope(market, 'source_id', 'canonical_domain');
+    if (scope === null) return undefined;
+    const profile = this.profileColumns('source_id');
     const result =
-      await sql<LiveReadRow>`with news as (${this.newsProjection()}) select * from news
-        where id = ${id} and canonical_domain in (${marketFilter})
-          and ${publisherIdentityFilter(market, 'source_id')}`.execute(
+      await sql<LiveReadRow>`with news as (${this.newsProjection()}) select news.*, ${profile} from news
+        where id = ${id} and ${scope}`.execute(
         this.database,
       );
     return result.rows[0];
@@ -168,9 +209,8 @@ export class LiveRepository {
    * body, hyperlinks or unreviewed rights policy are returned.
    */
   async registeredSources(market: PublisherMarket): Promise<LiveRegisteredSourceRow[]> {
-    const domains = publisherDomainsForMarket(market);
-    if (domains.length === 0) return [];
-    const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
+    const scope = this.marketScope(market, 's.id', 's.canonical_domain');
+    if (scope === null) return [];
     const result = await sql<LiveRegisteredSourceRow>`
       select s.id, s.name, s.canonical_domain, s.source_type,
         (select count(*)::integer from articles article_row
@@ -178,20 +218,19 @@ export class LiveRepository {
            and article_row.origin = 'LIVE_REAL') as staged_record_count
       from sources s
       where s.origin = 'LIVE_REAL'
-        and s.canonical_domain in (${marketFilter})
-        and ${publisherIdentityFilter(market, 's.id')}
+        and ${scope}
       order by s.name, s.id
-      limit 100
+      limit 200
     `.execute(this.database);
     return result.rows;
   }
 
   async sources(id?: Ulid, market: PublisherMarket = 'CL'): Promise<LiveSourceReadRow[]> {
-    const domains = publisherDomainsForMarket(market);
-    if (domains.length === 0) return [];
-    const marketFilter = sql.join(domains.map((domain) => sql`${domain}`));
+    const scope = this.marketScope(market, 's.id', 's.canonical_domain');
+    if (scope === null) return [];
+    const profile = this.profileColumns('s.id');
     const result =
-      await sql<LiveSourceReadRow>`select s.id, s.name, s.source_type, s.canonical_domain, p.policy
+      await sql<LiveSourceReadRow>`select s.id, s.name, s.source_type, s.canonical_domain, p.policy, ${profile}
       from sources s join live_source_policies p on p.source_id = s.id and p.id =
         (select id from live_source_policies where source_id = s.id order by recorded_at desc, id desc limit 1)
       where s.origin = 'LIVE_REAL' and p.active = true and p.rights_class = 'LIVE_READY'
@@ -201,8 +240,7 @@ export class LiveRepository {
         and nullif(p.policy->>'endpoint', '') is not null
         and p.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
         and p.policy->>'endpoint' <> 'https://supabase.com'
-        and s.canonical_domain in (${marketFilter})
-        and ${publisherIdentityFilter(market, 's.id')}
+        and ${scope}
         and ${id === undefined ? sql`true` : sql`s.id = ${id}`}
       order by s.name, s.id`.execute(this.database);
     return result.rows;

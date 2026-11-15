@@ -1,4 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
+import { sourceProfilesAvailable, type PublicCountry } from './source-profiles.js';
 import { sql } from 'kysely';
 
 import { CoreDatabaseService } from '../database/core-database.service.js';
@@ -15,6 +16,7 @@ export interface FeedRow {
   readonly representation_updated_at: Date;
   readonly synthesis_relation?: 'CONTRADICTION' | 'DIFFERENT_FOCUS' | 'DEVELOPING' | 'TREND' | null;
   readonly is_followed_source_match?: boolean;
+  readonly country_code?: string;
 }
 
 export interface EventRow extends FeedRow {
@@ -111,8 +113,20 @@ export interface RelationshipEndpointRow {
   readonly endpoint_order: number;
 }
 
+export interface MediaGroupRow {
+  readonly media_group_slug: string;
+  readonly media_group_name: string;
+  readonly country_code: string;
+  readonly editorial_lean: string | null;
+  readonly modalities: readonly string[];
+  readonly source_ids: readonly string[];
+  readonly items_last_7_days: number;
+  readonly latest_published_at: Date | null;
+}
+
 export interface ContradictionRow {
   readonly is_followed_source_match?: boolean;
+  readonly country_code?: string;
   readonly id: string;
   readonly event_id: string;
   readonly event_title: string;
@@ -282,6 +296,21 @@ export class PublicApiRepository {
     private readonly databaseService: CoreDatabaseService,
   ) {}
 
+  /**
+   * Country of an event = country of its outlets (pairs never cross
+   * countries). Events without profiled outlets are Chilean, as before 087.
+   */
+  #countryScope(country: PublicCountry, eventColumn: string) {
+    const event = sql.ref(eventColumn);
+    if (!sourceProfilesAvailable()) {
+      return { clause: country === 'CL' ? sql`` : sql`and false`, column: sql`'CL'::text` };
+    }
+    const column = sql`coalesce((select country_profile.country_code from public.articles country_article
+      join public.media_source_profiles country_profile on country_profile.source_id=country_article.source_id
+      where country_article.event_id=${event} order by country_article.id limit 1),'CL')`;
+    return { clause: sql`and ${column}=${country}`, column };
+  }
+
   public async listFeed(input: {
     readonly category?: string;
     readonly topic?: string;
@@ -289,7 +318,9 @@ export class PublicApiRepository {
     readonly limit: number;
     readonly followedSourceIds?: readonly string[];
     readonly blindspots?: boolean;
+    readonly country?: PublicCountry;
   }): Promise<readonly FeedRow[]> {
+    const country = this.#countryScope(input.country ?? 'CL', 'event_row.id');
     const categoryClause =
       input.category === undefined ? sql`` : sql`and category_row.slug = ${input.category}`;
     const topicClause =
@@ -327,6 +358,7 @@ export class PublicApiRepository {
         event_row.analysis_state,
         event_row.synthesis_relation,
         ${match} as is_followed_source_match,
+        ${country.column} as country_code,
         (
           select count(distinct article_row.source_id)::integer
           from articles article_row
@@ -365,6 +397,7 @@ export class PublicApiRepository {
         ${categoryClause}
         ${topicClause}
         ${blindspotClause}
+        ${country.clause}
         ${cursorClause}
       order by ${follows === undefined ? sql`` : sql`(${match})::int desc,`} event_row.detected_at desc, event_row.id desc
       limit ${input.limit + 1}
@@ -775,7 +808,11 @@ export class PublicApiRepository {
     readonly limit: number;
     readonly eventId?: string;
     readonly followedSourceIds?: readonly string[];
+    readonly country?: PublicCountry;
   }): Promise<readonly ContradictionRow[]> {
+    // A single event's contrasts are listed whatever its country.
+    const country = this.#countryScope(input.country ?? 'CL', 'event_row.id');
+    const countryClause = input.eventId === undefined ? country.clause : sql``;
     const follows=input.followedSourceIds;
     const match=follows===undefined ? sql`false` : sql`exists(select 1 from public.articles followed_article
       where followed_article.event_id=event_row.id and followed_article.origin='LIVE_REAL'
@@ -793,6 +830,7 @@ export class PublicApiRepository {
         publication.id,
         publication.event_id,
         ${match} as is_followed_source_match,
+        ${country.column} as country_code,
         case when publication.threshold_rule_at_publication='v1:editorial_focus_contrast'
           then 'Contraste de enfoques: ' || event_row.title_descriptive
           else event_row.title_descriptive end as event_title,
@@ -853,11 +891,50 @@ export class PublicApiRepository {
             and assertion_row.lifecycle_state = 'active'
             and claim.tombstone_id is null
         )
+        ${countryClause}
         ${cursorClause}
       order by ${follows === undefined ? sql`` : sql`(${match})::int desc,`} publication.confirmed_at desc, publication.id desc
       limit ${input.limit + 1}
     `.execute(this.databaseService.database);
     return result.rows;
+  }
+
+  /**
+   * Media groups of a country, each listed once with its press and YouTube
+   * outlets combined (ingested items in the last 7 days, newest item).
+   */
+  public async listMediaGroups(country: PublicCountry): Promise<readonly MediaGroupRow[] | null> {
+    if (!sourceProfilesAvailable()) return null;
+    const result = await sql<MediaGroupRow>`
+      select profile.media_group_slug, min(profile.media_group_name) as media_group_name, profile.country_code,
+        max(profile.editorial_lean) as editorial_lean,
+        array_agg(distinct profile.modality order by profile.modality) as modalities,
+        array_agg(source_row.id::text order by source_row.id) as source_ids,
+        coalesce(sum(stats.recent), 0)::integer as items_last_7_days,
+        max(stats.latest) as latest_published_at
+      from public.media_source_profiles profile
+      join public.sources source_row on source_row.id = profile.source_id and source_row.origin = 'LIVE_REAL'
+      join lateral (select policy.* from public.live_source_policies policy where policy.source_id = source_row.id
+        order by policy.recorded_at desc, policy.id desc limit 1) policy
+        on policy.active and policy.rights_class = 'LIVE_READY' and policy.policy->>'rightsReviewStatus' = 'APPROVED'
+      left join lateral (select count(*) filter (where article_row.published_at > now() - interval '7 days') as recent,
+          max(article_row.published_at) as latest
+        from public.articles article_row where article_row.source_id = source_row.id and article_row.origin = 'LIVE_REAL') stats on true
+      where profile.country_code = ${country}
+      group by profile.media_group_slug, profile.country_code
+      order by min(profile.media_group_name), profile.media_group_slug
+    `.execute(this.databaseService.database);
+    return result.rows;
+  }
+
+  /** Country, media group and lean of the given sources (empty before 087). */
+  public async sourceProfiles(sourceIds: readonly string[]): Promise<ReadonlyMap<string, { country_code: string; media_group_slug: string; editorial_lean: string | null }>> {
+    if (!sourceProfilesAvailable() || sourceIds.length === 0) return new Map();
+    const result = await sql<{ source_id: string; country_code: string; media_group_slug: string; editorial_lean: string | null }>`
+      select source_id::text as source_id, country_code, media_group_slug, editorial_lean
+      from public.media_source_profiles where source_id::text = any(${[...new Set(sourceIds)]}::text[])
+    `.execute(this.databaseService.database);
+    return new Map(result.rows.map((row) => [row.source_id, row]));
   }
 
   public async findSource(id: string): Promise<SourceRow | undefined> {
