@@ -98,6 +98,8 @@ interface CorporateSourceRow {
   readonly etag: string | null;
   readonly lastModified: string | null;
   readonly pollIntervalSeconds: number;
+  readonly ingestionMode: string | null;
+  readonly publisherCopyrightNotice: string | null;
 }
 
 interface BackfillArticle {
@@ -516,6 +518,8 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
         policy.policy->>'authorizationReference' as "authorizationReference",
         coalesce(policy.policy->>'language','es') as language,
         policy.policy->>'publisherFamily' as "publisherFamily",policy.policy->>'category' as category,
+        policy.policy->>'ingestionMode' as "ingestionMode",
+        policy.policy->>'publisherCopyrightNotice' as "publisherCopyrightNotice",
         state.etag,state.last_modified as "lastModified",state.poll_interval_seconds as "pollIntervalSeconds"
       from public.sources source
       join lateral(select c.* from public.corporate_live_source_connections c
@@ -557,6 +561,12 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
       attribution: row.attribution,
       language: row.language,
       allowedArticleDomains: row.allowedArticleDomains,
+      ...(row.ingestionMode === 'headline_and_citation_only'
+        ? {
+            ingestionMode: 'headline_and_citation_only' as const,
+            ...(row.publisherCopyrightNotice === 'ACCEPTED' ? { publisherCopyrightNotice: 'ACCEPTED' as const } : {}),
+          }
+        : {}),
     };
     assertLiveSourceReady(policy);
     if (
