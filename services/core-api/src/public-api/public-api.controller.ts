@@ -67,7 +67,7 @@ export class PublicApiController {
     const page = parsePageRequest(query, 'feed', { category, topic, synthesis: query.synthesis, ...(country === 'CL' ? {} : { country }), ...(userId === undefined ? {} : {user: userId, follows: followedSourceIds!.join(',')}) });
     if (followedSourceIds !== undefined) {
       void reply.header('cache-control','private, no-store');
-      return (await this.publicApi.feed({ ...(category === undefined ? {} : {category}), ...(topic === undefined ? {} : {topic}), page, followedSourceIds, includeSynthesis: query.synthesis === '1', country })).body;
+      return (await this.publicApi.feed({ ...(category === undefined ? {} : {category}), ...(topic === undefined ? {} : {topic}), page, followedSourceIds, includeSynthesis: query.synthesis === '1', country, includeCountry: query.country !== undefined })).body;
     }
     return sendPublicRead(
       request,
@@ -78,6 +78,7 @@ export class PublicApiController {
         page,
         includeSynthesis: query.synthesis === '1',
         country,
+        includeCountry: query.country !== undefined,
       }),
     );
   }
@@ -97,9 +98,9 @@ export class PublicApiController {
     const page = parsePageRequest(query, 'contradictions', {...(country === 'CL' ? {} : { country }), ...(userId === undefined ? {} : {user:userId,follows:followed!.join(',')})});
     if (followed !== undefined) {
       void reply.header('cache-control','private, no-store');
-      return (await this.publicApi.contradictions(page, followed, country)).body;
+      return (await this.publicApi.contradictions(page, followed, country, query.country !== undefined)).body;
     }
-    return sendPublicRead(request, reply, await this.publicApi.contradictions(page, undefined, country));
+    return sendPublicRead(request, reply, await this.publicApi.contradictions(page, undefined, country, query.country !== undefined));
   }
 
   @Get('feed/blindspots')
@@ -123,17 +124,19 @@ export class PublicApiController {
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
-    assertExactQueryKeys(query, ['include','personalized']);
+    assertExactQueryKeys(query, ['include','personalized','outlets']);
     if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
+    if (query.outlets !== undefined && query.outlets !== '1') throw new BadRequestException('Invalid outlets projection.');
+    const outlets = query.outlets === '1';
     if (query.include !== undefined && query.include !== 'coverage') {
       throw new BadRequestException('Unsupported event include');
     }
     if (query.personalized === '1') {
       const followed = await this.follows.list(betaUserId(request));
       void reply.header('cache-control','private, no-store');
-      return (await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage',followed)).body;
+      return (await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage',followed,outlets)).body;
     }
-    return sendPublicRead(request, reply, await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage'));
+    return sendPublicRead(request, reply, await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage',undefined,outlets));
   }
 
   @Get('events/:eventId/positions')
