@@ -13,6 +13,7 @@ import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:flutter/material.dart';
@@ -50,15 +51,6 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
     ArenaTopic.deportes,
     ArenaTopic.sociedad,
   ];
-  // Only Chile has licensed coverage today; the others are announced.
-  static const List<({String flag, String name, bool available})> _countries =
-      <({String flag, String name, bool available})>[
-        (flag: '🇨🇱', name: 'Chile', available: true),
-        (flag: '🇵🇪', name: 'Perú', available: false),
-        (flag: '🇦🇷', name: 'Argentina', available: false),
-        (flag: '🇨🇴', name: 'Colombia', available: false),
-        (flag: '🇲🇽', name: 'México', available: false),
-      ];
   final Set<int> _built = <int>{0};
   int _pill = 0;
   ArenaTopic? _topic;
@@ -101,8 +93,10 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
     if (chosen != null && mounted) setState(() => _topic = _topics[chosen]);
   }
 
-  void _chooseCountry() => unawaited(
-    showModalBottomSheet<void>(
+  /// The four countries of the verified catalog; switching updates Coliseo,
+  /// VS, Historias, Explorar and Medios and is remembered on the device.
+  Future<void> _chooseCountry() async {
+    final String? chosen = await showModalBottomSheet<String>(
       context: context,
       isScrollControlled: true,
       backgroundColor: ArenaColors.card,
@@ -118,28 +112,26 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
               padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
               child: Text('País', style: ArenaText.section),
             ),
-            for (final ({String flag, String name, bool available}) country
-                in _countries)
+            for (final CatalogCountry country
+                in PublisherMarketSelection.catalogCountries)
               ListTile(
-                enabled: country.available,
+                key: ValueKey<String>('arena-country-option-${country.code}'),
                 leading: Text(
                   country.flag,
                   style: const TextStyle(fontSize: 22),
                 ),
                 title: Text(country.name, style: ArenaText.cardTitle),
-                subtitle: country.available
-                    ? null
-                    : const Text('Próximamente', style: ArenaText.meta),
-                trailing: country.available
+                trailing: country.code == store.country
                     ? const Icon(Icons.check, color: ArenaColors.violet)
                     : null,
-                onTap: () => Navigator.of(sheetContext).pop(),
+                onTap: () => Navigator.of(sheetContext).pop(country.code),
               ),
           ],
         ),
       ),
-    ),
-  );
+    );
+    if (chosen != null && mounted) store.chooseCountry(chosen);
+  }
 
   ArenaStore get store => widget.store;
 
@@ -179,11 +171,18 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
                       ),
                     ),
                     const SizedBox(width: 10),
-                    ArenaDropdownPill(
-                      key: const Key('arena-country'),
-                      label: '🇨🇱 Chile',
-                      semanticsLabel: 'País: Chile. Cambiar país',
-                      onTap: _chooseCountry,
+                    ListenableBuilder(
+                      listenable: store,
+                      builder: (BuildContext context, Widget? _) {
+                        final CatalogCountry country =
+                            PublisherMarketSelection.countryOf(store.country);
+                        return ArenaDropdownPill(
+                          key: const Key('arena-country'),
+                          label: '${country.flag} ${country.name}',
+                          semanticsLabel: 'País: ${country.name}. Cambiar país',
+                          onTap: () => unawaited(_chooseCountry()),
+                        );
+                      },
                     ),
                   ],
                 ),

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
 import 'package:dialektik/design_system/theme/dialektik_theme.dart';
@@ -82,7 +84,8 @@ class DialektikApp extends StatefulWidget {
 }
 
 final class _DialektikAppState extends State<DialektikApp> {
-  final PublisherMarketSelection _publisherMarketSelection = PublisherMarketSelection();
+  final PublisherMarketSelection _publisherMarketSelection =
+      PublisherMarketSelection();
   ConsumerRepository? _repository;
   PublicApiClient? _ownedClient;
   PublicApiClient? _ownedSemanticClient;
@@ -99,6 +102,8 @@ final class _DialektikAppState extends State<DialektikApp> {
   @override
   void initState() {
     super.initState();
+    // The Arena reopens on the country chosen last time (Chile by default).
+    if (widget.arenaEnabled) unawaited(_publisherMarketSelection.restore());
     const String semanticMode = String.fromEnvironment(
       'DIALEKTIK_SEMANTIC_MODE',
       defaultValue: 'disabled',

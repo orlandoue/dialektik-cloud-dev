@@ -299,7 +299,7 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
   ).showSnackBar(SnackBar(content: Text(message)));
 
   Future<void> _toggle(List<LiveSourceDto> brand) async {
-    final String key = ArenaStore.brandKey(brand.first.name);
+    final String key = ArenaStore.brandKeyOf(brand.first);
     if (_busy.contains(key)) return;
     setState(() => _busy.add(key));
     try {
@@ -326,13 +326,13 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
     if (selected == null || !mounted) return;
     final Set<String> brands = store.sources
         .where((LiveSourceDto s) => selected.ids.contains(s.id))
-        .map((LiveSourceDto s) => ArenaStore.brandKey(s.name))
+        .map(ArenaStore.brandKeyOf)
         .toSet();
     final List<String> ids = store.sources
         .where(
           (LiveSourceDto s) =>
               (selected.ids.contains(s.id) ||
-                  brands.contains(ArenaStore.brandKey(s.name))) &&
+                  brands.contains(ArenaStore.brandKeyOf(s))) &&
               !store.followed.contains(s.id),
         )
         .map((LiveSourceDto s) => s.id)
@@ -481,7 +481,7 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
                             source: brand.first,
                             following: store.followsBrand(brand),
                             busy: _busy.contains(
-                              ArenaStore.brandKey(brand.first.name),
+                              ArenaStore.brandKeyOf(brand.first),
                             ),
                             canFollow: canFollow,
                             onOpen: () => Navigator.of(context).push(

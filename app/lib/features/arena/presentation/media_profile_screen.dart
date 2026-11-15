@@ -224,8 +224,8 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
                     in store
                         .brands(store.sources)
                         .map((List<LiveSourceDto> b) => b.first))
-                  if (ArenaStore.brandKey(item.name) !=
-                      ArenaStore.brandKey(source.name))
+                  if (ArenaStore.brandKeyOf(item) !=
+                      ArenaStore.brandKeyOf(source))
                     ListTile(
                       contentPadding: EdgeInsets.zero,
                       leading: MediaEmblem(name: item.name, size: 34),

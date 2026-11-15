@@ -235,9 +235,16 @@ void main() {
 
     await tester.tap(country);
     await tester.pumpAndSettle();
-    expect(find.text('Perú'), findsOneWidget);
-    expect(find.text('Argentina'), findsOneWidget);
-    expect(find.text('Próximamente'), findsWidgets);
+    // The four catalog countries are all enabled.
+    for (final String name in <String>[
+      'Chile',
+      'España',
+      'Argentina',
+      'EE. UU.',
+    ]) {
+      expect(find.text(name), findsWidgets);
+    }
+    expect(find.text('Próximamente'), findsNothing);
     await tester.tap(find.text('Chile').last);
     await tester.pumpAndSettle();
 

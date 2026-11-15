@@ -16,6 +16,7 @@ import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
+import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/foundation.dart';
@@ -92,8 +93,55 @@ final class ArenaStore extends ChangeNotifier {
     required this.live,
     this.openLink = openExternalHttpLink,
     this.account,
+    this.market,
   }) {
     following?.followingChanges.addListener(_followsChanged);
+    _country = market?.value ?? 'CL';
+    market?.addListener(_marketChanged);
+  }
+
+  /// Selected country (CL, ES, AR, US); shared with the API client, which
+  /// sends it to Core. Null in tests and in the classic reader: Chile.
+  final PublisherMarketSelection? market;
+  String _country = 'CL';
+
+  /// Country whose Coliseo, VS, Historias, Explorar and Medios are shown.
+  String get country => _country;
+
+  /// Changes the country for every tab and remembers it on the device.
+  void chooseCountry(String code) {
+    if (code == _country) return;
+    final PublisherMarketSelection? selection = market;
+    if (selection == null) {
+      _country = code;
+      _resetForCountry();
+      return;
+    }
+    selection.choose(code);
+  }
+
+  void _marketChanged() {
+    final String code = market?.value ?? 'CL';
+    if (code == _country) return;
+    _country = code;
+    _resetForCountry();
+  }
+
+  /// Another country is another set of outlets, events and duels.
+  void _resetForCountry() {
+    events = const <EventCardDto>[];
+    duels = const <ArenaDuel>[];
+    sources = const <LiveSourceDto>[];
+    videos = const <LiveNewsItemDto>[];
+    loaded = false;
+    error = null;
+    _notify();
+    final Future<void>? running = _running;
+    if (running == null) {
+      unawaited(load(refresh: true));
+    } else {
+      unawaited(running.whenComplete(() => load(refresh: true)));
+    }
   }
 
   final ConsumerRepository consumer;
@@ -214,11 +262,15 @@ final class ArenaStore extends ChangeNotifier {
   static String brandKey(String name) =>
       arenaSourceName(name).toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
 
+  /// Core's media group when known, otherwise the medium's name.
+  static String brandKeyOf(LiveSourceDto source) =>
+      source.mediaGroupSlug ?? brandKey(source.name);
+
   /// Every registered source of the same medium, [source] included.
   List<LiveSourceDto> brandOf(LiveSourceDto source) {
-    final String key = brandKey(source.name);
+    final String key = brandKeyOf(source);
     final List<LiveSourceDto> same = sources
-        .where((LiveSourceDto s) => brandKey(s.name) == key)
+        .where((LiveSourceDto s) => brandKeyOf(s) == key)
         .toList();
     return same.isEmpty ? <LiveSourceDto>[source] : same;
   }
@@ -229,7 +281,7 @@ final class ArenaStore extends ChangeNotifier {
         <String, List<LiveSourceDto>>{};
     for (final LiveSourceDto source in from) {
       grouped
-          .putIfAbsent(brandKey(source.name), () => <LiveSourceDto>[])
+          .putIfAbsent(brandKeyOf(source), () => <LiveSourceDto>[])
           .add(source);
     }
     return grouped.values.toList();
@@ -535,6 +587,7 @@ final class ArenaStore extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     following?.followingChanges.removeListener(_followsChanged);
+    market?.removeListener(_marketChanged);
     super.dispose();
   }
 }
