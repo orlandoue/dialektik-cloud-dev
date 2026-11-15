@@ -171,6 +171,23 @@ void main() {
     );
 
     test(
+      'ignores new public fields so Core can evolve without blocking sign-in',
+      () async {
+        final Map<String, Object?> card = eventCardJson()
+          ..['country_code'] = 'ES'
+          ..['a_future_field'] = <String, Object?>{'any': 1};
+        final PublicApiClient client = _client(
+          (_) async => _jsonResponse(<String, Object?>{
+            'items': <Object?>[card],
+            'next_cursor': null,
+          }),
+        );
+        final page = await client.listFeed();
+        expect(page.items, hasLength(1));
+      },
+    );
+
+    test(
       'decodes the complete provenance and public analysis shapes',
       () async {
         final List<Object?> responses = <Object?>[

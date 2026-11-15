@@ -5,6 +5,7 @@ import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
+import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/data/story_follow_store.dart';
@@ -153,7 +154,15 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
             borderRadius: BorderRadius.circular(16),
             onTap: video == null
                 ? null
-                : () => unawaited(store.openLink(video.url)),
+                : () => unawaited(
+                    openArenaPiece(
+                      context,
+                      store,
+                      video.url,
+                      title: video.title,
+                      channel: video.sourceName,
+                    ),
+                  ),
             child: ArenaCover(
               topic: topic,
               videoId: videoId,
@@ -345,7 +354,15 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
           key: const Key('arena-last-change'),
           borderColor: ArenaColors.amberBright,
           borderWidth: 1.5,
-          onTap: () => unawaited(store.openLink(latest.url)),
+          onTap: () => unawaited(
+            openArenaPiece(
+              context,
+              store,
+              latest.url,
+              title: latest.title,
+              channel: latest.sourceName,
+            ),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -527,7 +544,15 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
         ArenaCard(
           onTap: byId[quote.articleId] == null
               ? null
-              : () => unawaited(store.openLink(byId[quote.articleId]!.url)),
+              : () => unawaited(
+                  openArenaPiece(
+                    context,
+                    store,
+                    byId[quote.articleId]!.url,
+                    title: byId[quote.articleId]!.title,
+                    channel: quote.sourceName,
+                  ),
+                ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
@@ -673,7 +698,15 @@ class _TimelineEntry extends StatelessWidget {
                     button: true,
                     label: 'Abrir original: ${article.title}',
                     child: InkWell(
-                      onTap: () => unawaited(store.openLink(article.url)),
+                      onTap: () => unawaited(
+                        openArenaPiece(
+                          context,
+                          store,
+                          article.url,
+                          title: article.title,
+                          channel: article.sourceName,
+                        ),
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[

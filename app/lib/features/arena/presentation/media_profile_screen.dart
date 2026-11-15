@@ -5,6 +5,7 @@ import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
+import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
@@ -568,11 +569,27 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
         if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null)
           ArenaVideoCard(
             item: item,
-            onOpen: () => unawaited(store.openLink(item.canonicalUrl)),
+            onOpen: () => unawaited(
+              openArenaPiece(
+                context,
+                store,
+                item.canonicalUrl,
+                title: item.headline,
+                channel: item.source.name,
+              ),
+            ),
           )
         else
           ArenaCard(
-            onTap: () => unawaited(store.openLink(item.canonicalUrl)),
+            onTap: () => unawaited(
+              openArenaPiece(
+                context,
+                store,
+                item.canonicalUrl,
+                title: item.headline,
+                channel: item.source.name,
+              ),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[

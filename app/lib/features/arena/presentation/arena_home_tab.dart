@@ -6,6 +6,7 @@ import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
 import 'package:dialektik/features/arena/presentation/living_event_screen.dart';
+import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
@@ -341,7 +342,15 @@ class _Coliseo extends StatelessWidget {
                 for (final LiveNewsItemDto video in videos)
                   ArenaVideoCard(
                     item: video,
-                    onOpen: () => unawaited(store.openLink(video.canonicalUrl)),
+                    onOpen: () => unawaited(
+                      openArenaPiece(
+                        context,
+                        store,
+                        video.canonicalUrl,
+                        title: video.headline,
+                        channel: video.source.name,
+                      ),
+                    ),
                     onOpenSource: () =>
                         openArenaMedia(context, store, video.source.id),
                   ),
@@ -685,7 +694,15 @@ class ArenaNewsCard extends StatelessWidget {
     final String? videoId = extractYouTubeVideoId(item.canonicalUrl.toString());
     return ArenaCard(
       padding: EdgeInsets.zero,
-      onTap: () => unawaited(store.openLink(item.canonicalUrl)),
+      onTap: () => unawaited(
+        openArenaPiece(
+          context,
+          store,
+          item.canonicalUrl,
+          title: item.headline,
+          channel: item.source.name,
+        ),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[

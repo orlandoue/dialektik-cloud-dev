@@ -4,6 +4,7 @@ import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
+import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/social/data/arena_social_repository.dart';
@@ -339,7 +340,9 @@ class _CommunityScreenState extends State<CommunityScreen> {
           onVote: (int vote) => _voteEntry(entry, vote),
           onReply: () => _reply(entry),
           onOpen: entry.hasLink
-              ? () => unawaited(store.openLink(entry.url!))
+              ? () => unawaited(
+                  openArenaPiece(context, store, entry.url!, title: entry.body),
+                )
               : null,
         ),
     ];

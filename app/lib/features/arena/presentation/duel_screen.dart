@@ -4,6 +4,7 @@ import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
+import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
@@ -581,7 +582,15 @@ class _DuelScreenState extends State<DuelScreen> {
       for (final EventCoverageArticleDto article in event.articles)
         _SourceLinkCard(
           article: article,
-          onOpen: () => unawaited(store.openLink(article.url)),
+          onOpen: () => unawaited(
+            openArenaPiece(
+              context,
+              store,
+              article.url,
+              title: article.title,
+              channel: article.sourceName,
+            ),
+          ),
           onOpenSource: article.sourceId == null
               ? null
               : () => openArenaMedia(context, store, article.sourceId!),
@@ -906,68 +915,91 @@ class _SourceLinkCard extends StatelessWidget {
   final VoidCallback? onOpenSource;
 
   @override
-  Widget build(BuildContext context) => ArenaCard(
-    key: ValueKey<String>('arena-source-link-${article.id}'),
-    onTap: onOpen,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Semantics(
-          button: onOpenSource != null,
-          label: 'Abrir perfil de ${arenaSourceName(article.sourceName)}',
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: onOpenSource,
-            child: MediaEmblem(name: article.sourceName, size: 40),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
+  Widget build(BuildContext context) {
+    final String? videoId = extractYouTubeVideoId(article.url.toString());
+    return ArenaCard(
+      key: ValueKey<String>('arena-source-link-${article.id}'),
+      onTap: onOpen,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          if (videoId != null) ...<Widget>[
+            YouTubeThumbnail(
+              key: ValueKey<String>('arena-source-thumbnail-${article.id}'),
+              videoId: videoId,
+            ),
+            const SizedBox(height: 10),
+          ],
+          Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                article.title,
-                style: const TextStyle(
-                  fontSize: 14.5,
-                  height: 1.3,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF1A1A1A),
+              Semantics(
+                button: onOpenSource != null,
+                label: 'Abrir perfil de ${arenaSourceName(article.sourceName)}',
+                child: InkWell(
+                  customBorder: const CircleBorder(),
+                  onTap: onOpenSource,
+                  child: MediaEmblem(name: article.sourceName, size: 40),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '${arenaSourceName(article.sourceName)} · '
-                '${arenaAgo(article.publishedAt)}',
-                style: ArenaText.meta,
-              ),
-              const SizedBox(height: 6),
-              // The whole card opens the original; this row says so.
-              const Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  Flexible(
-                    child: Text(
-                      'Leer en medio original',
-                      style: TextStyle(
-                        fontSize: 13,
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      article.title,
+                      style: const TextStyle(
+                        fontSize: 14.5,
+                        height: 1.3,
                         fontWeight: FontWeight.w700,
-                        color: ArenaColors.violet,
-                        decoration: TextDecoration.underline,
-                        decorationColor: ArenaColors.violet,
+                        color: Color(0xFF1A1A1A),
                       ),
                     ),
-                  ),
-                  SizedBox(width: 4),
-                  Icon(Icons.open_in_new, size: 16, color: ArenaColors.violet),
-                ],
+                    const SizedBox(height: 4),
+                    Text(
+                      '${arenaSourceName(article.sourceName)} · '
+                      '${arenaAgo(article.publishedAt)}',
+                      style: ArenaText.meta,
+                    ),
+                    const SizedBox(height: 6),
+                    // The whole card opens the original; this row says so.
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: <Widget>[
+                        Flexible(
+                          child: Text(
+                            videoId != null
+                                ? '▶ Ver video en la app'
+                                : 'Leer en medio original',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w700,
+                              color: ArenaColors.violet,
+                              decoration: TextDecoration.underline,
+                              decorationColor: ArenaColors.violet,
+                            ),
+                          ),
+                        ),
+                        if (videoId == null) ...const <Widget>[
+                          SizedBox(width: 4),
+                          Icon(
+                            Icons.open_in_new,
+                            size: 16,
+                            color: ArenaColors.violet,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 /// Modal to contribute a link with a supporting note to the case.
