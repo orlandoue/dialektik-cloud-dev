@@ -57,7 +57,6 @@ function eventCard(row: FeedRow | EventRow): EventCardDto {
     analysis_state: row.analysis_state,
     source_count: row.source_count,
     position_count: positionCount,
-    ...(row.country_code === undefined ? {} : { country_code: row.country_code }),
   };
 }
 
@@ -149,6 +148,8 @@ export class PublicApiService {
     readonly blindspots?: boolean;
     readonly includeSynthesis?: boolean;
     readonly country?: PublicCountry;
+    /** Only clients that ask for a country get country_code (older apps reject unknown fields). */
+    readonly includeCountry?: boolean;
   }): Promise<PublicReadResult<PublicPage<EventCardDto>>> {
     const rows = await this.repository.listFeed({
       ...(input.country === undefined ? {} : { country: input.country }),
@@ -166,7 +167,7 @@ export class PublicApiService {
         ? encodeCursor('feed', input.page.filterFingerprint, last.detected_at, last.id)
         : null;
     return {
-      body: { items: visible.map((row) => ({...eventCard(row), ...(input.includeSynthesis ? {synthesis_relation:row.synthesis_relation ?? null} : {}), ...(input.followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true})})), next_cursor: nextCursor },
+      body: { items: visible.map((row) => ({...eventCard(row), ...(input.includeCountry && row.country_code !== undefined ? {country_code:row.country_code} : {}), ...(input.includeSynthesis ? {synthesis_relation:row.synthesis_relation ?? null} : {}), ...(input.followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true})})), next_cursor: nextCursor },
       lastModified:
         visible.length === 0
           ? new Date(0)
@@ -196,7 +197,7 @@ export class PublicApiService {
     return this.repository.countBlindspots(followedSourceIds);
   }
 
-  public async event(id: string, includeCoverage = false, followedSourceIds?: readonly string[]): Promise<PublicReadResult<EventDetailDto>> {
+  public async event(id: string, includeCoverage = false, followedSourceIds?: readonly string[], includeOutlets = false): Promise<PublicReadResult<EventDetailDto>> {
     const row = await this.#requireCurrentEvent(id);
     // Every read below depends only on the event id, so they run together on
     // the pool instead of paying one database round trip after another.
@@ -211,7 +212,8 @@ export class PublicApiService {
     if (primaryFacts.length > 1) throw new TypeError('Event has more than one primary fact.');
     const primary = primaryFacts[0];
     // Older repository doubles in tests may not provide profiles.
-    const profiles = withCoverage && typeof this.repository.sourceProfiles === 'function'
+    // Outlet fields only for clients that ask (older apps reject unknown fields).
+    const profiles = withCoverage && includeOutlets && typeof this.repository.sourceProfiles === 'function'
       ? await this.repository.sourceProfiles([...coverage.map((item) => item.source_id), ...linkedArticles.map((item) => item.source_id)])
       : new Map();
     const outlet = (sourceId: string) => {
@@ -382,6 +384,7 @@ export class PublicApiService {
     page: PageRequest,
     followedSourceIds?: readonly string[],
     country?: PublicCountry,
+    includeCountry = false,
   ): Promise<PublicReadResult<PublicPage<ContradictionDto>>> {
     const rows = await this.repository.listContradictions({
       ...(country === undefined ? {} : { country }),
@@ -401,7 +404,7 @@ export class PublicApiService {
           id: row.id,
           ...(followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true}),
           event_id: row.event_id,
-          ...(row.country_code === undefined ? {} : { country_code: row.country_code }),
+          ...(includeCountry && row.country_code !== undefined ? { country_code: row.country_code } : {}),
           event_title: row.event_title,
           position_a: {
             id: row.position_a_id,
