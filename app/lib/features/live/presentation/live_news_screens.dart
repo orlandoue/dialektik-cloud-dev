@@ -33,7 +33,10 @@ const Set<String> _chileBetaPublisherDomains = <String>{
   'emol.com', 'gob.cl', 'latercera.com', 'senapred.gob.cl', 'senapred.cl', 'youtube.com',
 };
 
+/// Chilean beta publishers, plus any catalog outlet Core already scoped to
+/// the selected country.
 bool isChileBetaPublisher(LiveSourceDto source) =>
+    source.countryCode != null ||
     _chileBetaPublisherDomains.contains(source.canonicalDomain.toLowerCase());
 
 enum LiveDateFilter { all, today, yesterday, week }

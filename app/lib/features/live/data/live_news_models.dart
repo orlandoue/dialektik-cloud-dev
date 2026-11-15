@@ -9,6 +9,9 @@ final class LiveSourceDto {
     required this.canonicalDomain,
     this.publisherFamily,
     this.category,
+    this.countryCode,
+    this.mediaGroupSlug,
+    this.editorialLean,
   });
   factory LiveSourceDto.fromJson(Object? value) {
     final Map<String, Object?> data = liveObject(value);
@@ -20,6 +23,9 @@ final class LiveSourceDto {
       canonicalDomain: liveString(data, 'canonical_domain'),
       publisherFamily: liveOptionalString(data, 'publisher_family'),
       category: liveOptionalString(data, 'category'),
+      countryCode: liveOptionalString(data, 'country_code'),
+      mediaGroupSlug: liveOptionalString(data, 'media_group_slug'),
+      editorialLean: liveOptionalString(data, 'editorial_lean'),
     );
   }
   final String id;
@@ -28,6 +34,13 @@ final class LiveSourceDto {
   final String canonicalDomain;
   final String? publisherFamily;
   final String? category;
+
+  /// Catalog country (CL, ES, AR, US) when Core knows it.
+  final String? countryCode;
+
+  /// One medium's press feed and YouTube channel share this group.
+  final String? mediaGroupSlug;
+  final String? editorialLean;
 }
 
 final class LiveNewsItemDto {

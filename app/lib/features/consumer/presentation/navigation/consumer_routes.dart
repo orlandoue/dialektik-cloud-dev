@@ -109,6 +109,7 @@ final class ConsumerRouteFactory {
     live: live,
     openLink: externalLinkOpener,
     account: account,
+    market: publisherMarketSelection,
   );
   static const Map<String, ArenaTab> _arenaTabs = <String, ArenaTab>{
     ConsumerRoutes.feed: ArenaTab.inicio,

@@ -84,8 +84,16 @@ final class PublicApiClient
   final int maxAttempts;
   final Duration retryDelay;
   final PublisherMarketSelection? publisherMarketSelection;
+  /// Markets without verified catalog coverage answer empty pages.
   bool get _otherMarket =>
-      publisherMarketSelection != null && publisherMarketSelection!.value != 'CL';
+      publisherMarketSelection != null &&
+      !PublisherMarketSelection.isCatalogCountry(publisherMarketSelection!.value);
+
+  /// ?country for Core's event endpoints; omitted for Chile (Core's default).
+  String? get _eventCountry {
+    final String? code = publisherMarketSelection?.value;
+    return code == null || code == 'CL' ? null : code;
+  }
   String? get _marketQuery => publisherMarketSelection?.value;
   final ValueNotifier<int> _followingVersion = ValueNotifier<int>(0);
   @override
@@ -264,6 +272,7 @@ final class PublicApiClient
         'topic': ?topic,
         'cursor': ?cursor,
         'limit': '$limit',
+        'country': ?_eventCountry,
       },
       decoder: (Object? value) => _page(value, EventCardDto.fromJson),
       refresh: refresh,
@@ -286,7 +295,7 @@ final class PublicApiClient
     }
     return _get<PublicPage<ContradictionDto>>(
       '/v1/contradictions',
-      query: <String, String>{if (_personalizationEnabled && personalized) 'personalized': '1', 'cursor': ?cursor, 'limit': '$limit'},
+      query: <String, String>{if (_personalizationEnabled && personalized) 'personalized': '1', 'cursor': ?cursor, 'limit': '$limit', 'country': ?_eventCountry},
       decoder: (Object? value) => _page(value, ContradictionDto.fromJson),
       refresh: refresh,
       requestToken: requestToken,
