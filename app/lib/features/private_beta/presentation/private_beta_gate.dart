@@ -64,6 +64,9 @@ final class PrivateBetaGate extends StatefulWidget {
   State<PrivateBetaGate> createState() => _PrivateBetaGateState();
 }
 
+/// How long sign-in waits for Core before entering anyway.
+const Duration preflightTimeout = Duration(seconds: 12);
+
 final class _PrivateBetaGateState extends State<PrivateBetaGate> {
   SupabaseAuthClient? _auth;
   bool _signedIn = false;
@@ -254,26 +257,21 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
     final int generation = ++_sessionGeneration;
     final PublicApiClient preflight = _createApiClient(auth);
     try {
-      // An empty authorized feed is valid; a 401 means the account is not
-      // admitted. Do not mount private navigation before this check.
-      await preflight.listFeed(limit: 1, refresh: true);
+      // Only an explicit refusal from Core (401/403: account not admitted or
+      // revoked) keeps a valid Supabase session out. A slow cold start, a
+      // network error or a response this version cannot read lets the reader
+      // in: the app retries its own requests.
+      await preflight
+          .listFeed(limit: 1, refresh: true)
+          .timeout(preflightTimeout);
     } on PublicApiFailure catch (failure) {
       if (failure.kind == PublicFailureKind.unauthorized) {
         auth.clearSession();
-      }
-      final bool unreachable =
-          failure.kind == PublicFailureKind.network ||
-          failure.kind == PublicFailureKind.serviceUnavailable;
-      if (!(restored && unreachable)) {
-        _fail(switch (failure.kind) {
-          PublicFailureKind.unauthorized =>
-            'La cuenta no está habilitada para la beta privada.',
-          PublicFailureKind.network || PublicFailureKind.serviceUnavailable =>
-            'La sesión se inició, pero Core no responde. Comprueba la conexión y vuelve a intentarlo.',
-          _ => 'No se pudo comprobar el acceso privado. Inténtalo nuevamente.',
-        });
+        _fail('La cuenta no está habilitada para la beta privada.');
         return;
       }
+    } on Object {
+      // Timeout or unexpected error: never block a valid sign-in.
     } finally {
       preflight.close();
     }

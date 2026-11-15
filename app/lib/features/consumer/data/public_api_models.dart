@@ -829,6 +829,12 @@ PositionListItemDto _positionBase(_JsonObject json) => PositionListItemDto(
   evidenceAbsenceReason: json.nullableString('evidence_absence_reason'),
 );
 
+/// Field names of internal epistemic or diagnostic values.
+final RegExp _internalField = RegExp(
+  r'(score|similarity|embedding|confidence|cluster|internal|stack|sql)',
+  caseSensitive: false,
+);
+
 final class _JsonObject {
   const _JsonObject(this._values, this._label);
 
@@ -841,9 +847,14 @@ final class _JsonObject {
     if (value is! Map<String, Object?>) {
       throw FormatException('$label must be a JSON object.');
     }
+    // Required fields must be present. Internal analysis values must never
+    // reach the reader; any other field this version does not know (such as
+    // a new country_code) is ignored, so Core can add data without locking
+    // installed apps out of sign-in.
     final Set<String> keys = value.keys.toSet();
     final Set<String> allowed = <String>{...required, ...optional};
-    if (!keys.containsAll(required) || !allowed.containsAll(keys)) {
+    if (!keys.containsAll(required) ||
+        keys.any((String key) => !allowed.contains(key) && _internalField.hasMatch(key))) {
       throw FormatException('$label has an invalid field set.');
     }
     return _JsonObject(value, label);
