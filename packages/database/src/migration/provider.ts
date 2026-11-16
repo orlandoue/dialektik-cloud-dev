@@ -6,6 +6,7 @@ import { semanticRunBatchSizeMigration } from './086_semantic_run_batch_size.js'
 import { multicountryMediaCatalogMigration } from './087_multicountry_media_catalog.js';
 import { rawArticleRetentionMigration } from './088_raw_article_retention.js';
 import { catalogRepairsMigration } from './089_catalog_repairs_and_citation_feeds.js';
+import { redundantReceiptRetentionMigration } from './090_redundant_receipt_retention.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -93,6 +94,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '087_multicountry_media_catalog': multicountryMediaCatalogMigration,
   '088_raw_article_retention': rawArticleRetentionMigration,
   '089_catalog_repairs_and_citation_feeds': catalogRepairsMigration,
+  '090_redundant_receipt_retention': redundantReceiptRetentionMigration,
   '085_social_arena': socialArenaMigration,
   '084_social_follower_count': socialFollowerCountMigration,
   '083_social_community': socialCommunityMigration,

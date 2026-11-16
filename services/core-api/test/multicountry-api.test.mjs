@@ -61,6 +61,11 @@ test('with profiles, the catalog country scopes live news, sources, feed and con
     assert.match(news.text, /market_profile\.country_code = \$\d+/u);
     assert.ok(news.values.includes('US'));
     assert.match(news.text, /media_group_slug/u);
+    // Columns must be qualified: inside the profile subqueries an unqualified
+    // source_id is the profile table's own column (SQLSTATE 21000 in production).
+    assert.match(news.text, /market_profile\.source_id = news\.source_id/u);
+    assert.match(news.text, /where source_id = "?news"?\."?source_id"?/u);
+    assert.doesNotMatch(news.text, /market_profile\.source_id = source_id\b/u);
     // Chilean sources without a profile keep their domain mapping.
     assert.match(sources.text, /not exists\(select 1 from media_source_profiles market_profile/u);
     assert.ok(sources.values.includes('biobiochile.cl'));
