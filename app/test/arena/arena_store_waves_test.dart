@@ -51,7 +51,10 @@ void main() {
     // Only the carousel's details are requested first, never one per
     // contrast at once.
     expect(core.requested, carousel);
-    expect(store.loaded, isFalse);
+    // Stories show at once; the carousel waits only for its own details.
+    expect(store.loaded, isTrue);
+    expect(store.duelsLoading, isTrue);
+    expect(store.duels, isEmpty);
 
     core.release(carousel);
     await _settle();
