@@ -17,9 +17,13 @@ import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
+import 'package:dialektik/features/science/data/science_repository.dart';
 import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/foundation.dart';
+
+/// The two reading modes of the app.
+enum ArenaMode { general, ciencia }
 
 /// One published contrast joined with the coverage of its event.
 final class ArenaDuel {
@@ -106,7 +110,8 @@ final class ArenaStore extends ChangeNotifier {
     this.openLink = openExternalHttpLink,
     this.account,
     this.market,
-  }) {
+    ScienceRepository? science,
+  }) : _science = science {
     following?.followingChanges.addListener(_followsChanged);
     _country = market?.value ?? 'CL';
     market?.addListener(_marketChanged);
@@ -168,6 +173,45 @@ final class ArenaStore extends ChangeNotifier {
   String? get alias => account?.alias;
 
   static const String _savedKey = 'dialektik_arena_saved';
+  static const String _modeKey = 'dialektik_arena_mode';
+
+  final ScienceRepository? _science;
+
+  /// Studies and story comments (Core). Requires API for the new routes.
+  ScienceRepository? get science =>
+      _science ??
+      (consumer is ScienceRepository
+          ? consumer as ScienceRepository
+          : live is ScienceRepository
+          ? live as ScienceRepository
+          : null);
+
+  /// General news or Science (studies with DOI); remembered on the device.
+  ArenaMode mode = ArenaMode.general;
+
+  void setMode(ArenaMode value) {
+    if (value == mode) return;
+    mode = value;
+    _notify();
+    unawaited(
+      storage.writeStories(_modeKey, value.name).catchError((Object _) {}),
+    );
+  }
+
+  Future<void> _loadMode() async {
+    try {
+      final String? raw = (await storage.readStories(_modeKey))?.trim();
+      final ArenaMode? stored = ArenaMode.values
+          .where((ArenaMode m) => m.name == raw)
+          .firstOrNull;
+      if (stored != null && stored != mode) {
+        mode = stored;
+        _notify();
+      }
+    } on Object {
+      /* The mode is a device convenience only. */
+    }
+  }
 
   List<EventCardDto> events = const <EventCardDto>[];
   List<ArenaDuel> duels = const <ArenaDuel>[];
@@ -349,6 +393,7 @@ final class ArenaStore extends ChangeNotifier {
     error = null;
     _notify();
     unawaited(_loadSaved());
+    unawaited(_loadMode());
     unawaited(stories.load().catchError((Object _) {}));
     final Future<void> secondary = Future.wait(<Future<void>>[
       _loadSources(refresh: refresh),

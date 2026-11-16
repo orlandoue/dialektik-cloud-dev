@@ -23,12 +23,16 @@ final class PublicApiFailure implements Exception {
     this.statusCode,
     this.code,
     this.tombstone,
+    this.existingCommentId,
   });
 
   final PublicFailureKind kind;
   final int? statusCode;
   final String? code;
   final TombstoneDto? tombstone;
+
+  /// Published comment a refused duplicate points to (`existing_comment_id`).
+  final String? existingCommentId;
 
   bool get canRetry =>
       kind == PublicFailureKind.network ||

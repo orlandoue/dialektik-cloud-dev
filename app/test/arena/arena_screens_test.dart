@@ -298,7 +298,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Pantalla 3 · Acontecimiento vivo con sus 3 pestañas', (
+  testWidgets('Pantalla 3 · Acontecimiento vivo con sus 4 pestañas', (
     WidgetTester tester,
   ) async {
     final List<Uri> opened = await pumpArena(
@@ -336,7 +336,11 @@ void main() {
       findsOneWidget,
     );
     expect(find.byKey(const Key('arena-follow-story')), findsOneWidget);
-    expect(find.byKey(const Key('arena-open-community')), findsOneWidget);
+    // Every story has its comments one tab away.
+    expect(
+      find.byKey(const ValueKey<String>('arena-subtab-Comentarios')),
+      findsOneWidget,
+    );
     // Dialektik never states the facts itself: every line is attributed.
     expect(find.text('Lo que dicen los medios'), findsOneWidget);
     expect(
