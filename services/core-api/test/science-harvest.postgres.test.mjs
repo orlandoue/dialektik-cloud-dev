@@ -36,7 +36,7 @@ function openAlexOnly(works) {
       if (url.includes('openalex')) return JSON.stringify({ results: works, meta: { next_cursor: null } });
       if (url.includes('europepmc')) return JSON.stringify({ resultList: { result: [] }, nextCursorMark: '*' });
       if (url.includes('arxiv')) return '<feed xmlns="http://www.w3.org/2005/Atom"></feed>';
-      return '<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/"><ListRecords></ListRecords></OAI-PMH>';
+      return JSON.stringify({ message: { items: [] } }); // Crossref, SciELO Chile prefix
     },
     async json() { return {}; },
   });

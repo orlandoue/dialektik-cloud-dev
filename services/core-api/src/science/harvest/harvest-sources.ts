@@ -1,6 +1,8 @@
 import { XMLParser } from 'fast-xml-parser';
 
-import { abstractFromInvertedIndex, normalizeDoi, type FetchLike, type ResolvedStudy } from '../study-resolver.js';
+import {
+  abstractFromInvertedIndex, authorsOf, dateParts, normalizeDoi, stripJats, type FetchLike, type ResolvedStudy,
+} from '../study-resolver.js';
 
 /**
  * Readers of the daily harvest. Each one turns one source's answer into
@@ -227,7 +229,7 @@ export async function harvestEuropePmc(options: HarvestOptions): Promise<SourceB
 // ---- arXiv: newest preprints in a few categories -------------------------
 
 const xml = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_', removeNSPrefix: true, isArray: (name) =>
-  ['entry', 'author', 'record', 'creator', 'identifier', 'description', 'title', 'link', 'affiliation', 'relation', 'language', 'source', 'date'].includes(name) });
+  ['entry', 'author', 'affiliation'].includes(name) });
 
 const textOf = (value: unknown): string | null => {
   if (Array.isArray(value)) return textOf(value[0]);
@@ -280,70 +282,68 @@ export async function harvestArxiv(options: HarvestOptions): Promise<SourceBatch
   return { studies: batch.studies.filter((s) => s.published_at === null || s.published_at >= since), skipped: batch.skipped };
 }
 
-// ---- SciELO Chile: OAI-PMH, records that carry a DOI ---------------------
+// ---- SciELO Chile: through Crossref, prefix 10.4067 ------------------------
+//
+// SciELO Chile registers its DOIs with Crossref under 10.4067. Its OAI-PMH
+// endpoint refuses automated clients from cloud runners, so the official
+// Crossref API is used instead; it carries the abstract when the journal
+// deposited it.
 
-export function parseScieloOai(body: string): SourceBatch & { resumptionToken: string | null } {
-  const root = (xml.parse(body) as { 'OAI-PMH'?: Record<string, unknown> })['OAI-PMH'];
-  const list = root?.ListRecords as { record?: Record<string, unknown>[]; resumptionToken?: unknown } | undefined;
-  const studies: HarvestedStudy[] = [];
-  let skipped = 0;
-  for (const record of list?.record ?? []) {
-    const header = record.header as { '@_status'?: unknown } | undefined;
-    if (header?.['@_status'] === 'deleted') continue;
-    const dc = ((record.metadata as Record<string, unknown> | undefined)?.dc ?? {}) as Record<string, unknown[]>;
-    const pick = (field: string, prefer = 'es'): string | null => {
-      const values = (dc[field] ?? []) as unknown[];
-      const preferred = values.find((v) => typeof v === 'object' && v !== null && (v as Record<string, unknown>)['@_lang'] === prefer);
-      return textOf(preferred ?? values[0]);
-    };
-    const identifiers = [...(dc.identifier ?? []), ...(dc.relation ?? [])].map(textOf).filter((v): v is string => v !== null);
-    const doi = identifiers.map((v) => normalizeDoi(v.match(/10\.\d{4,9}\/\S+/u)?.[0] ?? '')).find((v) => v !== null) ?? null;
-    const title = clip(pick('title'), 1000);
-    if (doi === null || title === null) { skipped += 1; continue; }
-    const abstract = clip(pick('description'), 12000);
-    const date = textOf((dc.date ?? [])[0]);
-    studies.push({
-      doi,
-      title,
-      review: 'peer_reviewed',
-      authors: authorList(((dc.creator ?? []) as unknown[]).map((c) => textOf(c) ?? '')),
-      institution: null,
-      journal: clip(textOf((dc.source ?? [])[0])?.replace(/\s*v\.\s*\d.*$/u, '') ?? null, 300),
-      published_at: date && /^\d{4}-\d{2}-\d{2}/u.test(date) ? date.slice(0, 10) : null,
-      abstract,
-      abstract_source: abstract === null ? null : 'SciELO',
-      abstract_language: language(textOf((dc.language ?? [])[0])),
-      access: 'Abierto',
-      retracted: false,
-      retracted_at: null,
-      made_in_chile: false,
-      harvest_source: 'scielo_cl',
-    });
-  }
-  const token = textOf(list?.resumptionToken);
-  return { studies, skipped, resumptionToken: token };
+export const SCIELO_CHILE_PREFIX = '10.4067';
+
+export function parseCrossrefScieloItem(item: Record<string, unknown>): HarvestedStudy | null {
+  const doi = typeof item.DOI === 'string' ? normalizeDoi(item.DOI) : null;
+  const titles = Array.isArray(item.title) ? item.title : [];
+  const title = clip(clean(titles[0]), 1000);
+  if (doi === null || title === null) return null;
+  const authors = Array.isArray(item.author) ? (item.author as Record<string, unknown>[]) : [];
+  const affiliations = authors.flatMap((a) => (Array.isArray(a.affiliation) ? (a.affiliation as { name?: unknown }[]) : []))
+    .map((a) => clean(a.name)).filter((a): a is string => a !== null);
+  const containers = Array.isArray(item['container-title']) ? item['container-title'] : [];
+  const abstract = clip(stripJats(item.abstract), 12000);
+  return {
+    doi,
+    title,
+    review: 'peer_reviewed',
+    authors: clip(authorsOf(item), 600),
+    institution: clip(affiliations.find((a) => /\bchile\b/iu.test(a)) ?? affiliations[0] ?? null, 300),
+    journal: clip(clean(containers[0]), 300),
+    published_at: dateParts(item.published) ?? dateParts(item.issued),
+    abstract,
+    abstract_source: abstract === null ? null : 'Crossref (SciELO Chile)',
+    abstract_language: language(item.language),
+    access: 'Abierto',
+    retracted: false,
+    retracted_at: null,
+    made_in_chile: affiliations.some((a) => /\bchile\b/iu.test(a)),
+    harvest_source: 'scielo_cl',
+  };
 }
 
 export async function harvestScielo(options: HarvestOptions): Promise<SourceBatch> {
   const from = day(new Date(options.now.getTime() - options.days * 86_400_000));
   const studies: HarvestedStudy[] = [];
   let skipped = 0;
-  let token: string | null = null;
+  let cursor = '*';
   let pages = 0;
-  do {
-    const url = new URL('https://www.scielo.cl/oai/scielo-oai.php');
-    url.searchParams.set('verb', 'ListRecords');
-    if (token) url.searchParams.set('resumptionToken', token);
-    else {
-      url.searchParams.set('metadataPrefix', 'oai_dc');
-      url.searchParams.set('from', from);
-    }
-    const page = parseScieloOai(await fetchText(options, 'scielo', url, 'text/xml'));
-    skipped += page.skipped;
-    for (const study of page.studies) if (studies.length < options.limit) studies.push(study);
-    token = page.resumptionToken;
+  while (studies.length < options.limit && cursor && pages < MAX_PAGES) {
     pages += 1;
-  } while (token && studies.length < options.limit && pages < MAX_PAGES);
+    const url = new URL(`https://api.crossref.org/prefixes/${SCIELO_CHILE_PREFIX}/works`);
+    url.searchParams.set('filter', `from-pub-date:${from},type:journal-article`);
+    url.searchParams.set('rows', '100');
+    url.searchParams.set('cursor', cursor);
+    if (options.contactEmail) url.searchParams.set('mailto', options.contactEmail);
+    const body = JSON.parse(await fetchText(options, 'crossref', url, 'application/json')) as {
+      message?: { items?: Record<string, unknown>[]; 'next-cursor'?: string };
+    };
+    const items = body.message?.items ?? [];
+    for (const item of items) {
+      const study = parseCrossrefScieloItem(item);
+      if (study === null) skipped += 1;
+      else if (studies.length < options.limit) studies.push(study);
+    }
+    cursor = items.length === 0 ? '' : body.message?.['next-cursor'] ?? '';
+  }
   return { studies, skipped };
 }
 

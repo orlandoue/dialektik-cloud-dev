@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 const {
-  parseOpenAlexWork, parseEuropePmcResult, parseArxivFeed, parseScieloOai, harvestOpenAlex, harvestArxiv,
+  parseOpenAlexWork, parseEuropePmcResult, parseArxivFeed, parseCrossrefScieloItem, harvestOpenAlex, harvestArxiv, harvestScielo,
 } = await import('../dist/science/harvest/harvest-sources.js');
 const { runHarvest, reportMarkdown } = await import('../dist/science/harvest/harvest.js');
 
@@ -101,44 +101,41 @@ test('arXiv: preprints get their DataCite DOI and stay within the window', async
   assert.deepEqual(recent.studies.map((s) => s.doi), ['10.48550/arxiv.2611.01234']);
 });
 
-const oai = `<?xml version="1.0" encoding="UTF-8"?>
-<OAI-PMH xmlns="http://www.openarchives.org/OAI/2.0/"><ListRecords>
-  <record><header><identifier>oai:scielo:S0034-98872026000100001</identifier></header>
-    <metadata><oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/">
-      <dc:title xml:lang="en">Influenza in Chile</dc:title>
-      <dc:title xml:lang="es">Influenza en Chile</dc:title>
-      <dc:creator>Rojas, Pedro</dc:creator><dc:creator>Muñoz, Carla Andrea</dc:creator>
-      <dc:description xml:lang="es">Estudio de casos de influenza.</dc:description>
-      <dc:source>Revista médica de Chile v.154 n.1 2026</dc:source>
-      <dc:date>2026-01-15</dc:date>
-      <dc:identifier>http://www.scielo.cl/scielo.php?pid=S0034</dc:identifier>
-      <dc:identifier>10.4067/S0034-98872026000100001</dc:identifier>
-      <dc:language>es</dc:language>
-    </oai_dc:dc></metadata></record>
-  <record><header><identifier>oai:scielo:S2</identifier></header>
-    <metadata><oai_dc:dc xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/" xmlns:dc="http://purl.org/dc/elements/1.1/">
-      <dc:title>Sin DOI</dc:title></oai_dc:dc></metadata></record>
-  <record><header status="deleted"><identifier>oai:scielo:S3</identifier></header></record>
-  <resumptionToken>token-2</resumptionToken>
-</ListRecords></OAI-PMH>`;
+const scieloItem = {
+  DOI: '10.4067/S0034-98872026000100001',
+  title: ['Influenza en Chile'],
+  author: [{ family: 'Rojas', given: 'Pedro', affiliation: [{ name: 'Universidad de Concepción, Chile' }] },
+    { family: 'Muñoz', given: 'Carla Andrea' }],
+  'container-title': ['Revista médica de Chile'],
+  published: { 'date-parts': [[2026, 1, 15]] },
+  abstract: '<jats:p>Estudio de casos de influenza.</jats:p>',
+  language: 'es',
+};
 
-test('SciELO: only records with a DOI enter; Spanish title and abstract first', () => {
-  const page = parseScieloOai(oai);
-  assert.equal(page.studies.length, 1);
-  assert.equal(page.skipped, 1);
-  assert.equal(page.resumptionToken, 'token-2');
-  const [study] = page.studies;
+test('SciELO Chile through Crossref: prefix 10.4067, authors, journal and abstract', async () => {
+  const study = parseCrossrefScieloItem(scieloItem);
   assert.equal(study.doi, '10.4067/s0034-98872026000100001');
-  assert.equal(study.title, 'Influenza en Chile');
   assert.equal(study.authors, 'Rojas P, Muñoz CA');
   assert.equal(study.journal, 'Revista médica de Chile');
-  assert.equal(study.abstract_source, 'SciELO');
-  assert.equal(study.abstract_language, 'es');
+  assert.equal(study.published_at, '2026-01-15');
+  assert.equal(study.abstract, 'Estudio de casos de influenza.');
+  assert.equal(study.abstract_source, 'Crossref (SciELO Chile)');
+  assert.equal(study.made_in_chile, true);
+  assert.equal(study.harvest_source, 'scielo_cl');
+  assert.equal(parseCrossrefScieloItem({ ...scieloItem, DOI: undefined }), null);
+  const urls = [];
+  const fetcher = async (url) => { urls.push(new URL(url)); return { ok: true, status: 200,
+    async text() { return JSON.stringify({ message: { items: [scieloItem], 'next-cursor': 'n' } }); }, async json() { return {}; } }; };
+  const batch = await harvestScielo({ fetcher, now: new Date('2026-11-16T00:00:00Z'), days: 30, limit: 1, contactEmail: 'contacto@example.org', arxivCategories: [] });
+  assert.equal(batch.studies.length, 1);
+  assert.equal(urls[0].pathname, '/prefixes/10.4067/works');
+  assert.equal(urls[0].searchParams.get('mailto'), 'contacto@example.org');
+  assert.match(urls[0].searchParams.get('filter'), /from-pub-date:2026-10-17/u);
 });
 
 test('a dry run reads every source, keeps going when one fails and reports it', async () => {
   const fetcher = async (url) => {
-    if (url.includes('scielo')) return { ok: false, status: 503, async text() { return ''; }, async json() { return {}; } };
+    if (url.includes('10.4067')) return { ok: false, status: 503, async text() { return ''; }, async json() { return {}; } };
     const body = url.includes('openalex') ? JSON.stringify({ results: [openAlexWork], meta: { next_cursor: null } })
       : url.includes('europepmc') ? JSON.stringify({ resultList: { result: [] }, nextCursorMark: '*' })
       : arxivFeed;
@@ -149,10 +146,10 @@ test('a dry run reads every source, keeps going when one fails and reports it', 
   assert.equal(report.status, 'partial');
   assert.equal(report.sources.openalex_cl.fetched, 1);
   assert.equal(report.sources.arxiv.fetched, 1);
-  assert.match(report.sources.scielo_cl.error, /503/u);
+  assert.match(report.sources.scielo_cl.error, /crossref answered 503/u);
   const markdown = reportMarkdown(report);
   assert.match(markdown, /Cosecha de Ciencia: parcial \(ensayo, sin base\)/u);
-  assert.match(markdown, /\| SciELO Chile \| 0 \| 0 \| 0 \| 0 \| scielo answered 503 \|/u);
+  assert.match(markdown, /\| SciELO Chile \| 0 \| 0 \| 0 \| 0 \| crossref answered 503 \|/u);
 });
 
 test('a source of records without DOI stops after a bounded number of pages', async () => {
