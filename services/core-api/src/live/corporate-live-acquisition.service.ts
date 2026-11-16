@@ -10,6 +10,8 @@ import {
   type LiveSourcePolicy,
 } from './live.registry.js';
 import { syncLivePayload } from './live.sync.js';
+import { activeCatalogMarkets } from './live.publisher-market.js';
+import { sourceProfilesAvailable } from '../public-api/source-profiles.js';
 import {
   capNewestFeedBlocks,
   fetchYouTubeVideoDetails,
@@ -475,6 +477,13 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
     return this.acquisitionDatabaseService.database;
   }
 
+  private activeMarketFilter() {
+    if (!sourceProfilesAvailable()) return sql`true`;
+    const markets = activeCatalogMarkets();
+    return sql`coalesce((select active_profile.country_code from public.media_source_profiles active_profile
+      where active_profile.source_id=source.id),'CL') = any(${[...markets]}::text[])`;
+  }
+
   private async claimDueSource(): Promise<string | null> {
     const youtubeApiConfigured = Boolean(youtubeApiKey());
     return this.database.transaction().execute(async (transaction) => {
@@ -510,6 +519,9 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
             and (state.lease_until is null or state.lease_until<=clock_timestamp())
             -- Only Data API connections need the key; Atom feeds are free.
             and (${youtubeApiConfigured} or connection.discovery_channel<>'youtube_data_api_v3')
+            -- Paused countries (DIALEKTIK_ACTIVE_MARKETS) are not polled; a
+            -- source without a catalog profile is one of the Chilean originals.
+            and ${this.activeMarketFilter()}
           order by case when source.canonical_domain='elmostrador.cl' then 0
             when source.canonical_domain='youtube.com' then 2 else 1 end,state.next_poll_at,source.id
           for update of state skip locked limit 1

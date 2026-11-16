@@ -23,6 +23,7 @@ import {
 import { HeadlineReviewService } from "../moderation/headline-review.service.js";
 import { ModerationHttpError } from "../moderation/moderation-http.error.js";
 import { HeadlineSemanticDatabaseService } from "./headline-semantic-database.service.js";
+import { activeCatalogMarkets } from "../live/live.publisher-market.js";
 import { ModerationDatabaseService } from "../moderation/moderation-database.service.js";
 import { parseLegacyContradictionReview, parseSemanticPromotionDecision, parseSemanticRejection } from "./live-semantic-editorial.contract.js";
 import {
@@ -446,6 +447,8 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
           where (published_at at time zone 'America/Santiago')::date>=${targetDay}::date
             and (published_at at time zone 'America/Santiago')::date<${targetDay}::date+2
             and i.event_id is null
+            -- Paused countries (DIALEKTIK_ACTIVE_MARKETS) spend no model calls.
+            and ${profile.country} = any(${[...activeCatalogMarkets()]}::text[])
           ) ranked where daily_rank<=300 and source_rank<=${CANDIDATES_PER_SOURCE} order by "publishedAt" desc,"articleId" desc`.execute(connection);
         const proposals=candidates.rows.map(a=>({...a,eventKey:'',eventTitle:a.headline,eventSummary:''}));
         const pendingIds=new Set(candidates.rows.filter(a=>a.needsExtraction).map(a=>a.articleId));

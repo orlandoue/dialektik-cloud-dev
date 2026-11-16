@@ -26,6 +26,18 @@ export type CatalogMarket = typeof CATALOG_MARKETS[number];
 export const isCatalogMarket = (market: string): market is CatalogMarket =>
   (CATALOG_MARKETS as readonly string[]).includes(market);
 
+/**
+ * Catalog countries whose sources are polled and analysed. Set with
+ * DIALEKTIK_ACTIVE_MARKETS (e.g. "CL,ES,AR,US"); Chile only by default, to
+ * keep the free-tier CPU, database and model budget on one country. Paused
+ * countries keep their sources and data and resume when listed again.
+ */
+export function activeCatalogMarkets(env: NodeJS.ProcessEnv = process.env): readonly CatalogMarket[] {
+  const listed = (env.DIALEKTIK_ACTIVE_MARKETS ?? 'CL').split(',')
+    .map((code) => code.trim().toUpperCase()).filter(isCatalogMarket);
+  return listed.length > 0 ? [...new Set(listed)] : ['CL'];
+}
+
 /** GOV.UK hosts many organisations; the trial includes only these two. */
 export const UK_BETA_SOURCE_IDS = [
   '01M4YDQK00WS344WW8RCPCEQHE',
