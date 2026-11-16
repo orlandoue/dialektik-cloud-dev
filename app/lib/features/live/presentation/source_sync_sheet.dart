@@ -54,7 +54,8 @@ class _SourceSyncSheetState extends State<SourceSyncSheet> {
     } finally {if(mounted)setState(()=>loading=false);}
   }
   @override Widget build(BuildContext context)=>SafeArea(child:Padding(padding:EdgeInsets.fromLTRB(20,20,20,20+MediaQuery.viewInsetsOf(context).bottom),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-    Text('¿Desde dónde quieres sincronizar tus fuentes?',style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:12),
+    Text('¿Desde dónde quieres importar tus medios?',style:Theme.of(context).textTheme.titleLarge),const SizedBox(height:8),
+    const Text('Solo leemos información pública para encontrar medios del catálogo de Dialektik. No publicamos nada en tus cuentas, no guardamos tu lista y puedes dejar de seguir cualquier medio cuando quieras.'),const SizedBox(height:12),
     if(choice==null) ...[
       ListTile(leading:const Icon(Icons.play_circle_outline),title:const Text('Sincronizar con YouTube'),subtitle:const Text('Busca suscripciones públicas de un canal.'),onTap:()=>setState(()=>choice='youtube')),
       ListTile(leading:const Text('𝕏',style:TextStyle(fontSize:24)),title:const Text('Sincronizar con X'),subtitle:const Text('Pega las cuentas de medios que sigues.'),onTap:()=>setState(()=>choice='x')),

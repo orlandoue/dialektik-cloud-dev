@@ -40,7 +40,7 @@ const int arenaMinimumQuoteLength = 40;
   EventDetailDto event,
   EventCoveragePositionDto? position,
 ) {
-  if (position == null) return (text: 'Postura no disponible.', literal: false);
+  if (position == null) return (text: 'Cita no disponible.', literal: false);
   final EventCoverageAssertionDto? first = position.assertions.firstOrNull;
   final String quote = first?.quotedText.trim() ?? '';
   if (quote.length >= arenaMinimumQuoteLength) {
@@ -233,4 +233,19 @@ List<String> arenaNamedActors(Iterable<String> texts, {int limit = 6}) {
           b.value.compareTo(a.value),
     );
   return ranked.take(limit).map((MapEntry<String, int> e) => e.key).toList();
+}
+
+/// «La Tercera: balance…» shown under «La Tercera» reads twice; the outlet
+/// prefix is dropped when the card already names the outlet.
+String arenaWithoutSourcePrefix(String headline, String sourceName) {
+  final String name = arenaSourceName(sourceName).toLowerCase();
+  final String trimmed = headline.trim();
+  for (final String separator in const <String>[': ', ' | ', ' - ']) {
+    final int at = trimmed.indexOf(separator);
+    if (at > 0 && trimmed.substring(0, at).trim().toLowerCase() == name) {
+      final String rest = trimmed.substring(at + separator.length).trim();
+      if (rest.isNotEmpty) return rest;
+    }
+  }
+  return trimmed;
 }

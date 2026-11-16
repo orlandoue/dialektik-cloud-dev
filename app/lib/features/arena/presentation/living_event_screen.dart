@@ -35,6 +35,11 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
   int _tab = 0;
   bool _followBusy = false;
 
+  /// When the reader last opened this followed case, captured before this
+  /// visit is recorded, to highlight what is new since then.
+  DateTime? _previousVisit;
+  bool _visitRecorded = false;
+
   ArenaStore get store => widget.store;
   StoryFollowStore get stories => store.stories;
 
@@ -67,6 +72,11 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
         _event = event;
         _error = null;
       });
+      if (!_visitRecorded) {
+        _visitRecorded = true;
+        _previousVisit = stories.snapshot(event.id)?.seenAt;
+        unawaited(stories.markSeen(event).catchError((Object _) {}));
+      }
     } on Exception catch (failure) {
       if (mounted) setState(() => _error = failure);
     }
@@ -100,12 +110,11 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
         surfaceTintColor: Colors.transparent,
         foregroundColor: ArenaColors.ink,
         titleSpacing: 0,
-        title: const FittedBox(
-          fit: BoxFit.scaleDown,
-          child: Text(
-            'Acontecimiento vivo',
-            style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
-          ),
+        title: Text(
+          event?.arenaTitle ?? 'Acontecimiento',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
         ),
       ),
       body: event == null
@@ -132,6 +141,10 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
             a.publishedAt.compareTo(b.publishedAt),
       );
 
+  /// A case is «en desarrollo» while it gets new coverage; after
+  /// [quietAfter] without any, it says so instead of claiming to be live.
+  static const Duration quietAfter = Duration(hours: 72);
+
   Widget _content(BuildContext context, EventDetailDto event) {
     final ArenaTopic topic = arenaTopicOfEvent(event);
     final List<EventCoverageArticleDto> timeline = _chronological(event);
@@ -143,148 +156,133 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
                 extractYouTubeVideoId(a.url.toString()) == videoId,
           );
     final bool followingStory = stories.contains(event.id);
+    final bool quiet =
+        timeline.isEmpty ||
+        DateTime.now().difference(timeline.last.publishedAt) > quietAfter;
+    final List<String> media =
+        event.articles
+            .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
+            .toSet()
+            .toList()
+          ..sort(
+            (String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()),
+          );
     return ListView(
       key: const Key('arena-event-scroll'),
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
       children: <Widget>[
-        Semantics(
-          button: video != null,
-          label: video == null ? null : 'Abrir video del acontecimiento',
-          child: InkWell(
-            borderRadius: BorderRadius.circular(16),
-            onTap: video == null
-                ? null
-                : () => unawaited(
-                    openArenaPiece(
-                      context,
-                      store,
-                      video.url,
-                      title: video.title,
-                      channel: video.sourceName,
+        // The same compact hero on every tab: one status pill, the case and
+        // when its coverage began.
+        ArenaCover(
+          topic: topic,
+          videoId: videoId,
+          minHeight: 160,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: <Widget>[
+                if (quiet)
+                  const ArenaBadge(
+                    label: 'Sin novedades recientes',
+                    background: Color(0xFFE2E8F0),
+                    foreground: ArenaColors.ink,
+                  )
+                else
+                  const ArenaBadge.live('En desarrollo'),
+                const SizedBox(height: 24),
+                Semantics(
+                  header: true,
+                  child: Text(
+                    event.arenaTitle,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      height: 1.25,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
                     ),
                   ),
-            child: ArenaCover(
-              topic: topic,
-              videoId: videoId,
-              showPlay: video != null,
-              minHeight: 200,
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: <Widget>[
-                    const ArenaBadge.live('ACONTECIMIENTO VIVO'),
-                    const SizedBox(height: 56),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Semantics(
-                          header: true,
-                          child: Text(
-                            event.arenaTitle,
-                            style: const TextStyle(
-                              fontFamily: ArenaText.serif,
-                              fontSize: 20,
-                              height: 1.25,
-                              fontWeight: FontWeight.w700,
-                              color: Colors.white,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          '${topic.label} · desde el '
-                          '${arenaDate(event.window.from)}',
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: Color(0xFFE2E8F0),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
                 ),
-              ),
+                const SizedBox(height: 6),
+                Text(
+                  '${topic.label}'
+                  '${timeline.isEmpty ? '' : ' · desde el ${arenaDate(timeline.first.publishedAt)}'}',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Color(0xFFE2E8F0),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
-        const SizedBox(height: 12),
-        // Sources on the left and the follow button on the right, one row.
+        if (video != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              key: const Key('arena-event-video'),
+              style: TextButton.styleFrom(
+                foregroundColor: ArenaColors.violet,
+                minimumSize: const Size(44, 44),
+              ),
+              onPressed: () => unawaited(
+                openArenaPiece(
+                  context,
+                  store,
+                  video.url,
+                  title: video.title,
+                  channel: video.sourceName,
+                ),
+              ),
+              icon: const Icon(Icons.play_circle_outline_rounded),
+              label: Text(
+                'Ver video de ${arenaSourceName(video.sourceName)}',
+                style: const TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          )
+        else
+          const SizedBox(height: 12),
+        // Who covers the case, once, next to the follow button.
         Row(
           children: <Widget>[
             Expanded(
               child: Text(
-                '📚 ${event.sourceCount} '
-                '${event.sourceCount == 1 ? 'fuente' : 'fuentes'}',
+                '${media.length} ${media.length == 1 ? 'medio' : 'medios'}'
+                '${media.isEmpty ? '' : ' · ${media.join(', ')}'}',
                 style: ArenaText.cardTitle,
               ),
             ),
             const SizedBox(width: 12),
-            FilledButton.icon(
+            ArenaFollowButton(
               key: const Key('arena-follow-story'),
+              following: followingStory,
               onPressed: _followBusy ? null : () => _toggleFollow(event),
-              style: FilledButton.styleFrom(
-                backgroundColor: followingStory
-                    ? ArenaColors.violetSoft
-                    : ArenaColors.violet,
-                foregroundColor: followingStory
-                    ? ArenaColors.violetDeep
-                    : Colors.white,
-                minimumSize: const Size(48, 44),
-              ),
-              icon: Icon(
-                followingStory ? Icons.check : Icons.notifications_none,
-                size: 18,
-              ),
-              label: Text(followingStory ? 'Siguiendo' : 'Seguir'),
             ),
           ],
         ),
         const SizedBox(height: 12),
         ArenaSubTabs(
-          labels: const <String>[
-            'Resumen',
-            'Cronología',
-            'Versiones',
-            'Evidencia',
-          ],
+          labels: const <String>['Resumen', 'Cronología', 'Citas'],
           selected: _tab,
           onSelected: (int value) => setState(() => _tab = value),
+        ),
+        const SizedBox(height: 10),
+        // The case's community is one tap away from every tab.
+        OutlinedButton.icon(
+          key: const Key('arena-open-community'),
+          onPressed: () => openArenaCommunity(context, store, event),
+          style: arenaSecondaryButtonStyle(),
+          icon: const Icon(Icons.forum_outlined),
+          label: const Text('Comunidad del caso'),
         ),
         const SizedBox(height: 14),
         if (_tab == 0) ..._summary(context, event, timeline),
         if (_tab == 1) ..._timeline(context, timeline),
-        if (_tab == 2) ..._versions(event, timeline),
-        if (_tab == 3) ..._evidence(context, event),
+        if (_tab == 2) ..._quotes(context, event),
       ],
     );
-  }
-
-  /// What the coverage says happened, never the header title repeated.
-  String _whatHappened(
-    EventDetailDto event,
-    List<EventCoverageArticleDto> timeline,
-  ) {
-    final String? fact = event.primaryFact?.statement.trim();
-    if (fact != null && fact.isNotEmpty) return fact;
-    final String header = event.arenaTitle.toLowerCase();
-    final List<String> lines = <String>[
-      for (final EventCoveragePositionDto position
-          in event.coveragePositions.take(2))
-        if (arenaPositionSummary(event, position).toLowerCase() != header)
-          'Según ${ArenaDuel.nameOf(position)}: '
-              '${arenaPositionSummary(event, position)}',
-    ];
-    if (lines.isNotEmpty) return lines.join('\n');
-    for (final EventCoverageArticleDto article in timeline) {
-      if (arenaTitle(article.title).toLowerCase() != header) {
-        return '${arenaSourceName(article.sourceName)} informó: '
-            '${article.title.trim()}';
-      }
-    }
-    return 'La cobertura registrada todavía no detalla el hecho más allá '
-        'de su titular.';
   }
 
   List<Widget> _summary(
@@ -300,52 +298,77 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
         arenaPositionSummary(event, p),
       for (final EventCoverageArticleDto a in event.articles) a.title,
     ]);
-    final Set<String> media = event.articles
-        .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
-        .toSet();
+    // Every statement is attributed to the outlet that made it, one line per
+    // outlet in alphabetical order: Dialektik never states the facts itself.
+    final List<EventCoveragePositionDto> positions =
+        event.coveragePositions.toList()..sort(
+          (EventCoveragePositionDto a, EventCoveragePositionDto b) =>
+              ArenaDuel.nameOf(
+                a,
+              ).toLowerCase().compareTo(ArenaDuel.nameOf(b).toLowerCase()),
+        );
+    final int newPieces = _previousVisit == null
+        ? 0
+        : timeline
+              .where(
+                (EventCoverageArticleDto a) =>
+                    a.publishedAt.isAfter(_previousVisit!),
+              )
+              .length;
     return <Widget>[
+      if (newPieces > 0)
+        ArenaCard(
+          key: const Key('arena-since-last-visit'),
+          borderColor: ArenaColors.amberBright,
+          borderWidth: 1.5,
+          onTap: () => setState(() => _tab = 1),
+          child: Row(
+            children: <Widget>[
+              const Icon(
+                Icons.fiber_new_outlined,
+                color: ArenaColors.amberDeep,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'Desde tu última visita: $newPieces '
+                  '${newPieces == 1 ? 'publicación nueva' : 'publicaciones nuevas'}. '
+                  'Ver en la cronología →',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: ArenaColors.amberDeep,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ArenaCard(
+        key: const Key('arena-event-attributed'),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Wrap(
-              spacing: 10,
-              runSpacing: 6,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: <Widget>[
-                Text('Estado actual', style: ArenaText.section),
-                ArenaBadge.live('En desarrollo'),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (event.primaryFact != null)
-              Text(event.primaryFact!.statement, style: ArenaText.body)
-            else if (event.coveragePositions.isEmpty)
-              Text(event.arenaTitle, style: ArenaText.body)
+            const Text('Lo que dicen los medios', style: ArenaText.section),
+            const SizedBox(height: 10),
+            if (positions.isNotEmpty)
+              for (final EventCoveragePositionDto position in positions)
+                _AttributedLine(
+                  name: ArenaDuel.nameOf(position),
+                  text: arenaPositionSummary(event, position),
+                )
+            else if (timeline.isNotEmpty)
+              for (final EventCoverageArticleDto article in timeline.take(3))
+                _AttributedLine(
+                  name: arenaSourceName(article.sourceName),
+                  text: article.title.trim(),
+                  verb: 'informó',
+                )
             else
-              for (final EventCoveragePositionDto position
-                  in event.coveragePositions)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 4),
-                  child: Text(
-                    '• ${arenaPositionSummary(event, position)}',
-                    style: ArenaText.body,
-                  ),
-                ),
-            const SizedBox(height: 8),
-            Text(
-              '${event.sourceCount} '
-              '${event.sourceCount == 1 ? 'fuente ha' : 'fuentes han'} '
-              'publicado ${event.articles.length} '
-              '${event.articles.length == 1 ? 'pieza' : 'piezas'} sobre este '
-              'caso'
-              '${switch (event.coveragePositions.length) {
-                0 => '',
-                1 => ' y se registra 1 postura con cita literal',
-                final int count => ' y se registran $count posturas con cita literal',
-              }}.',
-              style: ArenaText.meta,
-            ),
+              const Text(
+                'Todavía no hay publicaciones enlazadas a este caso.',
+                style: ArenaText.body,
+              ),
           ],
         ),
       ),
@@ -366,13 +389,25 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Text(
-                '⚡ Último cambio · ${arenaAgo(latest.publishedAt)}',
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w800,
-                  color: ArenaColors.amberDeep,
-                ),
+              Row(
+                children: <Widget>[
+                  const Icon(
+                    Icons.update_rounded,
+                    size: 16,
+                    color: ArenaColors.amberDeep,
+                  ),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      'Último cambio · ${arenaAgo(latest.publishedAt)}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: ArenaColors.amberDeep,
+                      ),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 6),
               Text(
@@ -386,39 +421,34 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
             ],
           ),
         ),
-      ArenaCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text('Claves del caso', style: ArenaText.section),
-            _Key(label: 'Qué pasó', text: _whatHappened(event, timeline)),
-            _Key(
-              label: 'Quiénes están involucrados',
-              text: actors.isEmpty
-                  ? 'La cobertura aún no permite identificar nombres.'
-                  : '${actors.join(', ')}. Nombres mencionados en los '
-                        'titulares de la cobertura.',
-            ),
-            _Key(
-              label: 'Impacto',
-              text:
-                  'Tema: ${arenaTopicOfEvent(event).label}. Lo cubren '
-                  '${media.length} medios: ${media.join(', ')}.',
-            ),
-            if (duel != null) ...<Widget>[
-              const SizedBox(height: 12),
-              ArenaPrimaryButton(
-                key: const Key('arena-open-duel'),
-                label: 'Ver duelo VS: ${duel.nameA} vs ${duel.nameB}',
-                onPressed: () => openArenaDuel(context, store, duel),
+      if (actors.isNotEmpty)
+        ArenaCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              const Text('Quiénes aparecen', style: ArenaText.section),
+              const SizedBox(height: 6),
+              Text(actors.join(', '), style: ArenaText.body),
+              const SizedBox(height: 4),
+              const Text(
+                'Nombres que aparecen en los titulares del caso.',
+                style: ArenaText.meta,
               ),
             ],
-          ],
+          ),
         ),
-      ),
+      if (duel != null)
+        ArenaPrimaryButton(
+          key: const Key('arena-open-duel'),
+          label: 'Ver duelo VS: ${duel.nameA} vs ${duel.nameB}',
+          onPressed: () => openArenaDuel(context, store, duel),
+        ),
     ];
   }
 
+  /// The coverage in publication order, with milestones: the first day's
+  /// coverage, each outlet that joins later, and what is new since the
+  /// reader's last visit.
   List<Widget> _timeline(
     BuildContext context,
     List<EventCoverageArticleDto> timeline,
@@ -426,25 +456,6 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
     if (timeline.isEmpty) {
       return const <Widget>[
         ArenaMessage('Todavía no hay publicaciones enlazadas a este caso.'),
-      ];
-    }
-    return <Widget>[
-      for (int i = 0; i < timeline.length; i++)
-        _TimelineEntry(
-          article: timeline[i],
-          isLast: i == timeline.length - 1,
-          store: store,
-        ),
-    ];
-  }
-
-  List<Widget> _versions(
-    EventDetailDto event,
-    List<EventCoverageArticleDto> timeline,
-  ) {
-    if (timeline.isEmpty) {
-      return const <Widget>[
-        ArenaMessage('Este caso todavía no registra versiones.'),
       ];
     }
     final DateTime firstDay = timeline.first.publishedAt.toLocal();
@@ -455,76 +466,37 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
           local.day == firstDay.day;
     }
 
-    final List<EventCoverageArticleDto> opening = timeline
-        .where((EventCoverageArticleDto a) => sameDay(a.publishedAt))
-        .toList();
-    final Set<String> openingSources = opening
-        .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
-        .toSet();
-    final List<EventCoverageArticleDto> later = timeline
-        .where((EventCoverageArticleDto a) => !sameDay(a.publishedAt))
-        .toList();
-    final Set<String> joined = later
-        .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
-        .toSet()
-        .difference(openingSources);
-    final StorySnapshot? snapshot = stories.snapshot(event.id);
-    final int newSources = snapshot == null
-        ? 0
-        : event.sourceCount - snapshot.sourceCount;
-    return <Widget>[
-      const Padding(
-        padding: EdgeInsets.only(bottom: 10),
-        child: Text(
-          'Las versiones tienen memoria',
-          style: TextStyle(
-            fontFamily: ArenaText.serif,
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-            color: ArenaColors.ink,
-          ),
-        ),
-      ),
-      _VersionStep(
-        number: 1,
-        title: 'Anuncio / Primeras coberturas',
-        date: arenaDate(timeline.first.publishedAt),
-        body:
-            '${opening.length} '
-            '${opening.length == 1 ? 'publicación' : 'publicaciones'} de '
-            '${openingSources.join(', ')}.',
-        quote: timeline.first.title,
-      ),
-      _VersionStep(
-        number: 2,
-        title: 'Nuevos ángulos / fuentes sumadas',
-        date: later.isEmpty ? 'Sin cambios' : arenaDate(later.last.publishedAt),
-        body: later.isEmpty
-            ? 'No se han sumado publicaciones después del primer día.'
-            : '${later.length} '
-                  '${later.length == 1 ? 'publicación posterior' : 'publicaciones posteriores'}'
-                  '${joined.isEmpty ? ' de las mismas fuentes' : '. Se sumaron: ${joined.join(', ')}'}.',
-        quote: later.lastOrNull?.title,
-      ),
-      _VersionStep(
-        number: 3,
-        title: 'Síntesis vigente',
-        date: arenaDate(timeline.last.publishedAt),
-        body:
-            '${event.sourceCount} fuentes y ${event.articles.length} '
-            'publicaciones. '
-            '${event.coveragePositions.isEmpty ? 'Aún sin posturas con cita literal.' : 'Posturas registradas: ${event.coveragePositions.map((EventCoveragePositionDto p) => arenaPositionSummary(event, p)).join(' · ')}.'}'
-            '${snapshot == null
-                ? ''
-                : newSources > 0
-                ? ' Desde tu última visita se sumaron $newSources fuentes.'
-                : ' Sin fuentes nuevas desde tu última visita.'}',
-        isLast: true,
-      ),
+    final Set<String> seen = <String>{};
+    final List<Widget> children = <Widget>[
+      const _Milestone('Primeras coberturas'),
     ];
+    bool laterStarted = false;
+    for (int i = 0; i < timeline.length; i++) {
+      final EventCoverageArticleDto article = timeline[i];
+      final String name = arenaSourceName(article.sourceName);
+      if (!sameDay(article.publishedAt) && !laterStarted) {
+        laterStarted = true;
+        children.add(const _Milestone('Coberturas posteriores'));
+      }
+      if (laterStarted && !seen.contains(name)) {
+        children.add(_Milestone('Se suma $name'));
+      }
+      seen.add(name);
+      children.add(
+        _TimelineEntry(
+          article: article,
+          isLast: i == timeline.length - 1,
+          store: store,
+          isNew:
+              _previousVisit != null &&
+              article.publishedAt.isAfter(_previousVisit!),
+        ),
+      );
+    }
+    return children;
   }
 
-  List<Widget> _evidence(BuildContext context, EventDetailDto event) {
+  List<Widget> _quotes(BuildContext context, EventDetailDto event) {
     final Map<String, EventCoverageArticleDto> byId =
         <String, EventCoverageArticleDto>{
           for (final EventCoverageArticleDto a in event.articles) a.id: a,
@@ -535,6 +507,16 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
           (EventCoverageAssertionDto a) => a.quotedText.trim().isNotEmpty,
         ),
     ];
+    final Set<String> quoted = quotes
+        .map((EventCoverageAssertionDto q) => arenaSourceName(q.sourceName))
+        .toSet();
+    final List<String> without =
+        event.articles
+            .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
+            .toSet()
+            .difference(quoted)
+            .toList()
+          ..sort();
     return <Widget>[
       if (quotes.isEmpty)
         const ArenaMessage(
@@ -568,69 +550,97 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
                 arenaAssertionText(event, quote).literal
                     ? arenaQuote(quote.quotedText)
                     : arenaAssertionText(event, quote).text,
-                style: const TextStyle(
-                  fontFamily: ArenaText.serif,
-                  fontSize: 15,
-                  height: 1.4,
-                  color: ArenaColors.ink,
-                ),
+                style: arenaAssertionText(event, quote).literal
+                    ? const TextStyle(
+                        fontFamily: ArenaText.serif,
+                        fontSize: 15,
+                        height: 1.45,
+                        color: ArenaColors.ink,
+                      )
+                    : ArenaText.body,
               ),
               const SizedBox(height: 8),
-              Row(
-                children: <Widget>[
-                  const Icon(
-                    Icons.check_circle,
-                    size: 16,
-                    color: ArenaColors.emerald,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      arenaAssertionText(event, quote).literal
-                          ? 'Cita literal verificada contra el original'
-                          : 'Titular de la publicación original',
-                      style: ArenaText.meta,
-                    ),
-                  ),
-                ],
+              Text(
+                arenaAssertionText(event, quote).literal
+                    ? arenaVerifiedQuoteLabel
+                    : 'Titular de su publicación',
+                style: ArenaText.meta,
               ),
             ],
           ),
         ),
-      const SizedBox(height: 4),
-      ArenaPrimaryButton(
-        key: const Key('arena-open-community'),
-        icon: Icons.forum_outlined,
-        label: 'Comunidad del caso',
-        onPressed: () => openArenaCommunity(context, store, event),
-      ),
+      if (quotes.isNotEmpty && without.isNotEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            'Sin cita literal aún de ${_humanList(without)}.',
+            style: ArenaText.meta,
+          ),
+        ),
     ];
   }
+
+  static String _humanList(List<String> names) => names.length < 2
+      ? names.join()
+      : '${names.sublist(0, names.length - 1).join(', ')} y ${names.last}';
 }
 
-class _Key extends StatelessWidget {
-  const _Key({required this.label, required this.text});
+/// «Según Medio: …» with the outlet's emblem.
+class _AttributedLine extends StatelessWidget {
+  const _AttributedLine({
+    required this.name,
+    required this.text,
+    this.verb = 'Según',
+  });
 
-  final String label;
+  final String name;
   final String text;
+  final String verb;
 
   @override
   Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 10),
-    child: Column(
+    padding: const EdgeInsets.only(bottom: 10),
+    child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w800,
-            color: ArenaColors.violetDeep,
+        MediaEmblem(name: name, size: 24),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text.rich(
+            TextSpan(
+              children: <InlineSpan>[
+                TextSpan(
+                  text: verb == 'Según' ? 'Según $name: ' : '$name $verb: ',
+                  style: const TextStyle(fontWeight: FontWeight.w700),
+                ),
+                TextSpan(text: text),
+              ],
+            ),
+            style: ArenaText.body,
           ),
         ),
-        const SizedBox(height: 2),
-        Text(text, style: ArenaText.body),
       ],
+    ),
+  );
+}
+
+/// A milestone label inside the chronology.
+class _Milestone extends StatelessWidget {
+  const _Milestone(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 10, top: 2),
+    child: Text(
+      label.toUpperCase(),
+      style: const TextStyle(
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+        letterSpacing: 0.4,
+        color: ArenaColors.muted,
+      ),
     ),
   );
 }
@@ -640,11 +650,16 @@ class _TimelineEntry extends StatelessWidget {
     required this.article,
     required this.isLast,
     required this.store,
+    this.isNew = false,
   });
 
   final EventCoverageArticleDto article;
   final bool isLast;
   final ArenaStore store;
+
+  /// Published after the reader's last visit; the highlight depends on the
+  /// date only, never on the outlet.
+  final bool isNew;
 
   @override
   Widget build(BuildContext context) {
@@ -680,9 +695,23 @@ class _TimelineEntry extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Text(
-                    arenaDateTime(article.publishedAt),
-                    style: ArenaText.meta,
+                  Row(
+                    children: <Widget>[
+                      Flexible(
+                        child: Text(
+                          arenaDateTime(article.publishedAt),
+                          style: ArenaText.meta,
+                        ),
+                      ),
+                      if (isNew) ...const <Widget>[
+                        SizedBox(width: 8),
+                        ArenaBadge(
+                          label: 'Nuevo',
+                          background: ArenaColors.amberSoft,
+                          foreground: ArenaColors.amberDeep,
+                        ),
+                      ],
+                    ],
                   ),
                   MediaNameRow(
                     name: article.sourceName,
@@ -710,11 +739,30 @@ class _TimelineEntry extends StatelessWidget {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: <Widget>[
-                          if (videoId != null) ...<Widget>[
-                            ArenaVideoFrame(videoId: videoId, radius: 12),
-                            const SizedBox(height: 8),
-                          ],
-                          Text(article.title, style: ArenaText.cardTitle),
+                          // A compact thumbnail beside the title instead
+                          // of a full-width frame in the middle of the line.
+                          if (videoId != null)
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                SizedBox(
+                                  width: 96,
+                                  child: ArenaVideoFrame(
+                                    videoId: videoId,
+                                    radius: 8,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    article.title,
+                                    style: ArenaText.cardTitle,
+                                  ),
+                                ),
+                              ],
+                            )
+                          else
+                            Text(article.title, style: ArenaText.cardTitle),
                         ],
                       ),
                     ),
@@ -727,68 +775,6 @@ class _TimelineEntry extends StatelessWidget {
       ),
     );
   }
-}
-
-class _VersionStep extends StatelessWidget {
-  const _VersionStep({
-    required this.number,
-    required this.title,
-    required this.date,
-    required this.body,
-    this.quote,
-    this.isLast = false,
-  });
-
-  final int number;
-  final String title;
-  final String date;
-  final String body;
-  final String? quote;
-  final bool isLast;
-
-  @override
-  Widget build(BuildContext context) => ArenaCard(
-    borderColor: isLast ? ArenaColors.violet : null,
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        _NumberCircle(number),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(title, style: ArenaText.cardTitle),
-              Text(date, style: ArenaText.meta),
-              const SizedBox(height: 6),
-              Text(body, style: ArenaText.body),
-              if (quote != null) ...<Widget>[
-                const SizedBox(height: 6),
-                Text(
-                  '«$quote»',
-                  style: const TextStyle(
-                    fontSize: 13,
-                    height: 1.35,
-                    fontStyle: FontStyle.italic,
-                    color: ArenaColors.muted,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
-}
-
-class _NumberCircle extends StatelessWidget {
-  const _NumberCircle(this.number);
-
-  final int number;
-
-  @override
-  Widget build(BuildContext context) => arenaNumberCircle(number);
 }
 
 /// Violet numbered circle shared by rankings and version steps.

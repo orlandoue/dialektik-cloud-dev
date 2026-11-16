@@ -35,8 +35,20 @@ final class ArenaDuel {
     return null;
   }
 
-  EventCoveragePositionDto? get positionA => _position(contrast.positionA.id);
-  EventCoveragePositionDto? get positionB => _position(contrast.positionB.id);
+  /// The two outlets are always shown in alphabetical order, so the first
+  /// place never depends on how Core happened to order the pair.
+  late final bool _swapped =
+      nameOf(_position(contrast.positionB.id)).toLowerCase().compareTo(
+        nameOf(_position(contrast.positionA.id)).toLowerCase(),
+      ) <
+      0;
+
+  /// Position shown first (left) and second (right).
+  String get idA => _swapped ? contrast.positionB.id : contrast.positionA.id;
+  String get idB => _swapped ? contrast.positionA.id : contrast.positionB.id;
+
+  EventCoveragePositionDto? get positionA => _position(idA);
+  EventCoveragePositionDto? get positionB => _position(idB);
 
   /// `CONTRADICTION`, `DIFFERENT_FOCUS` or `COMPATIBLE`.
   ///
@@ -586,6 +598,20 @@ final class ArenaStore extends ChangeNotifier {
     } on Object {
       /* Saved items are a device convenience only. */
     }
+  }
+
+  final Set<String> _blind = <String>{};
+
+  /// «Duelo a ciegas»: the reader chose to read both versions without the
+  /// outlets' names until they vote on this case.
+  bool isBlind(String eventId) => _blind.contains(eventId);
+
+  /// Whether the outlets are hidden right now: blind and not yet voted.
+  bool hidesOutlets(String eventId) =>
+      _blind.contains(eventId) && cachedPositionVotes(eventId)?.mine == null;
+
+  void setBlind(String eventId, {required bool value}) {
+    if (value ? _blind.add(eventId) : _blind.remove(eventId)) _notify();
   }
 
   void toggleSaved(String eventId) {

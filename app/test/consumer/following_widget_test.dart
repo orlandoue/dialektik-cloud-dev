@@ -66,21 +66,31 @@ void main() {
     expect(find.text('Canal de prueba'), findsOneWidget);
     await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-350));
     await tester.pumpAndSettle();
-    final button = find.text('+ Seguir').first;
+    final button = find.text('Seguir').first;
     await tester.ensureVisible(button);
     await tester.tap(button);
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
-    expect(find.text('✓ Siguiendo'), findsOneWidget);
-    expect(find.textContaining('Tu mezcla: 1 fuentes en Actualidad · 1'), findsOneWidget);
-    await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,500));
-    await tester.pumpAndSettle();
-    await tester.enterText(find.byType(TextField), 'Canal de prueba');
-    await tester.pumpAndSettle();
-    await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-350));
-    await tester.pumpAndSettle();
+    expect(find.text('Siguiendo'), findsOneWidget);
+    expect(find.text('Sigues 1 de 2 medios'), findsOneWidget);
+    // Following one source never hides the others.
     expect(find.text('Canal de prueba'), findsOneWidget);
-    expect(find.text('Editorial de pruebas · sintético'), findsNothing);
+    expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
+    // A short directory needs no search field of its own.
+    expect(find.byType(TextField), findsNothing);
+  });
+  testWidgets('a long directory can be filtered by name', (tester) async {
+    tester.view.physicalSize=const Size(800,1600); tester.view.devicePixelRatio=1;
+    addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
+    final repo=_FollowingLiveRepository(items:[
+      for(var i=10;i<26;i++) LiveSourceDto.fromJson({...liveTestSource(),'name':'Medio de prueba $i','id':'01K6MYH00000000000000000$i'}),
+    ]); addTearDown(repo.changes.dispose);
+    await tester.pumpWidget(MaterialApp(home:Scaffold(body:SourceRadar(repository:repo,onContinue:(){}))));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField),'prueba 12');
+    await tester.pumpAndSettle();
+    expect(find.text('Medio de prueba 12'),findsOneWidget);
+    expect(find.text('Medio de prueba 13'),findsNothing);
   });
   testWidgets('welcome radar opens for a new reader and can be skipped', (tester) async {
     final repo=_FollowingLiveRepository(); addTearDown(repo.changes.dispose);
@@ -88,7 +98,7 @@ void main() {
       consumerRepository:FakeConsumerRepository(),liveNewsRepository:repo,initialRoute:'/live/sources',locale:const Locale('es')));
     await tester.pumpAndSettle();
     expect(find.text('Saltar'),findsOneWidget);
-    expect(find.textContaining('Debate y tensión en video'),findsWidgets);
+    expect(find.text('Prensa escrita y digital'),findsWidgets);
     await tester.tap(find.text('Saltar'));
     await tester.pumpAndSettle();
     expect(find.text('Saltar'),findsNothing);
@@ -97,7 +107,7 @@ void main() {
     await tester.tap(find.text('Fuentes')); await tester.pumpAndSettle();
     expect(find.text('Saltar'),findsNothing);
   });
-  testWidgets('radar groups operational sources into the three carousels', (tester) async {
+  testWidgets('radar groups outlets by format, never by editorial style', (tester) async {
     tester.view.physicalSize=const Size(800,1600); tester.view.devicePixelRatio=1;
     addTearDown(tester.view.resetPhysicalSize); addTearDown(tester.view.resetDevicePixelRatio);
     LiveSourceDto source(String name,String id) => LiveSourceDto.fromJson({...liveTestSource(),'name':name,'id':id});
@@ -108,12 +118,16 @@ void main() {
     ]); addTearDown(repo.changes.dispose);
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:SourceRadar(repository:repo,onContinue:(){}))));
     await tester.pumpAndSettle();
-    for(final entry in [(0,'Sin Filtros TV'),(1,'CIPER Chile'),(2,'BioBioChile')]) {
-      expect(find.descendant(of:find.byKey(ValueKey('radar-group-${entry.$1}')),matching:find.text(entry.$2)),findsOneWidget);
+    // All three publish press feeds: one format group, in alphabetical order.
+    for(final name in ['Sin Filtros TV','CIPER Chile','BioBioChile']) {
+      expect(find.descendant(of:find.byKey(const ValueKey('radar-group-0')),matching:find.text(name)),findsOneWidget);
     }
-    expect(find.text('Tu mezcla: 0 fuentes en Actualidad · 3 en tu Espejo'),findsOneWidget);
-    await tester.tap(find.text('+ Seguir').first); await tester.pumpAndSettle();
-    expect(find.text('Tu mezcla: 1 fuentes en Actualidad · 2 en tu Espejo'),findsOneWidget);
+    expect(find.textContaining('Investigación'),findsNothing);
+    expect(find.textContaining('Debate y tensión'),findsNothing);
+    expect(tester.getTopLeft(find.text('BioBioChile')).dy,lessThan(tester.getTopLeft(find.text('CIPER Chile')).dy));
+    expect(find.text('Sigues 0 de 3 medios'),findsOneWidget);
+    await tester.tap(find.text('Seguir').first); await tester.pumpAndSettle();
+    expect(find.text('Sigues 1 de 3 medios'),findsOneWidget);
   });
   testWidgets('radar agrupa CIPER y sincroniza sus dos fuentes con letra grande', (tester) async {
     tester.view.physicalSize=const Size(390,844); tester.view.devicePixelRatio=1;
@@ -124,13 +138,13 @@ void main() {
     await tester.pumpWidget(MaterialApp(home:MediaQuery(data:const MediaQueryData(size:Size(390,844),textScaler:TextScaler.linear(1.45)),child:Scaffold(body:SourceRadar(repository:repo,onContinue:(){})))));
     await tester.pumpAndSettle();
     await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-240)); await tester.pumpAndSettle();
-    final group=find.byKey(const ValueKey('radar-group-1'));
+    final group=find.byKey(const ValueKey('radar-group-0'));
     await tester.ensureVisible(group); await tester.pumpAndSettle();
     expect(find.descendant(of:group,matching:find.text('CIPER Chile')),findsOneWidget);
     expect(tester.takeException(),isNull);
-    await tester.tap(find.descendant(of:group,matching:find.text('+ Seguir'))); await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of:group,matching:find.text('Seguir'))); await tester.pumpAndSettle();
     expect(repo.ids,{'01K6MYH0000000000000000011','01K6MYH0000000000000000012'});
-    await tester.tap(find.descendant(of:group,matching:find.text('✓ Siguiendo'))); await tester.pumpAndSettle();
+    await tester.tap(find.descendant(of:group,matching:find.text('Siguiendo'))); await tester.pumpAndSettle();
     expect(repo.ids,isEmpty);
     expect(tester.takeException(),isNull);
   });
@@ -138,7 +152,7 @@ void main() {
     final repo=_FollowingLiveRepository(items:[LiveSourceDto.fromJson({...liveTestSource(),'id':'01K6MYH0000000000000000011','name':'CIPER Chile'})]);
     addTearDown(repo.changes.dispose);
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:SourceRadar(repository:repo,onContinue:(){})))); await tester.pumpAndSettle();
-    await tester.tap(find.text('Sincronizar mis fuentes con YouTube o X')); await tester.pumpAndSettle();
+    await tester.tap(find.text('Importar los medios que sigues en YouTube o X')); await tester.pumpAndSettle();
     await tester.tap(find.text('Sincronizar con X')); await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last,'@ciper');
     await tester.tap(find.text('Buscar y seguir coincidencias')); await tester.pumpAndSettle();
@@ -148,7 +162,7 @@ void main() {
     final repo=_FollowingLiveRepository(items:[LiveSourceDto.fromJson({...liveTestSource(),'id':'01K6MYH0000000000000000011','name':'BioBioChile TV (YouTube)'}),LiveSourceDto.fromJson({...liveTestSource(),'id':'01K6MYH0000000000000000012','name':'BioBioChile'})]);
     repo.youtubeMatches={'01K6MYH0000000000000000011'}; addTearDown(repo.changes.dispose);
     await tester.pumpWidget(MaterialApp(home:Scaffold(body:SourceRadar(repository:repo,onContinue:(){})))); await tester.pumpAndSettle();
-    await tester.tap(find.text('Sincronizar mis fuentes con YouTube o X')); await tester.pumpAndSettle();
+    await tester.tap(find.text('Importar los medios que sigues en YouTube o X')); await tester.pumpAndSettle();
     await tester.tap(find.text('Sincronizar con YouTube')); await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).last,'@usuario');
     await tester.tap(find.text('Buscar y seguir coincidencias')); await tester.pumpAndSettle();

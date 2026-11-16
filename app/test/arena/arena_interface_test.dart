@@ -72,64 +72,80 @@ void main() {
     expect(find.byKey(const Key('arena-duel-dots')), findsNothing);
   });
 
-  testWidgets('la sección de historias usa la píldora menta refinada', (
+  testWidgets('las secciones de Inicio usan un mismo encabezado H2', (
     WidgetTester tester,
   ) async {
     await pumpArena(tester, ArenaFakeCore());
-    final Finder pill = find.byType(ArenaSectionPill);
-    await reveal(tester, pill, 'arena-coliseo-scroll');
-    final BoxDecoration decoration =
-        tester
-                .widget<DecoratedBox>(
-                  find
-                      .descendant(of: pill, matching: find.byType(DecoratedBox))
-                      .first,
-                )
-                .decoration
-            as BoxDecoration;
-    expect(decoration.color, const Color(0xFFE8F7F0));
-    expect(decoration.borderRadius, BorderRadius.circular(20));
-    expect((decoration.border! as Border).top.color, const Color(0xFFBBE5D0));
-    final Text label = tester.widget<Text>(
-      find.descendant(of: pill, matching: find.text('Historias en desarrollo')),
+    final Finder stories = find.text('Historias en desarrollo');
+    await reveal(tester, stories, 'arena-coliseo-scroll');
+    expect(
+      find.ancestor(of: stories, matching: find.byType(ArenaSectionTitle)),
+      findsOneWidget,
     );
-    expect(label.style?.fontSize, 12);
-    expect(label.style?.fontWeight, FontWeight.w700);
-    expect(label.style?.color, const Color(0xFF065F46));
+    final Text label = tester.widget<Text>(stories);
+    expect(label.style?.fontSize, 20);
+    expect(label.style?.fontWeight, FontWeight.w800);
+    expect(label.style?.color, const Color(0xFF0F172A));
+    // No tappable-looking pill for a heading.
+    expect(find.byType(ArenaSectionPill), findsNothing);
   });
 
-  testWidgets('cada duelo muestra solo su clasificación, con su estilo', (
+  testWidgets('cada duelo muestra solo su clasificación, atribuida y neutral', (
     WidgetTester tester,
   ) async {
     await pumpArena(tester, ArenaManyDuelsCore(), initialTab: ArenaTab.vs);
-    BoxDecoration badge() =>
-        tester
-                .widget<DecoratedBox>(find.byKey(const Key('arena-duel-kind')))
-                .decoration
-            as BoxDecoration;
+    Color? badge() => tester
+        .widget<Material>(
+          find
+              .ancestor(
+                of: find.byKey(const Key('arena-duel-kind')),
+                matching: find.byType(Material),
+              )
+              .first,
+        )
+        .color;
 
     await tester.tap(find.text(ArenaManyDuelsCore.titleOf(0)));
     await tester.pumpAndSettle();
-    expect(find.text('⚔️ Contradicción factual'), findsOneWidget);
-    expect(find.textContaining('Distinto enfoque'), findsNothing);
-    expect(find.textContaining('compatible'), findsNothing);
-    expect(badge().color, const Color(0xFFFDE8E8));
-    // Informative only: the badge is not a button.
     expect(
-      find.ancestor(
-        of: find.byKey(const Key('arena-duel-kind')),
-        matching: find.byType(InkWell),
+      find.textContaining(
+        'Tipo de duelo (Dialektik): Contradicción',
+        findRichText: true,
       ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Distinto enfoque', findRichText: true),
       findsNothing,
     );
+    final Color? contradiction = badge();
+    // Tapping explains what the classification means and whose it is.
+    await tester.tap(find.byKey(const Key('arena-duel-kind')));
+    await tester.pumpAndSettle();
+    expect(
+      find.text('Es una clasificación de Dialektik, no de los medios.'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Cerrar'));
+    await tester.pumpAndSettle();
     await tester.pageBack();
     await tester.pumpAndSettle();
 
     await tester.tap(find.text(ArenaManyDuelsCore.titleOf(1)));
     await tester.pumpAndSettle();
-    expect(find.text('⚡ Distinto enfoque'), findsOneWidget);
-    expect(find.textContaining('Contradicción'), findsNothing);
-    expect(badge().color, const Color(0xFFEDE9FE));
+    expect(
+      find.textContaining(
+        'Tipo de duelo (Dialektik): Distinto enfoque',
+        findRichText: true,
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Contradicción', findRichText: true),
+      findsNothing,
+    );
+    // Every kind shares one neutral style: no colour reads as a verdict.
+    expect(badge(), contradiction);
   });
 
   testWidgets('Evidencia: enlaces evidentes y aporte de un enlace con nota', (
@@ -164,7 +180,7 @@ void main() {
       findsOneWidget,
     );
     expect(
-      find.descendant(of: link, matching: find.text('Leer en medio original')),
+      find.descendant(of: link, matching: find.text('Leer en el medio')),
       findsOneWidget,
     );
     expect(
@@ -172,7 +188,7 @@ void main() {
       findsOneWidget,
     );
     await tester.tap(
-      find.descendant(of: link, matching: find.text('Leer en medio original')),
+      find.descendant(of: link, matching: find.text('Leer en el medio')),
     );
     expect(opened.single.toString(), 'https://latercera.com/nota/art1');
 
@@ -256,7 +272,10 @@ void main() {
     expect(decoration.boxShadow, isNotEmpty);
     await tester.tap(button);
     await tester.pumpAndSettle();
-    expect(find.text('La Tercera · 2 votos'), findsOneWidget);
+    // Before voting the options name the outlets but never their tallies.
+    expect(find.text('La Tercera'), findsWidgets);
+    expect(find.textContaining('2 votos'), findsNothing);
+    expect(find.textContaining('opiniones'), findsWidgets);
   });
 
   testWidgets('la comunidad se lee como un hilo con burbujas', (

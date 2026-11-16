@@ -194,7 +194,7 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
           'Confirma tu correo con el enlace que te enviamos y vuelve a '
               'intentarlo.',
         'user_already_exists' ||
-        'email_exists' => 'Ese correo ya tiene cuenta. Toca «Iniciar sesión».',
+        'email_exists' => 'Ese correo ya tiene cuenta. Elige «Entrar».',
         'weak_password' =>
           'La contraseña es muy débil: usa al menos 6 caracteres.',
         'email_address_invalid' ||
@@ -400,6 +400,7 @@ final class _PrivateBetaGateState extends State<PrivateBetaGate> {
       title: 'Dialektik',
       theme: DialektikTheme.offWhite(loadInterFromDependency: false),
       home: _PrivateBetaLoginScreen(
+        recoveryUri: widget.apiConfiguration.baseUri.resolve('/auth/recover'),
         isLoading: _busy,
         notice: _notice,
         enabled: _auth != null,
@@ -438,6 +439,7 @@ final class _GateAccount extends ArenaAccount {
 
 final class _PrivateBetaLoginScreen extends StatefulWidget {
   const _PrivateBetaLoginScreen({
+    required this.recoveryUri,
     required this.isLoading,
     required this.enabled,
     required this.onSubmit,
@@ -446,6 +448,8 @@ final class _PrivateBetaLoginScreen extends StatefulWidget {
     this.notice,
   });
 
+  /// Core's secure page to reset a forgotten password.
+  final Uri recoveryUri;
   final bool isLoading;
   final bool enabled;
   final String? notice;
@@ -485,7 +489,8 @@ final class _PrivateBetaLoginScreenState
         widget.onSignUp(
           _email.text,
           _password.text,
-          alias.isEmpty ? null : alias,
+          // Never the part of the e-mail before @: a neutral reader alias.
+          alias.isEmpty ? readerAliasFor(_email.text) : alias,
         ),
       );
     } else {
@@ -497,6 +502,7 @@ final class _PrivateBetaLoginScreenState
   InputDecoration _decoration(String label, {String? helper}) =>
       InputDecoration(
         labelText: label,
+        floatingLabelBehavior: FloatingLabelBehavior.always,
         helperText: helper,
         helperMaxLines: 3,
         errorMaxLines: 3,
@@ -547,7 +553,6 @@ final class _PrivateBetaLoginScreenState
                 const Text(
                   'Únete al Coliseo',
                   style: TextStyle(
-                    fontFamily: ArenaText.serif,
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     color: ArenaColors.ink,
@@ -613,6 +618,26 @@ final class _PrivateBetaLoginScreenState
                   ],
                 ),
                 const SizedBox(height: 14),
+                SegmentedButton<bool>(
+                  key: const Key('login-mode'),
+                  showSelectedIcon: false,
+                  segments: const <ButtonSegment<bool>>[
+                    ButtonSegment<bool>(value: false, label: Text('Entrar')),
+                    ButtonSegment<bool>(
+                      value: true,
+                      label: Text('Crear cuenta'),
+                    ),
+                  ],
+                  selected: <bool>{_creating},
+                  onSelectionChanged: (Set<bool> value) =>
+                      setState(() => _creating = value.first),
+                  style: SegmentedButton.styleFrom(
+                    minimumSize: const Size(48, 48),
+                    selectedBackgroundColor: ArenaColors.violetSoft,
+                    selectedForegroundColor: ArenaColors.violetDeep,
+                  ),
+                ),
+                const SizedBox(height: 16),
                 Form(
                   key: _formKey,
                   child: Column(
@@ -635,7 +660,7 @@ final class _PrivateBetaLoginScreenState
                         controller: _password,
                         obscureText: true,
                         autofillHints: const <String>[AutofillHints.password],
-                        onFieldSubmitted: (_) => _submit(create: false),
+                        onFieldSubmitted: (_) => _submit(create: _creating),
                         decoration: _decoration('Contraseña'),
                         validator: (String? value) {
                           if (value == null || value.isEmpty) {
@@ -647,19 +672,35 @@ final class _PrivateBetaLoginScreenState
                           return null;
                         },
                       ),
-                      const SizedBox(height: 12),
-                      TextFormField(
-                        key: const Key('login-alias'),
-                        controller: _alias,
-                        maxLength: 30,
-                        decoration: _decoration(
-                          'Alias público (opcional)',
-                          helper:
-                              'Si lo dejas vacío usamos la parte de tu '
-                              'correo antes de @. Puedes cambiarlo en '
-                              'Perfil.',
+                      if (_creating) ...<Widget>[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          key: const Key('login-alias'),
+                          controller: _alias,
+                          maxLength: 30,
+                          decoration: _decoration(
+                            'Alias público (opcional)',
+                            helper:
+                                'Si lo dejas vacío te asignamos uno como '
+                                '«Lector-4821». Tu correo nunca se muestra. '
+                                'Puedes cambiarlo en Perfil.',
+                          ),
                         ),
-                      ),
+                      ] else
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            key: const Key('login-forgot'),
+                            style: TextButton.styleFrom(
+                              foregroundColor: ArenaColors.violet,
+                              minimumSize: const Size(44, 44),
+                            ),
+                            onPressed: () => unawaited(
+                              openExternalHttpLink(widget.recoveryUri),
+                            ),
+                            child: const Text('¿Olvidaste tu contraseña?'),
+                          ),
+                        ),
                       if (widget.notice != null) ...<Widget>[
                         const SizedBox(height: 8),
                         Text(
@@ -670,8 +711,10 @@ final class _PrivateBetaLoginScreenState
                       ],
                       const SizedBox(height: 16),
                       FilledButton(
-                        key: const Key('login-submit'),
-                        onPressed: _ready ? () => _submit(create: false) : null,
+                        key: Key(_creating ? 'login-sign-up' : 'login-submit'),
+                        onPressed: _ready
+                            ? () => _submit(create: _creating)
+                            : null,
                         style: FilledButton.styleFrom(
                           backgroundColor: ArenaColors.violet,
                           minimumSize: const Size(48, 50),
@@ -687,27 +730,12 @@ final class _PrivateBetaLoginScreenState
                                   color: Colors.white,
                                 ),
                               )
-                            : const Text(
-                                'Iniciar sesión',
-                                style: TextStyle(fontWeight: FontWeight.w700),
+                            : Text(
+                                _creating ? 'Crear cuenta gratis' : 'Entrar',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                      ),
-                      const SizedBox(height: 10),
-                      OutlinedButton(
-                        key: const Key('login-sign-up'),
-                        onPressed: _ready ? () => _submit(create: true) : null,
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: ArenaColors.violet,
-                          side: const BorderSide(color: ArenaColors.violet),
-                          minimumSize: const Size(48, 50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
-                          ),
-                        ),
-                        child: const Text(
-                          'Crear cuenta gratis',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
                       ),
                     ],
                   ),

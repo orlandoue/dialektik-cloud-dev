@@ -162,7 +162,7 @@ void main() {
 
   for (final double scale in <double>[1, 1.45]) {
     testWidgets(
-      'the header selector lists the four countries, only Chile open · escala $scale',
+      'Perfil › Edición lists the four countries, only Chile open · escala $scale',
       (WidgetTester tester) async {
         final ArenaFullCore core = ArenaFullCore();
         final PublisherMarketSelection market = PublisherMarketSelection();
@@ -187,14 +187,24 @@ void main() {
               consumer: core,
               live: core,
               store: store,
+              initialTab: ArenaTab.perfil,
               offerWelcomeRadar: false,
             ),
           ),
         );
         await tester.pumpAndSettle();
-        expect(find.text('🇨🇱 Chile'), findsOneWidget);
+        // While Chile is the only edition, the header has no selector.
+        expect(find.byKey(const Key('arena-country')), findsNothing);
+        final Finder edition = find.byKey(const Key('arena-edition'));
+        await tester.scrollUntilVisible(
+          edition,
+          300,
+          scrollable: find.byType(Scrollable).first,
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('Edición: Chile'), findsOneWidget);
 
-        await tester.tap(find.byKey(const Key('arena-country')));
+        await tester.tap(edition);
         await tester.pumpAndSettle();
         for (final String code in <String>['CL', 'ES', 'AR', 'US']) {
           expect(
@@ -218,7 +228,7 @@ void main() {
           find.byKey(const ValueKey<String>('arena-country-option-CL')),
         );
         await tester.pumpAndSettle();
-        expect(find.text('🇨🇱 Chile'), findsOneWidget);
+        expect(find.text('Edición: Chile'), findsOneWidget);
         expect(tester.takeException(), isNull);
         market.dispose();
       },

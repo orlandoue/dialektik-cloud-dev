@@ -569,7 +569,7 @@ void main() {
     await tester.drag(find.byKey(const Key('radar-scroll')),const Offset(0,-350));
     await tester.pumpAndSettle();
     expect(find.text('Editorial de pruebas · sintético'), findsOneWidget);
-    expect(find.textContaining('Tu mezcla: 0 fuentes'), findsOneWidget);
+    expect(find.textContaining('Sigues 0 de'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
