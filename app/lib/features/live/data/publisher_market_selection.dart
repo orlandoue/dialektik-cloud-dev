@@ -46,6 +46,12 @@ final class PublisherMarketSelection extends ValueNotifier<String> {
     (code: 'US', flag: '🇺🇸', name: 'EE. UU.'),
   ];
 
+  /// Countries open in this beta. The others stay in the catalog but are
+  /// paused (shown as «Pronto») to keep the free-tier servers on Chile.
+  static const Set<String> activeCountryCodes = <String>{'CL'};
+
+  static bool isActiveCountry(String code) => activeCountryCodes.contains(code);
+
   static CatalogCountry countryOf(String code) => catalogCountries.firstWhere(
     (CatalogCountry country) => country.code == code,
     orElse: () => catalogCountries.first,
@@ -73,7 +79,7 @@ final class PublisherMarketSelection extends ValueNotifier<String> {
   Future<void> restore() async {
     try {
       final String? saved = await preference.readMarket();
-      if (saved != null && isCatalogCountry(saved) && saved != value) {
+      if (saved != null && isActiveCountry(saved) && saved != value) {
         value = saved;
       }
     } on Object {
