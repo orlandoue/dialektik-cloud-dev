@@ -17,6 +17,7 @@ import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/source_sync_sheet.dart';
+import 'package:dialektik/features/science/presentation/moderation_screen.dart';
 import 'package:flutter/material.dart';
 
 class _TabHeader extends StatelessWidget {
@@ -713,6 +714,18 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                     if (store.account
                         case final ArenaAccount account) ...<Widget>[
                       ArenaAccountCard(account: account),
+                      const SizedBox(height: 12),
+                    ],
+                    // Only moderator accounts (DIALEKTIK_SCIENCE_MODERATORS).
+                    if (store.scienceModerator) ...<Widget>[
+                      OutlinedButton.icon(
+                        key: const Key('arena-open-science-moderation'),
+                        onPressed: () =>
+                            unawaited(openScienceModeration(context, store)),
+                        style: arenaSecondaryButtonStyle(),
+                        icon: const Icon(Icons.fact_check_outlined),
+                        label: const Text('Moderación de Ciencia'),
+                      ),
                       const SizedBox(height: 12),
                     ],
                     // Counts live in each heading; no separate scoreboard.

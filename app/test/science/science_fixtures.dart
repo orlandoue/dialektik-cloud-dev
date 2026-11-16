@@ -183,7 +183,8 @@ List<StoryComment> sampleThread(DateTime now) => <StoryComment>[
 /// In-memory Core for the Science mode, enforcing the same rules as the
 /// server: retracted studies and duplicates are refused, fragments must be
 /// literal, study comments enter review.
-class FakeScienceRepository implements ScienceRepository {
+class FakeScienceRepository
+    implements ScienceRepository, ScienceModerationRepository {
   FakeScienceRepository({
     List<Study>? studies,
     Map<String, List<StoryComment>>? comments,
@@ -304,6 +305,91 @@ class FakeScienceRepository implements ScienceRepository {
   @override
   Future<ScienceAccess> access() async => scienceAccess;
 
+  /// Reports filed, by comment id.
+  final Map<String, List<CommentReport>> reports =
+      <String, List<CommentReport>>{};
+
+  /// Decisions taken: «approve», «reject:reason», «hide:reason», «dismiss».
+  final Map<String, String> decisions = <String, String>{};
+
+  List<ApiUsageDay> usageDays = <ApiUsageDay>[];
+
+  @override
+  Future<void> report(
+    String commentId,
+    ReportReason reason, {
+    String? note,
+  }) async {
+    (reports[commentId] ??= <CommentReport>[]).add(
+      CommentReport(reason: reason, note: note, createdAt: DateTime.now()),
+    );
+  }
+
+  StoryComment? _find(String id) {
+    for (final List<StoryComment> list in comments.values) {
+      for (final StoryComment c in list) {
+        if (c.id == id) return c;
+      }
+    }
+    return null;
+  }
+
+  String _eventOf(String id) => comments.entries
+      .firstWhere(
+        (MapEntry<String, List<StoryComment>> e) =>
+            e.value.any((StoryComment c) => c.id == id),
+      )
+      .key;
+
+  @override
+  Future<ModerationQueue> moderationQueue() async => ModerationQueue(
+    review: <ModerationItem>[
+      for (final MapEntry<String, List<StoryComment>> e in comments.entries)
+        for (final StoryComment c in e.value)
+          if (c.status == CommentStatus.inReview &&
+              !decisions.containsKey(c.id))
+            ModerationItem(comment: c, eventId: e.key),
+    ],
+    reports: <ModerationItem>[
+      for (final MapEntry<String, List<CommentReport>> r in reports.entries)
+        if (!decisions.containsKey(r.key) && _find(r.key) != null)
+          ModerationItem(
+            comment: _find(r.key)!,
+            eventId: _eventOf(r.key),
+            reports: r.value,
+          ),
+    ],
+  );
+
+  @override
+  Future<void> decide(
+    String commentId, {
+    required bool approve,
+    String? reason,
+  }) async {
+    decisions[commentId] = approve ? 'approve' : 'reject:$reason';
+  }
+
+  @override
+  Future<void> resolveReports(
+    String commentId, {
+    required bool hide,
+    String? reason,
+  }) async {
+    decisions[commentId] = hide ? 'hide:$reason' : 'dismiss';
+  }
+
+  @override
+  Future<Study> moderateStudy(String doi, StudyModeration fields) async {
+    final int i = studies.indexWhere((Study s) => s.doi == doi);
+    final Study updated = studies[i].moderated(fields.fields);
+    studies[i] = updated;
+    return updated;
+  }
+
+  @override
+  Future<List<ApiUsageDay>> usage() async => usageDays;
+
   @override
   Future<List<StoryComment>> commentsCitingStudy(String doi) async =>
       <StoryComment>[
@@ -313,7 +399,8 @@ class FakeScienceRepository implements ScienceRepository {
 }
 
 /// The Arena fake Core plus the Science routes and the vaccination story.
-class ArenaScienceCore extends ArenaFullCore implements ScienceRepository {
+class ArenaScienceCore extends ArenaFullCore
+    implements ScienceRepository, ScienceModerationRepository {
   ArenaScienceCore({FakeScienceRepository? science})
     : science = science ?? FakeScienceRepository();
 
@@ -379,4 +466,26 @@ class ArenaScienceCore extends ArenaFullCore implements ScienceRepository {
       science.commentsCitingStudy(doi);
   @override
   Future<ScienceAccess> access() => science.access();
+  @override
+  Future<void> report(String commentId, ReportReason reason, {String? note}) =>
+      science.report(commentId, reason, note: note);
+  @override
+  Future<ModerationQueue> moderationQueue() => science.moderationQueue();
+  @override
+  Future<void> decide(
+    String commentId, {
+    required bool approve,
+    String? reason,
+  }) => science.decide(commentId, approve: approve, reason: reason);
+  @override
+  Future<void> resolveReports(
+    String commentId, {
+    required bool hide,
+    String? reason,
+  }) => science.resolveReports(commentId, hide: hide, reason: reason);
+  @override
+  Future<Study> moderateStudy(String doi, StudyModeration fields) =>
+      science.moderateStudy(doi, fields);
+  @override
+  Future<List<ApiUsageDay>> usage() => science.usage();
 }

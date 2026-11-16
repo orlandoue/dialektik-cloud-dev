@@ -64,6 +64,7 @@ final class Study {
     this.retractedFlag = false,
     this.abstractText,
     this.abstractLanguage,
+    this.abstractSource,
     this.madeInChile = false,
     this.connectedStories = 0,
     this.citingComments = 0,
@@ -91,6 +92,7 @@ final class Study {
     retractedFlag: json['retracted'] as bool? ?? false,
     abstractText: json['abstract'] as String?,
     abstractLanguage: json['abstract_language'] as String?,
+    abstractSource: json['abstract_source'] as String?,
     madeInChile: json['made_in_chile'] as bool? ?? false,
     connectedStories: json['connected_stories'] as int? ?? 0,
     citingComments: json['citing_comments'] as int? ?? 0,
@@ -130,6 +132,47 @@ final class Study {
 
   /// BCP-47 code of the abstract, e.g. `en`.
   final String? abstractLanguage;
+
+  /// Where the abstract came from: Crossref, OpenAlex, or the publisher a
+  /// moderator copied it from. Never a generated summary.
+  final String? abstractSource;
+
+  bool get hasAbstract => abstractText?.trim().isNotEmpty ?? false;
+
+  /// The same study with the fields a moderator completed.
+  Study moderated(Map<String, Object?> f) {
+    T? pick<T>(String key, T? current) =>
+        f.containsKey(key) ? f[key] as T? : current;
+    final bool sets = f.containsKey('abstract');
+    final Map<String, Object?> given =
+        (f['abstract'] as Map<String, Object?>?) ?? const <String, Object?>{};
+    return Study(
+      doi: doi,
+      title: title,
+      review: review,
+      authors: authors,
+      institution: institution,
+      journal: journal,
+      publishedAt: publishedAt,
+      design: pick<String>('design', design),
+      population: pick<String>('population', population),
+      sampleSize: pick<int>('sample_size', sampleSize),
+      followUp: pick<String>('follow_up', followUp),
+      funding: pick<String>('funding', funding),
+      conflicts: pick<String>('conflicts', conflicts),
+      access: pick<String>('access', access),
+      corrections: pick<String>('corrections', corrections),
+      retractedAt: retractedAt,
+      retractedFlag: retractedFlag,
+      abstractText: sets ? given['text'] as String? : abstractText,
+      abstractLanguage: sets ? given['language'] as String? : abstractLanguage,
+      abstractSource: sets ? given['source'] as String? : abstractSource,
+      madeInChile: madeInChile,
+      connectedStories: connectedStories,
+      citingComments: citingComments,
+    );
+  }
+
   final bool madeInChile;
   final int connectedStories;
   final int citingComments;
@@ -301,4 +344,119 @@ String normalizeLiteral(String text) => text
 bool isLiteralFragment(String fragment, String abstractText) {
   final String needle = normalizeLiteral(fragment);
   return needle.isNotEmpty && normalizeLiteral(abstractText).contains(needle);
+}
+
+/// Why a reader reports a comment (`POST /v1/comments/{id}/reports`).
+enum ReportReason {
+  spam('spam', 'Spam o publicidad'),
+  offensive('ofensivo', 'Insulto u ofensa'),
+  misinformation('desinformacion', 'Desinformación'),
+  personalData('datos_personales', 'Datos personales de alguien'),
+  other('otro', 'Otro motivo');
+
+  const ReportReason(this.wire, this.label);
+
+  final String wire;
+  final String label;
+
+  static ReportReason? fromWire(Object? value) =>
+      values.where((ReportReason r) => r.wire == value).firstOrNull;
+}
+
+/// One report of a comment, as the moderation queue shows it.
+final class CommentReport {
+  const CommentReport({required this.reason, this.note, this.createdAt});
+
+  factory CommentReport.fromJson(Map<String, dynamic> json) => CommentReport(
+    reason: ReportReason.fromWire(json['reason']) ?? ReportReason.other,
+    note: json['note'] as String?,
+    createdAt: DateTime.tryParse(json['created_at'] as String? ?? ''),
+  );
+
+  final ReportReason reason;
+  final String? note;
+  final DateTime? createdAt;
+}
+
+/// A comment waiting for a moderator: a study comment in review, or a
+/// published comment with open reports.
+final class ModerationItem {
+  const ModerationItem({
+    required this.comment,
+    required this.eventId,
+    this.reports = const <CommentReport>[],
+  });
+
+  factory ModerationItem.fromJson(Map<String, dynamic> json) => ModerationItem(
+    comment: StoryComment.fromJson(json),
+    eventId: json['event_id'] as String? ?? '',
+    reports: <CommentReport>[
+      for (final Object? r
+          in (json['reports'] as List<dynamic>?) ?? const <dynamic>[])
+        CommentReport.fromJson(r! as Map<String, dynamic>),
+    ],
+  );
+
+  final StoryComment comment;
+  final String eventId;
+  final List<CommentReport> reports;
+}
+
+final class ModerationQueue {
+  const ModerationQueue({
+    this.review = const <ModerationItem>[],
+    this.reports = const <ModerationItem>[],
+  });
+
+  factory ModerationQueue.fromJson(Object? value) {
+    final Map<String, dynamic> json = value! as Map<String, dynamic>;
+    List<ModerationItem> list(String key) => <ModerationItem>[
+      for (final Object? item
+          in (json[key] as List<dynamic>?) ?? const <dynamic>[])
+        ModerationItem.fromJson(item! as Map<String, dynamic>),
+    ];
+    return ModerationQueue(review: list('review'), reports: list('reports'));
+  }
+
+  final List<ModerationItem> review;
+  final List<ModerationItem> reports;
+
+  bool get isEmpty => review.isEmpty && reports.isEmpty;
+}
+
+/// Calls to one metadata API on one day (`GET /v1/science/moderation/usage`).
+final class ApiUsageDay {
+  const ApiUsageDay({
+    required this.source,
+    required this.day,
+    required this.calls,
+    required this.errors,
+  });
+
+  factory ApiUsageDay.fromJson(Map<String, dynamic> json) => ApiUsageDay(
+    source: json['source'] as String? ?? '',
+    day: DateTime.tryParse(json['day'] as String? ?? '') ?? DateTime(1970),
+    calls: (json['calls'] as num?)?.toInt() ?? 0,
+    errors: (json['errors'] as num?)?.toInt() ?? 0,
+  );
+
+  static List<ApiUsageDay> listFromJson(Object? value) => <ApiUsageDay>[
+    for (final Object? item
+        in ((value! as Map<String, dynamic>)['days'] as List<dynamic>?) ??
+            const <dynamic>[])
+      ApiUsageDay.fromJson(item! as Map<String, dynamic>),
+  ];
+
+  final String source;
+  final DateTime day;
+  final int calls;
+  final int errors;
+}
+
+/// Fields a moderator completes on a study. Only the keys present are sent;
+/// a null value clears the field back to «No informado».
+final class StudyModeration {
+  const StudyModeration(this.fields);
+
+  final Map<String, Object?> fields;
 }

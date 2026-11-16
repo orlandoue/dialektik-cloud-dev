@@ -282,6 +282,7 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
 
   bool get _complete =>
       !study.retracted &&
+      study.hasAbstract &&
       !_duplicate &&
       _event != null &&
       _claimId != null &&
@@ -384,6 +385,8 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
             _duplicateId = null;
           case 'not_literal':
             _fragmentInvalid = true;
+          case 'no_abstract':
+            _error = 'Este estudio no tiene resumen disponible';
           case 'account_too_new':
             _error =
                 'Tu cuenta debe tener al menos 3 días para comentar con un '
@@ -606,12 +609,30 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
                   ),
                   const SizedBox(height: 12),
                   _stepLabel(4, 'Fragmento literal del resumen'),
-                  _AbstractPicker(
-                    study: study,
-                    fragment: _fragment,
-                    invalid: _fragmentInvalid,
-                    onSelected: _selectFragment,
-                  ),
+                  // Nothing literal to quote without an abstract: step 4 stays
+                  // closed until a moderator loads it from the publisher.
+                  if (study.hasAbstract)
+                    _AbstractPicker(
+                      study: study,
+                      fragment: _fragment,
+                      invalid: _fragmentInvalid,
+                      onSelected: _selectFragment,
+                    )
+                  else
+                    Container(
+                      key: const Key('sci-no-abstract'),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: SciColors.bgApp,
+                        borderRadius: BorderRadius.circular(SciRadius.card),
+                        border: Border.all(color: SciColors.borderCard),
+                      ),
+                      child: const Text(
+                        'Este estudio no tiene resumen disponible',
+                        style: SciText.body,
+                      ),
+                    ),
                   const SizedBox(height: 12),
                   _stepLabel(5, 'Tu comentario', '(se publica con tu alias)'),
                   TextField(
