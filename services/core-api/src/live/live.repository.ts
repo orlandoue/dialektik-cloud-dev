@@ -1,5 +1,5 @@
 import type { Database, Ulid } from '@dialektik/database';
-import { sql, type Kysely } from 'kysely';
+import { sql, type Kysely, type RawBuilder } from 'kysely';
 import { sourceProfilesAvailable } from '../public-api/source-profiles.js';
 import { CHILE_PUBLISHER_DOMAINS, isCatalogMarket, publisherDomainsForMarket, UK_BETA_SOURCE_IDS, type PublisherMarket } from './live.publisher-market.js';
 
@@ -133,7 +133,7 @@ export class LiveRepository {
       (select count(id)::int from live_acquisition_receipts where exclusion_id = ${exposure}) as receipt_count`;
   }
 
-  private newsProjection() {
+  private newsProjection(candidates: RawBuilder<unknown> = sql`true`) {
     return sql`select a.id, a.event_id, v.headline,
       case when p.storage_policy = 'METADATA_AND_FEED_EXCERPT' then v.excerpt else null end as excerpt,
       v.author, v.published_at, v.modified_at,
@@ -169,7 +169,7 @@ export class LiveRepository {
       -- keeps the subquery from being flattened back into that join.
       join lateral (select exclusion.first_seen_at from live_exposure_exclusions exclusion
         where exclusion.id = a.live_exposure_id offset 0) e on true
-      where a.origin = 'LIVE_REAL'
+      where a.origin = 'LIVE_REAL' and ${candidates}
         -- Use the latest explicit quarantine decision. Later source policy
         -- versions that omit this field do not accidentally reverse a review.
         and coalesce((select case
@@ -181,29 +181,84 @@ export class LiveRepository {
           order by q.recorded_at desc, q.id desc limit 1), true)`;
   }
 
+  /**
+   * The full projection costs several index lookups per article in the
+   * large receipt and exclusion tables (on disk on the free database); run
+   * over every live article it took 6-15 s. So one statement first picks
+   * the newest candidates from articles, their latest version and their
+   * source alone, with filters that can only keep too many rows, never too
+   * few, and projects only those. When the stricter conditions leave the
+   * page short and more candidates exist, the window grows until the result
+   * equals projecting every article.
+   */
   async list(query: LiveNewsQuery): Promise<LiveReadRow[]> {
     const market = query.market ?? 'CL';
+    const wanted = query.limit + 1;
+    for (let window = wanted * 4; ; window *= 4) {
+      const result = await this.#page(query, market, window);
+      if (result === null) return [];
+      if (result.rows.length >= wanted || result.candidates < window) return result.rows;
+    }
+  }
+
+  async #page(query: LiveNewsQuery, market: PublisherMarket, window: number): Promise<{ rows: LiveReadRow[]; candidates: number } | null> {
     const scope = this.marketScope(market, 'news.source_id', 'news.canonical_domain');
-    if (scope === null) return [];
+    const candidateScope = this.marketScope(market, 's.id', 's.canonical_domain');
+    if (scope === null || candidateScope === null) return null;
+    const following = (column: string) => query.sourceScope === undefined ? sql`true`
+      : query.sourceScope === 'following' ? sql`${sql.raw(column)}::text = any(${query.followedSourceIds ?? []}::text[])`
+        : sql`not (${sql.raw(column)}::text = any(${query.followedSourceIds ?? []}::text[]))`;
+    const format = (domain: string) => query.format === undefined ? sql`true`
+      : query.format === 'videos' ? sql`${sql.raw(domain)} = 'youtube.com'` : sql`${sql.raw(domain)} <> 'youtube.com'`;
+    // Candidates match headline and excerpt before the storage policy hides
+    // the excerpt: matching more text can only add candidates.
+    const candidateText = sql`(v.headline || ' ' || coalesce(v.excerpt, ''))`;
+    const candidateCursor = query.cursor === undefined ? sql`true` : sql`(v.published_at, a.id) <
+      (select cursor_version.published_at, cursor_article.id from articles cursor_article
+        join live_article_versions cursor_version on cursor_version.article_id = cursor_article.id
+          and cursor_version.version_number = (select max(version_number) from live_article_versions where article_id = cursor_article.id)
+        where cursor_article.id = ${query.cursor})`;
+    // A cursor outside the projection ends the listing, as before.
     const cursor =
       query.cursor === undefined
         ? sql`true`
         : sql`(published_at, id) <
-      (select published_at, id from news where id = ${query.cursor})`;
-    const result = await sql<LiveReadRow>`with news as (${this.newsProjection()}), page as (select news.* from news
+      (select cursor_news.published_at, cursor_news.id from (${this.newsProjection(sql`a.id = ${query.cursor}`)}) cursor_news)`;
+    const result = await sql<LiveReadRow & { candidate_count: number }>`with candidates as materialized (
+        select a.id from articles a
+        join sources s on s.id = a.source_id
+        join live_article_versions v on v.article_id = a.id
+          and v.version_number = (select max(version_number) from live_article_versions where article_id = a.id)
+        where a.origin = 'LIVE_REAL' and a.live_exposure_id is not null
+          and ${candidateCursor}
+          and ${candidateScope}
+          and ${following('a.source_id')}
+          and ${format('s.canonical_domain')}
+          and ${query.topic === undefined ? sql`true` : sql`${candidateText} ~* ${LIVE_NEWS_TOPIC_PATTERNS[query.topic]}`}
+          and ${query.q === undefined ? sql`true` : sql`position(lower(${query.q}) in lower(${candidateText})) > 0`}
+          and ${query.sourceId === undefined ? sql`true` : sql`a.source_id = ${query.sourceId}`}
+          and ${query.publishedFrom === undefined ? sql`true` : sql`v.published_at >= ${query.publishedFrom}`}
+          and ${query.publishedTo === undefined ? sql`true` : sql`v.published_at < ${query.publishedTo}`}
+        order by v.published_at desc, a.id desc limit ${window}),
+      news as (${this.newsProjection(sql`a.id in (select candidates.id from candidates)`)}), page as (select news.* from news
       where ${cursor}
         and ${scope}
-        and ${query.sourceScope === undefined ? sql`true` : query.sourceScope === 'following' ? sql`source_id::text = any(${query.followedSourceIds ?? []}::text[])` : sql`not (source_id::text = any(${query.followedSourceIds ?? []}::text[]))`}
-        and ${query.format === undefined ? sql`true` : query.format === 'videos' ? sql`canonical_domain = 'youtube.com'` : sql`canonical_domain <> 'youtube.com'`}
+        and ${following('source_id')}
+        and ${format('canonical_domain')}
         and ${query.topic === undefined ? sql`true` : sql`(headline || ' ' || coalesce(excerpt, '')) ~* ${LIVE_NEWS_TOPIC_PATTERNS[query.topic]}`}
         and ${query.q === undefined ? sql`true` : sql`position(lower(${query.q}) in lower(headline || ' ' || coalesce(excerpt, ''))) > 0`}
         and ${query.sourceId === undefined ? sql`true` : sql`source_id = ${query.sourceId}`}
         and ${query.publishedFrom === undefined ? sql`true` : sql`published_at >= ${query.publishedFrom}`}
         and ${query.publishedTo === undefined ? sql`true` : sql`published_at < ${query.publishedTo}`}
       order by published_at desc, id desc limit ${query.limit + 1})
-      select page.*, ${this.receiptColumns('page')}, ${this.profileColumns('page.source_id')} from page
-      order by published_at desc, id desc`.execute(this.database);
-    return result.rows;
+      select page.*, ${this.receiptColumns('page')}, ${this.profileColumns('page.source_id')}, meta.candidate_count
+      from (select count(*)::int as candidate_count from candidates) meta left join page on true
+      order by page.published_at desc, page.id desc`.execute(this.database);
+    // The one-row meta keeps the candidate count when the page is empty.
+    const candidates = Number(result.rows[0]?.candidate_count ?? 0);
+    const rows = result.rows.filter((row) => row.id !== null && row.id !== undefined)
+      .map(({ candidate_count: _count, ...row }) => row as LiveReadRow);
+    return { rows, candidates };
   }
 
   async article(id: Ulid, market: PublisherMarket = 'CL'): Promise<LiveReadRow | undefined> {
@@ -211,7 +266,7 @@ export class LiveRepository {
     if (scope === null) return undefined;
     const profile = this.profileColumns('news.source_id');
     const result =
-      await sql<LiveReadRow>`with news as (${this.newsProjection()}) select news.*, ${this.receiptColumns('news')}, ${profile} from news
+      await sql<LiveReadRow>`with news as (${this.newsProjection(sql`a.id = ${id}`)}) select news.*, ${this.receiptColumns('news')}, ${profile} from news
         where id = ${id} and ${scope}`.execute(
         this.database,
       );
