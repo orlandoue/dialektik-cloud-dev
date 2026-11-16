@@ -162,7 +162,13 @@ export class LiveRepository {
         and nullif(p.policy->>'endpoint', '') is not null
         and p.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
         and p.policy->>'endpoint' <> 'https://supabase.com'
-      join live_exposure_exclusions e on e.id = a.live_exposure_id
+      -- One primary-key lookup per article. As a plain join the planner,
+      -- misled by the correlated version/receipt/policy conditions above,
+      -- expects one article and scans this whole table once per article
+      -- (27 MB × thousands of articles: the 10 s Chilean feed). offset 0
+      -- keeps the subquery from being flattened back into that join.
+      join lateral (select exclusion.first_seen_at from live_exposure_exclusions exclusion
+        where exclusion.id = a.live_exposure_id offset 0) e on true
       where a.origin = 'LIVE_REAL'
         -- Use the latest explicit quarantine decision. Later source policy
         -- versions that omit this field do not accidentally reverse a review.
