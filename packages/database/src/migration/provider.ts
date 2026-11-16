@@ -1,13 +1,3 @@
-import { synthesisRelationMigration } from './081_synthesis_relation.js';
-import { socialCommunityMigration } from './083_social_community.js';
-import { socialFollowerCountMigration } from './084_social_follower_count.js';
-import { socialArenaMigration } from './085_social_arena.js';
-import { semanticRunBatchSizeMigration } from './086_semantic_run_batch_size.js';
-import { multicountryMediaCatalogMigration } from './087_multicountry_media_catalog.js';
-import { rawArticleRetentionMigration } from './088_raw_article_retention.js';
-import { catalogRepairsMigration } from './089_catalog_repairs_and_citation_feeds.js';
-import { redundantReceiptRetentionMigration } from './090_redundant_receipt_retention.js';
-import { scienceCommentsMigration } from './091_science_and_story_comments.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -51,55 +41,11 @@ import { personalOwnerOfficialVoteEventsMigration } from './038_personal_owner_o
 import { privateBetaAccessMigration } from './039_private_beta_access';
 import { liveCoreColumnReadMigration } from './040_live_core_column_read';
 import { govUkProductMetadataWriterMigration } from './041_govuk_product_metadata_writer';
-import { editorialBetaIdentityMigration } from './044_editorial_beta_identity';
-import { singleEditorAuthorityMigration } from './045_single_editor_authority';
-import { moderationWriterScopeMigration } from './046_moderation_writer_scope';
-import { editorialEventSplitsMigration } from './047_editorial_event_splits';
-import { headlineSemanticReviewMigration } from './048_headline_semantic_review';
-import { headlineRejectionDiagnosticsMigration } from './049_headline_rejection_diagnostics';
-import { headlineContextPairReviewMigration } from './050_headline_context_pair_review';
-import { headlineContextModelRelationMigration } from './051_headline_context_model_relation';
-import { liveNewsSitemapChannelMigration } from './052_live_news_sitemap_channel';
-import { chileVerifiedMetadataRoutesMigration } from './053_chile_verified_metadata_routes';
-import { chileFeedExcerptAndYoutubeSourcesMigration } from './054_chile_feed_excerpt_and_youtube_sources';
-import { liveArticlesEventLinkCheckMigration } from './055_live_articles_event_link_check';
-import { liveExcerptTextProjectionMigration } from './056_live_excerpt_text_projection';
-import { enableExcerptSemanticGrantsAndLiveEventsMigration } from './057_enable_excerpt_semantic_grants_and_live_events';
-import { excerptGovernanceAndProviderGrantsMigration } from './058_seed_excerpt_governance_and_provider_grants';
-import { qualifyExtractionGenerationDigestMigration } from './059_qualify_extraction_generation_digest';
-import { liveSemanticEditorialPromotionMigration } from './060_live_semantic_editorial_promotion';
-import { liveSemanticProposalMembersOrderMigration } from './061_live_semantic_proposal_members_order';
-import { finalizeLiveSemanticPromotionMigration } from './062_finalize_live_semantic_promotion';
-import { skipUnconfirmedStalePublicationsMigration } from './063_skip_unconfirmed_stale_publications';
-import { liveEventOriginMigration } from './064_live_event_origin';
-import { liveSemanticGenerationLineageMigration } from './065_live_semantic_generation_lineage';
-import { corporateLiveAcquisitionMigration } from './066_corporate_live_acquisition';
-import { liveSemanticMultiClaimPositionsMigration } from './067_live_semantic_multi_claim_positions';
-import { corporateLiveAcquisitionWriterMigration } from './068_corporate_live_acquisition_writer';
-import { corporateLiveHashSchemaUsageMigration } from './069_corporate_live_hash_schema_usage';
-import { corporateLiveQuarantineIdentityMigration } from './070_corporate_live_quarantine_identity';
-import { restoreCorporateLiveApprovalMetadataMigration } from './071_restore_corporate_live_approval_metadata';
-import { corporateLiveRightsGuardLockMigration } from './072_corporate_live_rights_guard_lock';
-import { normalizeCorporateLiveRegistryKeysMigration } from './073_normalize_corporate_live_registry_keys';
-import { qualifyEphemeralArticleGuardDigestMigration } from './074_qualify_ephemeral_article_guard_digest';
-import { liveSemanticEditorialDecisionsMigration } from './075_live_semantic_editorial_decisions';
-import { liveStanceReassessmentMigration } from './076_live_stance_reassessment';
-import { liveSemanticEventAttachmentMigration } from './077_live_semantic_event_attachment';
-import { editorialFocusContrastsMigration } from './078_editorial_focus_contrasts';
-import { automaticFocusContrastsMigration } from './082_automatic_focus_contrasts';
-import { youtubeVerifiedChannelIdsMigration } from './079_youtube_verified_channel_ids';
-import { userFollowedSourcesMigration } from './080_user_followed_sources';
+import { govUkProductWriterRowScopeMigration } from './042_govuk_product_writer_row_scope';
+import { govUkRshOneShotMetadataMigration } from './043_govuk_rsh_one_shot_metadata';
+import { govUkRshReceiptRecoveryMigration } from './044_govuk_rsh_receipt_recovery';
 
 const migrations: Readonly<Record<string, Migration>> = {
-  '086_semantic_run_batch_size': semanticRunBatchSizeMigration,
-  '087_multicountry_media_catalog': multicountryMediaCatalogMigration,
-  '088_raw_article_retention': rawArticleRetentionMigration,
-  '089_catalog_repairs_and_citation_feeds': catalogRepairsMigration,
-  '090_redundant_receipt_retention': redundantReceiptRetentionMigration,
-  '091_science_and_story_comments': scienceCommentsMigration,
-  '085_social_arena': socialArenaMigration,
-  '084_social_follower_count': socialFollowerCountMigration,
-  '083_social_community': socialCommunityMigration,
   '023_llm_semantic_shadow': llmSemanticShadowMigration,
   '024_llm_semantic_contract_v2': llmSemanticContractV2Migration,
   '025_cloudflare_projection_route_grants': cloudflareProjectionRouteGrantMigration,
@@ -120,45 +66,9 @@ const migrations: Readonly<Record<string, Migration>> = {
   '039_private_beta_access': privateBetaAccessMigration,
   '040_live_core_column_read': liveCoreColumnReadMigration,
   '041_govuk_product_metadata_writer': govUkProductMetadataWriterMigration,
-  '044_editorial_beta_identity': editorialBetaIdentityMigration,
-  '045_single_editor_authority': singleEditorAuthorityMigration,
-  '046_moderation_writer_scope': moderationWriterScopeMigration,
-  '047_editorial_event_splits': editorialEventSplitsMigration,
-  '048_headline_semantic_review': headlineSemanticReviewMigration,
-  '049_headline_rejection_diagnostics': headlineRejectionDiagnosticsMigration,
-  '050_headline_context_pair_review': headlineContextPairReviewMigration,
-  '051_headline_context_model_relation': headlineContextModelRelationMigration,
-  '052_live_news_sitemap_channel': liveNewsSitemapChannelMigration,
-  '053_chile_verified_metadata_routes': chileVerifiedMetadataRoutesMigration,
-  '054_chile_feed_excerpt_and_youtube_sources': chileFeedExcerptAndYoutubeSourcesMigration,
-  '055_live_articles_event_link_check': liveArticlesEventLinkCheckMigration,
-  '056_live_excerpt_text_projection': liveExcerptTextProjectionMigration,
-  '057_enable_excerpt_semantic_grants_and_live_events': enableExcerptSemanticGrantsAndLiveEventsMigration,
-  '058_seed_excerpt_governance_and_provider_grants': excerptGovernanceAndProviderGrantsMigration,
-  '059_qualify_extraction_generation_digest': qualifyExtractionGenerationDigestMigration,
-  '060_live_semantic_editorial_promotion': liveSemanticEditorialPromotionMigration,
-  '061_live_semantic_proposal_members_order': liveSemanticProposalMembersOrderMigration,
-  '062_finalize_live_semantic_promotion': finalizeLiveSemanticPromotionMigration,
-  '063_skip_unconfirmed_stale_publications': skipUnconfirmedStalePublicationsMigration,
-  '064_live_event_origin': liveEventOriginMigration,
-  '065_live_semantic_generation_lineage': liveSemanticGenerationLineageMigration,
-  '066_corporate_live_acquisition': corporateLiveAcquisitionMigration,
-  '067_live_semantic_multi_claim_positions': liveSemanticMultiClaimPositionsMigration,
-  '068_corporate_live_acquisition_writer': corporateLiveAcquisitionWriterMigration,
-  '069_corporate_live_hash_schema_usage': corporateLiveHashSchemaUsageMigration,
-  '070_corporate_live_quarantine_identity': corporateLiveQuarantineIdentityMigration,
-  '071_restore_corporate_live_approval_metadata': restoreCorporateLiveApprovalMetadataMigration,
-  '072_corporate_live_rights_guard_lock': corporateLiveRightsGuardLockMigration,
-  '073_normalize_corporate_live_registry_keys': normalizeCorporateLiveRegistryKeysMigration,
-  '074_qualify_ephemeral_article_guard_digest': qualifyEphemeralArticleGuardDigestMigration,
-  '075_live_semantic_editorial_decisions': liveSemanticEditorialDecisionsMigration,
-  '076_live_stance_reassessment': liveStanceReassessmentMigration,
-  '077_live_semantic_event_attachment': liveSemanticEventAttachmentMigration,
-  '078_editorial_focus_contrasts': editorialFocusContrastsMigration,
-  '079_youtube_verified_channel_ids': youtubeVerifiedChannelIdsMigration,
-  '080_user_followed_sources': userFollowedSourcesMigration,
-  '081_synthesis_relation': synthesisRelationMigration,
-  '082_automatic_focus_contrasts': automaticFocusContrastsMigration,
+  '042_govuk_product_writer_row_scope': govUkProductWriterRowScopeMigration,
+  '043_govuk_rsh_one_shot_metadata': govUkRshOneShotMetadataMigration,
+  '044_govuk_rsh_receipt_recovery': govUkRshReceiptRecoveryMigration,
   '001_initial_schema': initialSchemaMigration,
   '002_phase_1b_persistence_hardening': phase1bPersistenceHardeningMigration,
   '003_phase_1c_closure': phase1cClosureMigration,

@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final errorText = Theme.of(context).colorScheme.onErrorContainer;

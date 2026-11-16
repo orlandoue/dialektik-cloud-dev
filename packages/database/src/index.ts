@@ -11,8 +11,6 @@ export * from './domain/title-only-projection-registration';
 export * from './domain/nominal-scores';
 export * from './domain/position-relation-projection';
 export * from './domain/state-dimensions';
-export { socialArenaSql } from './migration/085_social_arena';
-export { scienceCommentsSql } from './migration/091_science_and_story_comments';
 export * from './migration/migrator';
 export * from './safety/state-dimension-checker';
 export * from './transaction';

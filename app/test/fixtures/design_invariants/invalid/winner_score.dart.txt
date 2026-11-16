@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final positionScore = evidence.supporting / evidence.total;

@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final marker = SizedBox(width: evidenceCount > 2 ? 2 : 1);

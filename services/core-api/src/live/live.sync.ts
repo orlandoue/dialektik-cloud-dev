@@ -11,7 +11,6 @@ import {
   type LiveDiscoveredItem,
 } from './live.adapter.js';
 import { assertLiveSourceReady, type LiveSourcePolicy } from './live.registry.js';
-import { fetchMetaDescription } from './meta-description.js';
 
 export interface LivePreflightExposure {
   readonly canonicalUrl: string | null;
@@ -59,61 +58,7 @@ export const emptyLiveSyncSummary = (): LiveSyncSummary => ({
 const nextId = (now: Date): Ulid => generateUlid({ now: () => now.getTime() });
 const exposureId = (key: string, identity: string): string => liveHash(`${key}\n${identity}`);
 
-function safePersistenceErrorCode(error: unknown): string {
-  const queue: unknown[] = [error];
-  const seen = new Set<object>();
-  let sqlState: string | null = null;
-  let resource: string | null = null;
-  let knownApplicationCode: string | null = null;
-  for (let depth = 0; depth < 8 && queue.length > 0; depth += 1) {
-    const current = queue.shift();
-    if (typeof current !== 'object' || current === null || seen.has(current)) continue;
-    seen.add(current);
-    const record = current as Record<string, unknown>;
-    if (sqlState === null && typeof record.code === 'string' && /^[0-9A-Z]{5}$/u.test(record.code))
-      sqlState = record.code;
-    if (resource === null) {
-      for (const key of ['table', 'column', 'constraint']) {
-        const value = record[key];
-        if (typeof value === 'string' && /^[a-z_][a-z0-9_]{0,62}$/iu.test(value)) {
-          resource = value.toUpperCase();
-          break;
-        }
-      }
-    }
-    if (
-      knownApplicationCode === null &&
-      typeof record.message === 'string' &&
-      /^[A-Z][A-Z0-9_]{1,62}$/u.test(record.message)
-    )
-      knownApplicationCode = record.message;
-    if (typeof record.message === 'string' && resource === null) {
-      const match = /(?:permission denied for (?:table|relation|column|sequence|schema)|row-level security policy for table)\s+["']?([a-z_][a-z0-9_]*)/iu.exec(record.message);
-      if (match?.[1] !== undefined) resource = match[1].toUpperCase();
-    }
-    for (const key of ['cause', 'error', 'originalError', 'driverError']) {
-      if (key in record) queue.push(record[key]);
-    }
-  }
-  if (sqlState !== null)
-    return `ARTICLE_PERSISTENCE_FAILED_${sqlState}${resource === null ? '' : `_${resource}`}`;
-  if (knownApplicationCode !== null)
-    return `ARTICLE_PERSISTENCE_FAILED_${knownApplicationCode}`.slice(0, 64);
-  return 'ARTICLE_PERSISTENCE_FAILED';
-}
-
-export function assertLiveDatabase(
-  config: Readonly<CoreApiConfig>,
-  corporateProductionAuthorization = false,
-): void {
-  if (
-    corporateProductionAuthorization &&
-    config.nodeEnvironment === 'production' &&
-    config.ownershipMode === 'corporate' &&
-    config.semanticMode === 'disabled' &&
-    process.env.DIALEKTIK_CORPORATE_LIVE_ACQUISITION_ENABLED === 'true'
-  )
-    return;
+export function assertLiveDatabase(config: Readonly<CoreApiConfig>): void {
   const target = new URL(config.databaseUrl);
   if (
     config.nodeEnvironment === 'production' ||
@@ -144,12 +89,6 @@ function policyJson(policy: LiveSourcePolicy) {
     storagePolicy: policy.storagePolicy,
     active: policy.active,
     rightsEvidenceUrl: policy.rightsEvidenceUrl,
-    ...(policy.rightsReviewStatus === undefined
-      ? {}
-      : { rightsReviewStatus: policy.rightsReviewStatus }),
-    ...(policy.authorizationReference === undefined
-      ? {}
-      : { authorizationReference: policy.authorizationReference }),
     rightsVerifiedAt: policy.rightsVerifiedAt,
     attribution: policy.attribution,
     language: policy.language,
@@ -337,8 +276,7 @@ function receipt(
     source_id: policy.sourceId,
     policy_id: policyId,
     exclusion_id: exclusionId,
-    discovery_channel: policy.discoveryChannel === 'news_sitemap' ? 'rss_atom' : policy.discoveryChannel,
-    discovery_channel_detail: policy.discoveryChannel,
+    discovery_channel: 'rss_atom',
     discovery_url: discoveryUrl,
     discovered_url: item.discoveredUrl,
     canonical_url: item.canonicalUrl,
@@ -353,47 +291,6 @@ function receipt(
     disposition: error === null ? ('PERSISTED' as const) : ('QUARANTINED' as const),
     error_code: error,
   };
-}
-
-async function refreshLiveArticleTextProjection(
-  transaction: Transaction<Database>,
-  articleId: Ulid,
-  versionId: Ulid,
-  language: string,
-  headline: string,
-  excerpt: string | null,
-): Promise<boolean> {
-  const article = await transaction
-    .selectFrom('articles')
-    .select(['lang', 'text_original', 'text_normalized'])
-    .where('id', '=', articleId)
-    .executeTakeFirst();
-  if (article === undefined) throw new Error('LIVE_ARTICLE_MISSING');
-
-  const update: { lang?: string; text_original?: string; text_normalized?: string } = {};
-  if (article.lang !== language) update.lang = language;
-  if (excerpt !== null) {
-    const originalText = `${headline}. ${excerpt}`;
-    const normalizedText = originalText.normalize('NFKC').toLowerCase();
-    if (article.text_original !== originalText || article.text_normalized !== normalizedText) {
-      const semanticHistory = await sql<{ present: boolean }>`
-        select exists(select 1 from public.claim_spans where article_id=${articleId})
-          or exists(select 1 from public.assertion_extraction_generations
-            where article_id=${articleId} and state='active') as present
-      `.execute(transaction);
-      if (semanticHistory.rows[0]?.present !== true) {
-        update.text_original = originalText;
-        update.text_normalized = normalizedText;
-      }
-    }
-  }
-  if (Object.keys(update).length === 0) return false;
-  await sql`
-    select set_config('dialektik.allow_live_excerpt_projection','on',true),
-      set_config('dialektik.live_excerpt_version_id',${versionId},true)
-  `.execute(transaction);
-  await transaction.updateTable('articles').set(update).where('id', '=', articleId).execute();
-  return true;
 }
 
 async function persistItem(
@@ -435,40 +332,10 @@ async function persistItem(
   }
   const articleId = existing?.id ?? nextId(now);
   const linkedExclusion = existing?.live_exposure_id ?? exclusionId;
-  const receiptPolicyId = existing === undefined
-    ? policyId
-    : (await transaction
-        .selectFrom('live_source_policies as source_policy')
-        .innerJoin(
-          'live_exposure_exclusions as source_exclusion',
-          'source_exclusion.registry_key',
-          'source_policy.registry_key',
-        )
-        .select('source_policy.id')
-        .where('source_policy.source_id', '=', policy.sourceId)
-        .where('source_policy.active', '=', true)
-        .where('source_policy.rights_class', '=', 'LIVE_READY')
-        .where('source_exclusion.id', '=', linkedExclusion)
-        .orderBy('source_policy.recorded_at', 'desc')
-        .orderBy('source_policy.id', 'desc')
-        .executeTakeFirst())?.id;
-  if (receiptPolicyId === undefined)
-    throw new Error('ARTICLE_POLICY_EXCLUSION_MISMATCH');
-  const acquisition = receipt(
-    policy,
-    receiptPolicyId,
-    item,
-    linkedExclusion,
-    now,
-    discoveryUrl,
-    null,
-  );
+  const acquisition = receipt(policy, policyId, item, linkedExclusion, now, discoveryUrl, null);
   await transaction.insertInto('live_acquisition_receipts').values(acquisition).execute();
-  const originalText = [item.headline, item.excerpt]
-    .filter((part): part is string => part !== null)
-    .join('. ');
-  const normalizedText = originalText.normalize('NFKC').toLowerCase();
   if (existing === undefined) {
+    const original = [item.headline, item.excerpt].filter((part) => part !== null).join('\n\n');
     await transaction
       .insertInto('articles')
       .values({
@@ -476,8 +343,8 @@ async function persistItem(
         source_id: policy.sourceId,
         event_id: null,
         url_canonical: item.canonicalUrl,
-        text_original: originalText,
-        text_normalized: normalizedText,
+        text_original: original,
+        text_normalized: original,
         lang: item.language,
         published_at: item.publishedAt,
         captured_at: now,
@@ -490,6 +357,14 @@ async function persistItem(
         origin: 'LIVE_REAL',
         live_exposure_id: linkedExclusion,
       })
+      .execute();
+  } else if (existing.lang !== item.language) {
+    // Correct mutable acquisition metadata without rewriting source text or
+    // manufacturing a publisher-content version for a language annotation.
+    await transaction
+      .updateTable('articles')
+      .set({ lang: item.language })
+      .where('id', '=', articleId)
       .execute();
   }
   const metadata = {
@@ -522,23 +397,12 @@ async function persistItem(
     latest.declared_upstream === item.declaredUpstream &&
     latest.version_canonical_url === item.canonicalUrl
   )
-    return existing !== undefined &&
-      (await refreshLiveArticleTextProjection(
-        transaction,
-        articleId,
-        latest.id,
-        item.language,
-        item.headline,
-        item.excerpt,
-      ))
-      ? 'updated'
-      : 'unchanged';
+    return 'unchanged';
   const legalText = [item.headline, item.excerpt].filter((part) => part !== null).join('\n');
-  const versionId = nextId(now);
   await transaction
     .insertInto('live_article_versions')
     .values({
-      id: versionId,
+      id: nextId(now),
       article_id: articleId,
       receipt_id: acquisition.id,
       version_number: (latest?.version_number ?? 0) + 1,
@@ -554,16 +418,6 @@ async function persistItem(
       recorded_at: now,
     })
     .execute();
-  if (existing !== undefined) {
-    await refreshLiveArticleTextProjection(
-      transaction,
-      articleId,
-      versionId,
-      item.language,
-      item.headline,
-      item.excerpt,
-    );
-  }
   return existing === undefined ? 'new' : 'updated';
 }
 
@@ -575,13 +429,10 @@ export async function syncLivePayload(
   options: {
     readonly discoveredAt: Date;
     readonly discoveryUrl?: string;
-    readonly corporateProductionAuthorization?: boolean;
     readonly authorizePersistence?: (transaction: Transaction<Database>) => Promise<void>;
   },
 ): Promise<LiveSyncSummary> {
-  assertLiveDatabase(config, options.corporateProductionAuthorization === true);
-  if (options.corporateProductionAuthorization && !options.authorizePersistence)
-    throw new Error('CORPORATE_ACQUISITION_REQUIRES_PER_ITEM_RIGHTS_AUTHORIZATION');
+  assertLiveDatabase(config);
   const now = options.discoveredAt;
   if (!Number.isFinite(now.getTime())) throw new Error('INVALID_DISCOVERY_TIME');
   const discoveryUrl = options.discoveryUrl ?? policy.endpoint;
@@ -626,106 +477,9 @@ export async function syncLivePayload(
   summary.itemsDiscovered = parsed.itemCount;
   for (const batch of parsed.batches) {
     // Metadata-only grants never retain RSS summaries in Article or version rows.
-    const items: LiveDiscoveredItem[] = [];
-    const itemUrls = batch.flatMap((item) =>
-      item.excerpt === null && item.canonicalUrl !== null ? [item.canonicalUrl] : [],
+    const items = batch.map((item) =>
+      policy.storagePolicy === 'METADATA_ONLY' ? Object.freeze({ ...item, excerpt: null }) : item,
     );
-    const existingExcerpts = new Map<string, { headline: string; excerpt: string }>();
-    if (itemUrls.length > 0) {
-      const result = await sql<{
-        canonicalUrl: string;
-        headline: string;
-        excerpt: string;
-      }>`select article.url_canonical as "canonicalUrl",version_row.headline,version_row.excerpt
-        from public.articles article
-        join lateral(select version.* from public.live_article_versions version
-          where version.article_id=article.id order by version.version_number desc limit 1) version_row on true
-        where article.source_id=${policy.sourceId}::dialektik_ulid
-          and article.url_canonical=any(${itemUrls}::text[])
-          and version_row.excerpt is not null and btrim(version_row.excerpt)<>''`.execute(database);
-      for (const row of result.rows) {
-        existingExcerpts.set(row.canonicalUrl, {
-          headline: row.headline,
-          excerpt: row.excerpt,
-        });
-      }
-    }
-    const metadataCandidates = batch.filter((item) => {
-      if (
-        policy.storagePolicy !== 'METADATA_AND_FEED_EXCERPT' ||
-        options.authorizePersistence === undefined ||
-        item.errorCode !== null ||
-        item.excerpt !== null ||
-        item.canonicalUrl === null
-      )
-        return false;
-      const existing = existingExcerpts.get(item.canonicalUrl);
-      return existing?.headline !== item.headline;
-    });
-    const selectedMetadataUrls = new Set<string>();
-    if (metadataCandidates.length > 0) {
-      const offset = Math.floor(now.getTime() / 60_000) % metadataCandidates.length;
-      const rotated = [
-        ...metadataCandidates.slice(offset),
-        ...metadataCandidates.slice(0, offset),
-      ];
-      for (const item of rotated.slice(0, 25)) {
-        if (item.canonicalUrl !== null) selectedMetadataUrls.add(item.canonicalUrl);
-      }
-    }
-    for (const item of batch) {
-      if (policy.storagePolicy === 'METADATA_ONLY') {
-        items.push(Object.freeze({ ...item, excerpt: null }));
-        continue;
-      }
-      const existing = item.canonicalUrl === null
-        ? undefined
-        : existingExcerpts.get(item.canonicalUrl);
-      if (item.excerpt === null && existing?.headline === item.headline) {
-        items.push(Object.freeze({ ...item, excerpt: existing.excerpt }));
-        continue;
-      }
-      const outdatedExcerpt = existing !== undefined && existing.headline !== item.headline;
-      if (
-        item.excerpt === null &&
-        outdatedExcerpt &&
-        item.canonicalUrl !== null &&
-        !selectedMetadataUrls.has(item.canonicalUrl)
-      ) {
-        // Do not supersede a usable prior version with a title-only version.
-        items.push(Object.freeze({ ...item, errorCode: 'META_DESCRIPTION_REFRESH_REQUIRED' }));
-        continue;
-      }
-      if (
-        item.excerpt === null &&
-        item.canonicalUrl !== null &&
-        options.authorizePersistence !== undefined &&
-        selectedMetadataUrls.has(item.canonicalUrl)
-      ) {
-        try {
-          await database.transaction().execute(async (transaction) => {
-            await options.authorizePersistence?.(transaction);
-          });
-          const excerpt = await fetchMetaDescription(item.canonicalUrl, policy.allowedArticleDomains);
-          items.push(
-            excerpt === null
-              ? outdatedExcerpt
-                ? Object.freeze({ ...item, errorCode: 'META_DESCRIPTION_REFRESH_REQUIRED' })
-                : item
-              : Object.freeze({ ...item, excerpt }),
-          );
-        } catch {
-          // Preserve the last authorized excerpt when a refresh is unavailable.
-          items.push(
-            outdatedExcerpt
-              ? Object.freeze({ ...item, errorCode: 'META_DESCRIPTION_REFRESH_REQUIRED' })
-              : item,
-          );
-        }
-      } else {
-        items.push(item);
-      }
-    }
     for (const item of items) {
       const excluded = await excludeItem(database, policy, item, now, discoveryUrl);
       summary.excludedItems++;
@@ -742,8 +496,8 @@ export async function syncLivePayload(
             summary.unchangedArticles++;
             summary.duplicateArticles++;
           }
-        } catch (persistenceError) {
-          error = safePersistenceErrorCode(persistenceError);
+        } catch {
+          error = 'ARTICLE_PERSISTENCE_FAILED';
         }
       }
       if (error !== null) {

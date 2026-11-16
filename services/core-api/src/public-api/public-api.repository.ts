@@ -1,5 +1,4 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sourceProfilesAvailable, type PublicCountry } from './source-profiles.js';
 import { sql } from 'kysely';
 
 import { CoreDatabaseService } from '../database/core-database.service.js';
@@ -14,9 +13,6 @@ export interface FeedRow {
   readonly source_count: number;
   readonly position_count: number;
   readonly representation_updated_at: Date;
-  readonly synthesis_relation?: 'CONTRADICTION' | 'DIFFERENT_FOCUS' | 'DEVELOPING' | 'TREND' | null;
-  readonly is_followed_source_match?: boolean;
-  readonly country_code?: string;
 }
 
 export interface EventRow extends FeedRow {
@@ -43,7 +39,6 @@ export interface PositionListRow {
   readonly published_at: Date;
   readonly assertion_count: number;
   readonly formed_by_count: number;
-  readonly has_reviewed_single_claim: boolean;
   readonly evidence_absence: 'no_evidence_yet' | 'inconclusive' | null;
   readonly representation_updated_at: Date;
 }
@@ -76,14 +71,6 @@ export interface PublicAssertionRow {
   readonly source_type: string;
 }
 
-export interface EventCoverageRow {
-  readonly position_id: string; readonly position_title: string;
-  readonly assertion_id: string; readonly assertion_text: string; readonly quoted_text: string;
-  readonly article_id: string; readonly article_title: string; readonly url: string;
-  readonly published_at: Date; readonly source_name: string; readonly source_id: string;
-  readonly article_text: string;
-}
-
 export interface AttributionRow {
   readonly span_id: string;
   readonly order: number;
@@ -113,20 +100,7 @@ export interface RelationshipEndpointRow {
   readonly endpoint_order: number;
 }
 
-export interface MediaGroupRow {
-  readonly media_group_slug: string;
-  readonly media_group_name: string;
-  readonly country_code: string;
-  readonly editorial_lean: string | null;
-  readonly modalities: readonly string[];
-  readonly source_ids: readonly string[];
-  readonly items_last_7_days: number;
-  readonly latest_published_at: Date | null;
-}
-
 export interface ContradictionRow {
-  readonly is_followed_source_match?: boolean;
-  readonly country_code?: string;
   readonly id: string;
   readonly event_id: string;
   readonly event_title: string;
@@ -162,133 +136,6 @@ export interface PositionSuccessorRow {
   readonly ordinal: number;
 }
 
-/** A single-claim position is public only through the signed editorial promotion path. */
-function reviewedSingleClaim(positionId: string, eventId: string) {
-  return sql`exists (
-    select 1 from public.live_semantic_promotion_claims promoted_claim
-    join public.live_semantic_promotion_positions promoted_position
-      on promoted_position.group_id=promoted_claim.group_id
-      and promoted_position.position_id=promoted_claim.position_id
-      and promoted_position.event_id=${sql.ref(eventId)}
-    join public.live_semantic_editorial_decisions decision
-      on decision.group_id=promoted_claim.group_id and decision.decision='APPROVED'
-      and decision.editor_user_id=promoted_position.editor_user_id
-      and decision.selected_claims @> jsonb_build_array(jsonb_build_object(
-        'articleId',promoted_claim.article_id::text,'ordinal',promoted_claim.claim_ordinal))
-    join public.assertions selected_assertion on selected_assertion.id=promoted_claim.assertion_id
-      and selected_assertion.position_id=promoted_claim.position_id
-      and selected_assertion.claim_span_id=promoted_claim.claim_span_id
-      and selected_assertion.lifecycle_state='active' and selected_assertion.is_principal
-    join public.claim_spans selected_span on selected_span.id=promoted_claim.claim_span_id
-      and selected_span.article_id=promoted_claim.article_id and selected_span.tombstone_id is null
-    join public.articles source_article on source_article.id=promoted_claim.article_id
-      and source_article.event_id=${sql.ref(eventId)} and source_article.origin='LIVE_REAL'
-    join public.evidence selected_evidence on selected_evidence.id=promoted_claim.evidence_id
-      and selected_evidence.scope_assertion_id=selected_assertion.id
-      and selected_evidence.anchor_span_id=selected_span.id
-      and selected_evidence.publication_state='published'
-      and selected_evidence.approved_by=decision.editor_user_id
-      and selected_evidence.approved_at is not null
-      and selected_evidence.citable_source_url=source_article.url_canonical
-    join lateral (select policy.* from public.live_source_policies policy
-      where policy.source_id=source_article.source_id order by policy.recorded_at desc,policy.id desc limit 1) current_policy
-      on current_policy.active and current_policy.rights_class='LIVE_READY'
-      and current_policy.policy->>'rightsReviewStatus'='APPROVED'
-      and nullif(current_policy.policy->>'authorizationReference','') is not null
-      and nullif(current_policy.policy->>'rightsEvidenceUrl','') is not null
-      and nullif(current_policy.policy->>'endpoint','') is not null
-      and current_policy.policy->>'rightsEvidenceUrl' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
-      and current_policy.policy->>'endpoint' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
-    where promoted_claim.position_id=${sql.ref(positionId)}
-      and exists(select 1 from public.live_acquisition_receipts receipt
-        where receipt.exclusion_id=source_article.live_exposure_id
-          and receipt.source_id=source_article.source_id and receipt.disposition='PERSISTED')
-      and coalesce((select case when jsonb_typeof(policy.policy->'quarantinedArticleIds')='array'
-          then not (policy.policy->'quarantinedArticleIds' @> jsonb_build_array(source_article.id::text))
-          else false end from public.live_source_policies policy
-        where policy.source_id=source_article.source_id and policy.policy ? 'quarantinedArticleIds'
-        order by policy.recorded_at desc,policy.id desc limit 1),true)
-      and not exists(select 1 from public.assertions successor where successor.supersedes_id=selected_assertion.id)
-      and (select count(*) from public.assertions current_assertion
-        where current_assertion.position_id=promoted_claim.position_id and current_assertion.lifecycle_state='active'
-          and not exists(select 1 from public.assertions successor where successor.supersedes_id=current_assertion.id))=1
-  )`;
-}
-
-/**
- * Publication gate for public Event list AND direct detail/position routes.
- * A bare PUBLISHED database flag is not evidence. All visible active
- * Positions need either confirmed R01a formation or a signed single-claim
- * promotion, plus active, non-superseded source-backed evidence.
- * ANALYSIS_PENDING is permitted only with an authentic linked Article.
- */
-const groundedEvent = sql`
-  not exists (
-    select 1 from public.editorial_event_splits editorial_split
-    where editorial_split.original_event_id = event_row.id
-  )
-  and exists (
-    select 1 from articles grounded_article
-    where grounded_article.event_id = event_row.id
-      and grounded_article.origin = 'LIVE_REAL'
-  )
-  and (
-    event_row.analysis_state = 'ANALYSIS_PENDING'
-    or (
-      event_row.analysis_state = 'PUBLISHED'
-      and exists (
-        select 1 from positions grounded_position
-        where grounded_position.event_id = event_row.id
-          and grounded_position.publication_state = 'published'
-          and grounded_position.status = 'active'
-      )
-      and not exists (
-        select 1 from positions invalid_position
-        where invalid_position.event_id = event_row.id
-          and invalid_position.publication_state = 'published'
-          and invalid_position.status = 'active'
-          and (
-            invalid_position.neutral_rank is null
-            or invalid_position.published_at is null
-            or invalid_position.published_by is null
-            or (not exists (
-              select 1 from position_formed_by formation
-              join relationships formed_relation
-                on formed_relation.id = formation.relationship_id
-              where formation.position_id = invalid_position.id
-                and formed_relation.rel_type = 'R01a'
-                and formed_relation.publication_state = 'published'
-                and formed_relation.declared_by is not null
-                and formed_relation.confirmed_by is not null
-                and formed_relation.confirmed_at is not null
-            ) and not ${reviewedSingleClaim('invalid_position.id', 'event_row.id')})
-            or not exists (
-              select 1 from assertions grounded_assertion
-              join claim_spans grounded_span
-                on grounded_span.id = grounded_assertion.claim_span_id
-              join articles grounded_source_article
-                on grounded_source_article.id = grounded_span.article_id
-              where grounded_assertion.position_id = invalid_position.id
-                and grounded_assertion.lifecycle_state = 'active'
-                and grounded_span.tombstone_id is null
-                and grounded_source_article.event_id = event_row.id
-                and not exists (
-                  select 1 from assertions successor
-                  where successor.supersedes_id = grounded_assertion.id
-                )
-                and exists (
-                  select 1 from evidence approved_evidence
-                  where approved_evidence.scope_assertion_id = grounded_assertion.id
-                    and approved_evidence.publication_state = 'published'
-                    and approved_evidence.approved_at is not null
-                )
-            )
-          )
-      )
-    )
-  )
-`;
-
 @Injectable()
 export class PublicApiRepository {
   public constructor(
@@ -296,31 +143,12 @@ export class PublicApiRepository {
     private readonly databaseService: CoreDatabaseService,
   ) {}
 
-  /**
-   * Country of an event = country of its outlets (pairs never cross
-   * countries). Events without profiled outlets are Chilean, as before 087.
-   */
-  #countryScope(country: PublicCountry, eventColumn: string) {
-    const event = sql.ref(eventColumn);
-    if (!sourceProfilesAvailable()) {
-      return { clause: country === 'CL' ? sql`` : sql`and false`, column: sql`'CL'::text` };
-    }
-    const column = sql`coalesce((select country_profile.country_code from public.articles country_article
-      join public.media_source_profiles country_profile on country_profile.source_id=country_article.source_id
-      where country_article.event_id=${event} order by country_article.id limit 1),'CL')`;
-    return { clause: sql`and ${column}=${country}`, column };
-  }
-
   public async listFeed(input: {
     readonly category?: string;
     readonly topic?: string;
     readonly cursor: PageCursor | null;
     readonly limit: number;
-    readonly followedSourceIds?: readonly string[];
-    readonly blindspots?: boolean;
-    readonly country?: PublicCountry;
   }): Promise<readonly FeedRow[]> {
-    const country = this.#countryScope(input.country ?? 'CL', 'event_row.id');
     const categoryClause =
       input.category === undefined ? sql`` : sql`and category_row.slug = ${input.category}`;
     const topicClause =
@@ -335,20 +163,11 @@ export class PublicApiRepository {
               and topic_row.status = 'active'
               and topic_row.canonical_slug = ${input.topic}
           )`;
-    const follows = input.followedSourceIds;
-    const match = follows === undefined ? sql`false` : sql`exists(select 1 from public.articles followed_article
-      where followed_article.event_id=event_row.id and followed_article.origin='LIVE_REAL'
-        and followed_article.source_id::text=any(${follows}::text[]))`;
-    const cursorMatch = input.cursor === null || follows === undefined ? sql`false` : sql`exists(select 1 from public.articles followed_cursor
-      where followed_cursor.event_id=${input.cursor.id}::dialektik_ulid and followed_cursor.origin='LIVE_REAL'
-        and followed_cursor.source_id::text=any(${follows}::text[]))`;
-    const cursorClause = input.cursor === null ? sql`` : follows === undefined
-      ? sql`and (event_row.detected_at,event_row.id)<(${input.cursor.timestamp},${input.cursor.id}::dialektik_ulid)`
-      : sql`and ((${match})::int,event_row.detected_at,event_row.id)<((${cursorMatch})::int,${input.cursor.timestamp},${input.cursor.id}::dialektik_ulid)`;
-    const blindspotClause = !input.blindspots ? sql`` : sql`and event_row.analysis_state='PUBLISHED' and not (${match})
-      and ((select count(distinct a.source_id) from public.articles a where a.event_id=event_row.id and a.origin='LIVE_REAL') >= 2
-        or exists(select 1 from public.contradiction_publications c where c.event_id=event_row.id
-          and c.publication_state='published' and c.confirmed_at is not null and c.confirmed_by is not null))`;
+    const cursorClause =
+      input.cursor === null
+        ? sql``
+        : sql`and (event_row.detected_at, event_row.id) <
+            (${input.cursor.timestamp}, ${input.cursor.id}::dialektik_ulid)`;
     const result = await sql<FeedRow>`
       select
         event_row.id,
@@ -356,9 +175,6 @@ export class PublicApiRepository {
         category_row.slug as category,
         event_row.detected_at,
         event_row.analysis_state,
-        event_row.synthesis_relation,
-        ${match} as is_followed_source_match,
-        ${country.column} as country_code,
         (
           select count(distinct article_row.source_id)::integer
           from articles article_row
@@ -373,7 +189,6 @@ export class PublicApiRepository {
         ) as position_count,
         greatest(
           event_row.detected_at,
-          coalesce(event_row.synthesis_relation_updated_at, event_row.detected_at),
           coalesce((
             select max(article_row.captured_at)
             from articles article_row
@@ -391,40 +206,13 @@ export class PublicApiRepository {
       join categories category_row on category_row.id = event_row.category_id
       where event_row.merged_into is null
         and category_row.is_active
-        -- Fail closed: a published Event without a published active Position
-        -- cannot be represented by eventCard(). Never expose it in the feed.
-        and ${groundedEvent}
         ${categoryClause}
         ${topicClause}
-        ${blindspotClause}
-        ${country.clause}
         ${cursorClause}
-      order by ${follows === undefined ? sql`` : sql`(${match})::int desc,`} event_row.detected_at desc, event_row.id desc
+      order by event_row.detected_at desc, event_row.id desc
       limit ${input.limit + 1}
     `.execute(this.databaseService.database);
     return result.rows;
-  }
-
-  public async eventHasFollowedSources(eventId: string, followedSourceIds: readonly string[]): Promise<boolean> {
-    if (followedSourceIds.length === 0) return false;
-    const result = await sql<{matched:boolean}>`select exists(select 1 from public.articles a
-      where a.event_id=${eventId}::dialektik_ulid and a.origin='LIVE_REAL'
-        and a.source_id::text=any(${followedSourceIds}::text[])) as matched`.execute(this.databaseService.database);
-    return result.rows[0]?.matched === true;
-  }
-
-  public async countBlindspots(followedSourceIds: readonly string[]): Promise<number> {
-    if (followedSourceIds.length === 0) return 0;
-    const result = await sql<{count:number}>`select count(*)::int as count from events event_row
-      join categories category_row on category_row.id=event_row.category_id
-      where event_row.merged_into is null and category_row.is_active and event_row.analysis_state='PUBLISHED'
-        and ${groundedEvent}
-        and not exists(select 1 from public.articles a where a.event_id=event_row.id and a.origin='LIVE_REAL'
-          and a.source_id::text=any(${followedSourceIds}::text[]))
-        and ((select count(distinct a.source_id) from public.articles a where a.event_id=event_row.id and a.origin='LIVE_REAL') >= 2
-          or exists(select 1 from public.contradiction_publications c where c.event_id=event_row.id
-            and c.publication_state='published' and c.confirmed_at is not null and c.confirmed_by is not null))`.execute(this.databaseService.database);
-    return result.rows[0]?.count ?? 0;
   }
 
   public async findEvent(id: string): Promise<EventRow | undefined> {
@@ -435,7 +223,6 @@ export class PublicApiRepository {
         category_row.slug as category,
         event_row.detected_at,
         event_row.analysis_state,
-        event_row.synthesis_relation,
         event_row.window_from,
         event_row.window_to,
         event_row.merged_into,
@@ -455,7 +242,6 @@ export class PublicApiRepository {
         ) as position_count,
         greatest(
           event_row.detected_at,
-          coalesce(event_row.synthesis_relation_updated_at, event_row.detected_at),
           coalesce(event_row.merged_at, event_row.detected_at),
           coalesce((
             select max(article_row.captured_at)
@@ -474,7 +260,6 @@ export class PublicApiRepository {
       join categories category_row on category_row.id = event_row.category_id
       left join events successor on successor.id = event_row.merged_into
       where event_row.id = ${id}::dialektik_ulid
-        and ${groundedEvent}
     `.execute(this.databaseService.database);
     return result.rows[0];
   }
@@ -523,7 +308,6 @@ export class PublicApiRepository {
           from position_formed_by formation
           where formation.position_id = position_row.id
         ) as formed_by_count,
-        ${reviewedSingleClaim('position_row.id', 'position_row.event_id')} as has_reviewed_single_claim,
         evidence_absence.evidence_absence,
         greatest(
           position_row.published_at,
@@ -585,67 +369,6 @@ export class PublicApiRepository {
       where tombstone.position_id = ${id}::dialektik_ulid
       order by link.ordinal
     `.execute(this.databaseService.database);
-    return result.rows;
-  }
-
-  public async listEventCoverage(eventId: string): Promise<readonly EventCoverageRow[]> {
-    const result = await sql<EventCoverageRow>`
-      select p.id::text as position_id,p.title_text as position_title,a.id::text as assertion_id,
-        ev.summary as assertion_text,span.quoted_text,article.id::text as article_id,
-        version.headline as article_title,article.url_canonical as url,
-        article.published_at,source.name as source_name,source.id::text as source_id,
-        article.text_original as article_text
-      from public.positions p
-      join public.assertions a on a.position_id=p.id and a.lifecycle_state='active'
-        and not exists(select 1 from public.assertions successor where successor.supersedes_id=a.id)
-      join public.claim_spans span on span.id=a.claim_span_id and span.tombstone_id is null
-      join public.articles article on article.id=span.article_id and article.event_id=p.event_id and article.origin='LIVE_REAL'
-      join public.sources source on source.id=article.source_id and source.origin='LIVE_REAL'
-      join lateral (select v.* from public.live_article_versions v where v.article_id=article.id order by v.version_number desc limit 1) version on true
-      join lateral (select policy.* from public.live_source_policies policy where policy.source_id=article.source_id
-        order by policy.recorded_at desc,policy.id desc limit 1) policy on policy.active and policy.rights_class='LIVE_READY'
-        and policy.policy->>'rightsReviewStatus'='APPROVED' and nullif(policy.policy->>'authorizationReference','') is not null
-        and nullif(policy.policy->>'rightsEvidenceUrl','') is not null and nullif(policy.policy->>'endpoint','') is not null
-        and policy.policy->>'rightsEvidenceUrl' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
-        and policy.policy->>'endpoint' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
-      join lateral (select evidence.* from public.evidence evidence
-        where evidence.scope_assertion_id=a.id and evidence.anchor_span_id=span.id and evidence.publication_state='published'
-          and evidence.approved_by is not null and evidence.approved_at is not null
-          and evidence.citable_source_url=article.url_canonical
-          and not exists(select 1 from public.evidence next where next.supersedes_id=evidence.id)
-        order by evidence.approved_at desc,evidence.id desc limit 1) ev on true
-      where p.event_id=${eventId}::dialektik_ulid and p.publication_state='published' and p.status='active'
-        and exists(select 1 from public.live_acquisition_receipts receipt where receipt.source_id=article.source_id
-          and receipt.exclusion_id=article.live_exposure_id and receipt.disposition='PERSISTED')
-        and coalesce((select case when jsonb_typeof(q.policy->'quarantinedArticleIds')='array'
-          then not (q.policy->'quarantinedArticleIds' @> jsonb_build_array(article.id::text)) else false end
-          from public.live_source_policies q where q.source_id=article.source_id and q.policy ? 'quarantinedArticleIds'
-          order by q.recorded_at desc,q.id desc limit 1),true)
-      order by p.neutral_rank,source.name,article.id,a.id` .execute(this.databaseService.database);
-    return result.rows;
-  }
-
-  public async listEventArticles(eventId: string): Promise<readonly Pick<EventCoverageRow, 'article_id' | 'article_title' | 'source_name' | 'source_id' | 'published_at' | 'url'>[]> {
-    const result = await sql<Pick<EventCoverageRow, 'article_id' | 'article_title' | 'source_name' | 'source_id' | 'published_at' | 'url'>>`
-      select article.id::text as article_id, version.headline as article_title,
-        source.name as source_name, source.id::text as source_id, article.published_at, article.url_canonical as url
-      from public.articles article
-      join public.sources source on source.id=article.source_id and source.origin='LIVE_REAL'
-      join lateral (select v.* from public.live_article_versions v where v.article_id=article.id order by v.version_number desc limit 1) version on true
-      join lateral (select p.* from public.live_source_policies p where p.source_id=article.source_id
-        order by p.recorded_at desc,p.id desc limit 1) policy on policy.active and policy.rights_class='LIVE_READY'
-        and policy.policy->>'rightsReviewStatus'='APPROVED' and nullif(policy.policy->>'authorizationReference','') is not null
-        and nullif(policy.policy->>'rightsEvidenceUrl','') is not null and nullif(policy.policy->>'endpoint','') is not null
-        and policy.policy->>'rightsEvidenceUrl' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
-        and policy.policy->>'endpoint' not in ('https://supabase.com','[https://supabase.com](https://supabase.com)')
-      where article.event_id=${eventId}::dialektik_ulid and article.origin='LIVE_REAL'
-        and exists(select 1 from public.live_acquisition_receipts r where r.source_id=article.source_id
-          and r.exclusion_id=article.live_exposure_id and r.disposition='PERSISTED')
-        and coalesce((select case when jsonb_typeof(q.policy->'quarantinedArticleIds')='array'
-          then not (q.policy->'quarantinedArticleIds' @> jsonb_build_array(article.id::text)) else false end
-          from public.live_source_policies q where q.source_id=article.source_id and q.policy ? 'quarantinedArticleIds'
-          order by q.recorded_at desc,q.id desc limit 1),true)
-      order by article.published_at desc,article.id`.execute(this.databaseService.database);
     return result.rows;
   }
 
@@ -806,34 +529,17 @@ export class PublicApiRepository {
   public async listContradictions(input: {
     readonly cursor: PageCursor | null;
     readonly limit: number;
-    readonly eventId?: string;
-    readonly followedSourceIds?: readonly string[];
-    readonly country?: PublicCountry;
   }): Promise<readonly ContradictionRow[]> {
-    // A single event's contrasts are listed whatever its country.
-    const country = this.#countryScope(input.country ?? 'CL', 'event_row.id');
-    const countryClause = input.eventId === undefined ? country.clause : sql``;
-    const follows=input.followedSourceIds;
-    const match=follows===undefined ? sql`false` : sql`exists(select 1 from public.articles followed_article
-      where followed_article.event_id=event_row.id and followed_article.origin='LIVE_REAL'
-        and followed_article.source_id::text=any(${follows}::text[]))`;
-    const cursorMatch=input.cursor===null || follows===undefined ? sql`false` : sql`exists(select 1
-      from public.contradiction_publications cursor_publication join public.articles cursor_article
-        on cursor_article.event_id=cursor_publication.event_id and cursor_article.origin='LIVE_REAL'
-      where cursor_publication.id=${input.cursor.id}::dialektik_ulid
-        and cursor_article.source_id::text=any(${follows}::text[]))`;
-    const cursorClause=input.cursor===null ? sql`` : follows===undefined
-      ? sql`and (publication.confirmed_at,publication.id)<(${input.cursor.timestamp},${input.cursor.id}::dialektik_ulid)`
-      : sql`and ((${match})::int,publication.confirmed_at,publication.id)<((${cursorMatch})::int,${input.cursor.timestamp},${input.cursor.id}::dialektik_ulid)`;
+    const cursorClause =
+      input.cursor === null
+        ? sql``
+        : sql`and (publication.confirmed_at, publication.id) <
+            (${input.cursor.timestamp}, ${input.cursor.id}::dialektik_ulid)`;
     const result = await sql<ContradictionRow>`
       select
         publication.id,
         publication.event_id,
-        ${match} as is_followed_source_match,
-        ${country.column} as country_code,
-        case when publication.threshold_rule_at_publication='v1:editorial_focus_contrast'
-          then 'Contraste de enfoques: ' || event_row.title_descriptive
-          else event_row.title_descriptive end as event_title,
+        event_row.title_descriptive as event_title,
         position_a.id as position_a_id,
         position_a.neutral_rank as position_a_ordinal,
         position_a.title_text as position_a_title,
@@ -848,93 +554,18 @@ export class PublicApiRepository {
       from contradiction_publications publication
       join events event_row on event_row.id = publication.event_id
       join positions position_a on position_a.id = publication.position_a_id
-        and position_a.event_id = event_row.id
       join positions position_b on position_b.id = publication.position_b_id
-        and position_b.event_id = event_row.id
       where publication.publication_state in ('published', 'requires_review')
-        ${input.eventId === undefined ? sql`` : sql`and publication.event_id=${input.eventId}::dialektik_ulid`}
         and event_row.merged_into is null
-        and event_row.analysis_state = 'PUBLISHED'
-        and publication.confirmed_by is not null
-        and publication.confirmed_at is not null
-        and position_a.id <> position_b.id
-        and ${groundedEvent}
         and position_a.publication_state = 'published'
         and position_a.status = 'active'
         and position_b.publication_state = 'published'
         and position_b.status = 'active'
-        -- Both positions need confirmed formation or a signed, source-backed
-        -- single-claim editorial promotion.
-        and (exists (
-          select 1 from position_formed_by formation
-          join relationships relationship_row
-            on relationship_row.id = formation.relationship_id
-          where formation.position_id = position_a.id
-        ) or ${reviewedSingleClaim('position_a.id', 'event_row.id')})
-        and (exists (
-          select 1 from position_formed_by formation
-          join relationships relationship_row
-            on relationship_row.id = formation.relationship_id
-          where formation.position_id = position_b.id
-        ) or ${reviewedSingleClaim('position_b.id', 'event_row.id')})
-        and exists (
-          select 1 from assertions assertion_row
-          join claim_spans claim on claim.id = assertion_row.claim_span_id
-          where assertion_row.position_id = position_a.id
-            and assertion_row.lifecycle_state = 'active'
-            and claim.tombstone_id is null
-        )
-        and exists (
-          select 1 from assertions assertion_row
-          join claim_spans claim on claim.id = assertion_row.claim_span_id
-          where assertion_row.position_id = position_b.id
-            and assertion_row.lifecycle_state = 'active'
-            and claim.tombstone_id is null
-        )
-        ${countryClause}
         ${cursorClause}
-      order by ${follows === undefined ? sql`` : sql`(${match})::int desc,`} publication.confirmed_at desc, publication.id desc
+      order by publication.confirmed_at desc, publication.id desc
       limit ${input.limit + 1}
     `.execute(this.databaseService.database);
     return result.rows;
-  }
-
-  /**
-   * Media groups of a country, each listed once with its press and YouTube
-   * outlets combined (ingested items in the last 7 days, newest item).
-   */
-  public async listMediaGroups(country: PublicCountry): Promise<readonly MediaGroupRow[] | null> {
-    if (!sourceProfilesAvailable()) return null;
-    const result = await sql<MediaGroupRow>`
-      select profile.media_group_slug, min(profile.media_group_name) as media_group_name, profile.country_code,
-        max(profile.editorial_lean) as editorial_lean,
-        array_agg(distinct profile.modality order by profile.modality) as modalities,
-        array_agg(source_row.id::text order by source_row.id) as source_ids,
-        coalesce(sum(stats.recent), 0)::integer as items_last_7_days,
-        max(stats.latest) as latest_published_at
-      from public.media_source_profiles profile
-      join public.sources source_row on source_row.id = profile.source_id and source_row.origin = 'LIVE_REAL'
-      join lateral (select policy.* from public.live_source_policies policy where policy.source_id = source_row.id
-        order by policy.recorded_at desc, policy.id desc limit 1) policy
-        on policy.active and policy.rights_class = 'LIVE_READY' and policy.policy->>'rightsReviewStatus' = 'APPROVED'
-      left join lateral (select count(*) filter (where article_row.published_at > now() - interval '7 days') as recent,
-          max(article_row.published_at) as latest
-        from public.articles article_row where article_row.source_id = source_row.id and article_row.origin = 'LIVE_REAL') stats on true
-      where profile.country_code = ${country}
-      group by profile.media_group_slug, profile.country_code
-      order by min(profile.media_group_name), profile.media_group_slug
-    `.execute(this.databaseService.database);
-    return result.rows;
-  }
-
-  /** Country, media group and lean of the given sources (empty before 087). */
-  public async sourceProfiles(sourceIds: readonly string[]): Promise<ReadonlyMap<string, { country_code: string; media_group_slug: string; editorial_lean: string | null }>> {
-    if (!sourceProfilesAvailable() || sourceIds.length === 0) return new Map();
-    const result = await sql<{ source_id: string; country_code: string; media_group_slug: string; editorial_lean: string | null }>`
-      select source_id::text as source_id, country_code, media_group_slug, editorial_lean
-      from public.media_source_profiles where source_id::text = any(${[...new Set(sourceIds)]}::text[])
-    `.execute(this.databaseService.database);
-    return new Map(result.rows.map((row) => [row.source_id, row]));
   }
 
   public async findSource(id: string): Promise<SourceRow | undefined> {

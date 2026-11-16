@@ -3,8 +3,6 @@ import { parseUlid } from '@dialektik/database';
 import { assertExactQueryKeys, parseUlidParameter } from '../public-api/public-api.validation.js';
 import { LiveApplicationService } from './live.service.js';
 import { parseLiveTimestamp } from './live.adapter.js';
-import { parsePublisherMarket, publisherMarketsStatus } from './live.publisher-market.js';
-import { LIVE_NEWS_TOPIC_PATTERNS, type LiveNewsTopic } from './live.repository.js';
 
 function queryDate(value: unknown): Date | undefined {
   if (value === undefined) return undefined;
@@ -19,7 +17,7 @@ function queryDate(value: unknown): Date | undefined {
 export class LiveController {
   constructor(@Inject(LiveApplicationService) private readonly service: LiveApplicationService) {}
   @Get('news')
-  news(@Query() query: Readonly<Record<string, unknown>>, personalization?: {sourceScope:'following'|'outside'; followedSourceIds:readonly string[]}) {
+  news(@Query() query: Readonly<Record<string, unknown>>) {
     assertExactQueryKeys(query, [
       'cursor',
       'limit',
@@ -27,9 +25,6 @@ export class LiveController {
       'source_id',
       'published_from',
       'published_to',
-      'country',
-      'format',
-      'topic',
     ]);
     if (
       query.limit !== undefined &&
@@ -46,21 +41,12 @@ export class LiveController {
       (query.source_id !== undefined && typeof query.source_id !== 'string')
     )
       throw new BadRequestException('Invalid identity filter.');
-    if (query.format !== undefined && query.format !== 'press' && query.format !== 'videos')
-      throw new BadRequestException('Invalid news format.');
-    if (query.topic !== undefined && (typeof query.topic !== 'string' ||
-      !Object.hasOwn(LIVE_NEWS_TOPIC_PATTERNS, query.topic)))
-      throw new BadRequestException('Invalid news topic.');
     const publishedFrom = queryDate(query.published_from);
     const publishedTo = queryDate(query.published_to);
     if (publishedFrom !== undefined && publishedTo !== undefined && publishedFrom >= publishedTo)
       throw new BadRequestException('Invalid date interval.');
     return this.service.list({
-      ...personalization,
       limit: query.limit === undefined ? 25 : Number(query.limit),
-      market: parsePublisherMarket(query.country),
-      ...(query.format === undefined ? {} : { format: query.format as 'press' | 'videos' }),
-      ...(query.topic === undefined ? {} : { topic: query.topic as LiveNewsTopic }),
       ...(query.cursor === undefined
         ? {}
         : { cursor: parseUlid(parseUlidParameter(query.cursor)) }),
@@ -72,28 +58,16 @@ export class LiveController {
       ...(publishedTo === undefined ? {} : { publishedTo }),
     });
   }
-  @Get('news/:id') article(@Param('id') id: string, @Query() query: Readonly<Record<string, unknown>>) {
-    assertExactQueryKeys(query, ['country']);
-    return this.service.article(parseUlid(parseUlidParameter(id)), parsePublisherMarket(query.country));
+  @Get('news/:id') article(@Param('id') id: string) {
+    return this.service.article(parseUlid(parseUlidParameter(id)));
   }
-  @Get('news/:id/provenance') provenance(@Param('id') id: string, @Query() query: Readonly<Record<string, unknown>>) {
-    assertExactQueryKeys(query, ['country']);
-    return this.service.provenance(parseUlid(parseUlidParameter(id)), parsePublisherMarket(query.country));
+  @Get('news/:id/provenance') provenance(@Param('id') id: string) {
+    return this.service.provenance(parseUlid(parseUlidParameter(id)));
   }
-  @Get('markets') markets(@Query() query: Readonly<Record<string, unknown>>) {
-    assertExactQueryKeys(query, []);
-    return publisherMarketsStatus();
+  @Get('sources') sources() {
+    return this.service.sources();
   }
-  @Get('registered-sources') registeredSources(@Query() query: Readonly<Record<string, unknown>>) {
-    assertExactQueryKeys(query, ['country']);
-    return this.service.registeredSources(parsePublisherMarket(query.country));
-  }
-  @Get('sources') sources(@Query() query: Readonly<Record<string, unknown>>) {
-    assertExactQueryKeys(query, ['country']);
-    return this.service.sources(parsePublisherMarket(query.country));
-  }
-  @Get('sources/:id') source(@Param('id') id: string, @Query() query: Readonly<Record<string, unknown>>) {
-    assertExactQueryKeys(query, ['country']);
-    return this.service.source(parseUlid(parseUlidParameter(id)), parsePublisherMarket(query.country));
+  @Get('sources/:id') source(@Param('id') id: string) {
+    return this.service.source(parseUlid(parseUlidParameter(id)));
   }
 }

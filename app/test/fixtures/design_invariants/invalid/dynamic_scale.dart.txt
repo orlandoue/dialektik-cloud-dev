@@ -1,0 +1,5 @@
+// dialektik:epistemic-component
+final emphasized = Transform.scale(
+  scale: isPrimary ? 1.05 : 1,
+  child: position,
+);

@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final decoration = BoxDecoration(boxShadow: preferredShadows);

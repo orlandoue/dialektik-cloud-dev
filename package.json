@@ -17,6 +17,7 @@
   "scripts": {
     "build": "npm run build --workspace @dialektik/database && npm run build --workspace @dialektik/core-api",
     "db:migrate": "npm run db:migrate --workspace @dialektik/database",
+    "supabase:dev:prepare-candidates": "tsx scripts/operations/prepare-supabase-dev-candidate-bundle.mts",
     "start": "npm run start --workspace @dialektik/core-api"
   },
   "devDependencies": {

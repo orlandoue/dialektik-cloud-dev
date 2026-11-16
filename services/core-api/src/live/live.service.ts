@@ -1,6 +1,5 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Ulid } from '@dialektik/database';
-import type { PublisherMarket } from './live.publisher-market.js';
 import {
   LiveRepository,
   type LiveNewsQuery,
@@ -14,9 +13,6 @@ function sourceDto(row: LiveSourceReadRow) {
     name: row.name,
     source_type: row.source_type,
     canonical_domain: row.canonical_domain,
-    country_code: row.country_code ?? null,
-    media_group_slug: row.media_group_slug ?? null,
-    editorial_lean: row.editorial_lean ?? null,
     publisher_family:
       typeof row.policy.publisherFamily === 'string' ? row.policy.publisherFamily : null,
     category: typeof row.policy.category === 'string' ? row.policy.category : null,
@@ -46,12 +42,9 @@ function newsDto(row: LiveReadRow) {
       source_type: row.source_type,
       canonical_domain: row.canonical_domain,
       policy: row.policy,
-      country_code: row.country_code ?? null,
-      media_group_slug: row.media_group_slug ?? null,
-      editorial_lean: row.editorial_lean ?? null,
     }),
     origin: 'LIVE_REAL' as const,
-    semantic_assignment: row.event_id === null ? ('UNASSIGNED' as const) : ('EVENT_LINKED' as const),
+    semantic_assignment: 'UNASSIGNED' as const,
     version_count: row.version_count,
   };
 }
@@ -84,15 +77,13 @@ export class LiveApplicationService {
     const items = rows.slice(0, query.limit).map(newsDto);
     return {
       origin: 'LIVE_REAL' as const,
-      semantic_mode: items.some((item) => item.semantic_assignment === 'EVENT_LINKED')
-        ? ('mixed' as const)
-        : ('unassigned' as const),
+      semantic_mode: 'unassigned' as const,
       items,
       next_cursor: rows.length > query.limit ? (items.at(-1)?.id ?? null) : null,
     };
   }
-  async article(id: Ulid, market: PublisherMarket = 'CL') {
-    const row = await this.repository.article(id, market);
+  async article(id: Ulid) {
+    const row = await this.repository.article(id);
     if (row === undefined) throw new NotFoundException('Live Article not found.');
     return {
       ...newsDto(row),
@@ -109,36 +100,16 @@ export class LiveApplicationService {
         row.policy.storagePolicy === 'METADATA_ONLY' ? null : row.declared_upstream,
     };
   }
-  async provenance(id: Ulid, market: PublisherMarket = 'CL') {
-    const row = await this.repository.article(id, market);
+  async provenance(id: Ulid) {
+    const row = await this.repository.article(id);
     if (row === undefined) throw new NotFoundException('Live provenance not found.');
     return provenanceDto(row);
   }
-  async registeredSources(market: PublisherMarket = 'CL') {
-    const [rows, reviewed] = await Promise.all([
-      this.repository.registeredSources(market),
-      this.repository.sources(undefined, market),
-    ]);
-    return {
-      mode: 'UNVERIFIED_SOURCE_REGISTRY' as const,
-      country_code: market,
-      license_status: 'NOT_ATTESTED' as const,
-      operational_source_count: reviewed.length,
-      items: rows.map((row) => ({
-        id: row.id,
-        name: row.name,
-        canonical_domain: row.canonical_domain,
-        source_type: row.source_type,
-        staged_record_count: Number(row.staged_record_count),
-        review_status: 'PENDING_INDEPENDENT_VERIFICATION' as const,
-      })),
-    };
+  async sources() {
+    return { items: (await this.repository.sources()).map(sourceDto) };
   }
-  async sources(market: PublisherMarket = 'CL') {
-    return { items: (await this.repository.sources(undefined, market)).map(sourceDto) };
-  }
-  async source(id: Ulid, market: PublisherMarket = 'CL') {
-    const rows = await this.repository.sources(id, market);
+  async source(id: Ulid) {
+    const rows = await this.repository.sources(id);
     const row = rows[0];
     if (row === undefined) throw new NotFoundException('Live Source not found.');
     return sourceDto(row);

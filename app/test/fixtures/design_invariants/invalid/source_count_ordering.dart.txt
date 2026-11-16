@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+positions.sort((left, right) => left.sourceCount.compareTo(right.sourceCount));

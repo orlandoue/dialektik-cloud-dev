@@ -8,6 +8,7 @@ export interface DatabaseConnectionOptions {
   readonly connectionString: string;
   readonly applicationName: string;
   readonly maxConnections?: number;
+  readonly connectionTimeoutMillis?: number;
 }
 
 export function validatePostgresUrl(connectionString: string): URL {
@@ -64,6 +65,9 @@ export function createDatabase(options: DatabaseConnectionOptions): Kysely<Datab
     application_name: options.applicationName,
     connectionString,
     max: options.maxConnections ?? 10,
+    ...(options.connectionTimeoutMillis === undefined
+      ? {}
+      : { connectionTimeoutMillis: options.connectionTimeoutMillis }),
     ...(ssl === undefined ? {} : { ssl }),
   });
   return new Kysely<Database>({

@@ -101,3 +101,167 @@ Fresh read-only queries on Supabase project vclsswwfhljczxgnsciq reported Postgr
 Render’s read-only listing reports dialektik-core-dev as Free, configured for codex/v7i-operational-product-pipeline at https://dialektik-core-dev.onrender.com. The latest deploy remains commit 13a5733059d5424fc057888669527ac8bb3dfa29, status live. No deployment was triggered. Direct HTTPS probes from this execution host failed at network level, so the report does not claim current route status.
 
 The local code and test gates are ready for review. Before the first product database insertion, obtain owner approval for this concrete operation: apply migration 041 to the Dialektik development project, provision the dedicated writer credential through a protected channel, and persist this one exact RSH item. After approval, deploy the reviewed code, verify authenticated Render HTTPS routes and provenance, then have the owner check the item on the physical phone. Keep Cloudflare, polling, semantic inference, paid APIs, and LIVE provider dispatch disabled.
+
+## Post-commit deployment verification — 2026-10-16
+
+This section supersedes the pre-deployment rows above for the final deployment and route checks. The report was committed before auto-deploy started.
+
+- Commit 9353ab9819a8d865cdec53896f593bafdd8f80d2 was pushed as a fast-forward to codex/v7i-operational-product-pipeline. No force push was used.
+- Render automatically built and deployed that exact commit. Deploy ID dep-db8r6hc9v7es7397ijeg completed with status live at 2026-10-16T05:17:58Z.
+- Direct HTTPS GET checks after deployment returned /health/live=200 and /health/ready=200. Requests without bearer to /live/news, /live/sources, /v1/feed, and /v1/contradictions each returned 401.
+- Authenticated remote Article routes were not called because a tester bearer was not available in the execution environment. Local authenticated PostgreSQL/Core integration remains the positive route evidence.
+- A fresh read-only Supabase query after deployment reported PostgreSQL 17.11; latest ledger row 20261014062211 grant_live_core_column_read; no GOV.UK writer role; 0 LIVE_REAL Articles, 0 LIVE_REAL Sources, 0 Events, and 0 acquisition receipts. Migration 041 and the item are still unapplied remotely.
+- The deployed Core has no source item to return. Flutter and physical Android display of this specific Article remain unverified.
+- C: free space at final inspection: 10,391,863,296 bytes (about 9.67 GiB), below the 10 GiB build guard. No APK build was attempted.
+- The code commit is deployed. No migration, acquired-data write, Cloudflare inference, polling, or paid resource was activated.
+
+## Owner-authorized database bootstrap checkpoint — 2026-10-16 05:29 UTC
+
+The owner authorized applying migration 041 and inserting only the approved RSH metadata item with no article body, excerpt, author, image, event, or semantic inference.
+
+- Applied only `041_govuk_product_metadata_writer` to Supabase development project `vclsswwfhljczxgnsciq`. Supabase recorded version `20261016052229`. The project is active in `us-east-1`, PostgreSQL 17.11.
+- Post-apply checks confirmed the writer role is login-only, NOINHERIT, non-superuser, without createdb/createrole/replication/BYPASSRLS, and limited to one connection. Column-scoped metadata INSERT privileges are present; table-wide article SELECT/INSERT, event INSERT, and body/excerpt INSERT are absent. `anon` and `authenticated` have no article SELECT.
+- A fresh one-shot dry-run made bounded requests to GOV.UK robots.txt and the exact official Content API item. It returned the approved publisher, content ID, canonical URL, title, dates, and `official_api` provenance. It wrote nothing. The first attempt from the restricted command environment failed DNS; the approved network-enabled retry passed.
+- At this checkpoint the product write has **not** run. A read-only post-migration query still showed zero GOV.UK source/article/receipt rows and zero Events. The writer password remains unset. The local Supabase CLI reports no access token in this execution context, so a local authenticated CLI session is needed to provision the random writer password through the Supabase Management API without placing it in tool arguments or chat. The protected terminal tab did not become visible; the owner can complete `supabase login --no-browser` in their usual Windows PowerShell from any directory.
+- After login, link an isolated temporary Supabase CLI workdir only to `vclsswwfhljczxgnsciq`; use `supabase db query --linked -f <protected temporary SQL file>` to set a newly generated, process-only random password, then run the existing `--mode persist --once` importer with the verified Supabase Root 2021 CA. Do not use the project’s admin or Core password. Remove the temporary SQL file and clear all environment values immediately. The importer validates the exact pooler hostname `aws-0-us-east-1.pooler.supabase.com`, project-qualified writer username, database path, CA, hostname verification, and restricted role before its transaction.
+- Verified CA file `C:\Users\orlan\Downloads\prod-ca-2021.crt`: self-signed Supabase Root 2021 CA, valid 2021-04-28 through 2031-04-26, SHA-256 `700723581420DD1AC98FD7E9AC529F0EF210EADCAF87FC868A3AD7D114C2F3B7`. No TLS verification bypass is configured.
+- Security handling note: one broad read-only query over the Supabase migration ledger returned a historical Core-role creation statement containing its password in tool output. The value is intentionally omitted here and was not used. Treat it as exposed to the tool history and rotate the Core database credential through a coordinated protected secret update (Supabase role and Render service) before relying on that credential further. No rotation was performed.
+- Render remains on live deploy `dep-db8r6hc9v7es7397ijeg` at code commit `9353ab9819a8d865cdec53896f593bafdd8f80d2`. No new deployment, polling, Cloudflare, paid API, or LIVE dispatch was activated. The physical phone/Flutter positive route remains for owner verification after the single row is persisted.
+- C: last measured at about 9.67 GiB free, below the 10 GiB APK build guard. No APK build was attempted.
+
+Current gate: migration 041 = PASS; restricted role/grants = PASS; fresh official Content API dry-run = PASS; one metadata-only product insertion = PENDING local Supabase CLI authentication and protected password provisioning; Flutter/physical Android display = PENDING owner check.
+
+## Authenticated retry and RLS finding — 2026-10-16
+
+This section supersedes the preceding CLI-authentication and pending-write statements.
+
+- The owner confirmed Supabase CLI authentication. An elevated, read-only `supabase projects list` showed the intended development project, and an isolated CLI work directory was linked to `vclsswwfhljczxgnsciq`.
+- One persistence attempt ran with the dedicated writer over the verified TLS Session Pooler. It failed safely and the importer transaction rolled back. A sanitized PostgreSQL log entry gave the exact cause: `new row violates row-level security policy for table "sources"`.
+- A subsequent read-only query confirmed 0 target RSH sources, 0 target Articles, 0 target receipts, 0 target versions, and 0 target Events. The temporary writer password is unset. No data row was inserted.
+- The remote catalog confirms RLS is enabled on `sources` and `articles`, but the only policies on those tables are `SELECT` for `dialektik_core_app`; the dedicated writer has no `SELECT` or `INSERT` policy. Four supporting acquisition tables (`live_source_policies`, `live_exposure_exclusions`, `live_acquisition_receipts`, and `live_article_versions`) have RLS disabled. The writer currently has column-scoped INSERT grants on those tables, so migration 041 alone does not scope its writes to the approved item at row level.
+- Prepared but **not applied or committed**: `packages/database/src/migration/042_govuk_product_writer_row_scope.ts`. It adds writer-only row policies tied to the fixed RSH source and exact approved content item, enables RLS on the four supporting acquisition tables, and adds `SELECT USING (true)` policies for the already-authorized `dialektik_core_app` role to preserve its preexisting read access. It does not grant access to `PUBLIC`, `anon`, or `authenticated`, enable polling, change source permissions, or write data. The rollback checks for additional policies before disabling RLS.
+- The CLI now checks for the complete scoped policy set before persistence. The existing migration test has source assertions for the new policy scope. These changes are local, uncommitted review material; the new migration has not yet been exercised against PostgreSQL.
+- No migration 042, SQL DDL, or data insert was sent to Supabase after this diagnosis. Migration 041 remains applied as ledger version `20261016052229`.
+- Current measured C: free space is approximately **1.9 GiB**, below the previously established 10 GiB safety floor. Therefore no npm build, Vitest run, disposable database test, commit, APK build, Render deploy, or second persistence attempt was run. The read-only `Get-Volume` query was unavailable due to Windows CIM access; the available PowerShell drive measurement returned 1.9 GiB.
+
+### Current disposition
+
+`SUPABASE_CLI_AUTH = PASS`
+`MIGRATION_041 = APPLIED`
+`OFFICIAL_API_DRY_RUN = PASS`
+`ONE_SHOT_INSERT = FAIL_SAFE_ROLLBACK; ZERO TARGET ROWS`
+`RLS_CORRECTION_042 = PREPARED LOCALLY; UNTESTED; NOT APPLIED`
+`WRITER_PASSWORD = UNSET`
+`LOCAL_BUILD_AND_TEST = BLOCKED; C: BELOW 10 GIB SAFETY FLOOR`
+`RENDER_DEPLOY = UNCHANGED`
+`ANDROID_ITEM_VERIFICATION = PENDING`
+
+## RLS migration 042 audit and local validation — 2026-10-16
+
+This section supersedes the prior statements that migration 042 was untested, that the writer password was unset, and that C: remained below the build guard.
+
+### Storage and safety
+
+- `Get-PSDrive C:` measured **13,889,228,800 bytes free (12.94 GiB)** after the current build and test activity. This exceeds the 10 GiB floor; no cleanup was needed or performed.
+- No project, worktree, Docker data, database, evidence, credential, or personal file was deleted. Docker Engine was unavailable in the earlier read-only check, so no Docker cleanup was attempted.
+- An attempt to recreate a disposable PostgreSQL test cluster in this Windows execution context did not complete: `initdb` was interrupted during initialization and connections to `127.0.0.1:55442` returned `WSAEACCES`. The incomplete, non-running directory is retained at `C:\Users\orlan\.codex\visualizations\2026\10\11\01a12950-84bd-7e31-87b0-3b11019e5b26\pg042-validation-20261016-final`; it was not reused for testing or deleted. This failed repeat does not replace the successful PostgreSQL 17.11 integration run recorded below.
+
+### Migration 042 scope and dependencies
+
+- `042_govuk_product_writer_row_scope` is registered in the local Kysely migration provider and has been applied **only** to a loopback-only disposable PostgreSQL 17.11 test cluster. It has not been applied to Supabase.
+- Its preflight fails closed if unexpected policies exist, the existing Core `SELECT` policies on `sources` or `articles` are absent, the restricted writer role is unsafe, or target source/article/receipt rows already exist.
+- The policy set limits the writer to the fixed RSH source, the official Content API item `86f4abba-9eaa-412f-b048-5ed30aa74201`, its canonical URL and exact metadata-only title. It requires the approved `LIVE_READY` / `METADATA_ONLY` policy JSON, excludes third-party content, attachments and images, disables polling, and keeps event association, body storage, full-text processing and derived semantic persistence out of scope.
+- RLS is enabled on the five trigger-support tables: `live_source_policies`, `live_exposure_exclusions`, `live_acquisition_receipts`, `live_article_versions`, and `prospective_content_rights_write_guards`. The last table is included because the existing source `AFTER INSERT` trigger seeds its row as the invoking role. The row policy restricts that trigger write to the fixed source; the existing trigger continues to reject direct guard inserts.
+- The migration creates Core-only `SELECT` policies on those five tables to preserve the Core reads previously allowed by grants while RLS was disabled. It adds no `GRANT`, does not change existing `sources`/`articles` Core read policies, and creates no access policy for `PUBLIC`, `anon`, or `authenticated`. Existing source/article, receipt, version, and rights-validation triggers are not replaced or weakened.
+- The one-shot CLI now requires the expected 14 role-scoped policies, RLS on all five support tables, the restricted role attributes, and absence of writer `SELECT` privilege for `articles.text_original`. The importer no longer searches unrelated `gov.uk` source rows, which cannot be visible under the item-scoped policy.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `npm run build` (Database and Core TypeScript) | PASS |
+| Focused Vitest `govuk-product-migration.test.ts` | PASS, 7/7 |
+| `node --check` on the integration and setup scripts | PASS |
+| `git diff --check` | PASS (only CRLF normalization warnings) |
+| PostgreSQL 17.11 integration, previously executed on the dedicated disposable loopback cluster | PASS: positive write path; 14 negative cases; deterministic replay; Core reads preserved; `anon` and `authenticated` denied; rollback leaves 0 rows |
+| Repeat of the PostgreSQL cluster run in the current restricted Windows execution | BLOCKED by loopback `WSAEACCES` after interrupted fresh `initdb`; no existing database was contacted |
+
+The successful integration result was emitted as `govuk_writer_row_scope_postgres17_integration` with `migration_042=applied_to_disposable_local_cluster_only`, `positive_write_path=PASS`, `negative_cases=14`, `repeated_deterministic_insert=PASS`, `core_read_policies=PASS`, `anon_authenticated_denied=PASS`, `rollback_rows_remaining=0`, and `remote_database_touched=false`. Its fixtures and all writes ran in one transaction that was rolled back.
+
+### Current Supabase state — read-only verification
+
+- Development project: `vclsswwfhljczxgnsciq`.
+- The latest `supabase_migrations.schema_migrations` entry remains `041_govuk_product_metadata_writer` (`20261016052229`); no 042 entry exists.
+- Current counts for the target source, target Article, target receipt, target version, and target source policy are all **0**. No retry or other remote data write was performed.
+- A read-only `pg_roles` query returned only booleans for the writer: `LOGIN=true`, password configured, `NOINHERIT`, no superuser/database/role-creation/replication/BYPASSRLS attributes, and no role memberships. Therefore the writer is **not disabled outside the operation**. No password or password hash was read or printed. No role change was made.
+- The previously exposed Core database credential's rotation remains **UNCONFIRMED**. No Core credential value or hash was read in this continuation. Render metadata previously available did not include a credential-rotation audit record; the owner must confirm rotation in the protected Render/Supabase configuration or authorize a coordinated protected rotation.
+
+### Disposition and approval gate
+
+`DISK_GUARD = PASS; 12.94 GIB FREE; NO CLEANUP`
+`MIGRATION_042_LOCAL_PG17 = PASS (successful prior run); CURRENT_SANDBOX_REPEAT = BLOCKED`
+`MIGRATION_042_REMOTE = NOT APPLIED`
+`REMOTE_TARGET_ROWS = 0`
+`TEMP_WRITER_DISABLED = FAIL; LOGIN ENABLED AND PASSWORD CONFIGURED`
+`CORE_CREDENTIAL_ROTATION = UNCONFIRMED`
+`REMOTE_INSERT = NOT RETRIED`
+`R14 / 50-SOURCE REGISTRY / POLLING / CLOUDFLARE / INFERENCE = UNCHANGED AND INACTIVE`
+`ANDROID E2E FOR THIS ARTICLE = NOT RUN`
+
+The reviewable local change is ready for owner review, but remote operation remains gated on explicit approval to apply migration 042 to this development project. The writer should be set `NOLOGIN` immediately after the already-authorized single metadata-only insertion; that remote role change has not been made. Do not claim the Core credential was rotated until independently confirmed through the protected secret-management path. The master phases 2/3 remain paused until the authorized GOV.UK publication and physical Android E2E are complete.
+
+Before proceeding, restore at least 10 GiB free on C: without deleting protected data. Then run the focused migration/build tests and a disposable PostgreSQL 17.11 RLS integration covering: exact RSH rows accepted; wrong source/item, article URL/origin, policy, exclusion, receipt, version, and oversized title denied; Core reads preserved; anon/authenticated remain denied; rollback leaves all counts unchanged. If those checks pass, obtain the owner's specific approval for applying migration 042 to the development project. Only after that approval should the one authorized metadata-only item be retried once. No further authentication is needed unless the CLI session has expired.
+
+## Final controlled execution of migration 042 — 2026-10-16 07:54 UTC
+
+This is the authoritative current state and supersedes all earlier statements in this report that migration 042 was pending, the writer still had LOGIN, or target rows were awaiting insertion.
+
+### Exact source and local PostgreSQL verification
+
+- Worktree branch: codex/govuk-rsh-one-shot-import.
+- Exact candidate commit: e89b859994937d55c7fc2db549f4d1e2ee1bd839.
+- The migration source hash in the working tree and in that commit is identical: Git blob 6e50616d486cb8c271b6a2ee09f667c06f3b9c91.
+- The exact committed migration was exercised against a disposable PostgreSQL 17.11 instance bound to loopback only. The run passed the positive write path, 14 negative cases, deterministic repeated insert, preservation of Core read policies, denial for anon and authenticated, and rollback with zero rows remaining. The test run reported remote_database_touched=false.
+- The test role was NOLOGIN; a new connection attempt against the disposable PostgreSQL server was rejected. This validates the engine behavior locally without attempting a remote writer login.
+- npm run build, the focused Vitest suite (7/7), node --check for both scripts, and git diff --check passed for the tested source. No test result was inferred from a failed run.
+
+### Authorized remote action and immediate verification
+
+The owner explicitly authorized migration 042 and the required preceding writer disablement for development project vclsswwfhljczxgnsciq.
+
+1. Before migration, the remote catalog was changed to NOLOGIN. It showed no active writer sessions before the change; after the change, rolcanlogin=false and the session count remained zero. No existing session needed termination. No attempt was made to re-enable the role.
+2. The remotely applied SQL was extracted from the committed, tested migration above. No INSERT, UPDATE, DELETE, or role alteration was included in the migration SQL. Supabase recorded only 042_govuk_product_writer_row_scope, version 20261016074743, after the prior 041 version.
+3. The immediate and final read-only verification confirmed:
+   - RLS enabled on sources, articles, events, live_source_policies, live_exposure_exclusions, live_acquisition_receipts, live_article_versions, and prospective_content_rights_write_guards.
+   - The preexisting dialektik_core_read policies on sources and articles are preserved. Core's existing read policy on events also remains.
+   - The five support-table Core read policies were added so enabling RLS does not remove its existing read surface. There are 22 relevant policies in total: 14 scoped writer policies (SELECT/INSERT for the seven narrowly scoped write tables) and 8 Core read policies. No policy targets PUBLIC, anon, or authenticated.
+   - The read-only privilege inventory returned no table- or column-level grants to PUBLIC, anon, or authenticated on the eight relevant tables.
+   - dialektik_govuk_metadata_writer is NOLOGIN, NOINHERIT, non-superuser, and has no database/role-creation, replication, or BYPASSRLS flags; it has no role memberships and zero sessions.
+   - Writer INSERT is column-scoped, with no table-wide INSERT. RLS binds source and Article rows to the approved RSH source and exact item. Although the writer has column-level INSERT on articles.text_original and text_normalized to store the approved title, the row policy requires the exact approved title and canonical URL, origin = LIVE_REAL, and event_id IS NULL; it has no SELECT privilege on those Article text columns. It has no table-wide event INSERT.
+   - Core retains column-scoped SELECT on Articles and the acquisition metadata columns it already needed under migration 040. A table-level has_table_privilege check for Core on live_acquisition_receipts is false by design; the authoritative column inventory confirms its limited SELECT columns. No broad table grants were added by 042.
+4. Counts remain sources=0, articles=0, events=0, live_acquisition_receipts=0, and live_article_versions=0. No data was inserted and no import was attempted.
+
+### Core credential rotation
+
+CORE_CREDENTIAL_ROTATION = UNCONFIRMED; NOT PERFORMED.
+
+No credential value, password hash, or current DATABASE_URL was read. Render's connected service inspection returned service metadata (the service is Free and not suspended) but no environment values, and the available environment-update operation requires a literal replacement value. The Supabase SQL channel likewise accepts raw SQL arguments. With these connected tools there is no protected secret-transfer path that both identifies the exact current database endpoint and coordinates a new password without placing secret material in tool arguments/history. I therefore did not change either side, risk an outage, or claim rotation. The exposed credential must still be treated as compromised until the owner completes a coordinated update through a protected secret-entry path. No statement here confirms Core health or current database connectivity.
+
+### Storage, protected environments, and inactive features
+
+- C: free space at final inspection: 13,800,620,032 bytes (about 12.85 GiB). No cleanup was performed.
+- The preexisting .task-temp directory was left untouched and unstaged.
+- R14 and scientific evidence were not touched. The 50-source candidate registry remains inactive. No polling, Cloudflare, inference, paid service, Render deploy, or Android build was started.
+
+### Current disposition and safe next action
+
+MIGRATION_042_TESTED_SOURCE_MATCH = PASS
+POSTGRES_17_11_LOCAL_TESTS = PASS
+REMOTE_MIGRATION_042 = APPLIED (20261016074743)
+WRITER_ROLE = NOLOGIN; ZERO SESSIONS
+REMOTE_RLS_AND_PRIVILEGES = VERIFIED
+TARGET_DATA_COUNTS = ZERO; NO INSERT
+CORE_CREDENTIAL_ROTATION = UNCONFIRMED; NOT PERFORMED
+R14 / 50 SOURCES / POLLING / CLOUDFLARE / INFERENCE = UNCHANGED OR INACTIVE
+
+The next GOV.UK step is not authorized yet: request a separate, explicit one-shot authorization before temporarily enabling the dedicated writer and repeating the exact metadata-only import. If later authorized, provision its one-use secret only through a protected channel, execute once over verified TLS, immediately set NOLOGIN again and close any writer sessions, then verify the single expected Source/Article/receipt/version and zero Events. Do not re-enable LOGIN or import based on the earlier authorization alone.

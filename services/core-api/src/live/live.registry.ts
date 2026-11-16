@@ -17,23 +17,17 @@ export interface LiveSourcePolicy {
   readonly sourceType: SourceType;
   readonly publisherFamily: string | null;
   readonly category: string | null;
-  readonly discoveryChannel: 'rss_atom' | 'news_sitemap' | 'official_api';
+  readonly discoveryChannel: 'rss_atom';
   readonly endpoint: string;
   readonly rightsClass: LiveRightsClass;
   readonly storagePolicy: LiveStoragePolicy;
   readonly active: boolean;
   readonly rightsEvidenceUrl: string;
-  readonly rightsReviewStatus?: string | null;
-  readonly authorizationReference?: string | null;
   readonly rightsVerifiedAt: string;
   readonly attribution: string;
   readonly language: string;
   readonly allowedArticleDomains: readonly string[];
   readonly canonicalPathAliases?: Readonly<Record<string, string>>;
-  /** Owner-reviewed mode: title, a short excerpt for the quote, link back. */
-  readonly ingestionMode?: 'headline_and_citation_only';
-  /** The feed-wide notice names the publisher itself (reviewed per source). */
-  readonly publisherCopyrightNotice?: 'ACCEPTED';
 }
 
 // These legacy candidates are discovery-only until consultation, storage and

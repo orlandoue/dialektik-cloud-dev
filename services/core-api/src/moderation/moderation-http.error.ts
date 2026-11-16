@@ -10,23 +10,14 @@ export type ModerationErrorCode =
   | 'MOD_NOT_FOUND'
   | 'MOD_TASK_CONFLICT'
   | 'MOD_PROPOSAL_CONFLICT'
-  | 'MOD_STALE_CONTEXT'
-  | 'MOD_SEMANTIC_PROMOTION_PERMISSION_DENIED'
-  | 'MOD_SEMANTIC_PROMOTION_CONSTRAINT_REJECTED'
-  | 'MOD_SEMANTIC_PROMOTION_DATABASE_FAILURE';
-
-export type ModerationDiagnostic = {
-  failureStage: 'transaction' | 'audit_context' | 'promotion_function';
-  sqlState?: string;
-};
+  | 'MOD_STALE_CONTEXT';
 
 export class ModerationHttpError extends HttpException {
   public constructor(
     status: HttpStatus,
     public readonly code: ModerationErrorCode,
-    public readonly diagnostic?: ModerationDiagnostic,
   ) {
-    super(diagnostic ? { code, diagnostic } : { code }, status);
+    super({ code }, status);
     this.name = 'ModerationHttpError';
   }
 }

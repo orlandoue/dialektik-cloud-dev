@@ -302,7 +302,6 @@ export interface SourceTable {
 
 export interface EventTable {
   id: Ulid;
-  origin: ColumnType<ProductOrigin | null, ProductOrigin | null | undefined, ProductOrigin | null>;
   title_descriptive: string;
   category_id: Ulid;
   window_from: Timestamp;
@@ -677,7 +676,6 @@ export interface ModerationReviewProposalTable {
   candidate_class_id: Ulid;
   outcome: ModerationReviewOutcome;
   proposer_id: Ulid;
-  single_editor_authorization_id: ColumnType<Ulid | null, Ulid | null | undefined, Ulid | null>;
   payload_hash: string;
   state: ModerationReviewProposalState;
   submitted_at: Timestamp;
@@ -964,7 +962,6 @@ export interface LiveAcquisitionReceiptTable {
   policy_id: string;
   exclusion_id: string;
   discovery_channel: string;
-  discovery_channel_detail: string | null;
   discovery_url: string;
   discovered_url: string | null;
   canonical_url: string | null;

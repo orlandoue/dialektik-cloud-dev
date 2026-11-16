@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final errorInk = context.operationalColors.error;

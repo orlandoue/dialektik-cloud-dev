@@ -1,13 +1,11 @@
-import { BadRequestException, Controller, Get, Inject, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { Controller, Get, Inject, Param, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 
 import { sendPublicRead } from './public-api.cache.js';
 import { PUBLIC_OPENAPI_DOCUMENT } from './public-api.openapi.js';
 import { PublicApiService } from './public-api.service.js';
-import { PublicRateLimitService, rateLimitClient } from './public-rate-limit.service.js';
-import { FollowedSourcesService } from './followed-sources.service.js';
-import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
-import { parsePublicCountry, type PublicCountry } from './source-profiles.js';
+import { PublicRateLimitService } from './public-rate-limit.service.js';
+import { PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import {
   assertExactQueryKeys,
   parseOptionalFilter,
@@ -17,22 +15,12 @@ import {
 
 type PublicQuery = Readonly<Record<string, unknown>>;
 
-/** ?country=CL|ES|AR|US; Chile when omitted (unchanged behaviour). */
-function countryOf(query: PublicQuery): PublicCountry {
-  try {
-    return parsePublicCountry(query.country);
-  } catch {
-    throw new BadRequestException('Invalid country.');
-  }
-}
-
 @Controller('v1')
 @UseGuards(PrivateBetaAuthGuard)
 export class PublicApiController {
   public constructor(
     @Inject(PublicApiService) private readonly publicApi: PublicApiService,
     @Inject(PublicRateLimitService) private readonly rateLimit: PublicRateLimitService,
-    @Inject(FollowedSourcesService) private readonly follows: FollowedSourcesService,
   ) {}
 
   @Get('openapi.json')
@@ -41,7 +29,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
+    this.rateLimit.assertAllowed(request.ip);
     assertExactQueryKeys(query, []);
     return sendPublicRead(request, reply, {
       body: PUBLIC_OPENAPI_DOCUMENT,
@@ -55,20 +43,11 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
-    assertExactQueryKeys(query, ['category', 'topic', 'cursor', 'limit', 'personalized', 'synthesis', 'country']);
-    const country = countryOf(query);
-    if (query.synthesis !== undefined && query.synthesis !== '1') throw new BadRequestException('Invalid synthesis projection.');
-    if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
+    this.rateLimit.assertAllowed(request.ip);
+    assertExactQueryKeys(query, ['category', 'topic', 'cursor', 'limit']);
     const category = parseOptionalFilter(query.category);
     const topic = parseOptionalFilter(query.topic);
-    const userId = query.personalized === '1' ? betaUserId(request) : undefined;
-    const followedSourceIds = userId === undefined ? undefined : await this.follows.list(userId);
-    const page = parsePageRequest(query, 'feed', { category, topic, synthesis: query.synthesis, ...(country === 'CL' ? {} : { country }), ...(userId === undefined ? {} : {user: userId, follows: followedSourceIds!.join(',')}) });
-    if (followedSourceIds !== undefined) {
-      void reply.header('cache-control','private, no-store');
-      return (await this.publicApi.feed({ ...(category === undefined ? {} : {category}), ...(topic === undefined ? {} : {topic}), page, followedSourceIds, includeSynthesis: query.synthesis === '1', country, includeCountry: query.country !== undefined })).body;
-    }
+    const page = parsePageRequest(query, 'feed', { category, topic });
     return sendPublicRead(
       request,
       reply,
@@ -76,9 +55,6 @@ export class PublicApiController {
         ...(category === undefined ? {} : { category }),
         ...(topic === undefined ? {} : { topic }),
         page,
-        includeSynthesis: query.synthesis === '1',
-        country,
-        includeCountry: query.country !== undefined,
       }),
     );
   }
@@ -89,31 +65,10 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
-    assertExactQueryKeys(query, ['cursor', 'limit', 'personalized', 'country']);
-    if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
-    const country = countryOf(query);
-    const userId = query.personalized === '1' ? betaUserId(request) : undefined;
-    const followed = userId === undefined ? undefined : await this.follows.list(userId);
-    const page = parsePageRequest(query, 'contradictions', {...(country === 'CL' ? {} : { country }), ...(userId === undefined ? {} : {user:userId,follows:followed!.join(',')})});
-    if (followed !== undefined) {
-      void reply.header('cache-control','private, no-store');
-      return (await this.publicApi.contradictions(page, followed, country, query.country !== undefined)).body;
-    }
-    return sendPublicRead(request, reply, await this.publicApi.contradictions(page, undefined, country, query.country !== undefined));
-  }
-
-  @Get('feed/blindspots')
-  public async blindspots(@Query() query: PublicQuery, @Req() request: FastifyRequest, @Res({passthrough:true}) reply: FastifyReply) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
-    assertExactQueryKeys(query, ['cursor','limit']);
-    const userId=betaUserId(request);
-    const followedSourceIds=await this.follows.list(userId);
-    const page=parsePageRequest(query,'feed',{user:userId,follows:followedSourceIds.join(','),blindspots:'1'});
-    void reply.header('cache-control','private, no-store');
-    if (followedSourceIds.length === 0) return {items:[],next_cursor:null,followed_source_count:0,total:0};
-    const result=await this.publicApi.feed({page,followedSourceIds,blindspots:true});
-    return {...result.body,followed_source_count:followedSourceIds.length,total:await this.publicApi.countBlindspots(followedSourceIds)};
+    this.rateLimit.assertAllowed(request.ip);
+    assertExactQueryKeys(query, ['cursor', 'limit']);
+    const page = parsePageRequest(query, 'contradictions', {});
+    return sendPublicRead(request, reply, await this.publicApi.contradictions(page));
   }
 
   @Get('events/:eventId')
@@ -123,20 +78,9 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
-    assertExactQueryKeys(query, ['include','personalized','outlets']);
-    if (query.personalized !== undefined && query.personalized !== '1') throw new BadRequestException('Invalid personalization.');
-    if (query.outlets !== undefined && query.outlets !== '1') throw new BadRequestException('Invalid outlets projection.');
-    const outlets = query.outlets === '1';
-    if (query.include !== undefined && query.include !== 'coverage') {
-      throw new BadRequestException('Unsupported event include');
-    }
-    if (query.personalized === '1') {
-      const followed = await this.follows.list(betaUserId(request));
-      void reply.header('cache-control','private, no-store');
-      return (await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage',followed,outlets)).body;
-    }
-    return sendPublicRead(request, reply, await this.publicApi.event(parseUlidParameter(eventId), query.include === 'coverage',undefined,outlets));
+    this.rateLimit.assertAllowed(request.ip);
+    assertExactQueryKeys(query, []);
+    return sendPublicRead(request, reply, await this.publicApi.event(parseUlidParameter(eventId)));
   }
 
   @Get('events/:eventId/positions')
@@ -146,7 +90,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
+    this.rateLimit.assertAllowed(request.ip);
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,
@@ -162,7 +106,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
+    this.rateLimit.assertAllowed(request.ip);
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,
@@ -178,7 +122,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
+    this.rateLimit.assertAllowed(request.ip);
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,
@@ -194,26 +138,13 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
+    this.rateLimit.assertAllowed(request.ip);
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,
       reply,
       await this.publicApi.position(parseUlidParameter(positionId)),
     );
-  }
-
-  /** Media groups of a country, each once with press and YouTube combined. */
-  @Get('sources')
-  public async mediaGroups(
-    @Query() query: PublicQuery,
-    @Req() request: FastifyRequest,
-    @Res({ passthrough: true }) reply: FastifyReply,
-  ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
-    assertExactQueryKeys(query, ['country']);
-    void reply.header('cache-control', 'private, max-age=300');
-    return this.publicApi.mediaGroups(countryOf(query));
   }
 
   @Get('sources/:sourceId')
@@ -223,7 +154,7 @@ export class PublicApiController {
     @Req() request: FastifyRequest,
     @Res({ passthrough: true }) reply: FastifyReply,
   ) {
-    this.rateLimit.assertAllowed(rateLimitClient(request));
+    this.rateLimit.assertAllowed(request.ip);
     assertExactQueryKeys(query, []);
     return sendPublicRead(
       request,

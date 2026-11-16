@@ -25,10 +25,8 @@ import type {
   SourceDto,
   TombstoneDto,
 } from './public-api.types.js';
-import { MINIMUM_QUOTE_CODE_POINTS, widenShortQuote } from '../semantic/live-semantic-production.contract.js';
 import { encodeCursor } from './public-api.validation.js';
 import type { PageRequest } from './public-api.validation.js';
-import type { PublicCountry } from './source-profiles.js';
 
 const EDITORIAL_DISPLAY = 'equipo editorial' as const;
 
@@ -144,21 +142,12 @@ export class PublicApiService {
     readonly category?: string;
     readonly topic?: string;
     readonly page: PageRequest;
-    readonly followedSourceIds?: readonly string[];
-    readonly blindspots?: boolean;
-    readonly includeSynthesis?: boolean;
-    readonly country?: PublicCountry;
-    /** Only clients that ask for a country get country_code (older apps reject unknown fields). */
-    readonly includeCountry?: boolean;
   }): Promise<PublicReadResult<PublicPage<EventCardDto>>> {
     const rows = await this.repository.listFeed({
-      ...(input.country === undefined ? {} : { country: input.country }),
       ...(input.category === undefined ? {} : { category: input.category }),
       ...(input.topic === undefined ? {} : { topic: input.topic }),
       cursor: input.page.cursor,
       limit: input.page.limit,
-      ...(input.followedSourceIds === undefined ? {} : {followedSourceIds: input.followedSourceIds}),
-      ...(input.blindspots ? {blindspots:true} : {}),
     });
     const visible = rows.slice(0, input.page.limit);
     const last = visible.at(-1);
@@ -167,7 +156,7 @@ export class PublicApiService {
         ? encodeCursor('feed', input.page.filterFingerprint, last.detected_at, last.id)
         : null;
     return {
-      body: { items: visible.map((row) => ({...eventCard(row), ...(input.includeCountry && row.country_code !== undefined ? {country_code:row.country_code} : {}), ...(input.includeSynthesis ? {synthesis_relation:row.synthesis_relation ?? null} : {}), ...(input.followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true})})), next_cursor: nextCursor },
+      body: { items: visible.map(eventCard), next_cursor: nextCursor },
       lastModified:
         visible.length === 0
           ? new Date(0)
@@ -175,76 +164,14 @@ export class PublicApiService {
     };
   }
 
-  public async mediaGroups(country: PublicCountry) {
-    const rows = await this.repository.listMediaGroups(country);
-    return {
-      country_code: country,
-      profiles_available: rows !== null,
-      items: (rows ?? []).map((row) => ({
-        media_group_slug: row.media_group_slug,
-        name: row.media_group_name,
-        country_code: row.country_code,
-        editorial_lean: row.editorial_lean,
-        modalities: row.modalities,
-        source_ids: row.source_ids,
-        items_last_7_days: row.items_last_7_days,
-        latest_published_at: row.latest_published_at === null ? null : iso(row.latest_published_at),
-      })),
-    };
-  }
-
-  public async countBlindspots(followedSourceIds: readonly string[]): Promise<number> {
-    return this.repository.countBlindspots(followedSourceIds);
-  }
-
-  public async event(id: string, includeCoverage = false, followedSourceIds?: readonly string[], includeOutlets = false): Promise<PublicReadResult<EventDetailDto>> {
+  public async event(id: string): Promise<PublicReadResult<EventDetailDto>> {
     const row = await this.#requireCurrentEvent(id);
-    // Every read below depends only on the event id, so they run together on
-    // the pool instead of paying one database round trip after another.
-    const withCoverage = includeCoverage && row.analysis_state === 'PUBLISHED';
-    const [primaryFacts, followedMatch, coverage, linkedArticles, related] = await Promise.all([
-      this.repository.findPrimaryFacts(id),
-      followedSourceIds === undefined ? Promise.resolve(undefined) : this.repository.eventHasFollowedSources(id, followedSourceIds),
-      withCoverage ? this.repository.listEventCoverage(id) : Promise.resolve([]),
-      withCoverage ? this.repository.listEventArticles(id) : Promise.resolve([]),
-      withCoverage ? this.repository.listContradictions({cursor:null,limit:100,eventId:id}) : Promise.resolve([]),
-    ]);
+    const primaryFacts = await this.repository.findPrimaryFacts(id);
     if (primaryFacts.length > 1) throw new TypeError('Event has more than one primary fact.');
     const primary = primaryFacts[0];
-    // Older repository doubles in tests may not provide profiles.
-    // Outlet fields only for clients that ask (older apps reject unknown fields).
-    const profiles = withCoverage && includeOutlets && typeof this.repository.sourceProfiles === 'function'
-      ? await this.repository.sourceProfiles([...coverage.map((item) => item.source_id), ...linkedArticles.map((item) => item.source_id)])
-      : new Map();
-    const outlet = (sourceId: string) => {
-      const profile = profiles.get(sourceId);
-      return profile === undefined ? {} : { country_code: profile.country_code, media_group_slug: profile.media_group_slug, editorial_lean: profile.editorial_lean };
-    };
-    const positions = new Map<string, {id:string;title:string;assertions:{id:string;assertion_text:string;quoted_text:string;article_id:string;source_name:string;source_id?:string;is_followed?:boolean}[]}>();
-    const articles = new Map<string, {id:string;title:string;source_name:string;published_at:string;url:string;source_id?:string;is_followed?:boolean;country_code?:string;media_group_slug?:string;editorial_lean?:string|null}>();
-    for (const item of coverage) {
-      const position=positions.get(item.position_id) ?? {id:item.position_id,title:item.position_title,assertions:[]};
-      // Records extracted before the minimum length existed are completed
-      // here from the same source text, so no client shows a two-word quote.
-      const quoted=completeQuote(item.quoted_text,item.article_text,item.article_title);
-      if (codePointLength(position.title) < MINIMUM_QUOTE_CODE_POINTS && position.assertions.length === 0) position.title=quoted;
-      position.assertions.push({id:item.assertion_id,assertion_text:codePointLength(item.assertion_text) < MINIMUM_QUOTE_CODE_POINTS ? quoted : item.assertion_text,quoted_text:quoted,article_id:item.article_id,source_name:item.source_name,
-        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)})});
-      positions.set(item.position_id,position);
-      articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url,
-        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)}),...outlet(item.source_id)});
-    }
-    for (const item of linkedArticles) {
-      articles.set(item.article_id,{id:item.article_id,title:item.article_title,source_name:item.source_name,published_at:iso(item.published_at),url:item.url,
-        ...(followedSourceIds === undefined ? {} : {source_id:item.source_id,is_followed:followedSourceIds.includes(item.source_id)}),...outlet(item.source_id)});
-    }
     return {
       body: {
         ...eventCard(row),
-        ...(followedSourceIds === undefined ? {} : {is_followed_source_match:followedMatch === true}),
-        ...(includeCoverage ? {positions:[...positions.values()],articles:[...articles.values()],
-          contrasts:related.map(item=>({id:item.id,position_a_id:item.position_a_id,position_b_id:item.position_b_id,
-            kind:item.threshold_rule==='v1:editorial_focus_contrast'?'contrast':'contradiction'}))} : {}),
         window: {
           from: iso(row.window_from),
           to: row.window_to === null ? null : iso(row.window_to),
@@ -296,8 +223,7 @@ export class PublicApiService {
       ...new Set(assertionRows.map((assertion) => assertion.span_id)),
     ]);
     const formedByRows = await this.repository.listFormedBy(id);
-    if (formedByRows.length !== row.formed_by_count ||
-        (formedByRows.length === 0 && !row.has_reviewed_single_claim)) {
+    if (formedByRows.length === 0 || formedByRows.length !== row.formed_by_count) {
       throw new TypeError('Public Position formation is incomplete.');
     }
     const formedBy: readonly FormedByDto[] = formedByRows.map((formation) => ({
@@ -382,15 +308,10 @@ export class PublicApiService {
 
   public async contradictions(
     page: PageRequest,
-    followedSourceIds?: readonly string[],
-    country?: PublicCountry,
-    includeCountry = false,
   ): Promise<PublicReadResult<PublicPage<ContradictionDto>>> {
     const rows = await this.repository.listContradictions({
-      ...(country === undefined ? {} : { country }),
       cursor: page.cursor,
       limit: page.limit,
-      ...(followedSourceIds === undefined ? {} : {followedSourceIds}),
     });
     const visible = rows.slice(0, page.limit);
     const last = visible.at(-1);
@@ -402,9 +323,7 @@ export class PublicApiService {
       body: {
         items: visible.map((row) => ({
           id: row.id,
-          ...(followedSourceIds === undefined ? {} : {is_followed_source_match:row.is_followed_source_match === true}),
           event_id: row.event_id,
-          ...(includeCountry && row.country_code !== undefined ? { country_code: row.country_code } : {}),
           event_title: row.event_title,
           position_a: {
             id: row.position_a_id,
@@ -480,15 +399,4 @@ export class PublicApiService {
     }
     return row;
   }
-}
-
-function codePointLength(text: string): number {
-  return Array.from(text.trim()).length;
-}
-
-/** Literal quote of at least the minimum length, else the publication headline. */
-function completeQuote(quotedText: string, articleText: string | null | undefined, headline: string): string {
-  const widened = widenShortQuote(articleText ?? '', quotedText);
-  if (codePointLength(widened) >= MINIMUM_QUOTE_CODE_POINTS) return widened;
-  return codePointLength(headline) > codePointLength(widened) ? headline.trim() : widened;
 }

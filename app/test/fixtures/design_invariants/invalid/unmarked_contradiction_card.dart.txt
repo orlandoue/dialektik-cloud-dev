@@ -1,0 +1,3 @@
+class ContradictionCard {
+  final color = context.operationalColors.error;
+}

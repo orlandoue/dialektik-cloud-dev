@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import { XMLParser } from 'fast-xml-parser';
 import { SyntaxValidator } from 'fast-xml-validator';
 import type { LiveSourcePolicy } from './live.registry.js';
-import { decodeCommonHtmlEntities } from './html-entities.js';
 
 export const LIVE_ADAPTER_VERSION = 'product-live-rss-atom-v1';
 export const MAX_LIVE_FEED_BYTES = 2_000_000;
@@ -64,33 +63,9 @@ const entities: Readonly<Record<string, string>> = {
   rdquo: '”',
 };
 
-const EXCERPT_MAX_CHARACTERS = 700;
-export const CITATION_EXCERPT_MAX_CHARACTERS = 300;
-
-function excerptKey(value: string): string {
-  return value
-    .normalize('NFKC')
-    .toLocaleLowerCase('es-CL')
-    .replace(/[.!?…]+$/u, '')
-    .trim();
-}
-
-function boundedFeedExcerpt(
-  value: string | null,
-  headline: string | null,
-  maximum = EXCERPT_MAX_CHARACTERS,
-): string | null {
-  if (value === null || headline === null || excerptKey(value) === excerptKey(headline)) return null;
-  const characters = Array.from(value);
-  if (characters.length <= maximum) return value;
-  const bounded = characters.slice(0, maximum).join('');
-  const lastWordBoundary = bounded.lastIndexOf(' ');
-  return (lastWordBoundary >= Math.floor(maximum * 0.7) ? bounded.slice(0, lastWordBoundary) : bounded).trim();
-}
-
 export function cleanLiveText(input: string | null): string | null {
   if (input === null) return null;
-  const clean = decodeCommonHtmlEntities(input)
+  const clean = input
     .replace(/&(#x[\da-f]+|#\d+|[a-z]+);/gi, (whole: string, name: string) => {
       if (name.startsWith('#')) {
         const code = name.toLowerCase().startsWith('#x')
@@ -206,41 +181,14 @@ function itemFromEntry(
       // An absent or malformed item declaration stays undetermined.
     }
   }
-  const summary = cleanLiveText(textValue(atom ? item.summary : item.description));
-  const encodedContent = cleanLiveText(
-    textValue(atom ? (item.content ?? namespacedValue(item, 'content')) : namespacedValue(item, 'encoded')),
-  );
-  // YouTube's official Atom feed nests its publisher-provided description in
-  // media:group/media:description instead of Atom's summary/content elements.
-  const mediaGroup = record(namespacedValue(item, 'group'));
-  const mediaDescription = cleanLiveText(
-    textValue(namespacedValue(mediaGroup, 'description')),
-  );
-  const excerptCandidate = [summary, encodedContent, mediaDescription].find(
-    (candidate) =>
-      candidate !== null &&
-      headline !== null &&
-      excerptKey(candidate) !== excerptKey(headline),
-  ) ?? null;
-  // headline_and_citation_only sources keep a shorter excerpt: enough to
-  // match the occurrence and quote it, never a substitute for the article.
-  const citationOnly = policy.ingestionMode === 'headline_and_citation_only';
-  const rawExcerpt = boundedFeedExcerpt(
-    excerptCandidate,
-    headline,
-    citationOnly ? CITATION_EXCERPT_MAX_CHARACTERS : EXCERPT_MAX_CHARACTERS,
-  );
+  const rawExcerpt = textValue(atom ? item.summary : item.description);
   const declaredRights = textValue(item.rights ?? item.copyright ?? item['dc:rights']);
   const declaredUpstream = cleanLiveText(textValue(item['dc:source'] ?? item.source));
   const decodedRights = [
     textValue(item.title),
     rawExcerpt,
     declaredRights,
-    // A publisher's own feed-wide notice («Copyright 2026 The New York Times
-    // Company») does not mark third-party material; for sources the owner
-    // reviewed as headline_and_citation_only it is not a rejection reason.
-    // Item-level rights, credits and external upstreams still are.
-    citationOnly && policy.publisherCopyrightNotice === 'ACCEPTED' ? null : feedRights,
+    feedRights,
     declaredUpstream,
   ]
     .map(cleanLiveText)
@@ -269,7 +217,10 @@ function itemFromEntry(
     discoveredUrl,
     canonicalUrl,
     headline,
-    excerpt: policy.storagePolicy === 'METADATA_AND_FEED_EXCERPT' && !thirdParty ? rawExcerpt : null,
+    excerpt:
+      policy.storagePolicy === 'METADATA_AND_FEED_EXCERPT' && !thirdParty
+        ? cleanLiveText(rawExcerpt)
+        : null,
     author: cleanLiveText(
       textValue(atom ? record(item.author).name : (item.author ?? item['dc:creator'])),
     ),
@@ -285,91 +236,9 @@ function itemFromEntry(
   };
 }
 
-const SITEMAP_NAMESPACE = 'http://www.sitemaps.org/schemas/sitemap/0.9';
-const NEWS_SITEMAP_NAMESPACE = 'http://www.google.com/schemas/sitemap-news/0.9';
-
-function namespacedValue(value: Record<string, unknown>, localName: string): unknown {
-  const key = Object.keys(value).find((candidate) =>
-    candidate === localName || candidate.endsWith(`:${localName}`),
-  );
-  return key === undefined ? undefined : value[key];
-}
-
-function newsSitemapEntries(parsed: unknown, policy: LiveSourcePolicy): unknown[] {
-  const root = record(parsed);
-  const sitemap = record(root.urlset);
-  if (root.urlset === undefined) throw new Error('UNSUPPORTED_NEWS_SITEMAP_FORMAT');
-  const sitemapNamespace = sitemap['@_xmlns'];
-  const newsNamespace = Object.entries(sitemap).find(
-    ([key, value]) => key.startsWith('@_xmlns:') && value === NEWS_SITEMAP_NAMESPACE,
-  );
-  if (
-    (sitemapNamespace !== undefined && sitemapNamespace !== SITEMAP_NAMESPACE) ||
-    newsNamespace === undefined
-  ) {
-    throw new Error('NEWS_SITEMAP_NAMESPACE_INVALID');
-  }
-  const urls = array(sitemap.url);
-  if (urls.length > MAX_LIVE_FEED_ITEMS) throw new Error('FEED_ITEM_LIMIT_EXCEEDED');
-  return urls.map((rawEntry) => {
-    const entry = record(rawEntry);
-    const news = record(namespacedValue(entry, 'news'));
-    const publication = record(namespacedValue(news, 'publication'));
-    const publicationName = cleanLiveText(textValue(namespacedValue(publication, 'name')));
-    const language = cleanLiveText(textValue(namespacedValue(publication, 'language')));
-    if (publicationName !== policy.publisherName || language !== policy.language) {
-      throw new Error('NEWS_SITEMAP_PUBLICATION_IDENTITY_MISMATCH');
-    }
-    return {
-      guid: entry.loc,
-      link: entry.loc,
-      title: namespacedValue(news, 'title'),
-      pubDate: namespacedValue(news, 'publication_date'),
-      'dc:language': language,
-    };
-  });
-}
-
 export interface ParsedLiveFeedBatches {
   readonly itemCount: number;
   readonly batches: Iterable<readonly LiveDiscoveredItem[]>;
-}
-
-/** Count XML elements, not HTML or apparent tags inside CDATA, comments or attributes. */
-function assertBoundedFeedNesting(payload: string): void {
-  let depth = 0;
-  let cursor = 0;
-  while (cursor < payload.length) {
-    const start = payload.indexOf('<', cursor);
-    if (start === -1) return;
-    const special = payload.startsWith('<![CDATA[', start)
-      ? { end: ']]>', offset: 9 }
-      : payload.startsWith('<!--', start)
-        ? { end: '-->', offset: 4 }
-        : payload.startsWith('<?', start)
-          ? { end: '?>', offset: 2 }
-          : null;
-    if (special !== null) {
-      const end = payload.indexOf(special.end, start + special.offset);
-      if (end === -1) throw new Error('INVALID_FEED_XML');
-      cursor = end + special.end.length;
-      continue;
-    }
-    let quote: string | null = null;
-    let end = start + 1;
-    for (; end < payload.length; end++) {
-      const character = payload[end];
-      if (quote !== null) {
-        if (character === quote) quote = null;
-      } else if (character === '"' || character === "'") quote = character;
-      else if (character === '>') break;
-    }
-    if (end >= payload.length) throw new Error('INVALID_FEED_XML');
-    if (payload[start + 1] === '/') depth--;
-    else if (!payload.slice(start + 1, end).trimEnd().endsWith('/')) depth++;
-    if (depth > 32) throw new Error('FEED_NESTING_TOO_DEEP');
-    cursor = end + 1;
-  }
 }
 
 export function parseLiveFeedBatches(
@@ -384,8 +253,13 @@ export function parseLiveFeedBatches(
   } catch {
     throw new Error('INVALID_FEED_XML');
   }
-  // Bound actual XML nesting before allocating parser output.
-  assertBoundedFeedNesting(payload);
+  // Bound nesting before allocating parser output; feeds need only a small XML tree.
+  let depth = 0;
+  for (const match of payload.matchAll(/<\/?[a-zA-Z][^>]*>/g)) {
+    if (match[0].startsWith('</')) depth--;
+    else if (!match[0].endsWith('/>')) depth++;
+    if (depth > 32) throw new Error('FEED_NESTING_TOO_DEEP');
+  }
   const parser = new XMLParser({
     ignoreAttributes: false,
     parseTagValue: false,
@@ -401,16 +275,10 @@ export function parseLiveFeedBatches(
   }
   const root = record(parsed);
   const atom = root.feed !== undefined;
-  const sitemap = policy.discoveryChannel === 'news_sitemap';
   const channel = atom ? record(root.feed) : record(record(root.rss).channel);
-  const entries = sitemap
-    ? newsSitemapEntries(parsed, policy)
-    : atom
-      ? array(channel.entry)
-      : array(channel.item);
+  const entries = atom ? array(channel.entry) : array(channel.item);
   const feedRights = textValue(channel.rights ?? channel.copyright ?? channel['dc:rights']);
-  if (!sitemap && root.feed === undefined && root.rss === undefined)
-    throw new Error('UNSUPPORTED_FEED_FORMAT');
+  if (root.feed === undefined && root.rss === undefined) throw new Error('UNSUPPORTED_FEED_FORMAT');
   if (entries.length > MAX_LIVE_FEED_ITEMS) throw new Error('FEED_ITEM_LIMIT_EXCEEDED');
   const hash = liveHash(payload);
   return {

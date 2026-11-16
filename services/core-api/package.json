@@ -9,6 +9,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "acquire:govuk-rsh": "node dist/live/govuk-product-acquisition.cli.mjs",
+    "test:govuk-rsh-one-shot:pg17": "node test/govuk-rsh-one-shot.pg17.mjs",
+    "test:attack044-clean:pg17": "node test/attack044-clean-one-shot.pg17.mjs",
     "start": "node --env-file-if-exists=.env dist/main.js"
   },
   "dependencies": {
@@ -24,7 +26,6 @@
     "rxjs": "7.8.2"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "0.5.13",
     "@nestjs/testing": "12.0.1"
   }
 }

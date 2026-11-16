@@ -1,0 +1,3 @@
+// dialektik:epistemic-component
+final ColorScheme palette = Theme.of(context).colorScheme;
+final errorInk = palette.error;

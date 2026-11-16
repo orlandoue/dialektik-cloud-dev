@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final card = Card(elevation: 2);

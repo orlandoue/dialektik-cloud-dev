@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final mutedInk = context.epistemicColors.ink.withValues(alpha: 0.45);

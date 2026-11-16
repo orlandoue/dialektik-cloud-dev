@@ -1,0 +1,6 @@
+// dialektik:epistemic-component
+final decoration = BoxDecoration(
+  color: isPrimary
+      ? context.surfaceColors.raised
+      : context.surfaceColors.base,
+);

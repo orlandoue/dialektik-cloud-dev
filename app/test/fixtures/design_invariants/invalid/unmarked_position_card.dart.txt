@@ -1,0 +1,3 @@
+class PositionCard {
+  final color = context.operationalColors.error;
+}

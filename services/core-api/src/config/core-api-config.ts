@@ -12,14 +12,11 @@ export interface CoreApiConfig {
   readonly databasePoolMax: number;
   readonly databaseUrl: string;
   readonly databaseCaCertificate?: string;
-  readonly moderationDatabaseUrl?: string;
   readonly host: string;
   readonly logLevel: CoreApiLogLevel;
   readonly nodeEnvironment: NodeEnvironment;
   readonly port: number;
   readonly supabaseAuthIssuer: string;
-  /** Reverse proxies in front of the API whose X-Forwarded-For is trusted (Render: 1). */
-  readonly trustedProxyHops?: number;
   readonly semanticMode?: 'disabled' | 'fixture' | 'unassigned';
   readonly ownershipMode?: 'corporate' | 'personal';
   readonly personalOwnerId?: string;
@@ -28,7 +25,6 @@ export interface CoreApiConfig {
 
 const DEFAULT_PORT = 3000;
 const DEFAULT_POOL_MAX = 10;
-const DEFAULT_TRUSTED_PROXY_HOPS = 1;
 const DEFAULT_SUPABASE_AUTH_ISSUER =
   'https://vclsswwfhljczxgnsciq.supabase.co/auth/v1';
 
@@ -105,24 +101,6 @@ function readDatabaseUrl(source: NodeJS.ProcessEnv): string {
     throw new Error('DATABASE_URL must identify a host and database');
   }
 
-  return raw;
-}
-
-function readModerationDatabaseUrl(source: NodeJS.ProcessEnv): string | undefined {
-  const raw = source.MODERATION_DATABASE_URL?.trim();
-  if (raw === undefined || raw.length === 0) return undefined;
-  let parsed: URL;
-  try {
-    parsed = new URL(raw);
-  } catch {
-    throw new Error('MODERATION_DATABASE_URL must be a valid PostgreSQL URL');
-  }
-  if (
-    (parsed.protocol !== 'postgres:' && parsed.protocol !== 'postgresql:') ||
-    parsed.hostname.length === 0 || parsed.pathname.length <= 1
-  ) {
-    throw new Error('MODERATION_DATABASE_URL must identify a PostgreSQL host and database');
-  }
   return raw;
 }
 
@@ -221,13 +199,11 @@ export function loadCoreApiConfig(
   }
 
   const databaseCaCertificate = readDatabaseCaCertificate(source);
-  const moderationDatabaseUrl = readModerationDatabaseUrl(source);
 
   return Object.freeze({
     databasePoolMax: readInteger(source, 'DATABASE_POOL_MAX', DEFAULT_POOL_MAX, 1, 50),
     databaseUrl: readDatabaseUrl(source),
     ...(databaseCaCertificate === undefined ? {} : { databaseCaCertificate }),
-    ...(moderationDatabaseUrl === undefined ? {} : { moderationDatabaseUrl }),
     host,
     logLevel: readEnum(source, 'CORE_API_LOG_LEVEL', logLevels, defaultLogLevel),
     nodeEnvironment,
@@ -237,6 +213,5 @@ export function loadCoreApiConfig(
     semanticMode: requestedMode as 'disabled' | 'fixture' | 'unassigned',
     port: readInteger(source, 'CORE_API_PORT', DEFAULT_PORT, 1, 65_535),
     supabaseAuthIssuer: readSupabaseAuthIssuer(source),
-    trustedProxyHops: readInteger(source, 'CORE_API_TRUSTED_PROXY_HOPS', DEFAULT_TRUSTED_PROXY_HOPS, 0, 5),
   });
 }

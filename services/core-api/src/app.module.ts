@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import type { DynamicModule } from '@nestjs/common';
 
-import { PasswordRecoveryController } from './auth/password-recovery.controller.js';
 import { CoreApiConfigModule } from './config/core-api-config.module.js';
 import type { CoreApiConfig } from './config/core-api-config.js';
 import { CoreDatabaseModule } from './database/core-database.module.js';
@@ -32,7 +31,6 @@ export class AppModule {
         PersonalOwnerModule.register(config),
       ],
       module: AppModule,
-      controllers: [PasswordRecoveryController],
       providers: [CoreLifecycleService],
     };
   }

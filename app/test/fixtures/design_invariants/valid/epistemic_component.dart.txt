@@ -1,0 +1,15 @@
+// dialektik:epistemic-component
+// Examples such as OperationalNotice and BoxShadow are documentation, not code.
+const rejectedExample = 'Theme.of(context).colorScheme.error';
+final presentation = EpistemicPresentation.forRole(
+  EpistemicVisualRole.nonComparable,
+);
+final sharedInk = context.epistemicColors.ink;
+final interactionInk = context.surfaceColors.interactionAccent;
+final staticRaisedSurface = context.surfaceColors.raised;
+final staticStyle = TextStyle(
+  fontWeight: FontWeight.w500,
+  fontSize: DialektikTypography.publicBodyMinimum,
+);
+final staticMarker = SizedBox(width: DialektikBorders.anchorWidth);
+final flatCard = Card(elevation: 0);

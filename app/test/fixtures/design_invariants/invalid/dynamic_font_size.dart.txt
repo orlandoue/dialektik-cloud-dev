@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+final style = TextStyle(fontSize: isPrimary ? 18 : 16);

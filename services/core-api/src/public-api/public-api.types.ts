@@ -13,20 +13,12 @@ export interface EventCardDto {
   readonly analysis_state: AnalysisState;
   readonly source_count: number;
   readonly position_count: number | null;
-  readonly synthesis_relation?: 'CONTRADICTION' | 'DIFFERENT_FOCUS' | 'DEVELOPING' | 'TREND' | null;
-  readonly is_followed_source_match?: boolean;
-  readonly country_code?: string;
 }
 
 export interface EventDetailDto extends EventCardDto {
   readonly window: Readonly<{ from: string; to: string | null }>;
   readonly primary_fact: PrimaryFactDto | null;
   readonly merged_into: null;
-  readonly positions?: readonly Readonly<{ id: string; title: string; assertions: readonly Readonly<{
-    id: string; assertion_text: string; quoted_text: string; article_id: string; source_name: string; source_id?: string; is_followed?: boolean;
-  }>[] }>[];
-  readonly articles?: readonly Readonly<{ id: string; title: string; source_name: string; published_at: string; url: string; source_id?: string; is_followed?: boolean }>[];
-  readonly contrasts?: readonly Readonly<{ id: string; position_a_id: string; position_b_id: string; kind: string }>[];
 }
 
 export interface PrimaryFactDto {
@@ -125,8 +117,6 @@ export interface RelationshipEndpointDto {
 }
 
 export interface ContradictionDto {
-  readonly is_followed_source_match?: boolean;
-  readonly country_code?: string;
   readonly id: string;
   readonly event_id: string;
   readonly event_title: string;

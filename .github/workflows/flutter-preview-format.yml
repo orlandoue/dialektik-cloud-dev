@@ -1,0 +1,43 @@
+name: Flutter official preview formatting
+# UX compact event card final
+# Final pinned format pass for curated Chile event evidence models
+# Final pinned format pass for official multi-news beta UI
+
+on:
+  push:
+    branches: [codex/cloud-flutter-pilot-20261018]
+    paths: ['.github/workflows/flutter-preview-format.yml']
+
+permissions:
+  contents: write
+
+jobs:
+  format-preview:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: true
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2
+        with:
+          flutter-version: '3.38.3'
+          channel: stable
+          cache: true
+      - name: Format official preview UI and tests
+        run: |
+          dart format app/lib/app/dialektik_app.dart app/lib/features/live/data/govuk_preview.dart app/lib/features/live/presentation/live_news_screens.dart app/test/live/govuk_preview_test.dart app/lib/features/consumer/data/curated_event_preview.dart app/lib/features/consumer/data/public_api_client.dart app/lib/features/consumer/presentation/screens/feed_screen.dart app/lib/features/consumer/presentation/navigation/consumer_routes.dart app/lib/features/consumer/presentation/widgets/curated_event_preview_card.dart app/test/consumer/curated_event_preview_test.dart
+          git diff --stat
+      - name: Commit formatted Dart files to cloud pilot
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app/lib/app/dialektik_app.dart app/lib/features/live/data/govuk_preview.dart app/lib/features/live/presentation/live_news_screens.dart app/test/live/govuk_preview_test.dart app/lib/features/consumer/data/curated_event_preview.dart app/lib/features/consumer/data/public_api_client.dart app/lib/features/consumer/presentation/screens/feed_screen.dart app/lib/features/consumer/presentation/navigation/consumer_routes.dart app/lib/features/consumer/presentation/widgets/curated_event_preview_card.dart app/test/consumer/curated_event_preview_test.dart
+          if git diff --cached --quiet; then
+            echo "Dart formatting unchanged"
+            exit 0
+          fi
+          git commit -m "style(flutter): format GOV.UK preview UI using pinned Dart"
+          git push origin HEAD:refs/heads/codex/cloud-flutter-pilot-20261018

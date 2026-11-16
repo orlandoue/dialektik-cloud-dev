@@ -1,0 +1,2 @@
+// dialektik:epistemic-component
+return Opacity(opacity: 0.45, child: position);
