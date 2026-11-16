@@ -14,6 +14,8 @@ import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
+import 'package:dialektik/features/science/presentation/science_feed.dart';
+import 'package:dialektik/features/science/presentation/science_widgets.dart';
 import 'package:flutter/material.dart';
 
 /// The catalog countries; only the active ones can be chosen. Lives in
@@ -124,43 +126,92 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 6, 6, 2),
-          child: Row(
-            children: <Widget>[
-              const Expanded(
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text('Dialektik', style: ArenaText.brand),
-                ),
-              ),
-              IconButton(
-                key: const Key('arena-search'),
-                tooltip: 'Buscar',
-                color: ArenaColors.ink,
-                onPressed: () => Navigator.of(context).push(
-                  MaterialPageRoute<void>(
-                    builder: (_) => ArenaSearchScreen(store: store),
+        // Logo, mode and search. The mode takes the place of the country.
+        ListenableBuilder(
+          listenable: store,
+          builder: (BuildContext context, _) => Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 16, 6),
+            child: Row(
+              children: <Widget>[
+                Expanded(
+                  child: Row(
+                    children: <Widget>[
+                      const Flexible(
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            'Dialektik',
+                            style: TextStyle(
+                              fontFamily: SciText.serif,
+                              fontSize: 24,
+                              fontWeight: FontWeight.w700,
+                              color: SciColors.ink,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Flexible(
+                        child: ModeButton(
+                          mode: store.mode,
+                          onTap: () async {
+                            final ArenaMode? chosen = await showModeSheet(
+                              context,
+                              store.mode,
+                            );
+                            if (chosen != null) store.setMode(chosen);
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-                icon: const Icon(Icons.search),
-              ),
-              IconButton(
-                key: const Key('arena-alerts'),
-                tooltip: 'Novedades de lo que sigues',
-                color: ArenaColors.ink,
-                onPressed: _openAlerts,
-                icon: const Icon(Icons.notifications_none),
-              ),
-            ],
+                IconButton(
+                  key: const Key('arena-search'),
+                  tooltip: 'Buscar',
+                  color: SciColors.ink,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 44,
+                    height: 44,
+                  ),
+                  padding: EdgeInsets.zero,
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) => ArenaSearchScreen(store: store),
+                    ),
+                  ),
+                  icon: const Icon(SciIcons.search, size: 22),
+                ),
+                // Not in the Science mockup: General keeps its alerts.
+                if (store.mode == ArenaMode.general)
+                  IconButton(
+                    key: const Key('arena-alerts'),
+                    tooltip: 'Novedades de lo que sigues',
+                    color: SciColors.ink,
+                    constraints: const BoxConstraints.tightFor(
+                      width: 44,
+                      height: 44,
+                    ),
+                    padding: EdgeInsets.zero,
+                    onPressed: _openAlerts,
+                    icon: const Icon(Icons.notifications_none, size: 22),
+                  ),
+              ],
+            ),
           ),
         ),
         Expanded(
-          child: _Coliseo(
-            store: store,
-            onOpenMedia: widget.onOpenMedia,
-            onOpenStories: widget.onOpenStories,
+          child: ListenableBuilder(
+            listenable: store,
+            builder: (BuildContext context, _) =>
+                store.mode == ArenaMode.ciencia
+                ? ScienceFeed(store: store)
+                : _Coliseo(
+                    store: store,
+                    onOpenMedia: widget.onOpenMedia,
+                    onOpenStories: widget.onOpenStories,
+                  ),
           ),
         ),
       ],

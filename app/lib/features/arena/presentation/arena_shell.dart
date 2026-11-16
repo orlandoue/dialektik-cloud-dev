@@ -10,6 +10,7 @@ import 'package:dialektik/features/consumer/presentation/external_links.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/presentation/source_radar.dart';
+import 'package:dialektik/features/science/presentation/science_widgets.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -184,58 +185,68 @@ class _ArenaShellState extends State<ArenaShell> {
             ),
         ],
       ),
-      bottomNavigationBar: DecoratedBox(
-        decoration: const BoxDecoration(
-          border: Border(top: BorderSide(color: ArenaColors.border)),
-        ),
-        // Labels stay on one line: large system text is capped in the bar
-        // only, never in the content above it.
-        child: MediaQuery.withClampedTextScaling(
-          maxScaleFactor: 1.15,
-          child: BottomNavigationBar(
-            key: const Key('arena-bottom-navigation'),
-            type: BottomNavigationBarType.fixed,
-            backgroundColor: ArenaColors.card,
-            elevation: 0,
-            currentIndex: _tab.index,
-            onTap: (int index) => _select(ArenaTab.values[index]),
-            selectedItemColor: ArenaColors.violet,
-            unselectedItemColor: ArenaColors.muted,
-            selectedFontSize: 12,
-            unselectedFontSize: 12,
-            selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
-            items: const <BottomNavigationBarItem>[
-              BottomNavigationBarItem(
-                icon: Icon(Icons.home_outlined),
-                activeIcon: Icon(Icons.home),
-                label: 'Inicio',
-                tooltip: 'Inicio',
+      bottomNavigationBar: ListenableBuilder(
+        listenable: _store,
+        builder: (BuildContext context, _) => _store.mode == ArenaMode.ciencia
+            ? SciBottomBar(
+                current: _tab.index,
+                onSelected: (int index) => _select(ArenaTab.values[index]),
+              )
+            : DecoratedBox(
+                decoration: const BoxDecoration(
+                  border: Border(top: BorderSide(color: ArenaColors.border)),
+                ),
+                // Labels stay on one line: large system text is capped in the bar
+                // only, never in the content above it.
+                child: MediaQuery.withClampedTextScaling(
+                  maxScaleFactor: 1.15,
+                  child: BottomNavigationBar(
+                    key: const Key('arena-bottom-navigation'),
+                    type: BottomNavigationBarType.fixed,
+                    backgroundColor: ArenaColors.card,
+                    elevation: 0,
+                    currentIndex: _tab.index,
+                    onTap: (int index) => _select(ArenaTab.values[index]),
+                    selectedItemColor: ArenaColors.violet,
+                    unselectedItemColor: ArenaColors.muted,
+                    selectedFontSize: 12,
+                    unselectedFontSize: 12,
+                    selectedLabelStyle: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                    ),
+                    items: const <BottomNavigationBarItem>[
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.home_outlined),
+                        activeIcon: Icon(Icons.home),
+                        label: 'Inicio',
+                        tooltip: 'Inicio',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: _VsIcon(),
+                        label: 'VS',
+                        tooltip: 'VS',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.auto_stories_outlined),
+                        activeIcon: Icon(Icons.auto_stories),
+                        label: 'Historias',
+                        tooltip: 'Historias',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.cell_tower),
+                        label: 'Medios',
+                        tooltip: 'Medios',
+                      ),
+                      BottomNavigationBarItem(
+                        icon: Icon(Icons.person_outline),
+                        activeIcon: Icon(Icons.person),
+                        label: 'Perfil',
+                        tooltip: 'Perfil',
+                      ),
+                    ],
+                  ),
+                ),
               ),
-              BottomNavigationBarItem(
-                icon: _VsIcon(),
-                label: 'VS',
-                tooltip: 'VS',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.auto_stories_outlined),
-                activeIcon: Icon(Icons.auto_stories),
-                label: 'Historias',
-                tooltip: 'Historias',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.cell_tower),
-                label: 'Medios',
-                tooltip: 'Medios',
-              ),
-              BottomNavigationBarItem(
-                icon: Icon(Icons.person_outline),
-                activeIcon: Icon(Icons.person),
-                label: 'Perfil',
-                tooltip: 'Perfil',
-              ),
-            ],
-          ),
-        ),
       ),
     ),
   );

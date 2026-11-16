@@ -17,6 +17,8 @@ import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/data/registered_source_directory.dart';
+import 'package:dialektik/features/science/data/science_models.dart';
+import 'package:dialektik/features/science/data/science_repository.dart';
 import 'package:dialektik/features/semantic/data/semantic_models.dart';
 import 'package:dialektik/features/semantic/data/semantic_repository.dart';
 import 'package:dialektik/features/semantic_shadow/data/ephemeral_semantic_models.dart';
@@ -53,7 +55,8 @@ final class PublicApiClient
         RegisteredSourceDirectoryRepository,
         SemanticShadowRepository,
         EphemeralSemanticRepository,
-        SemanticGraphRepository {
+        SemanticGraphRepository,
+        ScienceRepository {
   PublicApiClient({
     required ApiConfiguration configuration,
     http.Client? httpClient,
@@ -126,6 +129,71 @@ final class PublicApiClient
   @override
   Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote) =>
     _postJson('/v1/social/community/votes', {'entry_id': entryId, 'vote': vote}, CommunityEntry.listFromJson);
+
+  // Science mode and story comments. Requires API: these routes are new in
+  // Core; until they exist the feed shows its error state and comments fall
+  // back to the community entries (normal comments only).
+  @override
+  Future<List<Study>> listStudies(StudyFilter filter) => _get<List<Study>>(
+    '/v1/science/studies', query: {'filter': filter.wire},
+    decoder: Study.listFromJson, refresh: true, requestToken: null);
+  @override
+  Future<Study> study(String doi) => _get<Study>(
+    '/v1/science/studies/${Uri.encodeComponent(doi)}',
+    decoder: (value) => Study.fromJson(value! as Map<String,dynamic>), refresh: false, requestToken: null);
+  @override
+  Future<List<StoryComment>> storyComments(String eventId) async {
+    try {
+      return await _get<List<StoryComment>>('/v1/stories/${Uri.encodeComponent(eventId)}/comments',
+        decoder: StoryComment.listFromJson, refresh: true, requestToken: null);
+    } on PublicApiFailure catch (failure) {
+      if (failure.kind != PublicFailureKind.notFound) rethrow;
+      return [for (final entry in await communityEntries(eventId)) _commentFromEntry(entry)];
+    }
+  }
+  StoryComment _commentFromEntry(CommunityEntry entry) => StoryComment(
+    id: entry.id, author: entry.author, body: entry.body,
+    createdAt: entry.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
+    reactions: entry.upvotes, reacted: entry.myVote == 1, mine: entry.mine);
+  @override
+  Future<StoryComment> addComment(String eventId, {required String body, String? parentId}) async {
+    try {
+      return await _postJson('/v1/stories/${Uri.encodeComponent(eventId)}/comments',
+        {'body': body, 'parent_id': ?parentId}, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
+    } on PublicApiFailure catch (failure) {
+      if (failure.kind != PublicFailureKind.notFound) rethrow;
+      final entries = await addCommunityEntry(eventId, channel: CommunityChannel.debate, body: body);
+      return _commentFromEntry(entries.firstWhere((e) => e.mine && e.body == body, orElse: () => entries.first));
+    }
+  }
+  @override
+  Future<StoryComment> addStudyComment(String eventId, {required String doi, required String claimQuoteId,
+      required StudyRelation relation, required String abstractFragment, required String body}) async {
+    try {
+      return await _postJson('/v1/stories/${Uri.encodeComponent(eventId)}/study-comments', {
+        'doi': doi, 'claim_quote_id': claimQuoteId, 'relation': relation.wire,
+        'abstract_fragment': abstractFragment, 'body': body,
+      }, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
+    } on PublicApiFailure catch (failure) {
+      if (failure.kind == PublicFailureKind.gone) throw const StudyCommentRejected('retracted');
+      rethrow;
+    }
+  }
+  @override
+  Future<StoryComment> react(String commentId, {required bool reacted}) async {
+    try {
+      return await _postJson('/v1/comments/${Uri.encodeComponent(commentId)}/reactions',
+        {'reacted': reacted}, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
+    } on PublicApiFailure catch (failure) {
+      if (failure.kind != PublicFailureKind.notFound) rethrow;
+      final entries = await voteCommunityEntry(commentId, reacted ? 1 : null);
+      return _commentFromEntry(entries.firstWhere((e) => e.id == commentId));
+    }
+  }
+  @override
+  Future<List<StoryComment>> commentsCitingStudy(String doi) => _get<List<StoryComment>>(
+    '/v1/science/studies/${Uri.encodeComponent(doi)}/comments',
+    decoder: StoryComment.listFromJson, refresh: true, requestToken: null);
 
   Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder) async {
     final token = await authorizationTokenProvider?.call();

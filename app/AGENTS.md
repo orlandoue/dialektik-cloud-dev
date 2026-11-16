@@ -33,6 +33,19 @@ Do not use database types or migrations as the public client contract.
 
 - Flutter lives here; keep product UI out of backend/database packages.
 - Public UI follows current Design System, UX, API, and accessibility authority.
+- Restriction 1 (updated): Dialektik never says who is right. The community
+  may connect a study to a literal claim from a news item and say whether it
+  supports, contradicts, qualifies or gives context to it. That is always shown
+  as a comment signed by its author, never as a seal, colour or verdict of the
+  app. («Dialektik nunca dice quién tiene razón. La comunidad sí puede conectar
+  un estudio a una afirmación literal de una noticia y decir si la respalda,
+  contradice, matiza o da contexto. Eso se muestra siempre como comentario
+  firmado por su autor, nunca como un sello, color o veredicto de la app.»)
+- Science mode: no emoji icons, no aggregated counts («3 contradicen / 0
+  respaldan»), no impact factor or citation counts; unverified study data
+  reads «No informado». Study data comes from Core (Crossref/OpenAlex cached
+  server side, moderator-completed fields), never from the app directly nor
+  from unreviewed AI extraction.
 - Never imply epistemic meaning through color, opacity, size, weight, order,
   count, animation, elevation, or prominence.
 - The seven public no-conclusions from the Architecture Decision remain

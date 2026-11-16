@@ -10,6 +10,8 @@ import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/data/story_follow_store.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
+import 'package:dialektik/features/science/presentation/science_format.dart';
+import 'package:dialektik/features/science/presentation/story_comments.dart';
 import 'package:flutter/material.dart';
 
 /// Pantalla 3 — permanent page of one living event.
@@ -43,17 +45,29 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
   ArenaStore get store => widget.store;
   StoryFollowStore get stories => store.stories;
 
+  /// The «Comentarios» thread of this story (C3).
+  late final StoryCommentsController _comments = StoryCommentsController(
+    store: store,
+    eventId: widget.eventId,
+  );
+
+  static const int commentsTab = 3;
+
   @override
   void initState() {
     super.initState();
     _event = store.cachedDetail(widget.eventId);
     stories.addListener(_changed);
+    _comments.addListener(_changed);
+    unawaited(_comments.load());
     unawaited(_load());
   }
 
   @override
   void dispose() {
     stories.removeListener(_changed);
+    _comments.removeListener(_changed);
+    _comments.dispose();
     super.dispose();
   }
 
@@ -103,20 +117,87 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
   @override
   Widget build(BuildContext context) {
     final EventDetailDto? event = _event;
+    final bool commenting = _tab == commentsTab && event != null;
+    final Color background = commenting
+        ? SciColors.surface
+        : ArenaColors.background;
+    final int mediaCount = event == null
+        ? 0
+        : event.articles
+              .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
+              .toSet()
+              .length;
     return Scaffold(
-      backgroundColor: ArenaColors.background,
+      backgroundColor: background,
+      // Compact header: the case in one line, its topic and outlets, Seguir.
       appBar: AppBar(
-        backgroundColor: ArenaColors.background,
+        backgroundColor: background,
         surfaceTintColor: Colors.transparent,
-        foregroundColor: ArenaColors.ink,
+        foregroundColor: SciColors.ink,
         titleSpacing: 0,
-        title: Text(
-          event?.arenaTitle ?? 'Acontecimiento',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w800),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              event?.arenaTitle ?? 'Acontecimiento',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: SciText.sans,
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: SciColors.ink,
+              ),
+            ),
+            if (event != null)
+              Text(
+                '${arenaTopicOfEvent(event).label} · '
+                '${mediaCountLabel(mediaCount)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontFamily: SciText.sans,
+                  fontSize: 12,
+                  color: SciColors.inkSecondary,
+                ),
+              ),
+          ],
         ),
+        actions: <Widget>[
+          if (event != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 12),
+              child: Center(
+                child: FilledButton(
+                  key: const Key('arena-follow-story'),
+                  onPressed: _followBusy ? null : () => _toggleFollow(event),
+                  style: FilledButton.styleFrom(
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    backgroundColor: stories.contains(event.id)
+                        ? ArenaColors.violetSoft
+                        : SciColors.primary,
+                    foregroundColor: stories.contains(event.id)
+                        ? ArenaColors.violetDeep
+                        : Colors.white,
+                    shape: const StadiumBorder(),
+                    textStyle: const TextStyle(
+                      fontFamily: SciText.sans,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  child: Text(
+                    stories.contains(event.id) ? 'Siguiendo' : 'Seguir',
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
+      bottomNavigationBar: commenting
+          ? CommentComposer(controller: _comments, event: event)
+          : null,
       body: event == null
           ? Center(
               child: _error == null
@@ -155,7 +236,7 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
             (EventCoverageArticleDto a) =>
                 extractYouTubeVideoId(a.url.toString()) == videoId,
           );
-    final bool followingStory = stories.contains(event.id);
+    final bool commenting = _tab == commentsTab;
     final bool quiet =
         timeline.isEmpty ||
         DateTime.now().difference(timeline.last.publishedAt) > quietAfter;
@@ -167,120 +248,112 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
           ..sort(
             (String a, String b) => a.toLowerCase().compareTo(b.toLowerCase()),
           );
-    return ListView(
-      key: const Key('arena-event-scroll'),
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 28),
-      children: <Widget>[
-        // The same compact hero on every tab: one status pill, the case and
-        // when its coverage began.
-        ArenaCover(
-          topic: topic,
-          videoId: videoId,
-          minHeight: 160,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                if (quiet)
-                  const ArenaBadge(
-                    label: 'Sin novedades recientes',
-                    background: Color(0xFFE2E8F0),
-                    foreground: ArenaColors.ink,
-                  )
-                else
-                  const ArenaBadge.live('En desarrollo'),
-                const SizedBox(height: 24),
-                Semantics(
-                  header: true,
-                  child: Text(
-                    event.arenaTitle,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      height: 1.25,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  '${topic.label}'
-                  '${timeline.isEmpty ? '' : ' · desde el ${arenaDate(timeline.first.publishedAt)}'}',
+    final List<Widget> header = <Widget>[
+      // The same compact hero on every tab but Comentarios: one status
+      // pill, the case and when its coverage began.
+      ArenaCover(
+        topic: topic,
+        videoId: videoId,
+        minHeight: 160,
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: <Widget>[
+              if (quiet)
+                const ArenaBadge(
+                  label: 'Sin novedades recientes',
+                  background: Color(0xFFE2E8F0),
+                  foreground: ArenaColors.ink,
+                )
+              else
+                const ArenaBadge.live('En desarrollo'),
+              const SizedBox(height: 24),
+              Semantics(
+                header: true,
+                child: Text(
+                  event.arenaTitle,
                   style: const TextStyle(
-                    fontSize: 13,
-                    color: Color(0xFFE2E8F0),
+                    fontSize: 20,
+                    height: 1.25,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.white,
                   ),
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '${topic.label}'
+                '${timeline.isEmpty ? '' : ' · desde el ${arenaDate(timeline.first.publishedAt)}'}',
+                style: const TextStyle(fontSize: 13, color: Color(0xFFE2E8F0)),
+              ),
+            ],
           ),
         ),
-        if (video != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              key: const Key('arena-event-video'),
-              style: TextButton.styleFrom(
-                foregroundColor: ArenaColors.violet,
-                minimumSize: const Size(44, 44),
-              ),
-              onPressed: () => unawaited(
-                openArenaPiece(
-                  context,
-                  store,
-                  video.url,
-                  title: video.title,
-                  channel: video.sourceName,
-                ),
-              ),
-              icon: const Icon(Icons.play_circle_outline_rounded),
-              label: Text(
-                'Ver video de ${arenaSourceName(video.sourceName)}',
-                style: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+      if (video != null)
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton.icon(
+            key: const Key('arena-event-video'),
+            style: TextButton.styleFrom(
+              foregroundColor: ArenaColors.violet,
+              minimumSize: const Size(44, 44),
+            ),
+            onPressed: () => unawaited(
+              openArenaPiece(
+                context,
+                store,
+                video.url,
+                title: video.title,
+                channel: video.sourceName,
               ),
             ),
-          )
-        else
-          const SizedBox(height: 12),
-        // Who covers the case, once, next to the follow button.
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Text(
-                '${media.length} ${media.length == 1 ? 'medio' : 'medios'}'
-                '${media.isEmpty ? '' : ' · ${media.join(', ')}'}',
-                style: ArenaText.cardTitle,
-              ),
+            icon: const Icon(Icons.play_circle_outline_rounded),
+            label: Text(
+              'Ver video de ${arenaSourceName(video.sourceName)}',
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
-            const SizedBox(width: 12),
-            ArenaFollowButton(
-              key: const Key('arena-follow-story'),
-              following: followingStory,
-              onPressed: _followBusy ? null : () => _toggleFollow(event),
-            ),
-          ],
-        ),
+          ),
+        )
+      else
         const SizedBox(height: 12),
-        ArenaSubTabs(
-          labels: const <String>['Resumen', 'Cronología', 'Citas'],
+      // Who covers the case, once.
+      Text(
+        '${mediaCountLabel(media.length)}'
+        '${media.isEmpty ? '' : ' · ${media.join(', ')}'}',
+        style: ArenaText.cardTitle,
+      ),
+      const SizedBox(height: 12),
+    ];
+    Widget padded(Widget child) => Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: child,
+    );
+    return ListView(
+      key: const Key('arena-event-scroll'),
+      padding: const EdgeInsets.only(top: 4, bottom: 28),
+      children: <Widget>[
+        if (!commenting) ...header.map(padded),
+        StoryTabs(
+          labels: <String>[
+            'Resumen',
+            'Cronología',
+            'Citas',
+            'Comentarios ${_comments.total}',
+          ],
           selected: _tab,
           onSelected: (int value) => setState(() => _tab = value),
         ),
-        const SizedBox(height: 10),
-        // The case's community is one tap away from every tab.
-        OutlinedButton.icon(
-          key: const Key('arena-open-community'),
-          onPressed: () => openArenaCommunity(context, store, event),
-          style: arenaSecondaryButtonStyle(),
-          icon: const Icon(Icons.forum_outlined),
-          label: const Text('Comunidad del caso'),
-        ),
-        const SizedBox(height: 14),
-        if (_tab == 0) ..._summary(context, event, timeline),
-        if (_tab == 1) ..._timeline(context, timeline),
-        if (_tab == 2) ..._quotes(context, event),
+        if (commenting)
+          ...storyCommentsChildren(context, _comments, event)
+        else ...<Widget>[
+          const SizedBox(height: 14),
+          if (_tab == 0) ..._summary(context, event, timeline).map(padded),
+          if (_tab == 1) ..._timeline(context, timeline).map(padded),
+          if (_tab == 2) ..._quotes(context, event).map(padded),
+        ],
       ],
     );
   }

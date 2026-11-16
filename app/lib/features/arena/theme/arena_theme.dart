@@ -68,3 +68,93 @@ BoxDecoration arenaCardDecoration({
     width: borderWidth,
   ),
 );
+
+/// Tokens of the Science mode and story comments (C1–C4). Kept apart from
+/// [ArenaColors]: `primary` and `ink` differ slightly from the Arena values.
+abstract final class SciColors {
+  static const Color primary = Color(0xFF5B3FF5);
+  static const Color primaryText = Color(0xFF4C33D9);
+  static const Color bgApp = Color(0xFFF6F6F9);
+  static const Color surface = Color(0xFFFFFFFF);
+  static const Color ink = Color(0xFF111827);
+
+  /// Never lighter than this for text.
+  static const Color inkSecondary = Color(0xFF4B5563);
+  static const Color borderCard = Color(0xFFE5E7EB);
+  static const Color borderControl = Color(0xFFD1D5DB);
+  static const Color divider = Color(0xFFF1F2F4);
+  static const Color tagBg = Color(0xFFF1F2F4);
+  static const Color tagText = Color(0xFF374151);
+
+  /// Reserved; not used in story comments.
+  static const Color communityBand = Color(0xFFEEF2F7);
+  static const Color scrim = Color(0x80111827);
+}
+
+/// Inter scale of the Science mode; Merriweather only for literal quotes
+/// and study titles inside study labels.
+abstract final class SciText {
+  static const String serif = 'Merriweather';
+  static const String sans = 'Inter';
+
+  static const TextStyle h1 = TextStyle(
+    fontFamily: sans,
+    fontSize: 20,
+    height: 26 / 20,
+    fontWeight: FontWeight.w600,
+    color: SciColors.ink,
+  );
+  static const TextStyle cardTitle = TextStyle(
+    fontFamily: sans,
+    fontSize: 16,
+    height: 22 / 16,
+    fontWeight: FontWeight.w600,
+    color: SciColors.ink,
+  );
+  static const TextStyle body = TextStyle(
+    fontFamily: sans,
+    fontSize: 15,
+    height: 22 / 15,
+    color: SciColors.ink,
+  );
+  static const TextStyle secondary = TextStyle(
+    fontFamily: sans,
+    fontSize: 14,
+    height: 20 / 14,
+    color: SciColors.inkSecondary,
+  );
+  static const TextStyle meta = TextStyle(
+    fontFamily: sans,
+    fontSize: 13,
+    height: 18 / 13,
+    color: SciColors.inkSecondary,
+  );
+  static const TextStyle label = TextStyle(
+    fontFamily: sans,
+    fontSize: 12,
+    height: 16 / 12,
+    color: SciColors.inkSecondary,
+  );
+  static const TextStyle micro = TextStyle(
+    fontFamily: sans,
+    fontSize: 11,
+    height: 14 / 11,
+    color: SciColors.inkSecondary,
+  );
+  static const TextStyle quote = TextStyle(
+    fontFamily: serif,
+    fontSize: 14,
+    height: 20 / 14,
+    color: SciColors.ink,
+  );
+}
+
+/// Radii of the Science mode.
+abstract final class SciRadius {
+  static const double card = 16;
+  static const double fullButton = 14;
+  static const double rowButton = 12;
+  static const double pill = 22;
+  static const double studyLabel = 4;
+  static const double sheet = 20;
+}

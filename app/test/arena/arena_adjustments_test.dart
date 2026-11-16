@@ -160,7 +160,7 @@ void main() {
   }
 
   testWidgets(
-    'acontecimiento vivo: resumen sustantivo y fila única de seguir',
+    'acontecimiento vivo: resumen sustantivo y Seguir en la cabecera',
     (WidgetTester tester) async {
       await pumpArena(
         tester,
@@ -170,15 +170,19 @@ void main() {
       await tester.tap(find.text(steinertTitle));
       await tester.pumpAndSettle();
 
-      final Finder sources = find.textContaining('2 medios · ');
+      // Compact header: the case, its topic and outlets, and «Seguir».
       final Finder follow = find.byKey(const Key('arena-follow-story'));
       expect(
-        tester.getCenter(sources).dy,
-        closeTo(tester.getCenter(follow).dy, 12),
+        find.descendant(of: find.byType(AppBar), matching: follow),
+        findsOneWidget,
       );
+      expect(tester.getSize(follow).height, greaterThanOrEqualTo(44));
       expect(
-        tester.getCenter(sources).dx,
-        lessThan(tester.getCenter(follow).dx),
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.textContaining('2 medios'),
+        ),
+        findsOneWidget,
       );
       expect(find.textContaining('Sin seguir'), findsNothing);
 
