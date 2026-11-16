@@ -1,5 +1,5 @@
 import { Inject, Injectable } from '@nestjs/common';
-import { sql } from 'kysely';
+import { CompiledQuery, Kysely, PostgresDialect, sql } from 'kysely';
 
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { LiveRepository } from '../live/live.repository.js';
@@ -21,7 +21,11 @@ export interface QueryTiming {
 
 export interface QueryLatencyReport {
   readonly generatedAt: string;
+  /** Deployed commit (Render sets RENDER_GIT_COMMIT), to tell which code answered. */
+  readonly build: string | null;
   readonly profilesAvailable: boolean;
+  /** Costliest plan nodes of the Chilean live news read: node, table or index, ms. */
+  readonly liveNewsPlan: readonly string[];
   readonly timings: Readonly<Record<string, QueryTiming>>;
   readonly database: {
     readonly sizeMb: number | null;
@@ -31,6 +35,15 @@ export interface QueryLatencyReport {
     readonly articles: number | null;
     readonly articlesLast24hByCountry: Readonly<Record<string, number>>;
   };
+}
+
+interface PlanNode {
+  readonly 'Node Type': string;
+  readonly 'Relation Name'?: string;
+  readonly 'Index Name'?: string;
+  readonly 'Actual Total Time'?: number;
+  readonly 'Actual Loops'?: number;
+  readonly Plans?: readonly PlanNode[];
 }
 
 const CACHE_MS = 120_000;
@@ -67,6 +80,55 @@ export class QueryLatencyService {
       return { ms: Math.round(performance.now() - started), rows: null, error: code };
     } finally {
       if (timer) clearTimeout(timer);
+    }
+  }
+
+  /** The SQL and parameters LiveRepository.list sends, without running it. */
+  async #liveNewsQuery(): Promise<{ sql: string; parameters: readonly unknown[] } | null> {
+    let captured: { sql: string; parameters: readonly unknown[] } | null = null;
+    const pool = {
+      async connect() {
+        return {
+          async query(command: string | { text: string; values?: unknown[] }, values?: unknown[]) {
+            captured = typeof command === 'string' ? { sql: command, parameters: values ?? [] }
+              : { sql: command.text, parameters: command.values ?? [] };
+            return { rows: [] };
+          },
+          release() {},
+        };
+      },
+      async end() {},
+    };
+    const recorder = new Kysely<never>({ dialect: new PostgresDialect({ pool: pool as never }) });
+    try {
+      await new LiveRepository(recorder as never).list({ limit: 25, market: 'CL' });
+    } finally {
+      await recorder.destroy();
+    }
+    return captured;
+  }
+
+  /** Top plan nodes by time spent in the node itself (children excluded). */
+  async #liveNewsPlan(): Promise<string[]> {
+    try {
+      const query = await this.#liveNewsQuery();
+      if (!query) return [];
+      const result = await this.db.database.executeQuery<{ 'QUERY PLAN': unknown }>(
+        CompiledQuery.raw(`explain (analyze, format json) ${query.sql}`, [...query.parameters]));
+      const raw = result.rows[0]?.['QUERY PLAN'];
+      const plan = (typeof raw === 'string' ? JSON.parse(raw) : raw) as { Plan: PlanNode }[];
+      const nodes: { label: string; ms: number }[] = [];
+      const walk = (node: PlanNode): number => {
+        const total = (node['Actual Total Time'] ?? 0) * (node['Actual Loops'] ?? 1);
+        const children = (node.Plans ?? []).reduce((sum, child) => sum + walk(child), 0);
+        const target = node['Index Name'] ?? node['Relation Name'] ?? '';
+        nodes.push({ label: `${node['Node Type']}${target ? ` ${target}` : ''} loops=${node['Actual Loops'] ?? 1}`, ms: Math.max(0, total - children) });
+        return total;
+      };
+      walk(plan[0]!.Plan);
+      return nodes.sort((a, b) => b.ms - a.ms).slice(0, 6).map((node) => `${node.label}: ${Math.round(node.ms)} ms`);
+    } catch (error) {
+      return [`ERROR ${(error as { code?: string })?.code ?? 'UNKNOWN'}`];
     }
   }
 
@@ -125,9 +187,12 @@ export class QueryLatencyService {
         for (const row of rows.rows) byCountry[row.country] = row.n;
       } catch { /* profiles not readable */ }
     }
+    const liveNewsPlan = await this.#liveNewsPlan();
     return {
       generatedAt: new Date().toISOString(),
+      build: process.env.RENDER_GIT_COMMIT?.slice(0, 12) ?? null,
       profilesAvailable: sourceProfilesAvailable(),
+      liveNewsPlan,
       timings,
       database: {
         sizeMb: await this.#number(sql<{ n: unknown }>`select round(pg_database_size(current_database()) / 1048576.0, 1) as n`.execute(database)),
