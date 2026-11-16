@@ -122,6 +122,17 @@ export class LiveRepository {
       (select editorial_lean from media_source_profiles where source_id = ${source}) as editorial_lean`;
   }
 
+  /**
+   * Receipt aggregates scan every sighting of an article, so they are only
+   * computed for the rows of the page being returned, never for the whole
+   * market before sorting (13 s for Chile on the free database).
+   */
+  private receiptColumns(rowAlias: string) {
+    const exposure = sql.raw(`${rowAlias}.exposure_id`);
+    return sql`(select max(seen_at) from live_acquisition_receipts where exclusion_id = ${exposure}) as last_seen_at,
+      (select count(id)::int from live_acquisition_receipts where exclusion_id = ${exposure}) as receipt_count`;
+  }
+
   private newsProjection() {
     return sql`select a.id, a.event_id, v.headline,
       case when p.storage_policy = 'METADATA_AND_FEED_EXCERPT' then v.excerpt else null end as excerpt,
@@ -130,11 +141,9 @@ export class LiveRepository {
       v.version_number as version_count, s.id as source_id, s.name as source_name,
       s.source_type, s.canonical_domain, p.policy,
       e.first_seen_at,
-      (select max(seen_at) from live_acquisition_receipts where exclusion_id = a.live_exposure_id) as last_seen_at,
       r.original_published_at, r.original_modified_at, r.source_item_id,
       coalesce(r.discovery_channel_detail, r.discovery_channel) as discovery_channel,
-      r.discovery_url, r.adapter_version,
-      (select count(id)::int from live_acquisition_receipts where exclusion_id = a.live_exposure_id) as receipt_count
+      r.discovery_url, r.adapter_version, a.live_exposure_id as exposure_id
       from articles a join sources s on s.id = a.source_id
       join live_article_versions v on v.article_id = a.id and v.version_number =
         (select max(version_number) from live_article_versions where article_id = a.id)
@@ -170,13 +179,12 @@ export class LiveRepository {
     const market = query.market ?? 'CL';
     const scope = this.marketScope(market, 'news.source_id', 'news.canonical_domain');
     if (scope === null) return [];
-    const profile = this.profileColumns('news.source_id');
     const cursor =
       query.cursor === undefined
         ? sql`true`
         : sql`(published_at, id) <
       (select published_at, id from news where id = ${query.cursor})`;
-    const result = await sql<LiveReadRow>`with news as (${this.newsProjection()}) select news.*, ${profile} from news
+    const result = await sql<LiveReadRow>`with news as (${this.newsProjection()}), page as (select news.* from news
       where ${cursor}
         and ${scope}
         and ${query.sourceScope === undefined ? sql`true` : query.sourceScope === 'following' ? sql`source_id::text = any(${query.followedSourceIds ?? []}::text[])` : sql`not (source_id::text = any(${query.followedSourceIds ?? []}::text[]))`}
@@ -186,7 +194,9 @@ export class LiveRepository {
         and ${query.sourceId === undefined ? sql`true` : sql`source_id = ${query.sourceId}`}
         and ${query.publishedFrom === undefined ? sql`true` : sql`published_at >= ${query.publishedFrom}`}
         and ${query.publishedTo === undefined ? sql`true` : sql`published_at < ${query.publishedTo}`}
-      order by published_at desc, id desc limit ${query.limit + 1}`.execute(this.database);
+      order by published_at desc, id desc limit ${query.limit + 1})
+      select page.*, ${this.receiptColumns('page')}, ${this.profileColumns('page.source_id')} from page
+      order by published_at desc, id desc`.execute(this.database);
     return result.rows;
   }
 
@@ -195,7 +205,7 @@ export class LiveRepository {
     if (scope === null) return undefined;
     const profile = this.profileColumns('news.source_id');
     const result =
-      await sql<LiveReadRow>`with news as (${this.newsProjection()}) select news.*, ${profile} from news
+      await sql<LiveReadRow>`with news as (${this.newsProjection()}) select news.*, ${this.receiptColumns('news')}, ${profile} from news
         where id = ${id} and ${scope}`.execute(
         this.database,
       );
