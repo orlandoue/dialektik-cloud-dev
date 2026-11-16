@@ -320,6 +320,14 @@ class _Coliseo extends StatelessWidget {
             else ...<Widget>[
               if (duels.isNotEmpty)
                 DuelCarousel(duels: duels, store: store)
+              else if (store.duelsLoading)
+                const Padding(
+                  key: Key('arena-duels-loading'),
+                  padding: EdgeInsets.all(24),
+                  child: Center(
+                    child: CircularProgressIndicator(color: ArenaColors.violet),
+                  ),
+                )
               else
                 ArenaMessage(
                   topic == null

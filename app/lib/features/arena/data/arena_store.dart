@@ -131,6 +131,7 @@ final class ArenaStore extends ChangeNotifier {
   void _resetForCountry() {
     events = const <EventCardDto>[];
     duels = const <ArenaDuel>[];
+    duelsLoading = false;
     sources = const <LiveSourceDto>[];
     videos = const <LiveNewsItemDto>[];
     loaded = false;
@@ -164,6 +165,9 @@ final class ArenaStore extends ChangeNotifier {
   final Set<String> saved = <String>{};
   bool loading = false;
   bool loaded = false;
+
+  /// The first carousel duels are still joining their event details.
+  bool duelsLoading = false;
   Object? error;
   bool _disposed = false;
   Future<void>? _running;
@@ -356,6 +360,10 @@ final class ArenaStore extends ChangeNotifier {
           );
       stories.rememberRelations(allEvents);
       events = allEvents;
+      // The Coliseo can show its stories now; duels fill in as their
+      // details arrive instead of keeping the whole tab behind a spinner.
+      loaded = true;
+      duelsLoading = contrasts.isNotEmpty;
       _notify();
       // The carousel only needs its first pages: paint the Coliseo as soon
       // as those details arrive, then join the remaining contrasts in small
@@ -366,7 +374,7 @@ final class ArenaStore extends ChangeNotifier {
         refresh: refresh,
       );
       duels = joined;
-      loaded = true;
+      duelsLoading = false;
       _notify();
       final List<ContradictionDto> rest = contrasts
           .skip(firstDuelWave)
@@ -381,10 +389,17 @@ final class ArenaStore extends ChangeNotifier {
         duels = List<ArenaDuel>.unmodifiable(<ArenaDuel>[...duels, ...more]);
         _notify();
       }
-    } on Exception catch (failure) {
+    } on Object catch (failure) {
+      // Whatever fails, the spinner must stop: the tab shows a retry.
       error = failure;
+    } finally {
+      duelsLoading = false;
     }
-    await secondary;
+    try {
+      await secondary;
+    } on Object {
+      /* Sources, follows and videos show their own empty states. */
+    }
     loading = false;
     _notify();
   }
