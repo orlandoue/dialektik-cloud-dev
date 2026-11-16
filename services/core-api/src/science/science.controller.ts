@@ -39,10 +39,25 @@ export class ScienceController {
   constructor(@Inject(ScienceService) private readonly science: ScienceService,
     @Inject(PublicRateLimitService) private readonly rateLimit: PublicRateLimitService) {}
 
+  /** The verified reader, once the Science flag is on for them. */
+  #reader(request: FastifyRequest): string {
+    const userId = betaUserId(request);
+    this.science.requireAccess(userId);
+    return userId;
+  }
+
+  /** Whether the app shows Science and story comments to this reader. */
+  @Get('science/access')
+  async access(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    void reply.header('cache-control', 'private, no-store');
+    return this.science.access(betaUserId(request));
+  }
+
   @Get('science/studies')
   async studies(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Query('filter') filter?: string) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
-    betaUserId(request);
+    this.#reader(request);
     const chosen = (filter ?? 'conectados') as StudyFilter;
     if (!FILTERS.has(chosen)) throw new BadRequestException('Unknown filter.');
     void reply.header('cache-control', 'private, no-store');
@@ -53,7 +68,7 @@ export class ScienceController {
   @Get('science/studies/:doi')
   async study(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Param('doi') doi: string) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
-    betaUserId(request);
+    this.#reader(request);
     void reply.header('cache-control', 'private, no-store');
     return this.science.study(doiParameter(doi));
   }
@@ -62,14 +77,14 @@ export class ScienceController {
   async citing(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Param('doi') doi: string) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     void reply.header('cache-control', 'private, no-store');
-    return this.science.commentsCitingStudy(betaUserId(request), doiParameter(doi));
+    return this.science.commentsCitingStudy(this.#reader(request), doiParameter(doi));
   }
 
   @Get('stories/:id/comments')
   async comments(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Param('id') id: string) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     void reply.header('cache-control', 'private, no-store');
-    return this.science.storyComments(betaUserId(request), parseUlidParameter(id));
+    return this.science.storyComments(this.#reader(request), parseUlidParameter(id));
   }
 
   @Post('stories/:id/comments')
@@ -77,7 +92,7 @@ export class ScienceController {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     const input = record(body, 'Invalid comment.');
     const parentId = input.parent_id === undefined || input.parent_id === null ? null : uuidParameter(input.parent_id, 'Invalid reply.');
-    return this.science.addComment(betaUserId(request), parseUlidParameter(id), {
+    return this.science.addComment(this.#reader(request), parseUlidParameter(id), {
       body: text(input.body, 600, 'A comment needs 1 to 600 characters.'),
       parentId,
     });
@@ -93,7 +108,7 @@ export class ScienceController {
     if (doi === null || typeof input.claim_quote_id !== 'string' || relation === undefined || !RELATIONS.has(relation)) {
       throw new BadRequestException(message);
     }
-    return this.science.addStudyComment(betaUserId(request), parseUlidParameter(id), {
+    return this.science.addStudyComment(this.#reader(request), parseUlidParameter(id), {
       doi,
       claimQuoteId: parseUlidParameter(input.claim_quote_id),
       relation,
@@ -107,7 +122,7 @@ export class ScienceController {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     const input = record(body, 'Invalid reaction.');
     if (typeof input.reacted !== 'boolean') throw new BadRequestException('Invalid reaction.');
-    return this.science.react(betaUserId(request), uuidParameter(id, 'Invalid comment.'), input.reacted);
+    return this.science.react(this.#reader(request), uuidParameter(id, 'Invalid comment.'), input.reacted);
   }
 
   // ---- Moderation (DIALEKTIK_SCIENCE_MODERATORS) ---------------------------
@@ -116,7 +131,7 @@ export class ScienceController {
   async queue(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     void reply.header('cache-control', 'private, no-store');
-    return this.science.moderationQueue(betaUserId(request));
+    return this.science.moderationQueue(this.#reader(request));
   }
 
   /** Calls per metadata API and day, last 30 days. */
@@ -124,7 +139,7 @@ export class ScienceController {
   async usage(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     void reply.header('cache-control', 'private, no-store');
-    return this.science.usage(betaUserId(request));
+    return this.science.usage(this.#reader(request));
   }
 
   @Post('science/moderation/comments/:id')
@@ -132,7 +147,7 @@ export class ScienceController {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     const input = record(body, 'Invalid decision.');
     if (input.decision !== 'approve' && input.decision !== 'reject') throw new BadRequestException('Invalid decision.');
-    return this.science.decide(betaUserId(request), uuidParameter(id, 'Invalid comment.'), input.decision === 'approve');
+    return this.science.decide(this.#reader(request), uuidParameter(id, 'Invalid comment.'), input.decision === 'approve');
   }
 
   @Put('science/moderation/studies/:doi')
@@ -159,6 +174,6 @@ export class ScienceController {
       if (typeof input.made_in_chile !== 'boolean') throw new BadRequestException('Invalid made_in_chile.');
       fields.made_in_chile = input.made_in_chile;
     }
-    return this.science.moderateStudy(betaUserId(request), doiParameter(doi), fields);
+    return this.science.moderateStudy(this.#reader(request), doiParameter(doi), fields);
   }
 }

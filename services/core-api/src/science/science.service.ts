@@ -168,6 +168,21 @@ export class ScienceService implements OnModuleInit {
       .includes(userId.toLowerCase());
   }
 
+  /**
+   * Remote flag for Science and story comments: off unless
+   * DIALEKTIK_SCIENCE_ENABLED is «true», always on for moderators so they can
+   * try it before anyone else sees it.
+   */
+  access(userId: string, env: NodeJS.ProcessEnv = process.env): { enabled: boolean; moderator: boolean } {
+    const moderator = this.isModerator(userId, env);
+    return { enabled: moderator || env.DIALEKTIK_SCIENCE_ENABLED?.trim().toLowerCase() === 'true', moderator };
+  }
+
+  /** Without the flag the routes do not exist for this reader. */
+  requireAccess(userId: string): void {
+    if (!this.access(userId).enabled) throw new NotFoundException({ code: 'PUBLIC_NOT_FOUND' });
+  }
+
   async onModuleInit(): Promise<void> {
     if (!process.env.OPENALEX_API_KEY?.trim()) {
       this.#logger.warn('OPENALEX_API_KEY is not set: OpenAlex allows only a minimal daily budget without a key.');
