@@ -94,16 +94,58 @@ set search_path = pg_catalog, auth
 as $fn$ select created_at from auth.users where id = p_user $fn$;
 revoke all on function public.dialektik_account_created_at(uuid) from public, anon, authenticated;
 
+-- Public name of a reader, taken from the profile and never from the client:
+-- the chosen alias, else the Google name (both sanitised by Core), else the
+-- number of «Lector-NNNN» (FNV-1a of the e-mail, as the app computes it).
+-- The e-mail itself never leaves the database.
+create or replace function public.dialektik_reader_profile(p_user uuid)
+returns table(alias text, display_name text, reader_number integer)
+language plpgsql
+stable
+security definer
+set search_path = pg_catalog, auth
+as $fn$
+declare
+  v_meta jsonb;
+  v_email text;
+  v_hash bigint := 2166136261;
+  i integer;
+begin
+  select u.raw_user_meta_data, lower(btrim(u.email)) into v_meta, v_email from auth.users u where u.id = p_user;
+  if not found then return; end if;
+  if v_email is not null and v_email <> '' then
+    for i in 1..length(v_email) loop
+      v_hash := ((v_hash # ascii(substr(v_email, i, 1))) * 16777619) & 4294967295;
+    end loop;
+  end if;
+  return query select nullif(btrim(v_meta->>'alias'), ''),
+    coalesce(nullif(btrim(v_meta->>'full_name'), ''), nullif(btrim(v_meta->>'name'), '')),
+    case when v_email is null or v_email = '' then null else (1000 + v_hash % 9000)::integer end;
+end
+$fn$;
+revoke all on function public.dialektik_reader_profile(uuid) from public, anon, authenticated;
+
+-- Calls to each metadata API per day (OpenAlex bills by usage).
+create table if not exists public.science_api_usage (
+  source text not null check (source ~ '^[a-z_]{2,40}$'),
+  day date not null,
+  calls integer not null default 0 check (calls >= 0),
+  errors integer not null default 0 check (errors >= 0),
+  primary key (source, day)
+);
+
 alter table public.science_studies enable row level security;
 alter table public.story_comments enable row level security;
 alter table public.story_comment_studies enable row level security;
 alter table public.story_comment_reactions enable row level security;
+alter table public.science_api_usage enable row level security;
+alter table public.science_api_usage force row level security;
 alter table public.science_studies force row level security;
 alter table public.story_comments force row level security;
 alter table public.story_comment_studies force row level security;
 alter table public.story_comment_reactions force row level security;
-revoke all on public.science_studies, public.story_comments, public.story_comment_studies, public.story_comment_reactions
-  from public, anon, authenticated, service_role;
+revoke all on public.science_studies, public.story_comments, public.story_comment_studies, public.story_comment_reactions,
+  public.science_api_usage from public, anon, authenticated, service_role;
 
 do $grants$
 begin
@@ -114,6 +156,8 @@ begin
     grant select, insert on public.story_comment_studies to dialektik_core_app;
     grant select, insert, delete on public.story_comment_reactions to dialektik_core_app;
     grant execute on function public.dialektik_account_created_at(uuid) to dialektik_core_app;
+    grant execute on function public.dialektik_reader_profile(uuid) to dialektik_core_app;
+    grant select, insert, update on public.science_api_usage to dialektik_core_app;
   end if;
 end
 $grants$;
@@ -125,6 +169,9 @@ create policy science_studies_read on public.science_studies for select to diale
 -- Bibliographic cache written by Core after resolving a DOI.
 create policy science_studies_cache on public.science_studies for insert to dialektik_core_app with check (true);
 create policy science_studies_refresh on public.science_studies for update to dialektik_core_app using (true) with check (true);
+
+drop policy if exists science_api_usage_core on public.science_api_usage;
+create policy science_api_usage_core on public.science_api_usage for all to dialektik_core_app using (true) with check (true);
 
 drop policy if exists story_comments_read on public.story_comments;
 drop policy if exists story_comments_insert on public.story_comments;

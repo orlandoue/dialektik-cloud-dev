@@ -30,14 +30,55 @@ export function normalizeDoi(input: string): string | null {
   return /^10\.\d{4,9}\/\S+$/u.test(doi) && doi.length <= 300 ? doi : null;
 }
 
-const USER_AGENT = 'Dialektik/1.0 (+https://dialektik-core-dev.onrender.com)';
 const TIMEOUT_MS = 8_000;
 
-async function fetchJson(fetcher: FetchLike, url: string): Promise<Record<string, unknown> | null> {
+/**
+ * Only these metadata APIs are ever called. Article pages, PDFs and full
+ * text are never downloaded, paid or not: Dialektik keeps metadata, the
+ * abstract, the quoted fragment and a link.
+ */
+export const METADATA_HOSTS: Readonly<Record<string, ScienceSource>> = {
+  'api.crossref.org': 'crossref',
+  'api.openalex.org': 'openalex',
+};
+export type ScienceSource = 'crossref' | 'openalex';
+
+/** One call to a metadata API, for the daily usage record. */
+export type UsageRecorder = (source: ScienceSource, ok: boolean) => void;
+
+export interface ResolverOptions {
+  /** OPENALEX_API_KEY: required by OpenAlex since 13 Feb 2026. */
+  openAlexApiKey?: string | undefined;
+  /** SCIENCE_CONTACT_EMAIL: Crossref polite pool (and Unpaywall later). */
+  contactEmail?: string | undefined;
+  onCall?: UsageRecorder;
+}
+
+export function resolverOptionsFromEnv(env: NodeJS.ProcessEnv = process.env): Omit<ResolverOptions, 'onCall'> {
+  const key = env.OPENALEX_API_KEY?.trim();
+  const email = env.SCIENCE_CONTACT_EMAIL?.trim();
+  return {
+    ...(key ? { openAlexApiKey: key } : {}),
+    ...(email && /^[^\s@]+@[^\s@]+\.[^\s@]+$/u.test(email) ? { contactEmail: email } : {}),
+  };
+}
+
+function userAgent(options: ResolverOptions): string {
+  return options.contactEmail
+    ? `Dialektik/1.0 (+https://dialektik-core-dev.onrender.com; mailto:${options.contactEmail})`
+    : 'Dialektik/1.0 (+https://dialektik-core-dev.onrender.com)';
+}
+
+async function fetchJson(fetcher: FetchLike, url: URL, options: ResolverOptions): Promise<Record<string, unknown> | null> {
+  const source = METADATA_HOSTS[url.hostname];
+  if (source === undefined || url.protocol !== 'https:') throw new Error(`Not a metadata API: ${url.hostname}`);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  let ok = false;
   try {
-    const response = await fetcher(url, { headers: { accept: 'application/json', 'user-agent': USER_AGENT }, signal: controller.signal });
+    const response = await fetcher(url.toString(), { headers: { accept: 'application/json', 'user-agent': userAgent(options) }, signal: controller.signal });
+    // A missing DOI (404) is an answer, not a failure of the source.
+    ok = response.ok || response.status === 404;
     if (!response.ok) return null;
     const body = await response.json();
     return body !== null && typeof body === 'object' ? (body as Record<string, unknown>) : null;
@@ -45,7 +86,20 @@ async function fetchJson(fetcher: FetchLike, url: string): Promise<Record<string
     return null;
   } finally {
     clearTimeout(timer);
+    options.onCall?.(source, ok);
   }
+}
+
+export function crossrefWorkUrl(doi: string, options: ResolverOptions = {}): URL {
+  const url = new URL(`https://api.crossref.org/works/${encodeURIComponent(doi)}`);
+  if (options.contactEmail) url.searchParams.set('mailto', options.contactEmail);
+  return url;
+}
+
+export function openAlexWorkUrl(doi: string, options: ResolverOptions = {}): URL {
+  const url = new URL(`https://api.openalex.org/works/https://doi.org/${encodeURIComponent(doi)}`);
+  if (options.openAlexApiKey) url.searchParams.set('api_key', options.openAlexApiKey);
+  return url;
 }
 
 const text = (value: unknown): string | null =>
@@ -95,11 +149,11 @@ function authorsOf(crossref: Record<string, unknown> | null): string | null {
   return names.length > 4 ? `${names.slice(0, 3).join(', ')}, et al.` : names.join(', ');
 }
 
-export async function resolveStudy(doi: string, fetcher: FetchLike = fetch as unknown as FetchLike): Promise<ResolvedStudy | null> {
-  const encoded = encodeURIComponent(doi);
+export async function resolveStudy(doi: string, fetcher: FetchLike = fetch as unknown as FetchLike,
+  options: ResolverOptions = {}): Promise<ResolvedStudy | null> {
   const [crossrefBody, openalex] = await Promise.all([
-    fetchJson(fetcher, `https://api.crossref.org/works/${encoded}`),
-    fetchJson(fetcher, `https://api.openalex.org/works/https://doi.org/${encoded}`),
+    fetchJson(fetcher, crossrefWorkUrl(doi, options), options),
+    fetchJson(fetcher, openAlexWorkUrl(doi, options), options),
   ]);
   const crossref = (crossrefBody?.message ?? null) as Record<string, unknown> | null;
   const title = first(crossref?.title) ?? text(openalex?.title) ?? text(openalex?.display_name);

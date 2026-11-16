@@ -15,7 +15,23 @@ import { sql, type Kysely, type Transaction } from 'kysely';
 
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { PublicApiService } from '../public-api/public-api.service.js';
-import { isLiteralFragment, resolveStudy, type FetchLike, type ResolvedStudy } from './study-resolver.js';
+import {
+  isLiteralFragment, resolveStudy, resolverOptionsFromEnv, type FetchLike, type ResolvedStudy, type ScienceSource,
+} from './study-resolver.js';
+
+/** Same rule as the app: 2-30 letters, digits, spaces or `._-`. */
+export function sanitizeAlias(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+  const cleaned = raw.replace(/[^\p{L}\p{N} ._-]/gu, '').replace(/\s+/gu, ' ').trim().replace(/^[ ._-]+/u, '');
+  const clipped = cleaned.length > 30 ? cleaned.slice(0, 30).trimEnd() : cleaned;
+  return clipped.length >= 2 ? clipped : null;
+}
+
+/** The reader's public name from the profile; the client cannot choose it. */
+export function profileAlias(row: { alias: string | null; display_name: string | null; reader_number: number | null } | undefined): string {
+  return sanitizeAlias(row?.alias) ?? sanitizeAlias(row?.display_name)
+    ?? (row?.reader_number == null ? 'Lector' : `Lector-${row.reader_number}`);
+}
 
 export type StudyFilter = 'conectados' | 'chile' | 'temas' | 'recientes';
 export type StudyRelation = 'respalda' | 'contradice' | 'matiza' | 'contexto';
@@ -152,6 +168,12 @@ export class ScienceService implements OnModuleInit {
   }
 
   async onModuleInit(): Promise<void> {
+    if (!process.env.OPENALEX_API_KEY?.trim()) {
+      this.#logger.warn('OPENALEX_API_KEY is not set: OpenAlex allows only a minimal daily budget without a key.');
+    }
+    if (!resolverOptionsFromEnv().contactEmail) {
+      this.#logger.warn('SCIENCE_CONTACT_EMAIL is not set: Crossref requests stay out of the polite pool.');
+    }
     let timer: NodeJS.Timeout | undefined;
     const limit = new Promise<void>((resolve) => { timer = setTimeout(resolve, 20_000); });
     try {
@@ -196,7 +218,8 @@ export class ScienceService implements OnModuleInit {
   async #present(database: Kysely<unknown>): Promise<boolean> {
     const present = await sql<{ ready: boolean }>`select to_regclass('public.science_studies') is not null
       and to_regclass('public.story_comments') is not null and to_regclass('public.story_comment_studies') is not null
-      and to_regclass('public.story_comment_reactions') is not null as ready`.execute(database);
+      and to_regclass('public.story_comment_reactions') is not null and to_regclass('public.science_api_usage') is not null
+      and to_regprocedure('public.dialektik_reader_profile(uuid)') is not null as ready`.execute(database);
     return present.rows[0]?.ready === true;
   }
 
@@ -252,7 +275,8 @@ export class ScienceService implements OnModuleInit {
       const fresh = cached !== null && (await sql<{ fresh: boolean }>`select resolved_at > now() - make_interval(days => ${REFRESH_AFTER_DAYS}) as fresh
         from public.science_studies where doi = ${doi}`.execute(this.db.database)).rows[0]?.fresh === true;
       if (cached !== null && fresh) return cached;
-      const resolved = await resolveStudy(doi, this.fetcher);
+      const resolved = await resolveStudy(doi, this.fetcher, { ...resolverOptionsFromEnv(), onCall: (source, ok) => this.recordCall(source, ok) });
+      await this.flushUsage();
       if (resolved === null) {
         if (cached !== null) return cached;
         throw new NotFoundException('DOI not found.');
@@ -346,7 +370,13 @@ export class ScienceService implements OnModuleInit {
   }
 
   /** Published at once; one level of replies. */
-  async addComment(userId: string, eventId: string, input: { body: string; parentId: string | null; alias: string | null }): Promise<CommentJson> {
+  async #authorAlias(database: Kysely<unknown>, userId: string): Promise<string> {
+    const rows = await sql<{ alias: string | null; display_name: string | null; reader_number: number | null }>`
+      select alias, display_name, reader_number from public.dialektik_reader_profile(${userId}::uuid)`.execute(database);
+    return profileAlias(rows.rows[0]);
+  }
+
+  async addComment(userId: string, eventId: string, input: { body: string; parentId: string | null }): Promise<CommentJson> {
     return this.#transaction(userId, async (tx) => {
       await this.#requirePublished(tx, eventId);
       if (input.parentId !== null) {
@@ -356,7 +386,7 @@ export class ScienceService implements OnModuleInit {
       }
       const inserted = await sql<{ id: string }>`insert into public.story_comments(event_id,user_id,parent_id,kind,status,author_alias,body)
         values (${eventId}::dialektik_ulid, ${userId}::uuid, ${input.parentId}::uuid, 'normal', 'published',
-          coalesce(${input.alias}::text, 'Lector-' || upper(substr(md5(${userId}::text), 1, 4))), ${input.body})
+          ${await this.#authorAlias(tx, userId)}, ${input.body})
         returning id::text as id`.execute(tx);
       return this.#comment(tx, userId, inserted.rows[0]!.id);
     });
@@ -369,7 +399,7 @@ export class ScienceService implements OnModuleInit {
    * Starts in review.
    */
   async addStudyComment(userId: string, eventId: string, input: {
-    doi: string; claimQuoteId: string; relation: StudyRelation; abstractFragment: string; body: string; alias: string | null;
+    doi: string; claimQuoteId: string; relation: StudyRelation; abstractFragment: string; body: string;
   }): Promise<CommentJson> {
     await this.#guarded(async () => {
       const created = await sql<{ created_at: Date | null }>`select public.dialektik_account_created_at(${userId}::uuid) as created_at`
@@ -397,7 +427,7 @@ export class ScienceService implements OnModuleInit {
       if (duplicate.rows.length) throw refused(HttpStatus.CONFLICT, 'PUBLIC_SCIENCE_DUPLICATE');
       const inserted = await sql<{ id: string }>`insert into public.story_comments(event_id,user_id,kind,status,author_alias,body)
         values (${eventId}::dialektik_ulid, ${userId}::uuid, 'study', 'in_review',
-          coalesce(${input.alias}::text, 'Lector-' || upper(substr(md5(${userId}::text), 1, 4))), ${input.body})
+          ${await this.#authorAlias(tx, userId)}, ${input.body})
         returning id::text as id`.execute(tx);
       const id = inserted.rows[0]!.id;
       await sql`insert into public.story_comment_studies(comment_id,event_id,doi,claim_quote_id,claim_text,claim_outlet,relation,abstract_fragment)
@@ -428,6 +458,49 @@ export class ScienceService implements OnModuleInit {
       comments: await this.#comments(this.db.database as Kysely<unknown>, userId,
         sql`exists (select 1 from public.story_comment_studies x where x.comment_id = c.id and x.doi = ${doi})`),
     }));
+  }
+
+  // ---- Usage of the metadata APIs -----------------------------------------
+
+  #usageDay = '';
+  #usageToday = new Map<ScienceSource, { calls: number; errors: number }>();
+
+  /** Counts one call per source and day; logs the totals once a day ends. */
+  recordCall(source: ScienceSource, ok: boolean, now: Date = new Date()): void {
+    const today = now.toISOString().slice(0, 10);
+    if (this.#usageDay !== today) {
+      if (this.#usageDay !== '' && this.#usageToday.size > 0) {
+        const totals = [...this.#usageToday].map(([s, u]) => `${s} ${u.calls} calls (${u.errors} errors)`).join(', ');
+        this.#logger.log(`Science API usage ${this.#usageDay}: ${totals}.`);
+      }
+      this.#usageDay = today;
+      this.#usageToday = new Map();
+    }
+    const counter = this.#usageToday.get(source) ?? { calls: 0, errors: 0 };
+    counter.calls += 1;
+    if (!ok) counter.errors += 1;
+    this.#usageToday.set(source, counter);
+    const write = sql`insert into public.science_api_usage(source, day, calls, errors) values (${source}, ${today}::date, 1, ${ok ? 0 : 1})
+      on conflict (source, day) do update set calls = public.science_api_usage.calls + 1,
+        errors = public.science_api_usage.errors + excluded.errors`.execute(this.db.database)
+      .catch(() => this.#logger.warn('Could not record science API usage.'));
+    this.#pendingUsage.push(write);
+  }
+
+  #pendingUsage: Promise<unknown>[] = [];
+
+  /** Waits for the usage rows of the calls made so far. */
+  async flushUsage(): Promise<void> {
+    await Promise.allSettled(this.#pendingUsage.splice(0));
+  }
+
+  async usage(userId: string): Promise<{ days: { source: string; day: string; calls: number; errors: number }[] }> {
+    this.#requireModerator(userId);
+    return this.#guarded(async () => {
+      const rows = await sql<{ source: string; day: string; calls: number; errors: number }>`select source, day::text as day, calls, errors
+        from public.science_api_usage where day > current_date - 30 order by day desc, source`.execute(this.db.database);
+      return { days: rows.rows };
+    });
   }
 
   // ---- Moderation ----------------------------------------------------------

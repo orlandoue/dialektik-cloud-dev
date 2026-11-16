@@ -8,7 +8,6 @@ import { normalizeDoi } from './study-resolver.js';
 
 const FILTERS = new Set<StudyFilter>(['conectados', 'chile', 'temas', 'recientes']);
 const RELATIONS = new Set<StudyRelation>(['respalda', 'contradice', 'matiza', 'contexto']);
-const ALIAS = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{1,29}$/u;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function record(body: unknown, message: string): Record<string, unknown> {
@@ -31,12 +30,6 @@ function uuidParameter(value: unknown, message: string): string {
 
 function text(value: unknown, max: number, message: string): string {
   if (typeof value !== 'string' || value.trim() === '' || value.trim().length > max) throw new BadRequestException(message);
-  return value.trim();
-}
-
-function alias(value: unknown): string | null {
-  if (value === undefined || value === null) return null;
-  if (typeof value !== 'string' || !ALIAS.test(value.trim())) throw new BadRequestException('Invalid alias.');
   return value.trim();
 }
 
@@ -87,7 +80,6 @@ export class ScienceController {
     return this.science.addComment(betaUserId(request), parseUlidParameter(id), {
       body: text(input.body, 600, 'A comment needs 1 to 600 characters.'),
       parentId,
-      alias: alias(input.alias),
     });
   }
 
@@ -107,7 +99,6 @@ export class ScienceController {
       relation,
       abstractFragment: text(input.abstract_fragment, 1200, message),
       body: text(input.body, 280, 'A comment with a study needs 1 to 280 characters.'),
-      alias: alias(input.alias),
     });
   }
 
@@ -126,6 +117,14 @@ export class ScienceController {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     void reply.header('cache-control', 'private, no-store');
     return this.science.moderationQueue(betaUserId(request));
+  }
+
+  /** Calls per metadata API and day, last 30 days. */
+  @Get('science/moderation/usage')
+  async usage(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    void reply.header('cache-control', 'private, no-store');
+    return this.science.usage(betaUserId(request));
   }
 
   @Post('science/moderation/comments/:id')

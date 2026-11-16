@@ -8,13 +8,15 @@ const other = '22222222-2222-4222-8222-222222222222';
 const newcomer = '33333333-3333-4333-8333-333333333333';
 const moderator = '44444444-4444-4444-8444-444444444444';
 
-const baseSchema = `create schema auth; create table auth.users(id uuid primary key, created_at timestamptz not null);
+const baseSchema = `create schema auth; create table auth.users(id uuid primary key, created_at timestamptz not null, email text, raw_user_meta_data jsonb);
   create domain dialektik_ulid as text;
   create role anon; create role authenticated; create role service_role; create role dialektik_core_app;
   create table public.events(id dialektik_ulid primary key);
   create table public.public_events(id dialektik_ulid primary key, analysis_state text, detected_at timestamptz default now());
-  insert into auth.users values('${veteran}', now() - interval '30 days'), ('${other}', now() - interval '10 days'),
-    ('${newcomer}', now() - interval '1 day'), ('${moderator}', now() - interval '90 days');
+  insert into auth.users values('${veteran}', now() - interval '30 days', 'Veterano@Example.cl', '{}'),
+    ('${other}', now() - interval '10 days', 'ana@example.cl', '{"alias":"Ana <b>","full_name":"Ana Pérez"}'),
+    ('${newcomer}', now() - interval '1 day', 'nuevo@example.cl', '{"full_name":"Nuevo Lector"}'),
+    ('${moderator}', now() - interval '90 days', null, null);
   insert into public.events values('event1'),('draft');
   insert into public.public_events values('event1','PUBLISHED'),('draft','ANALYSIS_PENDING');
   grant select on public.public_events to dialektik_core_app;`;
@@ -44,6 +46,13 @@ const publicApi = { async event(id) {
   ] }] : [] } };
 } };
 
+/** The app's «Lector-NNNN» (Dart, 64-bit ints). */
+function readerAlias(email) {
+  let hash = 0x811c9dc5n;
+  for (const unit of email.trim().toLowerCase()) hash = ((hash ^ BigInt(unit.charCodeAt(0))) * 0x01000193n) & 0xffffffffn;
+  return `Lector-${1000n + hash % 9000n}`;
+}
+
 async function setup({ retracted = false } = {}) {
   const pg = new PGlite();
   await pg.exec(baseSchema);
@@ -65,7 +74,7 @@ async function setup({ retracted = false } = {}) {
 
 const DOI = '10.7326/m18-2101';
 const studyInput = (over = {}) => ({ doi: DOI, claimQuoteId: 'quote1', relation: 'contradice',
-  abstractFragment: 'MMR vaccination does not increase the risk for autism', body: 'Un estudio de cohorte danés lo contradice.', alias: null, ...over });
+  abstractFragment: 'MMR vaccination does not increase the risk for autism', body: 'Un estudio de cohorte danés lo contradice.', ...over });
 
 async function rejectsWith(promise, status, code) {
   await assert.rejects(promise, (error) => {
@@ -94,15 +103,16 @@ test('a study is resolved once, cached and shown with «No informado» fields as
 test('comments: normal ones publish at once, study ones go through review', async () => {
   const { pg, database, service } = await setup();
   try {
-    const normal = await service.addComment(other, 'event1', { body: 'Interesante', parentId: null, alias: 'Ana' });
+    // The name comes from the profile, sanitised like the app does.
+    const normal = await service.addComment(other, 'event1', { body: 'Interesante', parentId: null });
     assert.equal(normal.status, 'published');
-    assert.equal(normal.author, 'Ana');
-    const reply = await service.addComment(veteran, 'event1', { body: 'Coincido', parentId: normal.id, alias: null });
+    assert.equal(normal.author, 'Ana b');
+    const reply = await service.addComment(veteran, 'event1', { body: 'Coincido', parentId: normal.id });
     assert.equal(reply.parent_id, normal.id);
-    assert.match(reply.author, /^Lector-[0-9A-F]{4}$/);
+    assert.equal(reply.author, readerAlias('Veterano@Example.cl'));
     // Only one level of replies.
-    await rejectsWith(service.addComment(other, 'event1', { body: 'x', parentId: reply.id, alias: null }), 400, 'PUBLIC_SCIENCE_INVALID_PARENT');
-    await rejectsWith(service.addComment(other, 'draft', { body: 'x', parentId: null, alias: null }), 404);
+    await rejectsWith(service.addComment(other, 'event1', { body: 'x', parentId: reply.id }), 400, 'PUBLIC_SCIENCE_INVALID_PARENT');
+    await rejectsWith(service.addComment(other, 'draft', { body: 'x', parentId: null }), 404);
 
     const withStudy = await service.addStudyComment(veteran, 'event1', studyInput());
     assert.equal(withStudy.status, 'in_review');
@@ -193,4 +203,40 @@ test('row security binds comments and reactions to the reader and review to mode
     await assert.rejects(pg.exec(`delete from public.story_comments`));
     await pg.exec('reset role');
   } finally { await pg.close(); }
+});
+
+test('OpenAlex gets the key, Crossref the contact, and each call is counted per day', async () => {
+  const { pg, database, service } = await setup();
+  const { METADATA_HOSTS } = await import('../dist/science/study-resolver.js');
+  const seen = [];
+  const inner = service.fetcher;
+  service.fetcher = async (url, init) => { seen.push({ url: new URL(url), agent: init.headers['user-agent'] }); return inner(url, init); };
+  process.env.OPENALEX_API_KEY = 'test-key';
+  process.env.SCIENCE_CONTACT_EMAIL = 'contacto@example.org';
+  try {
+    await service.study(DOI);
+    const openalex = seen.find((s) => s.url.hostname === 'api.openalex.org');
+    const crossref = seen.find((s) => s.url.hostname === 'api.crossref.org');
+    assert.equal(openalex.url.searchParams.get('api_key'), 'test-key');
+    assert.equal(crossref.url.searchParams.get('mailto'), 'contacto@example.org');
+    assert.match(crossref.agent, /mailto:contacto@example\.org/);
+    // Only metadata APIs: never an article page, a PDF or full text.
+    assert.ok(seen.every((s) => s.url.protocol === 'https:' && Object.hasOwn(METADATA_HOSTS, s.url.hostname)));
+
+    service.fetcher = async (url) => (url.includes('openalex') ? { ok: false, status: 429, async json() { return {}; } } : inner(url));
+    // A stale cache entry is resolved again.
+    await pg.exec(`update public.science_studies set resolved_at = now() - interval '8 days'`);
+    await service.study(DOI);
+    process.env.DIALEKTIK_SCIENCE_MODERATORS = moderator;
+    const { days } = await service.usage(moderator);
+    const by = Object.fromEntries(days.map((d) => [d.source, d]));
+    assert.equal(by.openalex.calls, 2);
+    assert.equal(by.openalex.errors, 1);
+    assert.equal(by.crossref.calls, 2);
+    assert.equal(by.crossref.errors, 0);
+    await rejectsWith(service.usage(other), 403);
+  } finally {
+    delete process.env.OPENALEX_API_KEY; delete process.env.SCIENCE_CONTACT_EMAIL; delete process.env.DIALEKTIK_SCIENCE_MODERATORS;
+    await database.destroy(); await pg.close();
+  }
 });
