@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { scienceCommentsSql } from '../../../packages/database/dist/migration/091_science_and_story_comments.js';
+import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
 
 const veteran = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
@@ -57,6 +58,7 @@ async function setup({ retracted = false } = {}) {
   const pg = new PGlite();
   await pg.exec(baseSchema);
   await pg.exec(scienceCommentsSql);
+  await pg.exec(scienceModerationSql);
   await pg.exec('set role dialektik_core_app');
   const { Kysely, PostgresDialect } = await import('kysely');
   const { ScienceService } = await import('../dist/science/science.service.js');
@@ -125,12 +127,13 @@ test('comments: normal ones publish at once, study ones go through review', asyn
     assert.equal((await service.storyComments(other, 'event1')).comments.length, 2);
     assert.equal((await service.study(DOI)).citing_comments, 0);
 
-    await rejectsWith(service.decide(other, withStudy.id, true), 403);
+    await rejectsWith(service.decide(other, withStudy.id, true, null), 403);
     process.env.DIALEKTIK_SCIENCE_MODERATORS = moderator;
     try {
       const queue = await service.moderationQueue(moderator);
-      assert.deepEqual(queue.comments.map((c) => [c.id, c.event_id]), [[withStudy.id, 'event1']]);
-      assert.equal((await service.decide(moderator, withStudy.id, true)).status, 'published');
+      assert.deepEqual(queue.review.map((c) => [c.id, c.event_id]), [[withStudy.id, 'event1']]);
+      assert.deepEqual(queue.reports, []);
+      assert.equal((await service.decide(moderator, withStudy.id, true, null)).status, 'published');
       const study = await service.moderateStudy(moderator, DOI, { design: 'Cohorte', sample_size: 657461 });
       assert.equal(study.design, 'Cohorte');
       assert.equal(study.sample_size, 657461);
@@ -167,7 +170,7 @@ test('study comments are refused for duplicates, paraphrases, unknown claims and
       return true;
     });
     process.env.DIALEKTIK_SCIENCE_MODERATORS = moderator;
-    await service.decide(moderator, first.id, true);
+    await service.decide(moderator, first.id, true, null);
     delete process.env.DIALEKTIK_SCIENCE_MODERATORS;
     // Published: refused, with its id so «Ver comentario» opens it.
     await assert.rejects(service.addStudyComment(other, 'event1', studyInput()), (error) => {
@@ -200,7 +203,7 @@ test('a retracted study cannot be attached', async () => {
 test('row security binds comments and reactions to the reader and review to moderators', async () => {
   const pg = new PGlite();
   try {
-    await pg.exec(baseSchema); await pg.exec(scienceCommentsSql);
+    await pg.exec(baseSchema); await pg.exec(scienceCommentsSql); await pg.exec(scienceModerationSql);
     await pg.exec('set role dialektik_core_app');
     await pg.exec(`begin; select set_config('dialektik.social_user','${veteran}',true);`);
     await assert.rejects(pg.exec(`insert into public.story_comments(event_id,user_id,kind,status,author_alias,body) values('event1','${other}','normal','published','Spoof','x')`));
@@ -254,4 +257,74 @@ test('OpenAlex gets the key, Crossref the contact, and each call is counted per 
     delete process.env.OPENALEX_API_KEY; delete process.env.SCIENCE_CONTACT_EMAIL; delete process.env.DIALEKTIK_SCIENCE_MODERATORS;
     await database.destroy(); await pg.close();
   }
+});
+
+
+test('a study without an abstract cannot be cited until a moderator loads it from the publisher', async () => {
+  const { pg, database, service } = await setup();
+  const inner = service.fetcher;
+  // Crossref and OpenAlex both without an abstract.
+  service.fetcher = async (url, init) => {
+    const response = await inner(url, init);
+    const body = await response.json();
+    if (body.message) delete body.message.abstract;
+    delete body.abstract_inverted_index;
+    return { ok: true, status: 200, async json() { return body; } };
+  };
+  process.env.DIALEKTIK_SCIENCE_MODERATORS = moderator;
+  try {
+    const bare = await service.study(DOI);
+    assert.equal(bare.abstract, null);
+    assert.equal(bare.abstract_source, null);
+    await rejectsWith(service.addStudyComment(veteran, 'event1', studyInput()), 422, 'PUBLIC_SCIENCE_NO_ABSTRACT');
+    const loaded = await service.moderateStudy(moderator, DOI, { abstract: { text: ABSTRACT, source: 'Annals of Internal Medicine', language: 'en' } });
+    assert.equal(loaded.abstract_source, 'Annals of Internal Medicine');
+    // Resolving the DOI again keeps what the moderator loaded.
+    await pg.exec(`update public.science_studies set resolved_at = now() - interval '8 days'`);
+    const again = await service.study(DOI);
+    assert.equal(again.abstract, ABSTRACT);
+    assert.equal(again.abstract_source, 'Annals of Internal Medicine');
+    assert.equal((await service.addStudyComment(veteran, 'event1', studyInput())).status, 'in_review');
+  } finally { delete process.env.DIALEKTIK_SCIENCE_MODERATORS; await database.destroy(); await pg.close(); }
+});
+
+test('the resolver names where each abstract came from', async () => {
+  const { pg, database, service } = await setup();
+  try {
+    assert.equal((await service.study(DOI)).abstract_source, 'Crossref');
+  } finally { await database.destroy(); await pg.close(); }
+});
+
+test('rejecting needs a reason; reports reach the queue and a moderator hides or dismisses them', async () => {
+  const { pg, database, service } = await setup();
+  process.env.DIALEKTIK_SCIENCE_MODERATORS = moderator;
+  try {
+    const study = await service.addStudyComment(veteran, 'event1', studyInput());
+    await rejectsWith(service.decide(moderator, study.id, false, null), 400, 'PUBLIC_SCIENCE_REASON_REQUIRED');
+    assert.equal((await service.decide(moderator, study.id, false, 'El fragmento no sostiene la relación')).status, 'rejected');
+    const rows = await pg.query(`select review_reason from public.story_comments where id = $1`, [study.id]);
+    assert.equal(rows.rows[0].review_reason, 'El fragmento no sostiene la relación');
+
+    const rude = await service.addComment(other, 'event1', { body: 'Comentario ofensivo', parentId: null });
+    const fine = await service.addComment(other, 'event1', { body: 'Comentario normal', parentId: null });
+    await rejectsWith(service.report(other, rude.id, 'ofensivo', null), 400, 'PUBLIC_SCIENCE_OWN_COMMENT');
+    await service.report(veteran, rude.id, 'ofensivo', 'Insulta a otro lector');
+    await service.report(veteran, rude.id, 'spam', null); // one per reader: ignored
+    await service.report(newcomer, rude.id, 'ofensivo', null);
+    await service.report(veteran, fine.id, 'otro', null);
+    let queue = await service.moderationQueue(moderator);
+    assert.deepEqual(queue.reports.map((r) => [r.id, r.reports.length]), [[rude.id, 2], [fine.id, 1]]);
+    assert.equal(queue.reports[0].reports[0].note, 'Insulta a otro lector');
+    await rejectsWith(service.resolveReports(other, rude.id, true, 'x'), 403);
+    await rejectsWith(service.resolveReports(moderator, rude.id, true, null), 400, 'PUBLIC_SCIENCE_REASON_REQUIRED');
+    assert.equal((await service.resolveReports(moderator, rude.id, true, 'Insulto personal')).status, 'rejected');
+    assert.equal((await service.resolveReports(moderator, fine.id, false, null)).status, 'published');
+    queue = await service.moderationQueue(moderator);
+    assert.deepEqual(queue.reports, []);
+    // Hidden from everyone, its author included; the other stays.
+    const bodies = (await service.storyComments(other, 'event1')).comments.map((c) => c.body);
+    assert.ok(!bodies.includes('Comentario ofensivo'));
+    assert.ok(bodies.includes('Comentario normal'));
+    await rejectsWith(service.report(veteran, rude.id, 'spam', null), 404);
+  } finally { delete process.env.DIALEKTIK_SCIENCE_MODERATORS; await database.destroy(); await pg.close(); }
 });
