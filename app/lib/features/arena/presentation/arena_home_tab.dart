@@ -151,19 +151,21 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
                           ),
                         ),
                       ),
-                      const SizedBox(width: 10),
-                      Flexible(
-                        child: ModeButton(
-                          mode: store.mode,
-                          onTap: () async {
-                            final ArenaMode? chosen = await showModeSheet(
-                              context,
-                              store.mode,
-                            );
-                            if (chosen != null) store.setMode(chosen);
-                          },
+                      if (store.scienceEnabled) ...<Widget>[
+                        const SizedBox(width: 10),
+                        Flexible(
+                          child: ModeButton(
+                            mode: store.mode,
+                            onTap: () async {
+                              final ArenaMode? chosen = await showModeSheet(
+                                context,
+                                store.mode,
+                              );
+                              if (chosen != null) store.setMode(chosen);
+                            },
+                          ),
                         ),
-                      ),
+                      ],
                     ],
                   ),
                 ),

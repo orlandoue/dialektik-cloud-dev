@@ -37,4 +37,7 @@ abstract interface class ScienceRepository {
   Future<StoryComment> react(String commentId, {required bool reacted});
 
   Future<List<StoryComment>> commentsCitingStudy(String doi);
+
+  /// Whether Science and story comments are on for this account.
+  Future<ScienceAccess> access();
 }

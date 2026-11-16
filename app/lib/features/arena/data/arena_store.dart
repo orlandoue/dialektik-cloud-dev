@@ -17,6 +17,7 @@ import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
+import 'package:dialektik/features/science/data/science_models.dart';
 import 'package:dialektik/features/science/data/science_repository.dart';
 import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
@@ -186,12 +187,42 @@ final class ArenaStore extends ChangeNotifier {
           ? live as ScienceRepository
           : null);
 
+  ArenaMode _mode = ArenaMode.general;
+
   /// General news or Science (studies with DOI); remembered on the device.
-  ArenaMode mode = ArenaMode.general;
+  /// Always General while Science is not enabled for this account.
+  ArenaMode get mode => _scienceEnabled ? _mode : ArenaMode.general;
+
+  bool _scienceEnabled = false;
+  bool _scienceModerator = false;
+
+  /// Science mode and story comments, behind a remote flag that Core turns
+  /// on per account. Off until Core says otherwise, and on any error.
+  bool get scienceEnabled => _scienceEnabled;
+
+  /// The account may moderate Science (DIALEKTIK_SCIENCE_MODERATORS).
+  bool get scienceModerator => _scienceEnabled && _scienceModerator;
+
+  Future<void> _loadScienceAccess() async {
+    final ScienceRepository? repository = science;
+    if (repository == null) return;
+    try {
+      final ScienceAccess access = await repository.access();
+      if (access.enabled == _scienceEnabled &&
+          access.moderator == _scienceModerator) {
+        return;
+      }
+      _scienceEnabled = access.enabled;
+      _scienceModerator = access.moderator;
+      _notify();
+    } on Object {
+      /* Fail closed: Science stays hidden. */
+    }
+  }
 
   void setMode(ArenaMode value) {
-    if (value == mode) return;
-    mode = value;
+    if (value == _mode) return;
+    _mode = value;
     _notify();
     unawaited(
       storage.writeStories(_modeKey, value.name).catchError((Object _) {}),
@@ -204,8 +235,8 @@ final class ArenaStore extends ChangeNotifier {
       final ArenaMode? stored = ArenaMode.values
           .where((ArenaMode m) => m.name == raw)
           .firstOrNull;
-      if (stored != null && stored != mode) {
-        mode = stored;
+      if (stored != null && stored != _mode) {
+        _mode = stored;
         _notify();
       }
     } on Object {
@@ -394,6 +425,7 @@ final class ArenaStore extends ChangeNotifier {
     _notify();
     unawaited(_loadSaved());
     unawaited(_loadMode());
+    unawaited(_loadScienceAccess());
     unawaited(stories.load().catchError((Object _) {}));
     final Future<void> secondary = Future.wait(<Future<void>>[
       _loadSources(refresh: refresh),
