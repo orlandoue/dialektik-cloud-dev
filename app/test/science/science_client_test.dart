@@ -15,6 +15,68 @@ void main() {
     maxAttempts: 1,
   );
 
+  Future<StudyCommentRejected?> rejection(
+    int status,
+    String code, {
+    String? existing,
+  }) async {
+    final PublicApiClient api = client(
+      MockClient(
+        (_) async => http.Response(
+          jsonEncode(<String, Object>{
+            'error': 'refused',
+            'requestId': 'r',
+            'statusCode': status,
+            'code': code,
+            'existing_comment_id': ?existing,
+          }),
+          status,
+          headers: <String, String>{'content-type': 'application/json'},
+        ),
+      ),
+    );
+    try {
+      await api.addStudyComment(
+        '01JEVENT0000000000000000000',
+        doi: '10.7326/m18-2101',
+        claimQuoteId: '01JQUOTE0000000000000000000',
+        relation: StudyRelation.contradicts,
+        abstractFragment: 'does not increase the risk',
+        body: 'Lo contradice.',
+      );
+    } on StudyCommentRejected catch (rejected) {
+      return rejected;
+    }
+    return null;
+  }
+
+  test(
+    'a published duplicate carries its id; one in review does not',
+    () async {
+      const String id = '5f0c2b1e-7a3d-4c8e-9b21-0d6e4f3a2c10';
+      final StudyCommentRejected? published = await rejection(
+        409,
+        'PUBLIC_SCIENCE_DUPLICATE',
+        existing: id,
+      );
+      expect(published?.reason, 'duplicate');
+      expect(published?.existingCommentId, id);
+      final StudyCommentRejected? inReview = await rejection(
+        409,
+        'PUBLIC_SCIENCE_DUPLICATE_IN_REVIEW',
+      );
+      expect(inReview?.reason, 'duplicate_in_review');
+      expect(inReview?.existingCommentId, isNull);
+      // Anything but a UUID is dropped.
+      final StudyCommentRejected? odd = await rejection(
+        409,
+        'PUBLIC_SCIENCE_DUPLICATE',
+        existing: '../admin',
+      );
+      expect(odd?.existingCommentId, isNull);
+    },
+  );
+
   Future<String?> refusal(int status, String code) async {
     final PublicApiClient api = client(
       MockClient(

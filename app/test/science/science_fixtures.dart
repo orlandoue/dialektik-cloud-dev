@@ -249,7 +249,10 @@ class FakeScienceRepository implements ScienceRepository {
     for (final StoryComment c in comments[eventId] ?? const <StoryComment>[]) {
       if (c.attachment?.study.doi == doi &&
           c.attachment?.claim.id == claimQuoteId) {
-        throw StudyCommentRejected('duplicate', existingCommentId: c.id);
+        // Like Core: only a published comment is pointed to.
+        throw c.status == CommentStatus.published
+            ? StudyCommentRejected('duplicate', existingCommentId: c.id)
+            : const StudyCommentRejected('duplicate_in_review');
       }
     }
     if (!isLiteralFragment(abstractFragment, s.abstractText ?? '')) {

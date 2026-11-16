@@ -235,6 +235,11 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
   bool _fragmentInvalid = false;
   bool _busy = false;
   String? _error;
+
+  /// Same study on the same claim already exists in this story.
+  bool _duplicate = false;
+
+  /// Its id when it is published; a comment in review is never pointed to.
   String? _duplicateId;
 
   static const int maxLength = 280;
@@ -258,19 +263,26 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
       _event == null ? const <ClaimQuote>[] : claimQuotesOf(_event!);
 
   /// Same DOI and same claim already in this story's thread.
-  String? _duplicateOf(String? claimId) {
+  StoryComment? _duplicateOf(String? claimId) {
     for (final StoryComment c in widget.existing) {
       final StudyAttachmentData? a = c.attachment;
       if (a != null && a.study.doi == study.doi && a.claim.id == claimId) {
-        return c.id;
+        return c;
       }
     }
     return null;
   }
 
+  void _markDuplicate(StoryComment? existing, {String? publishedId}) {
+    _duplicate = existing != null || publishedId != null;
+    _duplicateId =
+        publishedId ??
+        (existing?.status == CommentStatus.published ? existing!.id : null);
+  }
+
   bool get _complete =>
       !study.retracted &&
-      _duplicateId == null &&
+      !_duplicate &&
       _event != null &&
       _claimId != null &&
       _relation != null &&
@@ -314,7 +326,7 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
         setState(() {
           _event = detail;
           _claimId = null;
-          _duplicateId = null;
+          _markDuplicate(null);
         });
       }
     } on Object {
@@ -326,7 +338,7 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
 
   void _selectClaim(String id) => setState(() {
     _claimId = id;
-    _duplicateId = _duplicateOf(id);
+    _markDuplicate(_duplicateOf(id));
   });
 
   void _selectFragment(String value) {
@@ -361,8 +373,15 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
         _busy = false;
         switch (rejected.reason) {
           case 'duplicate':
-            _duplicateId =
-                rejected.existingCommentId ?? _duplicateOf(_claimId) ?? '';
+            // Published: Core names it so «Ver comentario» can open it.
+            _markDuplicate(
+              _duplicateOf(_claimId),
+              publishedId: rejected.existingCommentId,
+            );
+            _duplicate = true;
+          case 'duplicate_in_review':
+            _duplicate = true;
+            _duplicateId = null;
           case 'not_literal':
             _fragmentInvalid = true;
           case 'account_too_new':
@@ -523,7 +542,16 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
                         onTap: () => _selectClaim(claim.id),
                       ),
                     ),
-                  if (_duplicateId != null) ...<Widget>[
+                  if (_duplicate && _duplicateId == null)
+                    const Padding(
+                      key: Key('sci-duplicate-review'),
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Text(
+                        'Ya hay un aporte con este estudio en revisión',
+                        style: SciText.secondary,
+                      ),
+                    ),
+                  if (_duplicate && _duplicateId != null) ...<Widget>[
                     Row(
                       key: const Key('sci-duplicate'),
                       children: <Widget>[

@@ -179,12 +179,15 @@ final class PublicApiClient
       final String? reason = switch (failure.code) {
         'PUBLIC_SCIENCE_RETRACTED' => 'retracted',
         'PUBLIC_SCIENCE_DUPLICATE' => 'duplicate',
+        'PUBLIC_SCIENCE_DUPLICATE_IN_REVIEW' => 'duplicate_in_review',
         'PUBLIC_SCIENCE_NOT_LITERAL' => 'not_literal',
         'PUBLIC_SCIENCE_ACCOUNT_TOO_NEW' => 'account_too_new',
         'PUBLIC_SCIENCE_INVALID_CLAIM' => 'invalid_claim',
         _ => failure.kind == PublicFailureKind.gone ? 'retracted' : null,
       };
-      if (reason != null) throw StudyCommentRejected(reason);
+      if (reason != null) {
+        throw StudyCommentRejected(reason, existingCommentId: failure.existingCommentId);
+      }
       rethrow;
     }
   }
@@ -860,12 +863,18 @@ final class PublicApiClient
   PublicApiFailure _decodeFailure(http.Response response) {
     String? code;
     TombstoneDto? tombstone;
+    String? existingCommentId;
     try {
       final Object? decoded = jsonDecode(utf8.decode(response.bodyBytes));
       if (decoded is Map<String, Object?>) {
         final Object? rawCode = decoded['code'];
         if (rawCode is String && rawCode.startsWith('PUBLIC_')) {
           code = rawCode;
+        }
+        final Object? existing = decoded['existing_comment_id'];
+        if (existing is String &&
+            RegExp(r'^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$').hasMatch(existing)) {
+          existingCommentId = existing;
         }
         if (response.statusCode == 410 && decoded['tombstone'] != null) {
           tombstone = TombstoneDto.fromJson(decoded['tombstone']);
@@ -889,6 +898,7 @@ final class PublicApiClient
       statusCode: response.statusCode,
       code: code,
       tombstone: tombstone,
+      existingCommentId: existingCommentId,
     );
   }
 

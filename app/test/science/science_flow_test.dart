@@ -325,6 +325,33 @@ void main() {
     expect(find.text('Ver comentario'), findsOneWidget);
   });
 
+  testWidgets('C2 · a duplicate still in review is named, never linked', (
+    WidgetTester tester,
+  ) async {
+    final DateTime now = DateTime.now();
+    final List<StoryComment> thread = <StoryComment>[
+      for (final StoryComment c in sampleThread(now))
+        c.attachment == null ? c : c.copyWith(status: CommentStatus.inReview),
+    ];
+    final ArenaScienceCore core = ArenaScienceCore(
+      science: FakeScienceRepository(
+        comments: <String, List<StoryComment>>{vaccineEventId: thread},
+      ),
+    );
+    await pumpArena(tester, core);
+    await _openVaccineComments(tester);
+    await _pickStudy(tester, hviid);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('sci-claim-$vaccineClaimId')),
+    );
+    await tester.pump();
+    expect(
+      find.text('Ya hay un aporte con este estudio en revisión'),
+      findsOneWidget,
+    );
+    expect(find.text('Ver comentario'), findsNothing);
+  });
+
   testWidgets('C3 · mixed thread, filters, replies and reactions', (
     WidgetTester tester,
   ) async {

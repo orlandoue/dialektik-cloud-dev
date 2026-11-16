@@ -245,13 +245,17 @@ final class StoryComment {
 
   bool get withStudy => attachment != null;
 
-  StoryComment copyWith({int? reactions, bool? reacted}) => StoryComment(
+  StoryComment copyWith({
+    int? reactions,
+    bool? reacted,
+    CommentStatus? status,
+  }) => StoryComment(
     id: id,
     author: author,
     body: body,
     createdAt: createdAt,
     parentId: parentId,
-    status: status,
+    status: status ?? this.status,
     attachment: attachment,
     reactions: reactions ?? this.reactions,
     reacted: reacted ?? this.reacted,
