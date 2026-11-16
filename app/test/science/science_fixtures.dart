@@ -221,6 +221,7 @@ class FakeScienceRepository implements ScienceRepository {
     String eventId, {
     required String body,
     String? parentId,
+    String? alias,
   }) async {
     final StoryComment created = StoryComment(
       id: 'n${_next++}',
@@ -242,6 +243,7 @@ class FakeScienceRepository implements ScienceRepository {
     required StudyRelation relation,
     required String abstractFragment,
     required String body,
+    String? alias,
   }) async {
     studyCalls.add(doi);
     final Study s = await study(doi);
@@ -344,6 +346,7 @@ class ArenaScienceCore extends ArenaFullCore implements ScienceRepository {
     String eventId, {
     required String body,
     String? parentId,
+    String? alias,
   }) => science.addComment(eventId, body: body, parentId: parentId);
   @override
   Future<StoryComment> addStudyComment(
@@ -353,6 +356,7 @@ class ArenaScienceCore extends ArenaFullCore implements ScienceRepository {
     required StudyRelation relation,
     required String abstractFragment,
     required String body,
+    String? alias,
   }) => science.addStudyComment(
     eventId,
     doi: doi,

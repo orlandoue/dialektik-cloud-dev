@@ -76,7 +76,9 @@ List<(String, List<StudyRow>)> studyLabelSections(
       (
         label: 'Retractación',
         value: study.retracted
-            ? 'Sí, ${sciLongDate(study.retractedAt!)}'
+            ? (study.retractedAt == null
+                  ? 'Sí'
+                  : 'Sí, ${sciLongDate(study.retractedAt!)}')
             : 'No',
         tabular: false,
       ),

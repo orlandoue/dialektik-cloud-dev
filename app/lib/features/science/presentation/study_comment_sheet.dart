@@ -353,6 +353,7 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
         relation: _relation!,
         abstractFragment: _fragment,
         body: _comment.text.trim(),
+        alias: widget.store.alias,
       );
       if (mounted) Navigator.of(context).pop(created);
     } on StudyCommentRejected catch (rejected) {
@@ -361,7 +362,8 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
         _busy = false;
         switch (rejected.reason) {
           case 'duplicate':
-            _duplicateId = rejected.existingCommentId ?? '';
+            _duplicateId =
+                rejected.existingCommentId ?? _duplicateOf(_claimId) ?? '';
           case 'not_literal':
             _fragmentInvalid = true;
           case 'account_too_new':
@@ -481,8 +483,10 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
                       child: Padding(
                         padding: const EdgeInsets.all(12),
                         child: Text(
-                          'La revista retractó este artículo el '
-                          '${sciLongDate(study.retractedAt!)}',
+                          study.retractedAt == null
+                              ? 'La revista retractó este artículo'
+                              : 'La revista retractó este artículo el '
+                                    '${sciLongDate(study.retractedAt!)}',
                           style: SciText.body,
                         ),
                       ),

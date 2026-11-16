@@ -61,6 +61,7 @@ final class Study {
     this.access,
     this.corrections,
     this.retractedAt,
+    this.retractedFlag = false,
     this.abstractText,
     this.abstractLanguage,
     this.madeInChile = false,
@@ -87,6 +88,7 @@ final class Study {
     access: json['access'] as String?,
     corrections: json['corrections'] as String?,
     retractedAt: DateTime.tryParse(json['retracted_at'] as String? ?? ''),
+    retractedFlag: json['retracted'] as bool? ?? false,
     abstractText: json['abstract'] as String?,
     abstractLanguage: json['abstract_language'] as String?,
     madeInChile: json['made_in_chile'] as bool? ?? false,
@@ -121,6 +123,9 @@ final class Study {
 
   /// Set when the journal retracted the article (from Crossref).
   final DateTime? retractedAt;
+
+  /// Retracted even when the notice gives no date (OpenAlex flag).
+  final bool retractedFlag;
   final String? abstractText;
 
   /// BCP-47 code of the abstract, e.g. `en`.
@@ -129,7 +134,7 @@ final class Study {
   final int connectedStories;
   final int citingComments;
 
-  bool get retracted => retractedAt != null;
+  bool get retracted => retractedFlag || retractedAt != null;
   Uri get doiUrl => Uri.parse('https://doi.org/$doi');
   String get reviewLabel =>
       review == StudyReview.preprint ? 'Preprint' : 'Revisado por pares';

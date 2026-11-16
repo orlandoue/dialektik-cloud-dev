@@ -156,26 +156,35 @@ final class PublicApiClient
     createdAt: entry.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
     reactions: entry.upvotes, reacted: entry.myVote == 1, mine: entry.mine);
   @override
-  Future<StoryComment> addComment(String eventId, {required String body, String? parentId}) async {
+  Future<StoryComment> addComment(String eventId, {required String body, String? parentId, String? alias}) async {
     try {
       return await _postJson('/v1/stories/${Uri.encodeComponent(eventId)}/comments',
-        {'body': body, 'parent_id': ?parentId}, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
+        {'body': body, 'parent_id': ?parentId, 'alias': ?alias}, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
     } on PublicApiFailure catch (failure) {
       if (failure.kind != PublicFailureKind.notFound) rethrow;
-      final entries = await addCommunityEntry(eventId, channel: CommunityChannel.debate, body: body);
+      final entries = await addCommunityEntry(eventId, channel: CommunityChannel.debate, body: body, alias: alias);
       return _commentFromEntry(entries.firstWhere((e) => e.mine && e.body == body, orElse: () => entries.first));
     }
   }
   @override
   Future<StoryComment> addStudyComment(String eventId, {required String doi, required String claimQuoteId,
-      required StudyRelation relation, required String abstractFragment, required String body}) async {
+      required StudyRelation relation, required String abstractFragment, required String body, String? alias}) async {
     try {
       return await _postJson('/v1/stories/${Uri.encodeComponent(eventId)}/study-comments', {
         'doi': doi, 'claim_quote_id': claimQuoteId, 'relation': relation.wire,
-        'abstract_fragment': abstractFragment, 'body': body,
+        'abstract_fragment': abstractFragment, 'body': body, 'alias': ?alias,
       }, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
     } on PublicApiFailure catch (failure) {
-      if (failure.kind == PublicFailureKind.gone) throw const StudyCommentRejected('retracted');
+      // Core names each refusal with a PUBLIC_SCIENCE_* code.
+      final String? reason = switch (failure.code) {
+        'PUBLIC_SCIENCE_RETRACTED' => 'retracted',
+        'PUBLIC_SCIENCE_DUPLICATE' => 'duplicate',
+        'PUBLIC_SCIENCE_NOT_LITERAL' => 'not_literal',
+        'PUBLIC_SCIENCE_ACCOUNT_TOO_NEW' => 'account_too_new',
+        'PUBLIC_SCIENCE_INVALID_CLAIM' => 'invalid_claim',
+        _ => failure.kind == PublicFailureKind.gone ? 'retracted' : null,
+      };
+      if (reason != null) throw StudyCommentRejected(reason);
       rethrow;
     }
   }
