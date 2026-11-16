@@ -37,5 +37,5 @@ jobs:
           node-version: '26'
       - run: npm ci --no-audit --no-fund
       - run: npm run build
-      - run: node --test services/core-api/test/science-comments.integration.test.mjs
+      - run: node --test services/core-api/test/science-comments.integration.test.mjs services/core-api/test/science-flag.test.mjs
       - run: node --test services/core-api/test/science-comments.postgres.test.mjs
