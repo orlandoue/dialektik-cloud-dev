@@ -82,11 +82,22 @@ String? sanitizeAlias(String? raw) {
 
 /// Alias shown for an account: the chosen one, else the Google name, else
 /// the part of the email before `@`.
+/// The public name of a reader. Never derived from the e-mail address: a
+/// reader without an alias gets a stable «Lector-NNNN» instead.
 String aliasFor(SupabaseAuthUser? user) =>
     sanitizeAlias(user?.alias) ??
     sanitizeAlias(user?.displayName) ??
-    sanitizeAlias(user?.email?.split('@').first) ??
-    'Lector';
+    readerAliasFor(user?.email);
+
+/// «Lector-NNNN», stable for one e-mail without revealing it.
+String readerAliasFor(String? seed) {
+  if (seed == null || seed.trim().isEmpty) return 'Lector';
+  int hash = 0x811c9dc5;
+  for (final int unit in seed.trim().toLowerCase().codeUnits) {
+    hash = ((hash ^ unit) * 0x01000193) & 0xffffffff;
+  }
+  return 'Lector-${1000 + hash % 9000}';
+}
 
 /// Transient transport failure; unlike a rejected refresh, it does not clear
 /// an otherwise valid in-memory session.

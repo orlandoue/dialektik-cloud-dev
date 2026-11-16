@@ -62,10 +62,10 @@ void main() {
     }
     await tester.tap(find.descendant(of: bar, matching: find.text('Medios')));
     await tester.pumpAndSettle();
-    expect(find.text('3 fuentes registradas · sigues 1'), findsOneWidget);
+    expect(find.textContaining('medios · sigues 1'), findsOneWidget);
     await tester.tap(find.descendant(of: bar, matching: find.text('Perfil')));
     await tester.pumpAndSettle();
-    expect(find.text('Configurar mi radar'), findsOneWidget);
+    expect(find.text('Elegir mis medios'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -76,15 +76,15 @@ void main() {
       expect(find.text('Dialektik'), findsOneWidget);
       expect(find.byKey(const Key('arena-search')), findsOneWidget);
       expect(find.byKey(const Key('arena-alerts')), findsOneWidget);
+      // One feed: no sub-tabs, no topic filter, no country selector.
       for (final String pill in <String>['Coliseo', 'Explorar', 'Siguiendo']) {
-        expect(
-          find.byKey(ValueKey<String>('arena-pill-$pill')),
-          findsOneWidget,
-        );
+        expect(find.byKey(ValueKey<String>('arena-pill-$pill')), findsNothing);
       }
+      expect(find.byKey(const Key('arena-topic-filter')), findsNothing);
+      expect(find.byKey(const Key('arena-country')), findsNothing);
       final Finder duel = find.byKey(const Key('arena-duel-of-the-day'));
       expect(
-        find.descendant(of: duel, matching: find.text('🔥 DUELO DEL DÍA')),
+        find.descendant(of: duel, matching: find.text('DUELO DEL DÍA')),
         findsOneWidget,
       );
       expect(
@@ -103,24 +103,33 @@ void main() {
         find.descendant(of: duel, matching: find.text('VS')),
         findsOneWidget,
       );
+      // Votes are opinion, never evidence, and their split stays hidden
+      // until the reader votes.
       expect(
         find.descendant(
           of: duel,
-          matching: find.text('Termómetro de evidencia'),
+          matching: find.text('Opinión de la comunidad'),
         ),
         findsOneWidget,
       );
-      expect(find.text('67% de respaldo · 3 votos'), findsOneWidget);
+      expect(find.textContaining('Termómetro'), findsNothing);
+      expect(
+        find.text('3 opiniones · el reparto se muestra después de votar.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('67%'), findsNothing);
+      expect(
+        find.text('Es opinión, no indica qué versión es correcta.'),
+        findsOneWidget,
+      );
       expect(find.byTooltip('Compartir duelo'), findsOneWidget);
       expect(find.byTooltip('Guardar duelo'), findsOneWidget);
-      expect(find.byTooltip('Abrir duelo completo'), findsOneWidget);
+      // The whole card opens the duel; no redundant arrow.
+      expect(find.byTooltip('Abrir duelo completo'), findsNothing);
 
       await reveal(tester, find.text(storyTitle), 'arena-coliseo-scroll');
       expect(find.text('Historias en desarrollo'), findsOneWidget);
-      expect(
-        find.textContaining('3 fuentes · Actualizada hace'),
-        findsOneWidget,
-      );
+      expect(find.textContaining('3 medios · '), findsOneWidget);
 
       final Finder video = find.text(
         'Debate presidencial: el cruce por pensiones',
@@ -145,26 +154,27 @@ void main() {
     },
   );
 
-  testWidgets('las píldoras de Inicio conservan su estado en memoria', (
+  testWidgets('Inicio reúne lo que no viste, tus medios y un final claro', (
     WidgetTester tester,
   ) async {
     await pumpArena(tester, ArenaFakeCore());
-    await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Explorar')));
-    await tester.pump();
-    expect(find.text('Lo que no viste hoy'), findsOneWidget);
-    await tester.tap(
-      find.byKey(const ValueKey<String>('arena-pill-Siguiendo')),
+    await reveal(
+      tester,
+      find.text('Lo que no viste hoy'),
+      'arena-coliseo-scroll',
     );
-    await tester.pumpAndSettle();
-    expect(
-      find.text('La Tercera: balance económico del trimestre'),
-      findsOneWidget,
+    expect(find.byKey(const Key('arena-blindspot-banner')), findsOneWidget);
+    // The followed outlet's latest, without repeating its name in the title.
+    await reveal(
+      tester,
+      find.text('balance económico del trimestre'),
+      'arena-coliseo-scroll',
     );
-    await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Coliseo')));
-    await tester.pump();
-    // A single frame is enough: nothing is refetched or rebuilt from scratch.
-    expect(find.byKey(const Key('arena-duel-of-the-day')), findsOneWidget);
-    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.text('De tu medio'), findsOneWidget);
+    expect(find.byKey(const Key('arena-following-all')), findsOneWidget);
+    await reveal(tester, find.text('Ya estás al día'), 'arena-coliseo-scroll');
+    expect(find.byKey(const Key('arena-feed-end')), findsOneWidget);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Pantalla 2 · VS Duelo de Medios con citas, pestañas y voto', (
@@ -177,14 +187,25 @@ void main() {
       initialTab: ArenaTab.vs,
     );
     expect(find.text('VS · Duelos'), findsOneWidget);
-    expect(find.text('DISTINTO ENFOQUE'), findsOneWidget);
+    // The list says whether the reader voted and previews both quotes.
+    expect(find.text('Pendiente'), findsOneWidget);
+    expect(find.textContaining('Distinto enfoque'), findsOneWidget);
     await tester.tap(find.text(duelTitle));
     await tester.pumpAndSettle();
 
     expect(find.text('VS · Duelo de Medios'), findsOneWidget);
     expect(find.textContaining('JUSTICIA · 9'), findsOneWidget);
-    // Only the classification that applies is shown, as a badge.
-    expect(find.text('⚡ Distinto enfoque'), findsOneWidget);
+    // Only the classification that applies is shown, labelled as Dialektik's.
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('arena-duel-kind')),
+        matching: find.textContaining(
+          'Tipo de duelo (Dialektik): Distinto enfoque',
+          findRichText: true,
+        ),
+      ),
+      findsOneWidget,
+    );
     expect(find.textContaining('Contradicción'), findsNothing);
     expect(find.textContaining('compatible'), findsNothing);
     expect(
@@ -226,16 +247,11 @@ void main() {
     expect(find.text('¿Qué falta por saber?'), findsNothing);
     expect(find.text('Cobertura comparada'), findsNothing);
 
-    await reveal(
-      tester,
+    // One tab of original notes, in publication order; no Contexto tab.
+    expect(
       find.byKey(const ValueKey<String>('arena-subtab-Contexto')),
-      'arena-duel-scroll',
+      findsNothing,
     );
-    await tester.tap(
-      find.byKey(const ValueKey<String>('arena-subtab-Contexto')),
-    );
-    await tester.pumpAndSettle();
-    // The facts in publication order, with no empty filler blocks.
     expect(find.text('Antecedentes del acontecimiento'), findsNothing);
     final Finder earlier = find.byKey(
       const ValueKey<String>('arena-context-art1'),
@@ -251,22 +267,38 @@ void main() {
       find.byKey(const ValueKey<String>('arena-subtab-Análisis IA')),
     );
     await tester.pumpAndSettle();
-    expect(find.text('En qué coinciden'), findsOneWidget);
+    // Dialektik's reading sits in its own labelled box; no filler block.
+    expect(find.text('En qué coinciden'), findsNothing);
     expect(find.text('Por qué es distinto enfoque'), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byKey(const Key('arena-ai-analysis')),
+        matching: find.text('Interpretación generada por Dialektik (IA)'),
+      ),
+      findsOneWidget,
+    );
 
     await tester.tap(find.byKey(const Key('arena-vote-button')));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey<String>('arena-vote-SOLID')));
     await tester.pumpAndSettle();
     expect(core.reactions, <String>['SOLID']);
-    expect(find.text('75% de respaldo · 4 votos'), findsWidgets);
+    // Four opinions are too few to show a split.
+    expect(
+      find.text(
+        'Aún hay pocas opiniones (4 opiniones). El reparto se muestra desde '
+        '30.',
+      ),
+      findsWidgets,
+    );
+    expect(find.textContaining('75%'), findsNothing);
     expect(find.text('✓ Tiene respaldo sólido'), findsOneWidget);
     expect(find.text('Abrir comunidad del caso'), findsOneWidget);
     expect(find.text('Crear tarjeta para X y WhatsApp'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('Pantalla 3 · Acontecimiento vivo con sus 4 pestañas', (
+  testWidgets('Pantalla 3 · Acontecimiento vivo con sus 3 pestañas', (
     WidgetTester tester,
   ) async {
     final List<Uri> opened = await pumpArena(
@@ -274,7 +306,13 @@ void main() {
       ArenaFakeCore(),
       initialTab: ArenaTab.historias,
     );
-    expect(find.text('Historias vivas'), findsOneWidget);
+    expect(
+      find.text(
+        'Cada acontecimiento conserva su cronología y lo que dijo cada '
+        'medio.',
+      ),
+      findsOneWidget,
+    );
     final Finder economy = find.byKey(
       const ValueKey<String>('arena-pill-Economía'),
     );
@@ -286,18 +324,33 @@ void main() {
     await tester.tap(find.text(storyTitle));
     await tester.pumpAndSettle();
 
-    expect(find.text('● ACONTECIMIENTO VIVO'), findsOneWidget);
-    expect(find.text('📚 3 fuentes'), findsOneWidget);
+    // One status pill: live while it gets coverage, quiet after 72 h.
+    expect(
+      find.text('● En desarrollo').evaluate().length +
+          find.text('Sin novedades recientes').evaluate().length,
+      1,
+    );
+    expect(find.text('● ACONTECIMIENTO VIVO'), findsNothing);
+    expect(
+      find.text('3 medios · BioBioChile, La Tercera, T13'),
+      findsOneWidget,
+    );
     expect(find.byKey(const Key('arena-follow-story')), findsOneWidget);
-    expect(find.text('Estado actual'), findsOneWidget);
-    expect(find.text('● En desarrollo'), findsOneWidget);
+    expect(find.byKey(const Key('arena-open-community')), findsOneWidget);
+    // Dialektik never states the facts itself: every line is attributed.
+    expect(find.text('Lo que dicen los medios'), findsOneWidget);
+    expect(
+      find.textContaining('Según La Tercera: ', findRichText: true),
+      findsOneWidget,
+    );
+    expect(find.text('Estado actual'), findsNothing);
 
     final Finder change = find.byKey(const Key('arena-last-change'));
     await reveal(tester, change, 'arena-event-scroll');
     expect(
       find.descendant(
         of: change,
-        matching: find.textContaining('⚡ Último cambio · '),
+        matching: find.textContaining('Último cambio · '),
       ),
       findsOneWidget,
     );
@@ -310,9 +363,9 @@ void main() {
       ),
       findsOneWidget,
     );
-    await reveal(tester, find.text('Impacto'), 'arena-event-scroll');
-    expect(find.text('Qué pasó'), findsOneWidget);
-    expect(find.text('Quiénes están involucrados'), findsOneWidget);
+    await reveal(tester, find.text('Quiénes aparecen'), 'arena-event-scroll');
+    expect(find.text('Impacto'), findsNothing);
+    expect(find.text('Qué pasó'), findsNothing);
 
     Future<void> openTab(String label) async {
       final Finder tab = find.byKey(ValueKey<String>('arena-subtab-$label'));
@@ -341,22 +394,17 @@ void main() {
     await tester.tap(second);
     expect(opened.last.toString(), 'https://biobiochile.cl/nota/art4');
 
-    await openTab('Versiones');
-    expect(find.text('Las versiones tienen memoria'), findsOneWidget);
-    expect(find.text('Anuncio / Primeras coberturas'), findsOneWidget);
-    await reveal(tester, find.text('Síntesis vigente'), 'arena-event-scroll');
-    expect(find.text('Nuevos ángulos / fuentes sumadas'), findsOneWidget);
-    expect(find.textContaining('Se sumaron: BioBioChile, T13'), findsOneWidget);
+    // The chronology carries the milestones; no separate Versiones tab.
+    expect(find.text('PRIMERAS COBERTURAS'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('arena-subtab-Versiones')),
+      findsNothing,
+    );
 
-    await openTab('Evidencia');
+    await openTab('Citas');
     expect(
       find.text('“La estatal confirmó la desvinculación de 300 trabajadores”'),
       findsOneWidget,
-    );
-    await reveal(
-      tester,
-      find.byKey(const Key('arena-open-community')),
-      'arena-event-scroll',
     );
     expect(tester.takeException(), isNull);
   });
@@ -374,15 +422,18 @@ void main() {
     expect(find.text('VS · Duelo de Medios'), findsOneWidget);
   });
 
-  testWidgets('Pantalla 4 · Perfil de medio con radiografía y seguimiento', (
+  testWidgets('Pantalla 4 · Perfil de medio neutral y seguimiento', (
     WidgetTester tester,
   ) async {
     final ArenaFakeCore core = ArenaFakeCore();
     await pumpArena(tester, core, initialTab: ArenaTab.medios);
     expect(
-      find.text('Sincronizar mis fuentes con YouTube o X'),
+      find.text('Importar los medios que sigues en YouTube o X'),
       findsOneWidget,
     );
+    // Objective format groups, never editorial style labels.
+    expect(find.text('Prensa escrita y digital'), findsOneWidget);
+    expect(find.textContaining('Investigación'), findsNothing);
     final Finder card = find.byKey(
       const ValueKey<String>('arena-media-$biobioId'),
     );
@@ -392,45 +443,52 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Prensa escrita · 12 seguidores'), findsOneWidget);
-    expect(find.byIcon(Icons.verified), findsOneWidget);
-    expect(find.text('+ Seguir'), findsOneWidget);
-    expect(find.text('⇄ Comparar'), findsOneWidget);
-    for (final String tab in <String>[
-      'Radiografía',
-      'Cobertura',
-      'Historial',
-    ]) {
+    // No badge and no follower count: neither may read as an endorsement.
+    expect(find.text('Prensa escrita · Fuente registrada'), findsOneWidget);
+    expect(find.byIcon(Icons.verified), findsNothing);
+    expect(find.textContaining('seguidores'), findsNothing);
+    expect(find.text('Seguir'), findsOneWidget);
+    expect(find.text('Comparar'), findsOneWidget);
+    for (final String tab in <String>['Resumen', 'Cobertura', 'Duelos']) {
       expect(find.byKey(ValueKey<String>('arena-subtab-$tab')), findsOneWidget);
     }
-    expect(find.text('Perfil editorial / Formato'), findsOneWidget);
+    expect(find.text('Publica en texto.'), findsOneWidget);
+    await reveal(
+      tester,
+      find.textContaining('Comparte duelos con: La Tercera (1)'),
+      'arena-media-scroll',
+    );
+    expect(find.text('Actividad en Dialektik'), findsOneWidget);
+    expect(find.textContaining('Precisión'), findsNothing);
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('arena-subtab-Cobertura')),
+    );
+    await tester.pumpAndSettle();
     final Finder donut = find.byKey(const Key('arena-coverage-donut'));
     await reveal(tester, donut, 'arena-media-scroll');
-    expect(find.text('Cobertura del último mes'), findsOneWidget);
-    for (final String topic in <String>[
-      'Política',
-      'Economía',
-      'Justicia',
-      'Sociedad',
-      'Deportes',
-      'Otros',
-    ]) {
+    // 3 real publications: one political, one judicial, one sports; topics
+    // it did not cover are not listed.
+    for (final String topic in <String>['Política', 'Justicia', 'Deportes']) {
       expect(
         find.descendant(of: donut, matching: find.text(topic)),
         findsOneWidget,
       );
     }
-    // 3 real publications: one political, one judicial, one sports.
+    for (final String topic in <String>['Economía', 'Sociedad', 'Otros']) {
+      expect(
+        find.descendant(of: donut, matching: find.text(topic)),
+        findsNothing,
+      );
+    }
     expect(
       find.descendant(of: donut, matching: find.text('33%')),
       findsNWidgets(3),
     );
-    await reveal(
-      tester,
-      find.textContaining('Contrasta más con: La Tercera (1)'),
-      'arena-media-scroll',
+    await tester.tap(
+      find.byKey(const ValueKey<String>('arena-subtab-Resumen')),
     );
-    expect(find.text('Precisión, trazabilidad y duelos VS'), findsOneWidget);
+    await tester.pumpAndSettle();
 
     await tester.dragUntilVisible(
       find.byKey(const Key('arena-media-follow')),
@@ -441,11 +499,9 @@ void main() {
     await tester.tap(find.byKey(const Key('arena-media-follow')));
     await tester.pumpAndSettle();
     expect(core.followed, contains(biobioId));
-    expect(find.text('✓ Siguiendo'), findsOneWidget);
+    expect(find.text('Siguiendo'), findsOneWidget);
 
-    await tester.tap(
-      find.byKey(const ValueKey<String>('arena-subtab-Historial')),
-    );
+    await tester.tap(find.byKey(const ValueKey<String>('arena-subtab-Duelos')));
     await tester.pumpAndSettle();
     await reveal(tester, find.text(storyTitle), 'arena-media-scroll');
 
@@ -544,80 +600,53 @@ void main() {
     },
   );
 
-  testWidgets('Pantalla 6 · Explorar con banner, tendencias y temas', (
-    WidgetTester tester,
-  ) async {
-    await pumpArena(tester, ArenaFakeCore());
-    await tester.tap(find.byKey(const ValueKey<String>('arena-pill-Explorar')));
-    await tester.pumpAndSettle();
-
-    final Finder banner = find.byKey(const Key('arena-blindspot-banner'));
-    expect(
-      find.descendant(of: banner, matching: find.text('Lo que no viste hoy')),
-      findsOneWidget,
-    );
-    expect(
-      find.text('Ángulos y datos que no aparecen en tus medios habituales →'),
-      findsOneWidget,
-    );
-    final Ink ink = tester.widget<Ink>(
-      find.ancestor(of: banner, matching: find.byType(Ink)).first,
-    );
-    expect(
-      ((ink.decoration! as BoxDecoration).gradient! as LinearGradient).colors,
-      const <Color>[Color(0xFF6D28D9), Color(0xFF4F46E5)],
-    );
-    expect(find.text('Tendencias en Dialektik'), findsOneWidget);
-    // Ranked by number of sources: the 3-source story leads.
-    final Finder top = find.byKey(const ValueKey<String>('arena-trend-1'));
-    expect(find.descendant(of: top, matching: find.text('1')), findsOneWidget);
-    expect(
-      find.descendant(of: top, matching: find.text(storyTitle)),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: top, matching: find.text('🔥 3 fuentes')),
-      findsOneWidget,
-    );
-    expect(
-      find.descendant(of: top, matching: find.byIcon(Icons.trending_up)),
-      findsOneWidget,
-    );
-    await reveal(
-      tester,
-      find.byKey(const ValueKey<String>('arena-topic-sociedad')),
-      'arena-explore-scroll',
-    );
-    for (final String topic in <String>[
-      'politica',
-      'justicia',
-      'economia',
-      'medioambiente',
-      'ciencia',
-      'deportes',
-      'sociedad',
-    ]) {
+  testWidgets(
+    'Pantalla 6 · Lo que no viste hoy, en Inicio, y orden por cobertura en Historias',
+    (WidgetTester tester) async {
+      await pumpArena(tester, ArenaFakeCore());
+      final Finder banner = find.byKey(const Key('arena-blindspot-banner'));
+      await reveal(tester, banner, 'arena-coliseo-scroll');
       expect(
-        find.byKey(ValueKey<String>('arena-topic-$topic')),
+        find.descendant(of: banner, matching: find.text('Lo que no viste hoy')),
         findsOneWidget,
       );
-    }
+      expect(
+        find.text('Ángulos y datos que no aparecen en tus medios habituales →'),
+        findsOneWidget,
+      );
+      final Ink ink = tester.widget<Ink>(
+        find.ancestor(of: banner, matching: find.byType(Ink)).first,
+      );
+      expect(
+        ((ink.decoration! as BoxDecoration).gradient! as LinearGradient).colors,
+        const <Color>[Color(0xFF6D28D9), Color(0xFF4F46E5)],
+      );
+      await tester.tap(banner);
+      await tester.pumpAndSettle();
+      expect(find.text('Acontecimientos fuera de tus medios'), findsOneWidget);
+      await tester.scrollUntilVisible(
+        find.text('Investigación revela contratos sin licitación'),
+        220,
+        scrollable: find.byType(Scrollable).last,
+      );
+      expect(find.text('Cobertura de un medio que no sigues'), findsOneWidget);
+      await tester.pageBack();
+      await tester.pumpAndSettle();
 
-    await tester.dragUntilVisible(
-      banner,
-      find.byKey(const Key('arena-explore-scroll')),
-      const Offset(0, 300),
-    );
-    await tester.pumpAndSettle();
-    await tester.tap(banner);
-    await tester.pumpAndSettle();
-    expect(find.text('Acontecimientos fuera de tus medios'), findsOneWidget);
-    await tester.scrollUntilVisible(
-      find.text('Investigación revela contratos sin licitación'),
-      220,
-      scrollable: find.byType(Scrollable).last,
-    );
-    expect(find.text('Cobertura de un medio que no sigues'), findsOneWidget);
-    expect(tester.takeException(), isNull);
-  });
+      // Trends live in Historias: «Más cubiertas» puts the 3-outlet story first.
+      final Finder bar = find.byKey(const Key('arena-bottom-navigation'));
+      await tester.tap(
+        find.descendant(of: bar, matching: find.text('Historias')),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('arena-stories-order-1')),
+      );
+      await tester.pumpAndSettle();
+      final Finder story = find.text(storyTitle);
+      final Finder duel = find.text(duelTitle);
+      expect(tester.getTopLeft(story).dy, lessThan(tester.getTopLeft(duel).dy));
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

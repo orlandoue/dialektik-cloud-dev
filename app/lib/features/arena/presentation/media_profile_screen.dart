@@ -10,7 +10,6 @@ import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
-import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/material.dart';
 
 /// Real publications and case participation of one registered medium.
@@ -145,7 +144,6 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
   MediaCoverage? _coverage;
   Object? _error;
   int _tab = 0;
-  int? _followers;
   bool _busy = false;
 
   ArenaStore get store => widget.store;
@@ -155,7 +153,6 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
   void initState() {
     super.initState();
     unawaited(_load());
-    unawaited(_loadFollowers());
   }
 
   Future<void> _load() async {
@@ -167,26 +164,12 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
     }
   }
 
-  Future<void> _loadFollowers() async {
-    try {
-      final SocialSummary? summary = await store.social?.socialSummary(
-        sourceId: source.id,
-      );
-      if (mounted && summary != null) {
-        setState(() => _followers = summary.followers);
-      }
-    } on Exception {
-      /* The profile stays readable without the follower count. */
-    }
-  }
-
   Future<void> _toggleFollow() async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
       final List<LiveSourceDto> brand = store.brandOf(source);
       await store.setBrandFollowing(brand, value: !store.followsBrand(brand));
-      unawaited(_loadFollowers());
     } on Object {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -301,26 +284,11 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: <Widget>[
-                                    Text.rich(
-                                      TextSpan(
-                                        text: arenaSourceName(source.name),
-                                        children: const <InlineSpan>[
-                                          WidgetSpan(
-                                            alignment:
-                                                PlaceholderAlignment.middle,
-                                            child: Padding(
-                                              padding: EdgeInsets.only(left: 6),
-                                              child: Icon(
-                                                Icons.verified,
-                                                size: 18,
-                                                color: Color(0xFFA5B4FC),
-                                                semanticLabel:
-                                                    'Fuente registrada',
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
+                                    // No badge and no follower count: both
+                                    // would read as an endorsement of the
+                                    // outlet's quality or credibility.
+                                    Text(
+                                      arenaSourceName(source.name),
                                       style: const TextStyle(
                                         fontSize: 21,
                                         fontWeight: FontWeight.w800,
@@ -329,8 +297,8 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      '${arenaMediaKind(source)}'
-                                      '${_followers == null ? '' : ' · $_followers ${_followers == 1 ? 'seguidor' : 'seguidores'}'}',
+                                      '${arenaMediaKind(source)} · Fuente '
+                                      'registrada',
                                       style: const TextStyle(
                                         fontSize: 13,
                                         color: Color(0xFFE2E8F0),
@@ -348,9 +316,9 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
                           child: Row(
                             children: <Widget>[
                               Expanded(
-                                child: ArenaPrimaryButton(
+                                child: ArenaFollowButton(
                                   key: const Key('arena-media-follow'),
-                                  label: following ? '✓ Siguiendo' : '+ Seguir',
+                                  following: following,
                                   onPressed: store.following == null || _busy
                                       ? null
                                       : _toggleFollow,
@@ -358,8 +326,12 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
                               ),
                               const SizedBox(width: 10),
                               Expanded(
-                                child: OutlinedButton(
+                                child: OutlinedButton.icon(
                                   key: const Key('arena-media-compare'),
+                                  icon: const Icon(
+                                    Icons.compare_arrows_rounded,
+                                    size: 18,
+                                  ),
                                   onPressed: _compare,
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.white,
@@ -373,8 +345,8 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
                                       borderRadius: BorderRadius.circular(14),
                                     ),
                                   ),
-                                  child: const Text(
-                                    '⇄ Comparar',
+                                  label: const Text(
+                                    'Comparar',
                                     textAlign: TextAlign.center,
                                     style: TextStyle(
                                       fontSize: 15,
@@ -397,11 +369,7 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
                     ArenaSubTabs(
-                      labels: const <String>[
-                        'Radiografía',
-                        'Cobertura',
-                        'Historial',
-                      ],
+                      labels: const <String>['Resumen', 'Cobertura', 'Duelos'],
                       selected: _tab,
                       onSelected: (int value) => setState(() => _tab = value),
                     ),
@@ -479,37 +447,24 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Text('Perfil editorial / Formato', style: ArenaText.section),
-            const SizedBox(height: 10),
-            if (total == 0)
-              const Text(
-                'Sin publicaciones registradas en el último mes.',
-                style: ArenaText.body,
-              )
-            else ...<Widget>[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(6),
-                child: LinearProgressIndicator(
-                  value: videos / total,
-                  minHeight: 10,
-                  backgroundColor: ArenaColors.emerald,
-                  valueColor: const AlwaysStoppedAnimation<Color>(
-                    ArenaColors.violet,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Video ${(videos * 100 / total).round()}% · '
-                'Texto ${((total - videos) * 100 / total).round()}%',
-                style: ArenaText.cardTitle,
-              ),
-            ],
+            const Text('Formato', style: ArenaText.section),
+            const SizedBox(height: 6),
+            Text(
+              total == 0
+                  ? 'Sin publicaciones registradas en el último mes.'
+                  : videos == 0
+                  ? 'Publica en texto.'
+                  : videos == total
+                  ? 'Publica en video.'
+                  : 'Publica en texto (${((total - videos) * 100 / total).round()} %) '
+                        'y video (${(videos * 100 / total).round()} %).',
+              style: ArenaText.body,
+            ),
             const SizedBox(height: 8),
             const Text(
               'Transparencia metodológica: Dialektik no asigna etiquetas '
-              'ideológicas a los medios. Esta radiografía se calcula solo '
-              'con las publicaciones registradas de la fuente.',
+              'ideológicas ni de calidad a los medios. Este resumen se '
+              'calcula solo con las publicaciones registradas de la fuente.',
               style: ArenaText.meta,
             ),
           ],
@@ -519,36 +474,33 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const Text('Cobertura del último mes', style: ArenaText.section),
-            const SizedBox(height: 12),
-            CoverageDonut(
-              key: const Key('arena-coverage-donut'),
-              slices: coverage.slices,
-            ),
-          ],
-        ),
-      ),
-      ArenaCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              'Precisión, trazabilidad y duelos VS',
-              style: ArenaText.section,
-            ),
+            const Text('Actividad en Dialektik', style: ArenaText.section),
             const SizedBox(height: 8),
-            _Metric('${coverage.events.length}', 'historias cubiertas'),
-            _Metric('${duels.length}', 'duelos VS en los que participa'),
             _Metric(
-              '$quotes',
-              'citas literales verificadas contra el original',
+              coverage.events.length,
+              'historia cubierta',
+              'historias cubiertas',
             ),
-            _Metric('$total', 'publicaciones con enlace a la fuente original'),
+            _Metric(
+              duels.length,
+              'duelo en el que participa',
+              'duelos en los que participa',
+            ),
+            _Metric(
+              quotes,
+              'cita literal registrada',
+              'citas literales registradas',
+            ),
+            _Metric(
+              total,
+              'publicación enlazada a su original',
+              'publicaciones enlazadas a su original',
+            ),
             const SizedBox(height: 6),
             Text(
               ranked.isEmpty
-                  ? 'Todavía no registra contrastes con otros medios.'
-                  : 'Contrasta más con: '
+                  ? 'Todavía no comparte duelos con otros medios.'
+                  : 'Comparte duelos con: '
                         '${ranked.take(3).map((MapEntry<String, int> e) => '${e.key} (${e.value})').join(', ')}.',
               style: ArenaText.body,
             ),
@@ -565,6 +517,19 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
       ];
     }
     return <Widget>[
+      ArenaCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text('Temas del último mes', style: ArenaText.section),
+            const SizedBox(height: 12),
+            CoverageDonut(
+              key: const Key('arena-coverage-donut'),
+              slices: coverage.slices,
+            ),
+          ],
+        ),
+      ),
       for (final LiveNewsItemDto item in coverage.items)
         if (extractYouTubeVideoId(item.canonicalUrl.toString()) != null)
           ArenaVideoCard(
@@ -639,25 +604,20 @@ class _MediaProfileScreenState extends State<MediaProfileScreen> {
   }
 }
 
+/// A neutral count: same colour and weight as the text around it.
 class _Metric extends StatelessWidget {
-  const _Metric(this.value, this.label);
+  const _Metric(this.value, this.singular, this.plural);
 
-  final String value;
-  final String label;
+  final int value;
+  final String singular;
+  final String plural;
 
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.symmetric(vertical: 3),
-    child: Text.rich(
-      TextSpan(
-        text: '$value ',
-        style: const TextStyle(
-          fontSize: 16,
-          fontWeight: FontWeight.w800,
-          color: ArenaColors.violet,
-        ),
-        children: <InlineSpan>[TextSpan(text: label, style: ArenaText.body)],
-      ),
+    child: Text(
+      '$value ${value == 1 ? singular : plural}',
+      style: ArenaText.body,
     ),
   );
 }

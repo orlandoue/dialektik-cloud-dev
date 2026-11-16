@@ -2,22 +2,28 @@ import 'dart:math' as math;
 
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
+import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/material.dart';
 
-/// Typographic identity of a medium. No third-party logo is reproduced.
+/// Typographic identity of a medium: a neutral monogram. No third-party
+/// logo or brand colour is reproduced, and every outlet looks the same, so
+/// no colour can favour or single out one of them.
 ({String label, Color background, Color foreground}) arenaEmblemOf(
   String sourceName,
 ) {
   final String name = arenaSourceName(sourceName);
   final String lower = name.toLowerCase();
-  const Color white = Color(0xFFFFFFFF);
   ({String label, Color background, Color foreground}) brand(
     String label,
-    int color,
-  ) => (label: label, background: Color(color), foreground: white);
+    int _,
+  ) => (
+    label: label,
+    background: const Color(0xFFE5E7EB),
+    foreground: const Color(0xFF111827),
+  );
   if (lower.contains('la tercera')) return brand('LT', 0xFF1E2430);
   if (lower.contains('biobio') || lower.contains('bío bío')) {
     return brand('RBB', 0xFF15578E);
@@ -189,7 +195,7 @@ class ArenaPill extends StatelessWidget {
         customBorder: const StadiumBorder(),
         onTap: onTap,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 40),
+          constraints: const BoxConstraints(minHeight: 44),
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             child: Center(
@@ -256,7 +262,7 @@ class ArenaDropdownPill extends StatelessWidget {
               customBorder: const StadiumBorder(),
               onTap: onTap,
               child: ConstrainedBox(
-                constraints: const BoxConstraints(minHeight: 40),
+                constraints: const BoxConstraints(minHeight: 44),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -342,17 +348,20 @@ class ArenaPillBar extends StatelessWidget {
         ),
       );
     }
-    return SingleChildScrollView(
-      scrollDirection: Axis.horizontal,
-      padding: padding,
-      child: Row(
-        children: <Widget>[
-          for (int i = 0; i < labels.length; i++)
-            Padding(
-              padding: EdgeInsets.only(right: i == labels.length - 1 ? 0 : 8),
-              child: _pill(i),
-            ),
-        ],
+    // A fade on the trailing edge shows the row continues.
+    return arenaTrailingFade(
+      SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: padding,
+        child: Row(
+          children: <Widget>[
+            for (int i = 0; i < labels.length; i++)
+              Padding(
+                padding: EdgeInsets.only(right: i == labels.length - 1 ? 0 : 8),
+                child: _pill(i),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -374,61 +383,85 @@ class ArenaSubTabs extends StatelessWidget {
   final int selected;
   final ValueChanged<int> onSelected;
 
-  @override
-  Widget build(BuildContext context) => DecoratedBox(
-    decoration: const BoxDecoration(
-      border: Border(bottom: BorderSide(color: ArenaColors.border)),
-    ),
-    child: Row(
-      children: <Widget>[
-        for (int i = 0; i < labels.length; i++)
-          Expanded(
-            child: Semantics(
-              button: true,
-              selected: i == selected,
-              child: InkWell(
-                key: ValueKey<String>('arena-subtab-${labels[i]}'),
-                onTap: () => onSelected(i),
-                child: Container(
-                  constraints: const BoxConstraints(minHeight: 46),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 4,
-                    vertical: 10,
-                  ),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(
-                        width: 3,
-                        color: i == selected
-                            ? ArenaColors.violet
-                            : Colors.transparent,
-                      ),
-                    ),
-                  ),
-                  child: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                      labels[i],
-                      maxLines: 1,
-                      softWrap: false,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: i == selected
-                            ? ArenaColors.violet
-                            : ArenaColors.muted,
-                      ),
-                    ),
-                  ),
-                ),
+  Widget _tab(int i, {required bool expand}) {
+    final Widget tab = Semantics(
+      button: true,
+      selected: i == selected,
+      child: InkWell(
+        key: ValueKey<String>('arena-subtab-${labels[i]}'),
+        onTap: () => onSelected(i),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 46),
+          padding: EdgeInsets.symmetric(
+            horizontal: expand ? 4 : 14,
+            vertical: 10,
+          ),
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            border: Border(
+              bottom: BorderSide(
+                width: 3,
+                color: i == selected ? ArenaColors.violet : Colors.transparent,
               ),
             ),
           ),
+          child: Text(
+            labels[i],
+            maxLines: 1,
+            softWrap: false,
+            overflow: expand ? TextOverflow.ellipsis : TextOverflow.visible,
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: i == selected ? ArenaColors.violet : ArenaColors.muted,
+            ),
+          ),
+        ),
+      ),
+    );
+    return expand ? Expanded(child: tab) : tab;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Shared width at normal sizes; from 130 % text the tabs keep their full
+    // labels and scroll, with a fade showing there is more.
+    final bool scroll = MediaQuery.textScalerOf(context).scale(10) >= 13;
+    final Widget row = Row(
+      mainAxisSize: scroll ? MainAxisSize.min : MainAxisSize.max,
+      children: <Widget>[
+        for (int i = 0; i < labels.length; i++) _tab(i, expand: !scroll),
       ],
-    ),
-  );
+    );
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: ArenaColors.border)),
+      ),
+      child: scroll
+          ? arenaTrailingFade(
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: row,
+              ),
+            )
+          : row,
+    );
+  }
 }
+
+/// Fades the trailing 24 pt of a horizontally scrolling row.
+Widget arenaTrailingFade(Widget child) => ShaderMask(
+  blendMode: BlendMode.dstIn,
+  shaderCallback: (Rect bounds) => LinearGradient(
+    colors: const <Color>[Colors.black, Colors.black, Colors.transparent],
+    stops: <double>[
+      0,
+      bounds.width <= 24 ? 0 : (bounds.width - 24) / bounds.width,
+      1,
+    ],
+  ).createShader(bounds),
+  child: child,
+);
 
 /// Small status badge such as `🔥 DUELO DEL DÍA` or `● EN DESARROLLO`.
 class ArenaBadge extends StatelessWidget {
@@ -449,7 +482,7 @@ class ArenaBadge extends StatelessWidget {
 
   const ArenaBadge.fire(String label, {Key? key})
     : this(
-        label: '🔥 $label',
+        label: label,
         background: ArenaColors.amberBright,
         foreground: ArenaColors.inkDeep,
         key: key,
@@ -494,7 +527,15 @@ class ArenaSectionTitle extends StatelessWidget {
         Expanded(
           child: Semantics(
             header: true,
-            child: Text(title, style: ArenaText.section),
+            child: Text(
+              title,
+              style: const TextStyle(
+                fontSize: 20,
+                height: 26 / 20,
+                fontWeight: FontWeight.w800,
+                color: ArenaColors.ink,
+              ),
+            ),
           ),
         ),
         ?trailing,
@@ -688,7 +729,96 @@ class ArenaCover extends StatelessWidget {
   }
 }
 
-/// Community rating of an event's coverage, read from Core reactions.
+/// Votes are the community's opinion, never evidence or a verdict: the
+/// split stays hidden until the reader votes and while there are fewer than
+/// [minimumOpinionsForSplit] opinions, and both sides use neutral greys of
+/// the same weight so no colour, length or order reads as a winner.
+const int minimumOpinionsForSplit = 30;
+
+const String _opinionTitle = 'Opinión de la comunidad';
+const String _opinionDisclaimer =
+    'Es opinión, no indica qué versión es correcta.';
+const Color _opinionToneA = Color(0xFF64748B);
+const Color _opinionToneB = Color(0xFF94A3B8);
+
+String arenaOpinionCount(int total) =>
+    total == 1 ? '1 opinión' : '$total opiniones';
+
+/// What the community block may show for [total] opinions.
+enum OpinionVisibility { hiddenUntilVote, tooFew, split }
+
+OpinionVisibility opinionVisibility({required bool voted, required int total}) {
+  if (!voted) return OpinionVisibility.hiddenUntilVote;
+  if (total < minimumOpinionsForSplit) return OpinionVisibility.tooFew;
+  return OpinionVisibility.split;
+}
+
+class _CommunityOpinion extends StatelessWidget {
+  const _CommunityOpinion({
+    required this.visibility,
+    required this.total,
+    required this.caption,
+    required this.bar,
+  });
+
+  final OpinionVisibility visibility;
+  final int total;
+  final String caption;
+  final Widget bar;
+
+  @override
+  Widget build(BuildContext context) {
+    final String line = switch (visibility) {
+      OpinionVisibility.hiddenUntilVote =>
+        total == 0
+            ? 'Aún no hay opiniones. El reparto se muestra después de votar.'
+            : '${arenaOpinionCount(total)} · el reparto se muestra después '
+                  'de votar.',
+      OpinionVisibility.tooFew =>
+        'Aún hay pocas opiniones (${arenaOpinionCount(total)}). El reparto '
+            'se muestra desde $minimumOpinionsForSplit.',
+      OpinionVisibility.split => caption,
+    };
+    return Semantics(
+      label: '$_opinionTitle. $line $_opinionDisclaimer',
+      child: ExcludeSemantics(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            const Text(
+              _opinionTitle,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: ArenaColors.muted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            if (visibility == OpinionVisibility.split) ...<Widget>[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(height: 10, child: bar),
+              ),
+              const SizedBox(height: 6),
+            ],
+            Text(
+              line,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: ArenaColors.ink,
+              ),
+            ),
+            const SizedBox(height: 2),
+            const Text(_opinionDisclaimer, style: ArenaText.meta),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Community opinion on an event's coverage, read from Core reactions.
 class EvidenceThermometer extends StatelessWidget {
   const EvidenceThermometer({required this.summary, super.key});
 
@@ -697,61 +827,40 @@ class EvidenceThermometer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final int solid = summary?.solid ?? 0;
-    final int total = solid + (summary?.biased ?? 0);
-    final double share = total == 0 ? 0 : solid / total;
-    final String caption = total == 0
-        ? 'Sin votos todavía'
-        : '${(share * 100).round()}% de respaldo · $total '
-              '${total == 1 ? 'voto' : 'votos'}';
-    return Semantics(
-      label: 'Termómetro de evidencia. $caption',
-      child: ExcludeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              'Termómetro de evidencia',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: ArenaColors.muted,
-              ),
+    final int biased = summary?.biased ?? 0;
+    final int total = solid + biased;
+    final int share = total == 0 ? 0 : (solid * 100 / total).round();
+    return _CommunityOpinion(
+      visibility: opinionVisibility(voted: summary?.mine != null, total: total),
+      total: total,
+      caption:
+          '$share% cree que tiene respaldo sólido · ${arenaOpinionCount(total)}',
+      bar: Row(
+        children: <Widget>[
+          if (solid > 0)
+            Expanded(
+              flex: solid,
+              child: const ColoredBox(color: _opinionToneA),
             ),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: share,
-                minHeight: 10,
-                backgroundColor: ArenaColors.track,
-                valueColor: const AlwaysStoppedAnimation<Color>(
-                  ArenaColors.violet,
-                ),
-              ),
+          if (biased > 0)
+            Expanded(
+              flex: biased,
+              child: const ColoredBox(color: _opinionToneB),
             ),
-            const SizedBox(height: 6),
-            Text(
-              caption,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: ArenaColors.ink,
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
 }
 
-/// Share of support of the two postures of a duel, as voted in Core.
+/// Community opinion on the two versions of a duel, as voted in Core.
 class PostureThermometer extends StatelessWidget {
   const PostureThermometer({
     required this.nameA,
     required this.nameB,
     required this.votesA,
     required this.votesB,
+    this.voted = false,
     super.key,
   });
 
@@ -760,71 +869,32 @@ class PostureThermometer extends StatelessWidget {
   final int votesA;
   final int votesB;
 
+  /// Whether the signed-in reader already voted on this duel.
+  final bool voted;
+
   @override
   Widget build(BuildContext context) {
     final int total = votesA + votesB;
     final int shareA = total == 0 ? 0 : (votesA * 100 / total).round();
-    final String caption = total == 0
-        ? 'Sin votos todavía'
-        : '$nameA $shareA% · $nameB ${100 - shareA}% · $total '
-              '${total == 1 ? 'voto' : 'votos'}';
-    return Semantics(
-      label: 'Termómetro de evidencia. $caption',
-      child: ExcludeSemantics(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text(
-              'Termómetro de evidencia',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-                color: ArenaColors.muted,
-              ),
+    return _CommunityOpinion(
+      visibility: opinionVisibility(voted: voted, total: total),
+      total: total,
+      caption:
+          '$nameA $shareA% · $nameB ${100 - shareA}% · '
+          '${arenaOpinionCount(total)}',
+      bar: Row(
+        children: <Widget>[
+          if (votesA > 0)
+            Expanded(
+              flex: votesA,
+              child: const ColoredBox(color: _opinionToneA),
             ),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: SizedBox(
-                height: 10,
-                child: total == 0
-                    ? const ColoredBox(
-                        color: ArenaColors.track,
-                        child: SizedBox.expand(),
-                      )
-                    : Row(
-                        children: <Widget>[
-                          if (votesA > 0)
-                            Expanded(
-                              flex: votesA,
-                              child: const ColoredBox(
-                                color: ArenaColors.violet,
-                                child: SizedBox.expand(),
-                              ),
-                            ),
-                          if (votesB > 0)
-                            Expanded(
-                              flex: votesB,
-                              child: const ColoredBox(
-                                color: ArenaColors.amberBright,
-                                child: SizedBox.expand(),
-                              ),
-                            ),
-                        ],
-                      ),
-              ),
+          if (votesB > 0)
+            Expanded(
+              flex: votesB,
+              child: const ColoredBox(color: _opinionToneB),
             ),
-            const SizedBox(height: 6),
-            Text(
-              caption,
-              style: const TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: ArenaColors.ink,
-              ),
-            ),
-          ],
-        ),
+        ],
       ),
     );
   }
@@ -929,12 +999,15 @@ class ArenaVideoFrame extends StatelessWidget {
 /// One slice of the coverage ring.
 typedef DonutSlice = ({String label, int value, Color color});
 
+/// Topic colours for charts (Política, Economía, Justicia, Sociedad,
+/// Deportes, Otros). None is the brand violet or a status green or orange,
+/// so no topic stands out or reads as «live» or «alert».
 const List<Color> arenaDonutColors = <Color>[
-  Color(0xFF5B3DF5),
-  Color(0xFF059669),
-  Color(0xFFD97706),
-  Color(0xFFDB2777),
-  Color(0xFF0284C7),
+  Color(0xFF3B5B92),
+  Color(0xFF0F766E),
+  Color(0xFF8B5E34),
+  Color(0xFFBE185D),
+  Color(0xFF0369A1),
   Color(0xFF94A3B8),
 ];
 
@@ -973,9 +1046,11 @@ class CoverageDonut extends StatelessWidget {
                     child: Padding(
                       padding: const EdgeInsets.all(30),
                       child: Text(
-                        '$total',
+                        '$total\n${total == 1 ? 'publicación' : 'publicaciones'}',
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
-                          fontSize: 20,
+                          fontSize: 16,
+                          height: 1.1,
                           fontWeight: FontWeight.w800,
                           color: ArenaColors.ink,
                         ),
@@ -992,7 +1067,10 @@ class CoverageDonut extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              for (final DonutSlice slice in slices)
+              // Only the topics it actually covered: rows at 0 % are noise.
+              for (final DonutSlice slice in slices.where(
+                (DonutSlice s) => s.value > 0,
+              ))
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 3),
                   child: Row(
@@ -1220,4 +1298,199 @@ class ArenaSectionPill extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// One wording for a quote checked against its original publication.
+const String arenaVerifiedQuoteLabel =
+    'Cita literal · verificada contra el original';
+
+/// Secondary action: outlined, full width, at least 44 pt tall.
+ButtonStyle arenaSecondaryButtonStyle() => OutlinedButton.styleFrom(
+  backgroundColor: ArenaColors.card,
+  foregroundColor: ArenaColors.violet,
+  side: const BorderSide(color: Color(0xFFD9D0FD)),
+  minimumSize: const Size(48, 48),
+  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+  textStyle: const TextStyle(fontFamily: 'Inter', fontWeight: FontWeight.w700),
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+);
+
+/// Text written by Dialektik (AI), in its own tinted container with a fixed
+/// label, so it is never mistaken for what an outlet said.
+class ArenaInterpretationBox extends StatelessWidget {
+  const ArenaInterpretationBox({
+    required this.title,
+    required this.body,
+    super.key,
+  });
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) => DecoratedBox(
+    decoration: BoxDecoration(
+      color: const Color(0xFFF1F0FF),
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: const Color(0xFFDCD7FE)),
+    ),
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          const Row(
+            children: <Widget>[
+              Icon(
+                Icons.auto_awesome_outlined,
+                size: 16,
+                color: ArenaColors.violetDeep,
+              ),
+              SizedBox(width: 6),
+              Flexible(
+                child: Text(
+                  'Interpretación generada por Dialektik (IA)',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: ArenaColors.violetDeep,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(title, style: ArenaText.section),
+          const SizedBox(height: 6),
+          Text(
+            body,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 22 / 15,
+              color: ArenaColors.ink,
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+/// What one outlet said, attributed with its emblem: a literal quote in
+/// Merriweather with quotation marks, or its headline set as plain text.
+class ArenaAttributedQuote extends StatelessWidget {
+  const ArenaAttributedQuote({
+    required this.event,
+    required this.position,
+    super.key,
+  });
+
+  final EventDetailDto event;
+  final EventCoveragePositionDto? position;
+
+  @override
+  Widget build(BuildContext context) {
+    final EventCoveragePositionDto? side = position;
+    final String name = side == null || side.assertions.isEmpty
+        ? 'Medio no disponible'
+        : arenaSourceName(side.assertions.first.sourceName);
+    final ({String text, bool literal}) posture = arenaPostureText(event, side);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          border: Border(left: BorderSide(color: ArenaColors.border, width: 3)),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                children: <Widget>[
+                  MediaEmblem(name: name, size: 24),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      name,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: ArenaColors.ink,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                posture.literal ? arenaQuote(posture.text) : posture.text,
+                style: posture.literal
+                    ? const TextStyle(
+                        fontFamily: ArenaText.serif,
+                        fontSize: 14,
+                        height: 1.45,
+                        color: ArenaColors.ink,
+                      )
+                    : ArenaText.body,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                posture.literal
+                    ? arenaVerifiedQuoteLabel
+                    : 'Titular de su publicación',
+                style: ArenaText.meta,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// One look for «Seguir / Siguiendo» everywhere: a solid primary action to
+/// follow, a tonal state once followed. At least 44 pt tall.
+class ArenaFollowButton extends StatelessWidget {
+  const ArenaFollowButton({
+    required this.following,
+    required this.onPressed,
+    this.compact = false,
+    super.key,
+  });
+
+  final bool following;
+  final VoidCallback? onPressed;
+
+  /// Narrow cards drop the icon.
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final ButtonStyle style = FilledButton.styleFrom(
+      backgroundColor: following ? ArenaColors.violetSoft : ArenaColors.violet,
+      foregroundColor: following ? ArenaColors.violetDeep : Colors.white,
+      minimumSize: const Size(48, 44),
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      shape: const StadiumBorder(),
+      textStyle: const TextStyle(
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w700,
+      ),
+    );
+    final String label = following ? 'Siguiendo' : 'Seguir';
+    if (compact) {
+      return FilledButton(
+        onPressed: onPressed,
+        style: style,
+        child: Text(label),
+      );
+    }
+    return FilledButton.icon(
+      onPressed: onPressed,
+      style: style,
+      icon: Icon(following ? Icons.check : Icons.add, size: 18),
+      label: Text(label),
+    );
+  }
 }

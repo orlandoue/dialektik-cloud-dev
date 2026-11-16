@@ -12,7 +12,10 @@ import 'package:dialektik/features/arena/presentation/media_profile_screen.dart'
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/data/story_follow_store.dart';
+import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
+import 'package:dialektik/features/live/data/publisher_market_selection.dart';
+import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/source_sync_sheet.dart';
 import 'package:flutter/material.dart';
 
@@ -85,7 +88,7 @@ class ArenaVsTab extends StatelessWidget {
             const _TabHeader(
               title: 'VS · Duelos',
               subtitle:
-                  'Todos los contrastes publicados entre medios, sin filtrar '
+                  'Todos los duelos publicados entre medios, sin filtrar '
                   'por tus fuentes.',
             ),
             Padding(
@@ -141,6 +144,9 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
   ];
   int _filter = 0;
 
+  /// 0: most recent first; 1: covered by the most outlets first.
+  int _order = 0;
+
   @override
   void initState() {
     super.initState();
@@ -167,12 +173,19 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
         listenable: store,
         builder: (BuildContext context, _) {
           final ArenaTopic? topic = _filters[_filter];
-          final List<EventCardDto> events = store.events
-              .where(
-                (EventCardDto e) =>
-                    topic == null || arenaTopicOfEvent(e) == topic,
-              )
-              .toList();
+          final List<EventCardDto> events =
+              store.events
+                  .where(
+                    (EventCardDto e) =>
+                        topic == null || arenaTopicOfEvent(e) == topic,
+                  )
+                  .toList()
+                ..sort(
+                  (EventCardDto a, EventCardDto b) => _order == 1
+                      ? b.sourceCount.compareTo(a.sourceCount)
+                      : b.detectedAt.compareTo(a.detectedAt),
+                );
+          final SeismicObservationRepository? seismic = store.seismic;
           return RefreshIndicator(
             color: ArenaColors.violet,
             onRefresh: () => store.load(refresh: true),
@@ -182,10 +195,10 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
               padding: const EdgeInsets.only(bottom: 24),
               children: <Widget>[
                 const _TabHeader(
-                  title: 'Historias vivas',
+                  title: 'Historias',
                   subtitle:
-                      'Cada acontecimiento conserva su cronología, sus '
-                      'versiones y su evidencia.',
+                      'Cada acontecimiento conserva su cronología y lo que '
+                      'dijo cada medio.',
                 ),
                 ArenaPillBar(
                   labels: <String>[
@@ -194,6 +207,27 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                   ],
                   selected: _filter,
                   onSelected: (int value) => setState(() => _filter = value),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: <Widget>[
+                      for (final (int value, String label)
+                          in const <(int, String)>[
+                            (0, 'Recientes'),
+                            (1, 'Más cubiertas'),
+                          ])
+                        ArenaPill(
+                          key: ValueKey<String>('arena-stories-order-$value'),
+                          label: label,
+                          selected: _order == value,
+                          onTap: () => setState(() => _order = value),
+                        ),
+                    ],
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Padding(
@@ -224,15 +258,50 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                           note: switch (stories.snapshot(event.id)) {
                             final StorySnapshot snapshot
                                 when event.sourceCount > snapshot.sourceCount =>
-                              '⚡ Giro: ${event.sourceCount - snapshot.sourceCount} '
-                                  'fuentes nuevas desde tu última visita',
-                            StorySnapshot() => '🔔 Sigues esta historia',
-                            null =>
-                              store.duelForEvent(event.id) == null
-                                  ? null
-                                  : '⚔️ Tiene duelo VS publicado',
+                              'Novedades: ${event.sourceCount - snapshot.sourceCount} '
+                                  '${event.sourceCount - snapshot.sourceCount == 1 ? 'medio nuevo' : 'medios nuevos'} '
+                                  'desde tu última visita',
+                            StorySnapshot() => 'Sigues esta historia',
+                            null => null,
                           },
+                          duel: store.duelForEvent(event.id),
                         ),
+                      if (seismic != null) ...<Widget>[
+                        const SizedBox(height: 16),
+                        DecoratedBox(
+                          decoration: arenaCardDecoration(),
+                          child: Theme(
+                            data: Theme.of(
+                              context,
+                            ).copyWith(dividerColor: Colors.transparent),
+                            child: ExpansionTile(
+                              key: const Key('arena-seismic'),
+                              shape: const Border(),
+                              iconColor: ArenaColors.violet,
+                              collapsedIconColor: ArenaColors.muted,
+                              leading: const Icon(
+                                Icons.sensors,
+                                color: ArenaColors.violet,
+                              ),
+                              title: const Text(
+                                'Actividad sísmica · USGS',
+                                style: ArenaText.cardTitle,
+                              ),
+                              childrenPadding: const EdgeInsets.fromLTRB(
+                                12,
+                                0,
+                                12,
+                                12,
+                              ),
+                              children: <Widget>[
+                                ChileSeismicObservationsPanel(
+                                  repository: seismic,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -245,37 +314,26 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
   }
 }
 
-int _styleGroup(LiveSourceDto source) {
-  final String name = source.name.toLowerCase();
-  bool any(List<String> needles) => needles.any(name.contains);
-  if (any(<String>[
-    'sin filtros',
-    'voz de los que sobran',
-    'vía x',
-    'via x',
-    'el líbero',
-    'el libero',
-    'turno',
-    'the clinic',
-    'el ciudadano',
-    'el desconcierto',
-  ])) {
-    return 0;
-  }
-  if (any(<String>[
-    'ciper',
-    'el mostrador',
-    'la tercera',
-    'fast check',
-    'radio u. de chile',
-    'radio universidad de chile',
-    'diario el día',
-    'diario el dia',
-  ])) {
+/// Objective format groups: what the outlet publishes, never a judgement
+/// of its style or quality.
+const List<String> arenaMediaFormats = <String>[
+  'Prensa escrita y digital',
+  'Radio',
+  'Canales de video',
+];
+
+int arenaMediaFormat(List<LiveSourceDto> brand) {
+  bool video(LiveSourceDto s) =>
+      s.canonicalDomain.contains('youtube') ||
+      s.name.toLowerCase().contains('youtube');
+  if (brand.any((LiveSourceDto s) => s.name.toLowerCase().contains('radio'))) {
     return 1;
   }
-  return 2;
+  return brand.every(video) ? 2 : 0;
 }
+
+/// A directory long enough to need its own search field.
+const int arenaMediaSearchThreshold = 15;
 
 /// Pestaña `Medios`: directory of every registered source.
 class ArenaMediaTab extends StatefulWidget {
@@ -385,33 +443,42 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
             _TabHeader(
               title: 'Medios',
               subtitle:
-                  '${store.sources.length} fuentes registradas · sigues '
-                  '$followedBrands',
+                  '${store.brands(store.sources).length} '
+                  '${store.brands(store.sources).length == 1 ? 'medio' : 'medios'} · '
+                  'sigues $followedBrands',
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
-                  TextField(
-                    key: const Key('arena-media-search'),
-                    onChanged: (String value) => setState(() => _query = value),
-                    decoration: InputDecoration(
-                      hintText: 'Buscar medios...',
-                      prefixIcon: const Icon(Icons.search),
-                      filled: true,
-                      fillColor: ArenaColors.card,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: ArenaColors.border),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(14),
-                        borderSide: const BorderSide(color: ArenaColors.border),
+                  if (store.brands(store.sources).length >=
+                      arenaMediaSearchThreshold) ...<Widget>[
+                    TextField(
+                      key: const Key('arena-media-search'),
+                      onChanged: (String value) =>
+                          setState(() => _query = value),
+                      decoration: InputDecoration(
+                        hintText: 'Buscar medios...',
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: ArenaColors.card,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: ArenaColors.border,
+                          ),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(
+                            color: ArenaColors.border,
+                          ),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
+                    const SizedBox(height: 10),
+                  ],
                   OutlinedButton.icon(
                     key: const Key('arena-media-sync'),
                     onPressed: canFollow && !_syncing ? _sync : null,
@@ -429,7 +496,7 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
                     ),
                     icon: const Icon(Icons.sync),
                     label: const Text(
-                      'Sincronizar mis fuentes con YouTube o X',
+                      'Importar los medios que sigues en YouTube o X',
                       textAlign: TextAlign.center,
                     ),
                   ),
@@ -453,51 +520,44 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
                     )
             else if (visible.isEmpty)
               const ArenaMessage('Sin resultados para esta búsqueda.'),
-            for (final (int group, String title) in const <(int, String)>[
-              (0, '🎬 Debate y tensión en video'),
-              (1, '🔍 Investigación y análisis'),
-              (2, '⚡ Minuto a minuto'),
-            ])
+            for (int group = 0; group < arenaMediaFormats.length; group++)
               if (visible.any(
-                (List<LiveSourceDto> b) => _styleGroup(b.first) == group,
+                (List<LiveSourceDto> b) => arenaMediaFormat(b) == group,
               )) ...<Widget>[
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: ArenaSectionTitle(title),
+                  child: ArenaSectionTitle(arenaMediaFormats[group]),
                 ),
-                SingleChildScrollView(
-                  key: ValueKey<String>('arena-media-carousel-$group'),
-                  scrollDirection: Axis.horizontal,
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: IntrinsicHeight(
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: <Widget>[
-                        for (final List<LiveSourceDto> brand in visible.where(
+                for (final List<LiveSourceDto> brand
+                    in visible
+                        .where(
                           (List<LiveSourceDto> b) =>
-                              _styleGroup(b.first) == group,
-                        ))
-                          _MediaCard(
-                            source: brand.first,
-                            following: store.followsBrand(brand),
-                            busy: _busy.contains(
-                              ArenaStore.brandKeyOf(brand.first),
+                              arenaMediaFormat(b) == group,
+                        )
+                        .toList()
+                      ..sort(
+                        (List<LiveSourceDto> a, List<LiveSourceDto> b) =>
+                            arenaSourceName(
+                              a.first.name,
+                            ).toLowerCase().compareTo(
+                              arenaSourceName(b.first.name).toLowerCase(),
                             ),
-                            canFollow: canFollow,
-                            onOpen: () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => MediaProfileScreen(
-                                  source: brand.first,
-                                  store: store,
-                                ),
-                              ),
-                            ),
-                            onToggle: () => _toggle(brand),
-                          ),
-                      ],
+                      ))
+                  _MediaRow(
+                    source: brand.first,
+                    following: store.followsBrand(brand),
+                    busy: _busy.contains(ArenaStore.brandKeyOf(brand.first)),
+                    canFollow: canFollow,
+                    onOpen: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) => MediaProfileScreen(
+                          source: brand.first,
+                          store: store,
+                        ),
+                      ),
                     ),
+                    onToggle: () => _toggle(brand),
                   ),
-                ),
               ],
           ],
         );
@@ -506,8 +566,9 @@ class _ArenaMediaTabState extends State<ArenaMediaTab> {
   );
 }
 
-class _MediaCard extends StatelessWidget {
-  const _MediaCard({
+/// One outlet per row: emblem, name, format and the follow button.
+class _MediaRow extends StatelessWidget {
+  const _MediaRow({
     required this.source,
     required this.following,
     required this.busy,
@@ -524,69 +585,38 @@ class _MediaCard extends StatelessWidget {
   final VoidCallback onToggle;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(right: 10),
-    child: SizedBox(
-      // Wide enough for «El Desconcierto» on one line.
-      width: 168,
-      child: Material(
-        key: ValueKey<String>('arena-media-${source.id}'),
-        color: ArenaColors.card,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: ArenaColors.border),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: onOpen,
-          child: Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              children: <Widget>[
-                MediaEmblem(name: source.name, size: 52),
-                const SizedBox(height: 8),
-                Text(
-                  arenaSourceName(source.name),
-                  textAlign: TextAlign.center,
-                  maxLines: 3,
-                  overflow: TextOverflow.ellipsis,
-                  style: ArenaText.cardTitle,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  arenaMediaKind(source),
-                  textAlign: TextAlign.center,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: ArenaText.meta,
-                ),
-                const Spacer(),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: canFollow && !busy ? onToggle : null,
-                    style: FilledButton.styleFrom(
-                      backgroundColor: following
-                          ? ArenaColors.violetSoft
-                          : ArenaColors.violet,
-                      foregroundColor: following
-                          ? ArenaColors.violetDeep
-                          : Colors.white,
-                      minimumSize: const Size(48, 40),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 8,
-                      ),
+  Widget build(BuildContext context) => Material(
+    key: ValueKey<String>('arena-media-${source.id}'),
+    color: Colors.transparent,
+    child: InkWell(
+      onTap: onOpen,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 64),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: Row(
+            children: <Widget>[
+              MediaEmblem(name: source.name, size: 40),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      arenaSourceName(source.name),
+                      style: ArenaText.cardTitle,
                     ),
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      child: Text(following ? '✓ Siguiendo' : '+ Seguir'),
-                    ),
-                  ),
+                    Text(arenaMediaKind(source), style: ArenaText.meta),
+                  ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(width: 8),
+              ArenaFollowButton(
+                compact: true,
+                following: following,
+                onPressed: canFollow && !busy ? onToggle : null,
+              ),
+            ],
           ),
         ),
       ),
@@ -601,11 +631,17 @@ class ArenaProfileTab extends StatefulWidget {
     required this.onConfigureRadar,
     this.extraActions = const <Widget>[],
     this.onOpenAdmin,
+    this.onOpenStories,
+    this.onOpenVs,
     super.key,
   });
 
   final ArenaStore store;
   final VoidCallback onConfigureRadar;
+
+  /// Empty sections lead somewhere: `Historias` and `VS`.
+  final VoidCallback? onOpenStories;
+  final VoidCallback? onOpenVs;
   final List<Widget> extraActions;
   final VoidCallback? onOpenAdmin;
 
@@ -679,40 +715,34 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                       ArenaAccountCard(account: account),
                       const SizedBox(height: 12),
                     ],
-                    ArenaCard(
-                      child: Wrap(
-                        alignment: WrapAlignment.spaceAround,
-                        spacing: 16,
-                        runSpacing: 12,
-                        children: <Widget>[
-                          _Stat('${followedMedia.length}', 'medios seguidos'),
-                          _Stat(
-                            '${followedStories.length}',
-                            'historias seguidas',
-                          ),
-                          _Stat('${savedDuels.length}', 'duelos guardados'),
-                        ],
-                      ),
-                    ),
+                    // Counts live in each heading; no separate scoreboard.
                     ArenaPrimaryButton(
                       key: const Key('arena-configure-radar'),
                       icon: Icons.tune,
-                      label: 'Configurar mi radar',
+                      label: 'Elegir mis medios',
                       onPressed: widget.onConfigureRadar,
                     ),
-                    const ArenaSectionTitle('Historias que sigues'),
+                    ArenaSectionTitle(
+                      'Historias que sigues · ${followedStories.length}',
+                    ),
                     if (followedStories.isEmpty)
-                      const Text(
-                        'Usa 🔔 Seguir en un acontecimiento para guardarlo aquí.',
-                        style: ArenaText.body,
+                      _EmptySection(
+                        text:
+                            'Sigue un acontecimiento para guardarlo aquí y '
+                            'ver sus novedades.',
+                        actionLabel: 'Explorar historias',
+                        onAction: widget.onOpenStories,
                       ),
                     for (final EventCardDto event in followedStories)
                       DevelopingEventCard(event: event, store: store),
-                    const ArenaSectionTitle('Medios que sigues'),
+                    ArenaSectionTitle(
+                      'Medios que sigues · ${followedMedia.length}',
+                    ),
                     if (followedMedia.isEmpty)
-                      const Text(
-                        'Todavía no sigues medios.',
-                        style: ArenaText.body,
+                      _EmptySection(
+                        text: 'Todavía no sigues medios.',
+                        actionLabel: 'Elegir mis medios',
+                        onAction: widget.onConfigureRadar,
                       ),
                     Wrap(
                       spacing: 12,
@@ -728,11 +758,14 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                           ),
                       ],
                     ),
-                    const ArenaSectionTitle('Guardados'),
+                    ArenaSectionTitle('Guardados · ${savedDuels.length}'),
                     if (savedDuels.isEmpty)
-                      const Text(
-                        'Guarda un duelo con el marcador para leerlo después.',
-                        style: ArenaText.body,
+                      _EmptySection(
+                        text:
+                            'Guarda un duelo con el marcador para leerlo '
+                            'después.',
+                        actionLabel: 'Ver duelos',
+                        onAction: widget.onOpenVs,
                       ),
                     for (final ArenaDuel duel in savedDuels)
                       DuelListCard(duel: duel, store: store),
@@ -741,6 +774,29 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                       'Tus aportes con fuente se publican en la «Comunidad '
                       'del caso» de cada acontecimiento.',
                       style: ArenaText.body,
+                    ),
+                    const ArenaSectionTitle('Ajustes'),
+                    ArenaCard(
+                      key: const Key('arena-edition'),
+                      onTap: () =>
+                          unawaited(showArenaCountrySheet(context, store)),
+                      child: Row(
+                        children: <Widget>[
+                          const Icon(Icons.public, color: ArenaColors.muted),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Edición: '
+                              '${PublisherMarketSelection.countryOf(store.country).name}',
+                              style: ArenaText.cardTitle,
+                            ),
+                          ),
+                          const Icon(
+                            Icons.chevron_right,
+                            color: ArenaColors.muted,
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -753,25 +809,31 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
   }
 }
 
-class _Stat extends StatelessWidget {
-  const _Stat(this.value, this.label);
+/// An empty section with a way forward.
+class _EmptySection extends StatelessWidget {
+  const _EmptySection({
+    required this.text,
+    required this.actionLabel,
+    this.onAction,
+  });
 
-  final String value;
-  final String label;
+  final String text;
+  final String actionLabel;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) => Column(
-    mainAxisSize: MainAxisSize.min,
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: <Widget>[
-      Text(
-        value,
-        style: const TextStyle(
-          fontSize: 22,
-          fontWeight: FontWeight.w800,
-          color: ArenaColors.violet,
+      Text(text, style: ArenaText.body),
+      if (onAction != null) ...<Widget>[
+        const SizedBox(height: 8),
+        OutlinedButton(
+          style: arenaSecondaryButtonStyle(),
+          onPressed: onAction,
+          child: Text(actionLabel),
         ),
-      ),
-      Text(label, style: ArenaText.meta),
+      ],
     ],
   );
 }

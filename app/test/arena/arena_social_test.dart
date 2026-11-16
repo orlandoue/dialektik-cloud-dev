@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/features/arena/presentation/arena_shell.dart';
+import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/consumer/data/public_api_client.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/social/data/arena_social_repository.dart';
@@ -119,45 +120,108 @@ void main() {
     });
   });
 
-  testWidgets('el termómetro reparte el respaldo entre las dos posturas', (
+  testWidgets(
+    'la opinión de la comunidad se oculta hasta votar y con pocos votos',
+    (WidgetTester tester) async {
+      final ArenaFullCore core = ArenaFullCore();
+      await pumpArena(tester, core);
+      expect(
+        find.text('3 opiniones · el reparto se muestra después de votar.'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('67%'), findsNothing);
+
+      await tester.tap(find.text(duelTitle).first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('arena-vote-button')));
+      await tester.pumpAndSettle();
+      // The options name the outlets, never their tallies, before voting.
+      expect(find.text('La Tercera'), findsWidgets);
+      expect(find.text('BioBioChile'), findsWidgets);
+      expect(find.textContaining('votos'), findsNothing);
+      expect(
+        find.text('no existe ni existirá un acuerdo con el imputado'),
+        findsOneWidget,
+      );
+
+      await tester.tap(
+        find.byKey(const ValueKey<String>('arena-vote-position-$positionBId')),
+      );
+      await tester.pumpAndSettle();
+      expect(core.positionVoteCalls, <String?>[positionBId]);
+      expect(find.text('✓ BioBioChile'), findsOneWidget);
+      // Four opinions are still too few for a split.
+      expect(
+        find.text(
+          'Aún hay pocas opiniones (4 opiniones). El reparto se muestra desde '
+          '30.',
+        ),
+        findsWidgets,
+      );
+      expect(find.textContaining('50%'), findsNothing);
+      // Tapping the chosen side again withdraws the vote.
+      await tester.tap(
+        find.byKey(const ValueKey<String>('arena-vote-position-$positionBId')),
+      );
+      await tester.pumpAndSettle();
+      expect(core.positionVoteCalls, <String?>[positionBId, null]);
+      expect(find.text('✓ BioBioChile'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('con 30 opiniones y tras votar, el reparto usa grises neutros', (
     WidgetTester tester,
   ) async {
-    final ArenaFullCore core = ArenaFullCore();
-    await pumpArena(tester, core);
+    Future<void> pump({required bool voted}) => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PostureThermometer(
+            nameA: 'BioBioChile',
+            nameB: 'La Tercera',
+            votesA: 20,
+            votesB: 10,
+            voted: voted,
+          ),
+        ),
+      ),
+    );
+    await pump(voted: false);
+    expect(find.textContaining('67%'), findsNothing);
     expect(
-      find.text('La Tercera 67% · BioBioChile 33% · 3 votos'),
+      find.text('30 opiniones · el reparto se muestra después de votar.'),
       findsOneWidget,
     );
 
-    await tester.tap(find.byTooltip('Abrir duelo completo'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.byKey(const Key('arena-vote-button')));
-    await tester.pumpAndSettle();
-    expect(find.text('La Tercera · 2 votos'), findsOneWidget);
-    expect(find.text('BioBioChile · 1 voto'), findsOneWidget);
+    await pump(voted: true);
     expect(
-      find.text('no existe ni existirá un acuerdo con el imputado'),
+      find.text('BioBioChile 67% · La Tercera 33% · 30 opiniones'),
       findsOneWidget,
     );
-
-    await tester.tap(
-      find.byKey(const ValueKey<String>('arena-vote-position-$positionBId')),
-    );
-    await tester.pumpAndSettle();
-    expect(core.positionVoteCalls, <String?>[positionBId]);
-    expect(find.text('✓ BioBioChile · 2 votos'), findsOneWidget);
     expect(
-      find.text('La Tercera 50% · BioBioChile 50% · 4 votos'),
-      findsWidgets,
+      find.text('Es opinión, no indica qué versión es correcta.'),
+      findsOneWidget,
     );
-    // Tapping the chosen side again withdraws the vote.
-    await tester.tap(
-      find.byKey(const ValueKey<String>('arena-vote-position-$positionBId')),
+    final List<Color> tones = tester
+        .widgetList<ColoredBox>(find.byType(ColoredBox))
+        .map((ColoredBox box) => box.color)
+        .where(
+          (Color c) =>
+              c == const Color(0xFF64748B) || c == const Color(0xFF94A3B8),
+        )
+        .toList();
+    // Two neutral greys: never the brand violet or an alert orange.
+    expect(tones, <Color>[const Color(0xFF64748B), const Color(0xFF94A3B8)]);
+    expect(
+      tester
+          .widgetList<ColoredBox>(find.byType(ColoredBox))
+          .where(
+            (ColoredBox box) =>
+                box.color == const Color(0xFF5B3DF5) ||
+                box.color == const Color(0xFFF59E0B),
+          ),
+      isEmpty,
     );
-    await tester.pumpAndSettle();
-    expect(core.positionVoteCalls, <String?>[positionBId, null]);
-    expect(find.text('BioBioChile · 1 voto'), findsOneWidget);
-    expect(tester.takeException(), isNull);
   });
 
   testWidgets('Pantalla 5 · los tres canales persisten con autor y 👍/👎', (
@@ -233,7 +297,7 @@ void main() {
     );
     expect(find.textContaining('hace\u00A04\u00A0d'), findsOneWidget);
     expect(
-      find.text('La Tercera 67% · BioBioChile 33% · 3 votos'),
+      find.text('3 opiniones · el reparto se muestra después de votar.'),
       findsOneWidget,
     );
     await tester.enterText(

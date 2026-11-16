@@ -144,6 +144,7 @@ class _ArenaShellState extends State<ArenaShell> {
       ArenaTab.inicio => ArenaHomeTab(
         store: _store,
         onOpenMedia: () => _select(ArenaTab.medios),
+        onOpenStories: () => _select(ArenaTab.historias),
       ),
       ArenaTab.vs => ArenaVsTab(store: _store),
       ArenaTab.historias => ArenaStoriesTab(store: _store),
@@ -153,6 +154,8 @@ class _ArenaShellState extends State<ArenaShell> {
         extraActions: widget.extraActions,
         onOpenAdmin: widget.onOpenAdmin,
         onConfigureRadar: () => unawaited(_openRadar()),
+        onOpenStories: () => _select(ArenaTab.historias),
+        onOpenVs: () => _select(ArenaTab.vs),
       ),
     };
   }

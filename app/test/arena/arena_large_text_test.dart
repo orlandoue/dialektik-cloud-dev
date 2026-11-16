@@ -37,51 +37,54 @@ void main() {
       expect(tester.takeException(), isNull, reason: 'pestaña $label');
     }
 
-    testWidgets('fuente 1.45 sin desbordes · Inicio y Explorar · $device', (
-      WidgetTester tester,
-    ) async {
-      await pumpArena(tester, ArenaFakeCore(), textScale: scale, size: size);
-      expect(
-        MediaQuery.textScalerOf(
-          tester.element(find.byKey(const Key('arena-coliseo-scroll'))),
-        ),
-        const TextScaler.linear(scale),
-      );
-      expect(tester.takeException(), isNull);
-      await scrollThrough(tester, 'arena-coliseo-scroll');
+    testWidgets(
+      'fuente 1.45 sin desbordes · Inicio y sus secciones · $device',
+      (WidgetTester tester) async {
+        await pumpArena(tester, ArenaFakeCore(), textScale: scale, size: size);
+        expect(
+          MediaQuery.textScalerOf(
+            tester.element(find.byKey(const Key('arena-coliseo-scroll'))),
+          ),
+          const TextScaler.linear(scale),
+        );
+        expect(tester.takeException(), isNull);
+        await scrollThrough(tester, 'arena-coliseo-scroll');
 
-      await tester.tap(
-        find.byKey(const ValueKey<String>('arena-pill-Explorar')),
-      );
-      await tester.pumpAndSettle();
-      await scrollThrough(tester, 'arena-explore-scroll');
-      await tester.tap(find.byKey(const Key('arena-blindspot-banner')));
-      await tester.pumpAndSettle();
-      expect(find.text('Acontecimientos fuera de tus medios'), findsOneWidget);
-      expect(tester.takeException(), isNull);
-      await tester.pageBack();
-      await tester.pumpAndSettle();
+        await reveal(
+          tester,
+          find.byKey(const Key('arena-blindspot-banner')),
+          'arena-coliseo-scroll',
+        );
+        await tester.tap(find.byKey(const Key('arena-blindspot-banner')));
+        await tester.pumpAndSettle();
+        expect(
+          find.text('Acontecimientos fuera de tus medios'),
+          findsOneWidget,
+        );
+        expect(tester.takeException(), isNull);
+        await tester.pageBack();
+        await tester.pumpAndSettle();
 
-      final Finder following = find.byKey(
-        const ValueKey<String>('arena-pill-Siguiendo'),
-      );
-      await tester.ensureVisible(following);
-      await tester.pumpAndSettle();
-      await tester.tap(following);
-      await tester.pumpAndSettle();
-      await scrollThrough(tester, 'arena-following-scroll');
+        final Finder following = find.byKey(const Key('arena-following-all'));
+        await reveal(tester, following, 'arena-coliseo-scroll');
+        await tester.tap(following);
+        await tester.pumpAndSettle();
+        await scrollThrough(tester, 'arena-following-scroll');
+        await tester.pageBack();
+        await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('arena-search')));
-      await tester.pumpAndSettle();
-      await tester.enterText(
-        find.byKey(const Key('arena-search-input')),
-        'codelco',
-      );
-      await tester.testTextInput.receiveAction(TextInputAction.search);
-      await tester.pumpAndSettle();
-      expect(find.text(storyTitle), findsOneWidget);
-      expect(tester.takeException(), isNull);
-    });
+        await tester.tap(find.byKey(const Key('arena-search')));
+        await tester.pumpAndSettle();
+        await tester.enterText(
+          find.byKey(const Key('arena-search-input')),
+          'codelco',
+        );
+        await tester.testTextInput.receiveAction(TextInputAction.search);
+        await tester.pumpAndSettle();
+        expect(find.text(storyTitle), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      },
+    );
 
     testWidgets('fuente 1.45 sin desbordes · VS, duelo y comunidad · $device', (
       WidgetTester tester,
@@ -98,11 +101,7 @@ void main() {
       await tester.tap(find.text(duelTitle));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      for (final String tab in <String>[
-        'Evidencia',
-        'Contexto',
-        'Análisis IA',
-      ]) {
+      for (final String tab in <String>['Notas originales', 'Análisis IA']) {
         final Finder target = find.byKey(ValueKey<String>('arena-subtab-$tab'));
         await reveal(tester, target, 'arena-duel-scroll');
         await tester.ensureVisible(target);
@@ -150,12 +149,7 @@ void main() {
         await tester.tap(find.text(title));
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        for (final String tab in <String>[
-          'Resumen',
-          'Cronología',
-          'Versiones',
-          'Evidencia',
-        ]) {
+        for (final String tab in <String>['Resumen', 'Cronología', 'Citas']) {
           final Finder target = find.byKey(
             ValueKey<String>('arena-subtab-$tab'),
           );
@@ -191,11 +185,7 @@ void main() {
         );
         await tester.pumpAndSettle();
         expect(tester.takeException(), isNull);
-        for (final String tab in <String>[
-          'Radiografía',
-          'Cobertura',
-          'Historial',
-        ]) {
+        for (final String tab in <String>['Resumen', 'Cobertura', 'Duelos']) {
           final Finder target = find.byKey(
             ValueKey<String>('arena-subtab-$tab'),
           );

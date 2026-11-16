@@ -1,5 +1,8 @@
 import 'dart:async';
 
+import 'package:dialektik/features/arena/data/arena_format.dart';
+import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
+import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/source_sync_repository.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
@@ -17,7 +20,6 @@ class SourceRadar extends StatefulWidget {
   @override State<SourceRadar> createState() => _SourceRadarState();
 }
 class _SourceRadarState extends State<SourceRadar> {
-  static const navy=Color(0xff162032);
   List<LiveSourceDto> sources=[];
   Set<String> followed={};
   final Set<String> busy={};
@@ -67,7 +69,7 @@ class _SourceRadarState extends State<SourceRadar> {
     };
   }
   Future<void> _openSourceSync() async {
-    final selected=await showModalBottomSheet<SourceSyncSelection>(context:context,isScrollControlled:true,backgroundColor:const Color(0xfffaf8f3),shape:const RoundedRectangleBorder(borderRadius:BorderRadius.vertical(top:Radius.circular(24))),builder:(_)=>SourceSyncSheet(sources:sources,lookup:widget.repository is SourceSyncRepository ? widget.repository as SourceSyncRepository : null));
+    final selected=await showModalBottomSheet<SourceSyncSelection>(context:context,isScrollControlled:true,backgroundColor:ArenaColors.card,shape:const RoundedRectangleBorder(borderRadius:BorderRadius.vertical(top:Radius.circular(24))),builder:(_)=>SourceSyncSheet(sources:sources,lookup:widget.repository is SourceSyncRepository ? widget.repository as SourceSyncRepository : null));
     if(!mounted || selected==null)return;
     final repo=following;
     if(repo==null)return;
@@ -82,67 +84,62 @@ class _SourceRadarState extends State<SourceRadar> {
       if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Se siguieron $done fuentes; no se pudieron guardar todas.')));
     } finally {if(mounted)setState(()=>busy.remove('sync'));}
   }
-  int _group(LiveSourceDto source) {
-    final name=source.name.toLowerCase();
-    if (['sin filtros','voz de los que sobran','vía x','via x','el líbero','el libero','turno','the clinic','el ciudadano','el desconcierto'].any(name.contains)) return 0;
-    if (['ciper','el mostrador','la tercera','fast check','radio u. de chile','radio universidad de chile','diario el día','diario el dia'].any(name.contains)) return 1;
-    return 2;
-  }
   @override Widget build(BuildContext context) {
-    final selected=sources.where((s)=>followed.contains(s.id)).length;
     final brands=<String,List<LiveSourceDto>>{};
     for(final source in sources) { brands.putIfAbsent(_brandKey(source.name),()=>[]).add(source); }
-    final visible=brands.values.where((brand)=>brand.any((s)=>s.name.toLowerCase().contains(query.trim().toLowerCase()))).toList();
-    final scale=MediaQuery.textScalerOf(context).scale(1).clamp(1.0,1.35);
-    final rowHeight=176.0*scale;
-    final cardWidth=scale>1.15 ? 168.0 : 160.0;
-    return ColoredBox(color:const Color(0xfffaf8f3),child:Column(children:[
-      Expanded(child:loading ? const Center(child:Column(mainAxisSize:MainAxisSize.min,children:[CircularProgressIndicator(),Text('Cargando fuentes…')])) : failed ? Center(child:Column(mainAxisSize:MainAxisSize.min,children:[const Text('El servicio de fuentes no está disponible.'),TextButton(onPressed:_load,child:const Text('Reintentar'))])) : ListView(key:const Key('radar-scroll'),padding:const EdgeInsets.fromLTRB(16,18,16,20),children:[
-        if(sources.isEmpty) const Text('Todavía no hay fuentes operativas.'),
-        const Text('Personaliza tu radar',textAlign:TextAlign.center,style:TextStyle(fontFamily:'serif',fontSize:26,fontWeight:FontWeight.w700,color:navy)),
-        const SizedBox(height:14),TextField(onChanged:(value)=>setState(()=>query=value),decoration:InputDecoration(hintText:'Buscar medios...',prefixIcon:const Icon(Icons.search),filled:true,fillColor:Colors.white,border:OutlineInputBorder(borderRadius:BorderRadius.circular(12),borderSide:const BorderSide(color:Color(0xffe2dec9))),enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(12),borderSide:const BorderSide(color:Color(0xffe2dec9))))),
-        const SizedBox(height:12),OutlinedButton.icon(style:OutlinedButton.styleFrom(backgroundColor:const Color(0xffede9df),foregroundColor:navy,side:const BorderSide(color:Color(0xffd0c9b8)),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))),onPressed:following!=null && busy.isEmpty ? _openSourceSync : null,icon:const Icon(Icons.sync_rounded),label:const Text('Sincronizar mis fuentes con YouTube o X')),
-        const SizedBox(height:20),const Text('Carruseles por estilo',textAlign:TextAlign.center,style:TextStyle(fontFamily:'serif',fontSize:18,fontWeight:FontWeight.w600,color:navy)),
-        for(final group in [(0,'1  🎬 Debate y tensión en video'),(1,'2  🔍 Investigación y análisis'),(2,'3  ⚡ Minuto a minuto')]) ...[
-          const SizedBox(height:18),Text('${group.$2}  ›',style:const TextStyle(fontWeight:FontWeight.w700,color:navy)),const SizedBox(height:8),
-          if(!visible.any((brand)=>_group(brand.first)==group.$1)) const Padding(padding:EdgeInsets.all(8),child:Text('Sin resultados'))
-          else SizedBox(key:ValueKey('radar-group-${group.$1}'),height:rowHeight,child:ListView.separated(scrollDirection:Axis.horizontal,itemCount:visible.where((brand)=>_group(brand.first)==group.$1).length,separatorBuilder:(_,_)=>const SizedBox(width:10),itemBuilder:(context,index){
-            final brand=visible.where((brand)=>_group(brand.first)==group.$1).elementAt(index);
-            return _SourceRadarCard(source:brand.first,width:cardWidth,selected:brand.every((source)=>followed.contains(source.id)),busy:busy.contains(_brandKey(brand.first.name)),enabled:following!=null,onTap:()=>unawaited(_toggle(brand)),onOpenProfile:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>MediaPublicProfileScreen(source:brand.first,repository:widget.repository))));
-          })),
-        ],
+    final followedBrands=brands.values.where((brand)=>brand.every((s)=>followed.contains(s.id))).length;
+    final needle=query.trim().toLowerCase();
+    final visible=brands.values.where((brand)=>brand.any((s)=>s.name.toLowerCase().contains(needle))).toList()
+      ..sort((a,b)=>arenaSourceName(a.first.name).toLowerCase().compareTo(arenaSourceName(b.first.name).toLowerCase()));
+    return ColoredBox(color:ArenaColors.background,child:Column(children:[
+      Expanded(child:loading ? const Center(child:Column(mainAxisSize:MainAxisSize.min,children:[CircularProgressIndicator(color:ArenaColors.violet),SizedBox(height:8),Text('Cargando fuentes…')])) : failed ? Center(child:Column(mainAxisSize:MainAxisSize.min,children:[const Text('El servicio de fuentes no está disponible.'),TextButton(onPressed:_load,child:const Text('Reintentar'))])) : ListView(key:const Key('radar-scroll'),padding:const EdgeInsets.fromLTRB(0,18,0,20),children:[
+        Padding(padding:const EdgeInsets.symmetric(horizontal:16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          if(sources.isEmpty) const Text('Todavía no hay fuentes operativas.'),
+          const Text('Personaliza tu radar',style:TextStyle(fontSize:24,fontWeight:FontWeight.w800,color:ArenaColors.ink)),
+          const SizedBox(height:4),
+          const Text('Elige los medios que quieres ver primero. Puedes cambiarlo cuando quieras en Medios.',style:ArenaText.body),
+          if(brands.length>=15) ...[
+            const SizedBox(height:14),
+            TextField(onChanged:(value)=>setState(()=>query=value),decoration:InputDecoration(hintText:'Buscar medios…',prefixIcon:const Icon(Icons.search),filled:true,fillColor:ArenaColors.card,border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:const BorderSide(color:ArenaColors.border)),enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:const BorderSide(color:ArenaColors.border)))),
+          ],
+          const SizedBox(height:12),
+          OutlinedButton.icon(style:arenaSecondaryButtonStyle(),onPressed:following!=null && busy.isEmpty ? _openSourceSync : null,icon:const Icon(Icons.download_rounded),label:const Text('Importar los medios que sigues en YouTube o X')),
+        ])),
+        // Objective format groups; a group without outlets is not shown.
+        for(var group=0;group<_formats.length;group++)
+          if(visible.any((brand)=>_format(brand)==group)) Column(key:ValueKey('radar-group-$group'),crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+            Padding(padding:const EdgeInsets.fromLTRB(16,18,16,4),child:Text(_formats[group],style:ArenaText.section)),
+            for(final brand in visible.where((brand)=>_format(brand)==group))
+              _SourceRadarRow(source:brand.first,selected:brand.every((source)=>followed.contains(source.id)),busy:busy.contains(_brandKey(brand.first.name)),enabled:following!=null,onTap:()=>unawaited(_toggle(brand)),onOpenProfile:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(_)=>MediaPublicProfileScreen(source:brand.first,repository:widget.repository)))),
+          ]),
+        if(sources.isNotEmpty && visible.isEmpty) const Padding(padding:EdgeInsets.all(16),child:Text('Sin resultados para esta búsqueda.',style:ArenaText.body)),
       ])),
-      Container(padding:const EdgeInsets.fromLTRB(16,12,16,12),decoration:const BoxDecoration(color:Color(0xfffaf8f3),border:Border(top:BorderSide(color:Color(0xffe2dec9)))),child:SafeArea(top:false,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,mainAxisSize:MainAxisSize.min,children:[
-        Text('Tu mezcla: $selected fuentes en Actualidad · ${sources.length-selected} en tu Espejo',style:const TextStyle(fontSize:12,color:navy)),
-        const SizedBox(height:8),ClipRRect(borderRadius:BorderRadius.circular(4),child:LinearProgressIndicator(minHeight:7,value:sources.isEmpty ? 0 : selected/sources.length,backgroundColor:const Color(0xffd8d4c8),valueColor:const AlwaysStoppedAnimation<Color>(navy))),
-        const SizedBox(height:12),SizedBox(height:48,child:FilledButton(style:FilledButton.styleFrom(backgroundColor:navy,foregroundColor:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(12))),onPressed:busy.isEmpty ? widget.onContinue : null,child:const Text('Comenzar →',style:TextStyle(fontWeight:FontWeight.w700)))),
+      Container(padding:const EdgeInsets.fromLTRB(16,12,16,12),decoration:const BoxDecoration(color:ArenaColors.card,border:Border(top:BorderSide(color:ArenaColors.border))),child:SafeArea(top:false,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,mainAxisSize:MainAxisSize.min,children:[
+        Text('Sigues $followedBrands de ${brands.length} ${brands.length==1 ? 'medio' : 'medios'}',key:const Key('radar-summary'),style:ArenaText.meta),
+        const SizedBox(height:8),
+        SizedBox(height:48,child:FilledButton(style:FilledButton.styleFrom(backgroundColor:ArenaColors.violet,foregroundColor:Colors.white,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))),onPressed:busy.isEmpty ? widget.onContinue : null,child:const Text('Comenzar',style:TextStyle(fontWeight:FontWeight.w700)))),
       ]))),
     ]));
   }
+  static const _formats=['Prensa escrita y digital','Radio','Canales de video'];
+  int _format(List<LiveSourceDto> brand) {
+    bool video(LiveSourceDto s) => s.canonicalDomain.contains('youtube') || s.name.toLowerCase().contains('youtube');
+    if(brand.any((s)=>s.name.toLowerCase().contains('radio'))) return 1;
+    return brand.every(video) ? 2 : 0;
+  }
 }
 
-class _SourceRadarCard extends StatelessWidget {
-  const _SourceRadarCard({required this.source,required this.width,required this.selected,required this.busy,required this.enabled,required this.onTap,required this.onOpenProfile});
+/// One outlet per row with the same emblem and follow button as Medios.
+class _SourceRadarRow extends StatelessWidget {
+  const _SourceRadarRow({required this.source,required this.selected,required this.busy,required this.enabled,required this.onTap,required this.onOpenProfile});
   final LiveSourceDto source;
-  final double width;
   final bool selected,busy,enabled;
   final VoidCallback onTap,onOpenProfile;
-  @override Widget build(BuildContext context) {
-    final name=source.name.replaceAll('(YouTube)','').trim();
-    final palette=[const Color(0xffa82929),const Color(0xff173b70),const Color(0xff29354c),const Color(0xff6e3f79),const Color(0xff1b695f)];
-    final lower=name.toLowerCase();
-    final defaultColor=palette[name.codeUnits.fold<int>(0,(sum,c)=>sum+c)%palette.length];
-    final viaX=lower.contains('vía x') || lower.contains('via x');
-    final voice=lower.contains('voz de los que sobran');
-    final ciper=lower.contains('ciper');
-    final tercera=lower.contains('la tercera');
-    final color=voice || ciper || tercera ? Colors.white : lower.contains('sin filtros') || lower.contains('cnn') || lower.contains('24 horas') ? const Color(0xffc21f2b) : lower.contains('cooperativa') ? const Color(0xff16488a) : lower.contains('ciper') ? const Color(0xffb2272a) : lower.contains('biobio') ? const Color(0xff15578e) : lower.contains('vía x') || lower.contains('via x') ? const Color(0xffba2132) : lower.contains('adn') ? const Color(0xff203a79) : lower.contains('la tercera') || lower.contains('el mostrador') ? const Color(0xff1e2430) : defaultColor;
-    final initials=name.split(RegExp(r'\s+')).where((w)=>w.isNotEmpty).take(3).map((w)=>w.characters.first.toUpperCase()).join();
-    final words=voice ? 'la voz' : lower.contains('sin filtros') ? 'SIN FILTROS' : ciper ? 'CiPER' : lower.contains('biobio') ? 'RBB' : lower.contains('cooperativa') ? 'COOP' : lower.contains('vía x') || lower.contains('via x') ? 'X' : lower.contains('la tercera') ? 'LA TERCERA' : lower.contains('el mostrador') ? 'MOSTRADOR' : lower.contains('adn') ? 'ADN' : lower.contains('24 horas') ? '24H' : lower.contains('cnn') ? 'CNN' : lower.contains('t13') ? 'T13' : lower.contains('mega') ? 'MEGA' : lower.contains('chv') ? 'CHV' : initials;
-    return Semantics(button:true,toggled:selected,label:'${source.name}, ${selected ? 'siguiendo' : 'no sigues'}',child:Material(color:Colors.white,borderRadius:BorderRadius.circular(14),elevation:1,child:InkWell(borderRadius:BorderRadius.circular(14),onTap:onOpenProfile,child:Container(width:width,padding:const EdgeInsets.all(8),decoration:BoxDecoration(border:Border.all(color:const Color(0xffe4e0d4)),borderRadius:BorderRadius.circular(14)),child:Column(children:[
-      SizedBox(height:42,child:Center(child:MediaQuery.withClampedTextScaling(maxScaleFactor:1.0,child:FittedBox(fit:BoxFit.scaleDown,child:Container(height:42,width:viaX ? 42 : 70,alignment:Alignment.center,decoration:BoxDecoration(color:color,shape:viaX ? BoxShape.circle : BoxShape.rectangle,borderRadius:viaX ? null : BorderRadius.circular(lower.contains('cooperativa') ? 24 : 8)),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Text(words.isEmpty ? '?' : words,textAlign:TextAlign.center,maxLines:1,softWrap:false,style:TextStyle(color:voice || ciper || tercera ? const Color(0xff162032) : lower.contains('cooperativa') ? const Color(0xffffd34d) : Colors.white,fontFamily:tercera ? 'serif' : null,fontWeight:FontWeight.bold,fontSize:words.contains('\n') || words.length>7 ? 11 : 19,height:1)),if(voice) Container(width:48,height:3,color:const Color(0xffffcf18)),if(ciper || lower.contains('el mostrador')) const Text('●',style:TextStyle(color:Color(0xffc21f2b),fontSize:10,height:0.8)),if(lower.contains('biobio')) Container(width:36,height:3,color:const Color(0xffffa326)),if(lower.contains('adn')) Container(width:36,height:3,color:const Color(0xffe22b35))])))))),
-      const SizedBox(height:4),Expanded(child:Center(child:InkWell(onTap:onOpenProfile,child:Text(name,textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:13,fontWeight:FontWeight.w600,color:Color(0xff1a1a1a)))))),
-      const SizedBox(height:4),AnimatedContainer(duration:MediaQuery.disableAnimationsOf(context) ? Duration.zero : const Duration(milliseconds:180),height:30,width:double.infinity,decoration:BoxDecoration(color:selected ? const Color(0xffede9df) : Colors.white,borderRadius:BorderRadius.circular(15)),child:OutlinedButton(style:OutlinedButton.styleFrom(padding:EdgeInsets.zero,backgroundColor:Colors.transparent,foregroundColor:const Color(0xff162032),side:const BorderSide(color:Color(0xff162032)),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(15))),onPressed:enabled && !busy ? onTap : null,child:Padding(padding:const EdgeInsets.symmetric(horizontal:10,vertical:4),child:FittedBox(fit:BoxFit.scaleDown,child:Text(selected ? '✓ Siguiendo' : '+ Seguir',maxLines:1,softWrap:false,style:const TextStyle(fontSize:12)))))),
-    ])))));
-  }
+  @override Widget build(BuildContext context)=>InkWell(onTap:onOpenProfile,child:ConstrainedBox(constraints:const BoxConstraints(minHeight:64),child:Padding(padding:const EdgeInsets.symmetric(horizontal:16,vertical:8),child:Row(children:[
+    MediaEmblem(name:source.name,size:40),
+    const SizedBox(width:12),
+    Expanded(child:Text(arenaSourceName(source.name),style:ArenaText.cardTitle)),
+    const SizedBox(width:8),
+    ArenaFollowButton(compact:true,following:selected,onPressed:enabled && !busy ? onTap : null),
+  ]))));
 }

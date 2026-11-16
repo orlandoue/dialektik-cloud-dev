@@ -168,8 +168,9 @@ Widget arenaDuelThermometer(ArenaStore store, ArenaDuel duel) {
   return PostureThermometer(
     nameA: duel.nameA,
     nameB: duel.nameB,
-    votesA: votes.votesFor(duel.contrast.positionA.id),
-    votesB: votes.votesFor(duel.contrast.positionB.id),
+    votesA: votes.votesFor(duel.idA),
+    votesB: votes.votesFor(duel.idB),
+    voted: votes.mine != null,
   );
 }
 
@@ -203,7 +204,6 @@ class DuelOfTheDayCard extends StatelessWidget {
                 Text(
                   duel.title,
                   style: const TextStyle(
-                    fontFamily: ArenaText.serif,
                     fontSize: 20,
                     height: 1.25,
                     fontWeight: FontWeight.w700,
@@ -380,6 +380,7 @@ class DuelActions extends StatelessWidget {
       return Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: <Widget>[
+          // The whole card opens the duel; these two are its only actions.
           IconButton(
             tooltip: 'Compartir duelo',
             color: ArenaColors.muted,
@@ -396,12 +397,6 @@ class DuelActions extends StatelessWidget {
             onPressed: () => store.toggleSaved(duel.event.id),
             icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border),
           ),
-          IconButton(
-            tooltip: 'Abrir duelo completo',
-            color: ArenaColors.violet,
-            onPressed: () => openArenaDuel(context, store, duel),
-            icon: const Icon(Icons.arrow_forward),
-          ),
         ],
       );
     },
@@ -416,45 +411,88 @@ class DuelListCard extends StatelessWidget {
   final ArenaStore store;
 
   @override
-  Widget build(BuildContext context) => ArenaCard(
-    key: ValueKey<String>('arena-duel-${duel.contrast.id}'),
-    onTap: () => openArenaDuel(context, store, duel),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
+  Widget build(BuildContext context) {
+    final PositionVotes? votes = store.cachedPositionVotes(duel.event.id);
+    final bool voted = votes?.mine != null;
+    Widget preview(EventCoveragePositionDto? position) {
+      final ({String text, bool literal}) posture = arenaPostureText(
+        duel.event,
+        position,
+      );
+      return Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            ArenaBadge(
-              label: arenaKindLabel(duel.kind).toUpperCase(),
-              background: ArenaColors.violetSoft,
-              foreground: ArenaColors.violetDeep,
-            ),
-            Text(
-              '${arenaTopicOfEvent(duel.event).label} · '
-              '${arenaAgo(duel.contrast.confirmedAt)}',
-              style: ArenaText.meta,
+            MediaEmblem(name: ArenaDuel.nameOf(position), size: 24),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text.rich(
+                TextSpan(
+                  children: <InlineSpan>[
+                    TextSpan(
+                      text: '${ArenaDuel.nameOf(position)}: ',
+                      style: const TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                    TextSpan(
+                      text: posture.literal
+                          ? arenaQuote(posture.text)
+                          : posture.text,
+                    ),
+                  ],
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: ArenaText.body,
+              ),
             ),
           ],
         ),
-        const SizedBox(height: 10),
-        Text(
-          duel.title,
-          style: const TextStyle(
-            fontFamily: ArenaText.serif,
-            fontSize: 17,
-            height: 1.3,
-            fontWeight: FontWeight.w700,
-            color: ArenaColors.ink,
+      );
+    }
+
+    return ArenaCard(
+      key: ValueKey<String>('arena-duel-${duel.contrast.id}'),
+      onTap: () => openArenaDuel(context, store, duel),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              ArenaBadge(
+                label: voted ? 'Votaste' : 'Pendiente',
+                background: voted
+                    ? const Color(0xFFE2E8F0)
+                    : ArenaColors.violetSoft,
+                foreground: voted ? ArenaColors.ink : ArenaColors.violetDeep,
+              ),
+              Text(
+                '${arenaTopicOfEvent(duel.event).label} · '
+                '${arenaDate(duel.contrast.confirmedAt)} · '
+                '${arenaKindLabel(duel.kind)}',
+                style: ArenaText.meta,
+              ),
+            ],
           ),
-        ),
-        const SizedBox(height: 10),
-        DuelFaceOff(duel: duel, store: store),
-      ],
-    ),
-  );
+          const SizedBox(height: 10),
+          Text(
+            duel.title,
+            style: const TextStyle(
+              fontSize: 17,
+              height: 1.3,
+              fontWeight: FontWeight.w700,
+              color: ArenaColors.ink,
+            ),
+          ),
+          preview(duel.positionA),
+          preview(duel.positionB),
+        ],
+      ),
+    );
+  }
 }
 
 /// Pantalla 2 — `VS · Duelo de Medios`.
@@ -552,273 +590,282 @@ class _DuelScreenState extends State<DuelScreen> {
           child: DuelKindBadge(kind: duel.kind),
         ),
         const SizedBox(height: 14),
-        IntrinsicHeight(
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              Expanded(child: _PostureCard(duel.event, duel.positionA, store)),
-              const SizedBox(width: 8),
-              Expanded(child: _PostureCard(duel.event, duel.positionB, store)),
-            ],
-          ),
+        ListenableBuilder(
+          listenable: store,
+          builder: (BuildContext context, _) {
+            final bool hidden = store.hidesOutlets(duel.event.id);
+            final List<Widget> cards = <Widget>[
+              _PostureCard(
+                duel.event,
+                duel.positionA,
+                store,
+                blindLabel: hidden ? 'Versión A' : null,
+              ),
+              _PostureCard(
+                duel.event,
+                duel.positionB,
+                store,
+                blindLabel: hidden ? 'Versión B' : null,
+              ),
+            ];
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _BlindToggle(store: store, eventId: duel.event.id),
+                const SizedBox(height: 8),
+                // Side by side at normal sizes; one under the other, full
+                // width, once the text is enlarged so neither is squeezed.
+                if (MediaQuery.textScalerOf(context).scale(10) >=
+                    13) ...<Widget>[
+                  cards[0],
+                  const SizedBox(height: 8),
+                  cards[1],
+                ] else
+                  IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: <Widget>[
+                        Expanded(child: cards[0]),
+                        const SizedBox(width: 8),
+                        Expanded(child: cards[1]),
+                      ],
+                    ),
+                  ),
+              ],
+            );
+          },
         ),
         const SizedBox(height: 16),
         ArenaSubTabs(
-          labels: const <String>['Evidencia', 'Contexto', 'Análisis IA'],
+          labels: const <String>['Notas originales', 'Análisis IA'],
           selected: _tab,
           onSelected: (int value) => setState(() => _tab = value),
         ),
         const SizedBox(height: 14),
-        if (_tab == 0) ..._evidence(context),
-        if (_tab == 1) ..._context(context),
-        if (_tab == 2) ..._analysis(),
+        if (_tab == 0) ..._notes(context),
+        if (_tab == 1) ..._analysis(),
       ],
     ),
   );
 
-  List<Widget> _evidence(BuildContext context) {
-    final EventDetailDto event = duel.event;
-    return <Widget>[
-      for (final EventCoverageArticleDto article in event.articles)
-        _SourceLinkCard(
-          article: article,
-          onOpen: () => unawaited(
-            openArenaPiece(
-              context,
-              store,
-              article.url,
-              title: article.title,
-              channel: article.sourceName,
-            ),
-          ),
-          onOpenSource: article.sourceId == null
-              ? null
-              : () => openArenaMedia(context, store, article.sourceId!),
-        ),
-      OutlinedButton.icon(
-        key: const Key('arena-add-evidence'),
-        onPressed: () => showArenaContributionSheet(context, store, event),
-        style: OutlinedButton.styleFrom(
-          backgroundColor: ArenaColors.card,
-          foregroundColor: ArenaColors.violet,
-          side: const BorderSide(color: Color(0xFFD9D0FD)),
-          minimumSize: const Size(48, 48),
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-        icon: const Icon(Icons.add_link_rounded),
-        label: const Text(
-          'Aportar enlace o evidencia verificable',
-          textAlign: TextAlign.center,
-          style: TextStyle(fontWeight: FontWeight.w700),
-        ),
-      ),
-    ];
-  }
-
-  /// The essential facts in the order they were published.
-  List<Widget> _context(BuildContext context) {
+  /// The original publications in the order they appeared, each one a link
+  /// to its outlet, then the ways to go further.
+  List<Widget> _notes(BuildContext context) {
     final EventDetailDto event = duel.event;
     final List<EventCoverageArticleDto> timeline = event.articles.toList()
       ..sort(
         (EventCoverageArticleDto a, EventCoverageArticleDto b) =>
             a.publishedAt.compareTo(b.publishedAt),
       );
-    final String? fact = event.primaryFact?.statement.trim();
     return <Widget>[
-      if (fact != null && fact.isNotEmpty)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Text(fact, style: ArenaText.body),
-        ),
       for (final EventCoverageArticleDto article in timeline)
-        Padding(
+        KeyedSubtree(
           key: ValueKey<String>('arena-context-${article.id}'),
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              const Padding(
-                padding: EdgeInsets.only(top: 6),
-                child: SizedBox.square(
-                  dimension: 8,
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: ArenaColors.violet,
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                ),
+          child: _SourceLinkCard(
+            article: article,
+            onOpen: () => unawaited(
+              openArenaPiece(
+                context,
+                store,
+                article.url,
+                title: article.title,
+                channel: article.sourceName,
               ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      '${arenaDateTime(article.publishedAt)} · '
-                      '${arenaSourceName(article.sourceName)}',
-                      style: ArenaText.meta,
-                    ),
-                    const SizedBox(height: 2),
-                    Text(article.title, style: ArenaText.body),
-                  ],
-                ),
-              ),
-            ],
+            ),
+            onOpenSource: article.sourceId == null
+                ? null
+                : () => openArenaMedia(context, store, article.sourceId!),
           ),
         ),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: TextButton(
-          style: TextButton.styleFrom(
-            foregroundColor: ArenaColors.violet,
-            padding: EdgeInsets.zero,
-          ),
-          onPressed: () => openArenaEvent(context, store, event.id),
-          child: const Text('Abrir acontecimiento vivo →'),
-        ),
+      const SizedBox(height: 4),
+      OutlinedButton.icon(
+        key: const Key('arena-add-evidence'),
+        onPressed: () => showArenaContributionSheet(context, store, event),
+        style: arenaSecondaryButtonStyle(),
+        icon: const Icon(Icons.add_link_rounded),
+        label: const Text('Aportar una fuente'),
+      ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        key: const Key('arena-open-living-event'),
+        onPressed: () => openArenaEvent(context, store, event.id),
+        style: arenaSecondaryButtonStyle(),
+        icon: const Icon(Icons.timeline_rounded),
+        label: const Text('Ver el acontecimiento completo'),
       ),
     ];
   }
 
+  /// Dialektik's own reading, visibly separate from what the outlets said.
   List<Widget> _analysis() {
     final String explanation = switch (duel.kind) {
       'CONTRADICTION' =>
-        'Las dos posturas describen el mismo hecho con afirmaciones que no '
-            'pueden ser ciertas a la vez. Dialektik lo clasifica como '
-            'contradicción y no declara cuál es la correcta: la evidencia '
-            'original está enlazada para que la revises.',
+        'Las dos citas describen el mismo hecho con afirmaciones que no '
+            'pueden ser ciertas a la vez. Dialektik no declara cuál es la '
+            'correcta: revisa las notas originales.',
       'DIFFERENT_FOCUS' =>
         'Ambos medios informan sobre el mismo acontecimiento, pero ponen el '
-            'acento en aspectos distintos. Sus afirmaciones no se excluyen: '
-            'la diferencia es de enfoque, no de hechos.',
+            'acento en aspectos distintos. Sus afirmaciones no se excluyen.',
       'COMPATIBLE' =>
-        'Las posturas de ambos medios son compatibles entre sí: describen '
-            'el mismo acontecimiento sin afirmaciones que se opongan.',
+        'Las citas de ambos medios son compatibles: describen el mismo '
+            'acontecimiento sin afirmaciones que se opongan.',
       _ =>
         'Los dos medios cubren el mismo acontecimiento desde ángulos '
-            'distintos. Revisa las citas y los originales enlazados.',
+            'distintos. Revisa las citas y las notas originales.',
     };
-    Widget posture(EventCoveragePositionDto? position) => Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(
-            ArenaDuel.nameOf(position),
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: ArenaColors.violetDeep,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            position == null
-                ? 'Postura no disponible.'
-                : position.assertions.isNotEmpty &&
-                      position.assertions.first.assertionText.trim().length >=
-                          arenaMinimumQuoteLength
-                ? position.assertions.first.assertionText
-                : arenaPostureText(duel.event, position).text,
-            style: ArenaText.body,
-          ),
-        ],
-      ),
-    );
     return <Widget>[
-      ArenaCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            const Text('En qué coinciden', style: ArenaText.section),
-            const SizedBox(height: 8),
-            Text(
-              'Los dos medios cubren el mismo acontecimiento: '
-              '«${duel.event.arenaTitle}».',
-              style: ArenaText.body,
-            ),
-          ],
+      const Padding(
+        padding: EdgeInsets.only(bottom: 10),
+        child: Text(
+          'Esto lo escribe Dialektik. Lo que dijo cada medio está en sus '
+          'citas y en Notas originales.',
+          style: ArenaText.meta,
         ),
       ),
-      ArenaCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'Por qué es ${arenaKindLabel(duel.kind).toLowerCase()}',
-              style: ArenaText.section,
-            ),
-            const SizedBox(height: 8),
-            Text(explanation, style: ArenaText.body),
-            posture(duel.positionA),
-            posture(duel.positionB),
-            const SizedBox(height: 10),
-            const Text(
-              'Resumen generado por IA a partir de las citas literales. '
-              'No reemplaza la lectura de las fuentes originales.',
-              style: ArenaText.meta,
-            ),
-          ],
-        ),
+      ArenaInterpretationBox(
+        key: const Key('arena-ai-analysis'),
+        title: 'Por qué es ${arenaKindLabel(duel.kind).toLowerCase()}',
+        body: explanation,
       ),
+      const SizedBox(height: 12),
+      for (final EventCoveragePositionDto? position
+          in <EventCoveragePositionDto?>[duel.positionA, duel.positionB])
+        ArenaAttributedQuote(event: duel.event, position: position),
     ];
   }
 }
 
-/// The one classification of this duel, as an informative badge.
-///
-/// Only the label that applies is shown: three pills side by side looked
-/// like options the reader could switch.
+/// The one classification of this duel, labelled as Dialektik's own and
+/// explained on tap. All kinds share one neutral style: a colour per kind
+/// would read as a verdict on the outlets.
 class DuelKindBadge extends StatelessWidget {
   const DuelKindBadge({required this.kind, super.key});
 
   final String kind;
 
+  static ({IconData icon, String label, String explanation}) describe(
+    String kind,
+  ) => switch (kind) {
+    'CONTRADICTION' => (
+      icon: Icons.compare_arrows_rounded,
+      label: 'Contradicción',
+      explanation:
+          'Dialektik encontró dos afirmaciones sobre el mismo hecho que no '
+          'pueden ser ciertas a la vez. No indica cuál es la correcta.',
+    ),
+    'COMPATIBLE' => (
+      icon: Icons.join_inner_rounded,
+      label: 'Compatible',
+      explanation:
+          'Dialektik no encontró afirmaciones que se opongan: los medios '
+          'describen el mismo acontecimiento de forma compatible.',
+    ),
+    _ => (
+      icon: Icons.center_focus_weak_rounded,
+      label: 'Distinto enfoque',
+      explanation:
+          'Los medios hablan del mismo acontecimiento pero ponen el acento '
+          'en aspectos distintos. Sus afirmaciones no se excluyen.',
+    ),
+  };
+
   @override
   Widget build(BuildContext context) {
-    final ({String icon, String label, Color background, Color foreground})
-    style = switch (kind) {
-      'CONTRADICTION' => (
-        icon: '⚔️',
-        label: 'Contradicción factual',
-        background: const Color(0xFFFDE8E8),
-        foreground: const Color(0xFF9B1C1C),
-      ),
-      'COMPATIBLE' => (
-        icon: '🤝',
-        label: 'Cobertura compatible',
-        background: const Color(0xFFEDF2F7),
-        foreground: const Color(0xFF2D3748),
-      ),
-      _ => (
-        icon: '⚡',
-        label: 'Distinto enfoque',
-        background: ArenaColors.violetSoft,
-        foreground: ArenaColors.violet,
-      ),
-    };
+    final ({IconData icon, String label, String explanation}) style = describe(
+      kind,
+    );
     return Semantics(
-      label: 'Clasificación: ${style.label}',
+      button: true,
+      label:
+          'Tipo de duelo según Dialektik: ${style.label}. Toca para saber '
+          'qué significa',
       child: ExcludeSemantics(
-        child: DecoratedBox(
-          key: const Key('arena-duel-kind'),
-          decoration: BoxDecoration(
-            color: style.background,
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: style.foreground.withValues(alpha: 0.18)),
+        child: Material(
+          color: ArenaColors.card,
+          shape: const StadiumBorder(
+            side: BorderSide(color: ArenaColors.border),
           ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            child: Text(
-              '${style.icon} ${style.label}',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w700,
-                color: style.foreground,
+          child: InkWell(
+            key: const Key('arena-duel-kind'),
+            customBorder: const StadiumBorder(),
+            onTap: () => showModalBottomSheet<void>(
+              context: context,
+              showDragHandle: true,
+              backgroundColor: ArenaColors.card,
+              builder: (BuildContext sheetContext) => SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Tipo de duelo: ${style.label}',
+                        style: ArenaText.section,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(style.explanation, style: ArenaText.body),
+                      const SizedBox(height: 8),
+                      const Text(
+                        'Es una clasificación de Dialektik, no de los medios.',
+                        style: ArenaText.meta,
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: TextButton(
+                          style: TextButton.styleFrom(
+                            minimumSize: const Size(64, 44),
+                          ),
+                          onPressed: () => Navigator.of(sheetContext).pop(),
+                          child: const Text('Cerrar'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(minHeight: 44),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    Icon(style.icon, size: 16, color: ArenaColors.muted),
+                    const SizedBox(width: 6),
+                    Flexible(
+                      child: Text.rich(
+                        TextSpan(
+                          children: <InlineSpan>[
+                            const TextSpan(
+                              text: 'Tipo de duelo (Dialektik): ',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w500,
+                                color: ArenaColors.muted,
+                              ),
+                            ),
+                            TextSpan(
+                              text: style.label,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w700,
+                                color: ArenaColors.ink,
+                              ),
+                            ),
+                          ],
+                        ),
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    const Icon(
+                      Icons.info_outline_rounded,
+                      size: 16,
+                      color: ArenaColors.muted,
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -829,11 +876,25 @@ class DuelKindBadge extends StatelessWidget {
 }
 
 class _PostureCard extends StatelessWidget {
-  const _PostureCard(this.event, this.position, this.store);
+  const _PostureCard(this.event, this.position, this.store, {this.blindLabel});
 
   final EventDetailDto event;
   final EventCoveragePositionDto? position;
   final ArenaStore store;
+
+  /// «Versión A/B» while the reader reads blind; the outlet, its emblem and
+  /// its link stay hidden until they vote.
+  final String? blindLabel;
+
+  /// The outlet's own publication in this case, to read the quote in context.
+  EventCoverageArticleDto? get _article {
+    final String? sourceId = ArenaDuel.sourceIdOf(position);
+    if (sourceId == null) return null;
+    for (final EventCoverageArticleDto article in event.articles) {
+      if (article.sourceId == sourceId) return article;
+    }
+    return null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -850,51 +911,92 @@ class _PostureCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            // A Wrap lets a long name drop under its emblem as a whole word
-            // instead of breaking inside the narrow half-width card.
-            Semantics(
-              button: sourceId != null,
-              label: 'Abrir perfil de ${ArenaDuel.nameOf(position)}',
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: sourceId == null
-                    ? null
-                    : () => openArenaMedia(context, store, sourceId),
-                child: Wrap(
-                  spacing: 8,
-                  runSpacing: 4,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: <Widget>[
-                    MediaEmblem(name: ArenaDuel.nameOf(position), size: 30),
-                    Text(
-                      ArenaDuel.nameOf(position),
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                        color: ArenaColors.ink,
+            if (blindLabel != null)
+              Text(
+                blindLabel!,
+                key: ValueKey<String>('arena-blind-$blindLabel'),
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  color: ArenaColors.ink,
+                ),
+              )
+            else
+              // A Wrap lets a long name drop under its emblem as a whole word
+              // instead of breaking inside the narrow half-width card.
+              Semantics(
+                button: sourceId != null,
+                label: 'Abrir perfil de ${ArenaDuel.nameOf(position)}',
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(12),
+                  onTap: sourceId == null
+                      ? null
+                      : () => openArenaMedia(context, store, sourceId),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: <Widget>[
+                      MediaEmblem(name: ArenaDuel.nameOf(position), size: 30),
+                      Text(
+                        ArenaDuel.nameOf(position),
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: ArenaColors.ink,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
             const SizedBox(height: 10),
+            // Merriweather and quotation marks only for literal quotes; a
+            // headline stand-in is set like any other Dialektik text.
             Text(
               quote.isNotEmpty ? quote : posture.text,
-              style: const TextStyle(
-                fontFamily: ArenaText.serif,
-                fontSize: 13,
-                height: 1.4,
-                color: ArenaColors.ink,
-              ),
+              style: quote.isNotEmpty
+                  ? const TextStyle(
+                      fontFamily: ArenaText.serif,
+                      fontSize: 14,
+                      height: 1.45,
+                      color: ArenaColors.ink,
+                    )
+                  : ArenaText.body,
             ),
             const SizedBox(height: 8),
             Text(
               quote.isNotEmpty
-                  ? 'Cita literal verificada'
+                  ? arenaVerifiedQuoteLabel
                   : 'Titular de su publicación',
               style: ArenaText.meta,
             ),
+            if (_article != null && blindLabel == null)
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: ValueKey<String>('arena-quote-context-${_article!.id}'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: ArenaColors.violet,
+                    minimumSize: const Size(44, 44),
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    tapTargetSize: MaterialTapTargetSize.padded,
+                  ),
+                  onPressed: () => unawaited(
+                    openArenaPiece(
+                      context,
+                      store,
+                      _article!.url,
+                      title: _article!.title,
+                      channel: _article!.sourceName,
+                    ),
+                  ),
+                  child: const Text(
+                    'Ver en contexto ↗',
+                    style: TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
           ],
         ),
       ),
@@ -958,8 +1060,8 @@ class _SourceLinkCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '${arenaSourceName(article.sourceName)} · '
-                      '${arenaAgo(article.publishedAt)}',
+                      '${arenaDateTime(article.publishedAt)} · '
+                      '${arenaSourceName(article.sourceName)}',
                       style: ArenaText.meta,
                     ),
                     const SizedBox(height: 6),
@@ -971,7 +1073,7 @@ class _SourceLinkCard extends StatelessWidget {
                           child: Text(
                             videoId != null
                                 ? '▶ Ver video en la app'
-                                : 'Leer en medio original',
+                                : 'Leer en el medio',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w700,
@@ -998,6 +1100,49 @@ class _SourceLinkCard extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// «Leer a ciegas»: hides the outlets until the reader votes, so the brand
+/// does not anchor the choice. Both versions are revealed together.
+class _BlindToggle extends StatelessWidget {
+  const _BlindToggle({required this.store, required this.eventId});
+
+  final ArenaStore store;
+  final String eventId;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool blind = store.isBlind(eventId);
+    final bool voted = store.cachedPositionVotes(eventId)?.mine != null;
+    return Row(
+      children: <Widget>[
+        Expanded(
+          child: Text(
+            blind && voted
+                ? 'Ya votaste: estos son los medios de cada versión.'
+                : 'Lee sin saber qué medio dijo cada cita y descúbrelo al votar.',
+            style: ArenaText.meta,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Semantics(
+          toggled: blind,
+          label: 'Leer a ciegas',
+          child: FilterChip(
+            key: const Key('arena-blind-toggle'),
+            label: const Text('Leer a ciegas'),
+            selected: blind,
+            showCheckmark: true,
+            materialTapTargetSize: MaterialTapTargetSize.padded,
+            selectedColor: ArenaColors.violetSoft,
+            onSelected: voted && !blind
+                ? null
+                : (bool value) => store.setBlind(eventId, value: value),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -1125,7 +1270,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          const Text('Aportar evidencia', style: ArenaText.section),
+          const Text('Aportar una fuente', style: ArenaText.section),
           const SizedBox(height: 4),
           const Text(
             'Suma un enlace o documento que respalde o contradiga una de las '
@@ -1153,7 +1298,7 @@ class _ContributionSheetState extends State<_ContributionSheet> {
             maxLines: 4,
             maxLength: 600,
             decoration: InputDecoration(
-              labelText: 'Nota de respaldo',
+              labelText: 'Qué aporta esta fuente',
               hintText: '¿Qué demuestra este enlace?',
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(12),
@@ -1304,9 +1449,9 @@ class _VoteSheetState extends State<_VoteSheet> {
               ),
               const SizedBox(height: 6),
               const Text(
-                'Evalúa el respaldo en evidencia de la cobertura de este '
-                'caso. Tu voto se suma al termómetro de la comunidad y '
-                'puedes cambiarlo cuando quieras.',
+                '¿La cobertura de este caso te parece bien respaldada? Tu '
+                'voto es tu opinión, se suma a la de la comunidad y puedes '
+                'cambiarlo cuando quieras.',
                 style: ArenaText.body,
               ),
               const SizedBox(height: 14),
@@ -1350,7 +1495,7 @@ class _VoteSheetState extends State<_VoteSheet> {
                 ),
               if (!canVote)
                 const Text(
-                  'Inicia sesión para votar en el termómetro.',
+                  'Inicia sesión para dar tu opinión.',
                   style: ArenaText.meta,
                 ),
               if (_error != null)
@@ -1400,16 +1545,17 @@ class _VoteSheetState extends State<_VoteSheet> {
     ArenaDuel duel,
     PositionVotes votes,
   ) {
+    final bool hidden = widget.store.hidesOutlets(duel.event.id);
     final List<({String id, String name, String title})> sides =
         <({String id, String name, String title})>[
           (
-            id: duel.contrast.positionA.id,
-            name: duel.nameA,
+            id: duel.idA,
+            name: hidden ? 'Versión A' : duel.nameA,
             title: arenaPostureText(duel.event, duel.positionA).text,
           ),
           (
-            id: duel.contrast.positionB.id,
-            name: duel.nameB,
+            id: duel.idB,
+            name: hidden ? 'Versión B' : duel.nameB,
             title: arenaPostureText(duel.event, duel.positionB).text,
           ),
         ];
@@ -1427,8 +1573,9 @@ class _VoteSheetState extends State<_VoteSheet> {
         ),
         const SizedBox(height: 6),
         const Text(
-          'Elige la postura que, según la evidencia enlazada, está mejor '
-          'respaldada. Tienes un voto por caso y puedes cambiarlo.',
+          'Lee ambas citas y sus notas originales. Tu voto es tu opinión, '
+          'no decide qué versión es correcta. Tienes un voto por caso y '
+          'puedes cambiarlo.',
           style: ArenaText.body,
         ),
         const SizedBox(height: 14),
@@ -1461,9 +1608,10 @@ class _VoteSheetState extends State<_VoteSheet> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   Text(
-                    '${votes.mine == side.id ? '✓ ' : ''}${side.name} · '
-                    '${votes.votesFor(side.id)} '
-                    '${votes.votesFor(side.id) == 1 ? 'voto' : 'votos'}',
+                    // Tallies follow the community block: never before the
+                    // reader votes, never with too few opinions.
+                    '${votes.mine == side.id ? '✓ ' : ''}${side.name}'
+                    '${opinionVisibility(voted: votes.mine != null, total: votes.total) == OpinionVisibility.split ? ' · ${arenaOpinionCount(votes.votesFor(side.id))}' : ''}',
                     style: const TextStyle(fontWeight: FontWeight.w800),
                   ),
                   const SizedBox(height: 2),

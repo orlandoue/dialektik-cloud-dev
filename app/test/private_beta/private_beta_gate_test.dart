@@ -394,7 +394,9 @@ void main() {
     expect(find.byTooltip('Cerrar sesión'), findsNothing);
     final Finder signOut = find.byKey(const Key('arena-account-sign-out'));
     expect(signOut, findsOneWidget);
-    expect(find.text('tester'), findsOneWidget);
+    // Without an alias the reader gets «Lector-NNNN», never their e-mail.
+    expect(find.text('tester'), findsNothing);
+    expect(find.textContaining(RegExp(r'^Lector-\d{4}$')), findsOneWidget);
     await tester.tap(signOut);
     await tester.pumpAndSettle();
     expect(find.text('Beta privada'), findsOneWidget);

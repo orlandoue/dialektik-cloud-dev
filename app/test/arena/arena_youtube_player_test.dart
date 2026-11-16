@@ -79,7 +79,7 @@ void main() {
         findsOneWidget,
       );
       // Press links keep opening the original publication.
-      expect(find.text('Leer en medio original'), findsWidgets);
+      expect(find.text('Leer en el medio', skipOffstage: false), findsWidgets);
 
       await tester.tap(video);
       await tester.pumpAndSettle();

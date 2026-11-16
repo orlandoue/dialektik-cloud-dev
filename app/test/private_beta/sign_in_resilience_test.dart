@@ -58,9 +58,9 @@ Future<void> _signIn(WidgetTester tester) async {
     'ana@example.test',
   );
   await tester.enterText(find.byKey(const Key('login-password')), 'secreto1');
-  await tester.ensureVisible(find.text('Iniciar sesión'));
+  await tester.ensureVisible(find.byKey(const Key('login-submit')));
   await tester.pumpAndSettle();
-  await tester.tap(find.text('Iniciar sesión'));
+  await tester.tap(find.byKey(const Key('login-submit')));
 }
 
 Finder get _arena => find.byKey(const Key('arena-bottom-navigation'));

@@ -5,26 +5,84 @@ import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
-import 'package:dialektik/features/arena/presentation/living_event_screen.dart';
 import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/data/story_follow_store.dart';
-import 'package:dialektik/features/live/data/chile_seismic_observations.dart';
 import 'package:dialektik/features/live/data/live_news_models.dart';
 import 'package:dialektik/features/live/data/live_news_repository.dart';
 import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
-import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:flutter/material.dart';
-import 'package:phosphor_flutter/phosphor_flutter.dart';
 
-/// Pestaña `Inicio`: Coliseo, Explorar y Siguiendo kept alive in memory.
+/// The catalog countries; only the active ones can be chosen. Lives in
+/// Perfil › Edición: while Chile is the only edition it costs no header space.
+Future<void> showArenaCountrySheet(
+  BuildContext context,
+  ArenaStore store,
+) async {
+  final String? chosen = await showModalBottomSheet<String>(
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    backgroundColor: ArenaColors.card,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+    ),
+    builder: (BuildContext sheetContext) => SafeArea(
+      child: ListView(
+        shrinkWrap: true,
+        padding: const EdgeInsets.only(bottom: 16),
+        children: <Widget>[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
+            child: Text('Edición', style: ArenaText.section),
+          ),
+          for (final CatalogCountry country
+              in PublisherMarketSelection.catalogCountries)
+            ListTile(
+              key: ValueKey<String>('arena-country-option-${country.code}'),
+              minTileHeight: 56,
+              leading: Text(country.flag, style: const TextStyle(fontSize: 22)),
+              title: Text(country.name, style: ArenaText.cardTitle),
+              subtitle: PublisherMarketSelection.isActiveCountry(country.code)
+                  ? null
+                  : const Text(
+                      'Pronto',
+                      style: TextStyle(color: Color(0xFF6B7280)),
+                    ),
+              enabled: PublisherMarketSelection.isActiveCountry(country.code),
+              trailing: country.code == store.country
+                  ? const Icon(Icons.check, color: ArenaColors.violet)
+                  : null,
+              onTap: () => Navigator.of(sheetContext).pop(country.code),
+            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 0),
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
+                onPressed: () => Navigator.of(sheetContext).pop(),
+                child: const Text('Cerrar'),
+              ),
+            ),
+          ),
+        ],
+      ),
+    ),
+  );
+  if (chosen != null && context.mounted) store.chooseCountry(chosen);
+}
+
+/// Pestaña `Inicio`: one feed. The duel of the day, what the reader did not
+/// see, the latest from their media, the stories in development and videos.
 class ArenaHomeTab extends StatefulWidget {
   const ArenaHomeTab({
     required this.store,
     required this.onOpenMedia,
+    this.onOpenStories,
     super.key,
   });
 
@@ -33,124 +91,30 @@ class ArenaHomeTab extends StatefulWidget {
   /// Switches to the `Medios` tab so the reader can choose sources.
   final VoidCallback onOpenMedia;
 
+  /// Switches to the `Historias` tab.
+  final VoidCallback? onOpenStories;
+
   @override
   State<ArenaHomeTab> createState() => _ArenaHomeTabState();
 }
 
 class _ArenaHomeTabState extends State<ArenaHomeTab> {
-  static const List<String> _pills = <String>[
-    'Coliseo',
-    'Explorar',
-    'Siguiendo',
-  ];
-  static const List<ArenaTopic?> _topics = <ArenaTopic?>[
-    null,
-    ArenaTopic.politica,
-    ArenaTopic.justicia,
-    ArenaTopic.economia,
-    ArenaTopic.seguridad,
-    ArenaTopic.deportes,
-    ArenaTopic.sociedad,
-  ];
-  final Set<int> _built = <int>{0};
-  int _pill = 0;
-  ArenaTopic? _topic;
-
-  Future<void> _chooseTopic() async {
-    final int? chosen = await showModalBottomSheet<int>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: ArenaColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (BuildContext sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('Filtrar por tema', style: ArenaText.section),
-            ),
-            for (int i = 0; i < _topics.length; i++)
-              ListTile(
-                key: ValueKey<String>(
-                  'arena-topic-option-${_topics[i]?.name ?? 'todos'}',
-                ),
-                title: Text(
-                  _topics[i]?.label ?? 'Todos',
-                  style: ArenaText.cardTitle,
-                ),
-                trailing: _topics[i] == _topic
-                    ? const Icon(Icons.check, color: ArenaColors.violet)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop(i),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (chosen != null && mounted) setState(() => _topic = _topics[chosen]);
-  }
-
-  /// The four countries of the verified catalog; only the active ones can be
-  /// chosen. Switching updates Coliseo, VS, Historias, Explorar and Medios
-  /// and is remembered on the device.
-  Future<void> _chooseCountry() async {
-    final String? chosen = await showModalBottomSheet<String>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: ArenaColors.card,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (BuildContext sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          children: <Widget>[
-            const Padding(
-              padding: EdgeInsets.fromLTRB(20, 0, 20, 8),
-              child: Text('País', style: ArenaText.section),
-            ),
-            for (final CatalogCountry country
-                in PublisherMarketSelection.catalogCountries)
-              ListTile(
-                key: ValueKey<String>('arena-country-option-${country.code}'),
-                leading: Text(
-                  country.flag,
-                  style: const TextStyle(fontSize: 22),
-                ),
-                title: Text(country.name, style: ArenaText.cardTitle),
-                subtitle: PublisherMarketSelection.isActiveCountry(country.code)
-                    ? null
-                    : const Text('Pronto'),
-                enabled: PublisherMarketSelection.isActiveCountry(country.code),
-                trailing: country.code == store.country
-                    ? const Icon(Icons.check, color: ArenaColors.violet)
-                    : null,
-                onTap: () => Navigator.of(sheetContext).pop(country.code),
-              ),
-          ],
-        ),
-      ),
-    );
-    if (chosen != null && mounted) store.chooseCountry(chosen);
-  }
-
   ArenaStore get store => widget.store;
 
   void _openAlerts() => unawaited(
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      showDragHandle: true,
       backgroundColor: ArenaColors.card,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (BuildContext sheetContext) =>
-          _AlertsSheet(store: store, hostContext: context),
+      builder: (BuildContext sheetContext) => _AlertsSheet(
+        store: store,
+        hostContext: context,
+        onOpenStories: widget.onOpenStories,
+      ),
     ),
   );
 
@@ -164,33 +128,11 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
           padding: const EdgeInsets.fromLTRB(16, 6, 6, 2),
           child: Row(
             children: <Widget>[
-              // Logo and country share what the two icons leave free; the
-              // logo keeps its size and only shrinks when it truly must.
-              Expanded(
-                child: Row(
-                  children: <Widget>[
-                    const Flexible(
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        alignment: Alignment.centerLeft,
-                        child: Text('Dialektik', style: ArenaText.brand),
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    ListenableBuilder(
-                      listenable: store,
-                      builder: (BuildContext context, Widget? _) {
-                        final CatalogCountry country =
-                            PublisherMarketSelection.countryOf(store.country);
-                        return ArenaDropdownPill(
-                          key: const Key('arena-country'),
-                          label: '${country.flag} ${country.name}',
-                          semanticsLabel: 'País: ${country.name}. Cambiar país',
-                          onTap: () => unawaited(_chooseCountry()),
-                        );
-                      },
-                    ),
-                  ],
+              const Expanded(
+                child: FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text('Dialektik', style: ArenaText.brand),
                 ),
               ),
               IconButton(
@@ -206,7 +148,7 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
               ),
               IconButton(
                 key: const Key('arena-alerts'),
-                tooltip: 'Alertas de giros',
+                tooltip: 'Novedades de lo que sigues',
                 color: ArenaColors.ink,
                 onPressed: _openAlerts,
                 icon: const Icon(Icons.notifications_none),
@@ -214,58 +156,11 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
             ],
           ),
         ),
-        // Section pills and the topic dropdown share one row: the filter
-        // costs no vertical space above the duel of the day.
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          child: Row(
-            children: <Widget>[
-              Expanded(
-                child: ArenaPillBar(
-                  padding: EdgeInsets.zero,
-                  labels: _pills,
-                  selected: _pill,
-                  onSelected: (int value) => setState(() {
-                    _built.add(value);
-                    _pill = value;
-                  }),
-                ),
-              ),
-              const SizedBox(width: 8),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 124),
-                child: ArenaDropdownPill(
-                  key: const Key('arena-topic-filter'),
-                  label: _topic?.label ?? 'Tema',
-                  leading: Icon(_topic == null ? Icons.tune : Icons.check),
-                  active: _topic != null,
-                  semanticsLabel: _topic == null
-                      ? 'Filtrar por tema'
-                      : 'Tema: ${_topic!.label}. Cambiar tema',
-                  onTap: _chooseTopic,
-                ),
-              ),
-            ],
-          ),
-        ),
         Expanded(
-          child: IndexedStack(
-            index: _pill,
-            children: <Widget>[
-              _Coliseo(store: store, topic: _topic),
-              if (_built.contains(1))
-                _Explore(store: store, topic: _topic)
-              else
-                const SizedBox.shrink(),
-              if (_built.contains(2))
-                _FollowingFeed(
-                  store: store,
-                  topic: _topic,
-                  onOpenMedia: widget.onOpenMedia,
-                )
-              else
-                const SizedBox.shrink(),
-            ],
+          child: _Coliseo(
+            store: store,
+            onOpenMedia: widget.onOpenMedia,
+            onOpenStories: widget.onOpenStories,
           ),
         ),
       ],
@@ -273,34 +168,30 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
   );
 }
 
-/// Pantalla 1 — panorama of the day.
+/// Pantalla 1 — panorama of the day, in one scroll.
 class _Coliseo extends StatelessWidget {
-  const _Coliseo({required this.store, required this.topic});
+  const _Coliseo({
+    required this.store,
+    required this.onOpenMedia,
+    required this.onOpenStories,
+  });
 
   final ArenaStore store;
-  final ArenaTopic? topic;
+  final VoidCallback onOpenMedia;
+  final VoidCallback? onOpenStories;
 
-  bool _matches(EventCardDto event) =>
-      topic == null || arenaTopicOfEvent(event) == topic;
+  /// Stories shown in Inicio; the rest live in `Historias`.
+  static const int storiesInHome = 2;
 
   @override
   Widget build(BuildContext context) => ListenableBuilder(
     listenable: store,
     builder: (BuildContext context, _) {
-      final List<EventCardDto> developing =
-          (store.developing.isEmpty ? store.events : store.developing)
-              .where(_matches)
-              .toList();
-      final List<ArenaDuel> duels = store.duels
-          .where((ArenaDuel duel) => _matches(duel.event))
-          .toList();
-      final List<LiveNewsItemDto> videos = store.videos
-          .where(
-            (LiveNewsItemDto v) =>
-                topic == null ||
-                arenaTopicOfText('${v.headline} ${v.excerpt ?? ''}') == topic,
-          )
-          .toList();
+      final List<EventCardDto> developing = store.developing.isEmpty
+          ? store.events
+          : store.developing;
+      final List<ArenaDuel> duels = store.duels;
+      final List<LiveNewsItemDto> videos = store.videos;
       return RefreshIndicator(
         color: ArenaColors.violet,
         onRefresh: () => store.load(refresh: true),
@@ -335,19 +226,20 @@ class _Coliseo extends StatelessWidget {
                 )
               else
                 ArenaMessage(
-                  topic == null
-                      ? 'Hoy todavía no hay duelos publicados.'
-                      : 'No hay duelos publicados en ${topic!.label}.',
+                  'Hoy no hay duelos nuevos.',
+                  actionLabel: onOpenStories == null ? null : 'Ver historias',
+                  onAction: onOpenStories,
                 ),
+              const SizedBox(height: 16),
+              _BlindspotBanner(store: store),
+              _FollowingFeed(
+                store: store,
+                onOpenMedia: onOpenMedia,
+                preview: true,
+              ),
               if (developing.isNotEmpty) ...<Widget>[
-                const Padding(
-                  padding: EdgeInsets.only(top: 4, bottom: 10),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: ArenaSectionPill('Historias en desarrollo'),
-                  ),
-                ),
-                for (final EventCardDto event in developing.take(5))
+                const ArenaSectionTitle('Historias en desarrollo'),
+                for (final EventCardDto event in developing.take(storiesInHome))
                   DevelopingEventCard(event: event, store: store),
               ],
               if (videos.isNotEmpty) ...<Widget>[
@@ -368,11 +260,103 @@ class _Coliseo extends StatelessWidget {
                         openArenaMedia(context, store, video.source.id),
                   ),
               ],
+              // The feed ends instead of trailing off.
+              Padding(
+                key: const Key('arena-feed-end'),
+                padding: const EdgeInsets.only(top: 16),
+                child: Column(
+                  children: <Widget>[
+                    const Text(
+                      'Ya estás al día',
+                      textAlign: TextAlign.center,
+                      style: ArenaText.cardTitle,
+                    ),
+                    if (onOpenStories != null)
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: ArenaColors.violet,
+                          minimumSize: const Size(44, 44),
+                        ),
+                        onPressed: onOpenStories,
+                        child: const Text(
+                          'Ver todas las historias →',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
             ],
           ],
         ),
       );
     },
+  );
+}
+
+/// «Lo que no viste hoy»: the most distinctive door of the app, in Inicio.
+class _BlindspotBanner extends StatelessWidget {
+  const _BlindspotBanner({required this.store});
+
+  final ArenaStore store;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Semantics(
+      button: true,
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(16),
+        clipBehavior: Clip.antiAlias,
+        child: Ink(
+          decoration: const BoxDecoration(gradient: ArenaColors.violetGradient),
+          child: InkWell(
+            key: const Key('arena-blindspot-banner'),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => BlindspotScreen(store: store),
+              ),
+            ),
+            child: const Padding(
+              padding: EdgeInsets.all(18),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Icon(Icons.travel_explore, color: Colors.white, size: 32),
+                  SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Lo que no viste hoy',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(height: 6),
+                        Text(
+                          'Ángulos y datos que no aparecen en tus '
+                          'medios habituales →',
+                          style: TextStyle(
+                            fontSize: 14,
+                            height: 1.35,
+                            color: Color(0xFFEDE9FE),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
@@ -382,12 +366,16 @@ class DevelopingEventCard extends StatefulWidget {
     required this.event,
     required this.store,
     this.note,
+    this.duel,
     super.key,
   });
 
   final EventCardDto event;
   final ArenaStore store;
   final String? note;
+
+  /// The case's published duel, linked straight from the card.
+  final ArenaDuel? duel;
 
   @override
   State<DevelopingEventCard> createState() => _DevelopingEventCardState();
@@ -412,6 +400,55 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
     }
   }
 
+  /// The case's video when it has one; otherwise the emblems of the outlets
+  /// that cover it on a light tile, never a dark empty block.
+  Widget _thumbnail(ArenaTopic topic, EventDetailDto? detail) {
+    final String? videoId = detail == null ? null : arenaVideoIdOfEvent(detail);
+    if (videoId != null) {
+      return ArenaCover(
+        topic: topic,
+        videoId: videoId,
+        minHeight: 0,
+        radius: 12,
+        child: const Center(
+          child: Icon(
+            Icons.play_circle_fill_rounded,
+            color: Color(0xE6FFFFFF),
+            size: 30,
+          ),
+        ),
+      );
+    }
+    final List<String> outlets =
+        (detail?.articles ?? const <EventCoverageArticleDto>[])
+            .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
+            .toSet()
+            .take(3)
+            .toList();
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFEEF0F5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Center(
+        child: outlets.isEmpty
+            ? Icon(arenaTopicIcon(topic), color: ArenaColors.muted, size: 28)
+            : Wrap(
+                spacing: 4,
+                runSpacing: 4,
+                alignment: WrapAlignment.center,
+                children: <Widget>[
+                  for (final String name in outlets)
+                    MediaEmblem(
+                      name: name,
+                      size: outlets.length == 1 ? 40 : 30,
+                    ),
+                ],
+              ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final EventCardDto event = widget.event;
@@ -433,19 +470,7 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
             width: 84,
             child: AspectRatio(
               aspectRatio: 1,
-              child: ArenaCover(
-                topic: topic,
-                videoId: detail == null ? null : arenaVideoIdOfEvent(detail),
-                minHeight: 0,
-                radius: 12,
-                child: Center(
-                  child: Icon(
-                    arenaTopicIcon(topic),
-                    color: const Color(0xCCFFFFFF),
-                    size: 28,
-                  ),
-                ),
-              ),
+              child: _thumbnail(topic, detail),
             ),
           ),
           const SizedBox(width: 12),
@@ -453,13 +478,14 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
+                // Categories are navigation, not a signal: plain grey caps.
                 Text(
                   topic.label.toUpperCase(),
                   style: const TextStyle(
-                    fontSize: 11,
+                    fontSize: 12,
                     fontWeight: FontWeight.w800,
                     letterSpacing: 0.4,
-                    color: ArenaColors.emerald,
+                    color: ArenaColors.muted,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -467,8 +493,8 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
                 const SizedBox(height: 6),
                 Text(
                   '${event.sourceCount} '
-                  '${event.sourceCount == 1 ? 'fuente' : 'fuentes'} · '
-                  'Actualizada ${arenaAgo(updated)}',
+                  '${event.sourceCount == 1 ? 'medio' : 'medios'} · '
+                  '${DateTime.now().difference(updated) > const Duration(hours: 72) ? 'Sin novedades recientes' : 'Actualizada ${arenaAgo(updated)}'}',
                   style: ArenaText.meta,
                 ),
                 if (widget.note != null) ...<Widget>[
@@ -482,6 +508,22 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
                     ),
                   ),
                 ],
+                if (widget.duel != null)
+                  TextButton(
+                    key: ValueKey<String>('arena-event-duel-${event.id}'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: ArenaColors.violet,
+                      minimumSize: const Size(44, 44),
+                      padding: EdgeInsets.zero,
+                      alignment: Alignment.centerLeft,
+                    ),
+                    onPressed: () =>
+                        openArenaDuel(context, widget.store, widget.duel!),
+                    child: const Text(
+                      'Ver su duelo VS →',
+                      style: TextStyle(fontWeight: FontWeight.w700),
+                    ),
+                  ),
               ],
             ),
           ),
@@ -489,188 +531,6 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
       ),
     );
   }
-}
-
-/// Pantalla 6 — discovery outside the reader's usual media.
-class _Explore extends StatelessWidget {
-  const _Explore({required this.store, required this.topic});
-
-  final ArenaStore store;
-  final ArenaTopic? topic;
-
-  static const List<ArenaTopic> _topics = <ArenaTopic>[
-    ArenaTopic.politica,
-    ArenaTopic.justicia,
-    ArenaTopic.economia,
-    ArenaTopic.medioambiente,
-    ArenaTopic.ciencia,
-    ArenaTopic.deportes,
-    ArenaTopic.sociedad,
-  ];
-
-  @override
-  Widget build(BuildContext context) => ListenableBuilder(
-    listenable: store,
-    builder: (BuildContext context, _) {
-      final List<EventCardDto> trending =
-          store.events
-              .where(
-                (EventCardDto e) =>
-                    topic == null || arenaTopicOfEvent(e) == topic,
-              )
-              .toList()
-            ..sort(
-              (EventCardDto a, EventCardDto b) =>
-                  b.sourceCount.compareTo(a.sourceCount),
-            );
-      final SeismicObservationRepository? seismic = store.seismic;
-      return ListView(
-        key: const Key('arena-explore-scroll'),
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-        children: <Widget>[
-          Semantics(
-            button: true,
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(16),
-              clipBehavior: Clip.antiAlias,
-              child: Ink(
-                decoration: const BoxDecoration(
-                  gradient: ArenaColors.violetGradient,
-                ),
-                child: InkWell(
-                  key: const Key('arena-blindspot-banner'),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => BlindspotScreen(store: store),
-                    ),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(18),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Icon(
-                          PhosphorIcons.binoculars(),
-                          color: Colors.white,
-                          size: 34,
-                        ),
-                        const SizedBox(width: 14),
-                        const Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: <Widget>[
-                              Text(
-                                'Lo que no viste hoy',
-                                style: TextStyle(
-                                  fontFamily: ArenaText.serif,
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.white,
-                                ),
-                              ),
-                              SizedBox(height: 6),
-                              Text(
-                                'Ángulos y datos que no aparecen en tus '
-                                'medios habituales →',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  height: 1.35,
-                                  color: Color(0xFFEDE9FE),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-          const ArenaSectionTitle('Tendencias en Dialektik'),
-          if (trending.isEmpty)
-            const ArenaMessage('Todavía no hay acontecimientos publicados.'),
-          for (int i = 0; i < trending.length && i < 5; i++)
-            ArenaCard(
-              key: ValueKey<String>('arena-trend-${i + 1}'),
-              padding: const EdgeInsets.all(12),
-              onTap: () => openArenaEvent(context, store, trending[i].id),
-              child: Row(
-                children: <Widget>[
-                  arenaNumberCircle(i + 1),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          trending[i].arenaTitle,
-                          style: ArenaText.cardTitle,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '🔥 ${trending[i].sourceCount} '
-                          '${trending[i].sourceCount == 1 ? 'fuente' : 'fuentes'}',
-                          style: ArenaText.meta,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Icon(Icons.trending_up, color: ArenaColors.violet),
-                ],
-              ),
-            ),
-          const ArenaSectionTitle('Temas'),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              for (final ArenaTopic topic in _topics)
-                ArenaPill(
-                  key: ValueKey<String>('arena-topic-${topic.name}'),
-                  label: topic.label,
-                  selected: false,
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) => TopicScreen(topic: topic, store: store),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-          if (seismic != null) ...<Widget>[
-            const SizedBox(height: 16),
-            DecoratedBox(
-              decoration: arenaCardDecoration(),
-              child: Theme(
-                data: Theme.of(
-                  context,
-                ).copyWith(dividerColor: Colors.transparent),
-                child: ExpansionTile(
-                  key: const Key('arena-seismic'),
-                  shape: const Border(),
-                  iconColor: ArenaColors.violet,
-                  collapsedIconColor: ArenaColors.muted,
-                  leading: const Icon(Icons.sensors, color: ArenaColors.violet),
-                  title: const Text(
-                    'Actividad sísmica · USGS',
-                    style: ArenaText.cardTitle,
-                  ),
-                  childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-                  children: <Widget>[
-                    ChileSeismicObservationsPanel(repository: seismic),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ],
-      );
-    },
-  );
 }
 
 String _outsideReason(LiveNewsItemDto item) {
@@ -733,7 +593,10 @@ class ArenaNewsCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                 ],
-                Text(item.headline, style: ArenaText.cardTitle),
+                Text(
+                  arenaWithoutSourcePrefix(item.headline, item.source.name),
+                  style: ArenaText.cardTitle,
+                ),
                 const SizedBox(height: 6),
                 Wrap(
                   spacing: 8,
@@ -990,17 +853,21 @@ class _TopicScreenState extends State<TopicScreen> {
   }
 }
 
-/// Píldora `Siguiendo`: publications and stories of followed sources.
+/// Publications and stories of followed sources: a three-item section in
+/// Inicio ([preview]) or the full list behind «Ver todo».
 class _FollowingFeed extends StatefulWidget {
   const _FollowingFeed({
     required this.store,
     required this.onOpenMedia,
-    required this.topic,
+    this.preview = false,
   });
 
   final ArenaStore store;
-  final ArenaTopic? topic;
   final VoidCallback onOpenMedia;
+  final bool preview;
+
+  /// Publications shown in Inicio.
+  static const int previewCount = 3;
 
   @override
   State<_FollowingFeed> createState() => _FollowingFeedState();
@@ -1061,23 +928,20 @@ class _FollowingFeedState extends State<_FollowingFeed> {
     }
   }
 
+  String _fromYourMedia() {
+    final int count = store
+        .brands(store.sources)
+        .where(store.followsBrand)
+        .length;
+    return count == 1 ? 'De tu medio' : 'De tus $count medios';
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (widget.preview) return _previewSection(context);
     final StoryFollowStore stories = store.stories;
-    final ArenaTopic? topic = widget.topic;
     final List<EventCardDto> followedStories = store.events
-        .where(
-          (EventCardDto e) =>
-              stories.contains(e.id) &&
-              (topic == null || arenaTopicOfEvent(e) == topic),
-        )
-        .toList();
-    final List<LiveNewsItemDto> items = _items
-        .where(
-          (LiveNewsItemDto n) =>
-              topic == null ||
-              arenaTopicOfText('${n.headline} ${n.excerpt ?? ''}') == topic,
-        )
+        .where((EventCardDto e) => stories.contains(e.id))
         .toList();
     return RefreshIndicator(
       color: ArenaColors.violet,
@@ -1117,23 +981,119 @@ class _FollowingFeedState extends State<_FollowingFeed> {
               for (final EventCardDto event in followedStories)
                 DevelopingEventCard(event: event, store: store),
             ],
-            ArenaSectionTitle('De tus ${store.followed.length} medios'),
-            if (items.isEmpty)
+            ArenaSectionTitle(_fromYourMedia()),
+            if (_items.isEmpty)
               const ArenaMessage('Tus medios no tienen publicaciones nuevas.'),
-            for (final LiveNewsItemDto item in items)
+            for (final LiveNewsItemDto item in _items)
               ArenaNewsCard(item: item, store: store),
           ],
         ],
       ),
     );
   }
+
+  Widget _previewSection(BuildContext context) {
+    if (store.following == null) return const SizedBox.shrink();
+    if (store.followed.isEmpty) {
+      return Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: ArenaCard(
+          key: const Key('arena-choose-media'),
+          onTap: widget.onOpenMedia,
+          child: const Row(
+            children: <Widget>[
+              Icon(Icons.cell_tower, color: ArenaColors.violet),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Elige tus medios para ver aquí lo último que publican →',
+                  style: ArenaText.cardTitle,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+    final List<LiveNewsItemDto> items = _items
+        .take(_FollowingFeed.previewCount)
+        .toList();
+    return Column(
+      key: const Key('arena-following-preview'),
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(child: ArenaSectionTitle(_fromYourMedia())),
+            TextButton(
+              key: const Key('arena-following-all'),
+              style: TextButton.styleFrom(
+                foregroundColor: ArenaColors.violet,
+                minimumSize: const Size(44, 44),
+              ),
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => Scaffold(
+                    backgroundColor: ArenaColors.background,
+                    appBar: AppBar(
+                      backgroundColor: ArenaColors.background,
+                      surfaceTintColor: Colors.transparent,
+                      foregroundColor: ArenaColors.ink,
+                      title: const Text(
+                        'Lo último de tus medios',
+                        style: TextStyle(
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ),
+                    body: _FollowingFeed(
+                      store: store,
+                      onOpenMedia: widget.onOpenMedia,
+                    ),
+                  ),
+                ),
+              ),
+              child: const Text(
+                'Ver todo',
+                style: TextStyle(fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+        if (_loading)
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Center(
+              child: CircularProgressIndicator(color: ArenaColors.violet),
+            ),
+          )
+        else if (_failed)
+          ArenaMessage(
+            'No se pudo cargar la cobertura de tus medios.',
+            actionLabel: 'Reintentar',
+            onAction: () => unawaited(_load()),
+          )
+        else if (items.isEmpty)
+          const ArenaMessage('Tus medios no tienen publicaciones nuevas.')
+        else
+          for (final LiveNewsItemDto item in items)
+            ArenaNewsCard(item: item, store: store),
+      ],
+    );
+  }
 }
 
 class _AlertsSheet extends StatelessWidget {
-  const _AlertsSheet({required this.store, required this.hostContext});
+  const _AlertsSheet({
+    required this.store,
+    required this.hostContext,
+    this.onOpenStories,
+  });
 
   final ArenaStore store;
   final BuildContext hostContext;
+  final VoidCallback? onOpenStories;
 
   @override
   Widget build(BuildContext context) {
@@ -1144,28 +1104,67 @@ class _AlertsSheet extends StatelessWidget {
           if (event.sourceCount > snapshot.sourceCount)
             (event, event.sourceCount - snapshot.sourceCount),
     ];
+    // Two stories the reader could follow with one tap.
+    final List<EventCardDto> suggestions =
+        (store.developing.isEmpty ? store.events : store.developing)
+            .where((EventCardDto e) => !stories.contains(e.id))
+            .take(2)
+            .toList();
     return SafeArea(
       child: ListView(
         shrinkWrap: true,
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
         children: <Widget>[
-          const Text('Alertas de giros', style: ArenaText.section),
+          const Text('Novedades de lo que sigues', style: ArenaText.section),
           const SizedBox(height: 8),
-          if (changes.isEmpty)
+          if (changes.isEmpty) ...<Widget>[
             Text(
               stories.followedIds.isEmpty
-                  ? 'Sigue un acontecimiento con 🔔 Seguir para recibir aquí '
-                        'sus giros.'
-                  : 'Sin giros nuevos en las historias que sigues.',
+                  ? 'Sigue un acontecimiento y aquí verás cuando un medio '
+                        'nuevo publique sobre él.'
+                  : 'Sin novedades en las historias que sigues.',
               style: ArenaText.body,
             ),
+            if (suggestions.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 12),
+              const Text('Para empezar', style: ArenaText.meta),
+              for (final EventCardDto event in suggestions)
+                ListTile(
+                  key: ValueKey<String>('arena-alert-suggestion-${event.id}'),
+                  contentPadding: EdgeInsets.zero,
+                  minTileHeight: 56,
+                  title: Text(event.arenaTitle, style: ArenaText.cardTitle),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () {
+                    Navigator.of(context).pop();
+                    unawaited(openArenaEvent(hostContext, store, event.id));
+                  },
+                ),
+            ],
+            if (onOpenStories != null) ...<Widget>[
+              const SizedBox(height: 8),
+              OutlinedButton(
+                key: const Key('arena-alerts-open-stories'),
+                style: arenaSecondaryButtonStyle(),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                  onOpenStories!();
+                },
+                child: const Text('Ver historias en desarrollo'),
+              ),
+            ],
+          ],
           for (final (EventCardDto event, int added) in changes)
             ListTile(
               contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.bolt, color: ArenaColors.amber),
+              minTileHeight: 56,
+              leading: const Icon(
+                Icons.update_rounded,
+                color: ArenaColors.amberDeep,
+              ),
               title: Text(event.arenaTitle, style: ArenaText.cardTitle),
               subtitle: Text(
-                '$added ${added == 1 ? 'fuente nueva' : 'fuentes nuevas'} '
+                '$added ${added == 1 ? 'medio nuevo' : 'medios nuevos'} '
                 'desde tu última visita',
                 style: ArenaText.meta,
               ),
@@ -1174,6 +1173,14 @@ class _AlertsSheet extends StatelessWidget {
                 unawaited(openArenaEvent(hostContext, store, event.id));
               },
             ),
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              style: TextButton.styleFrom(minimumSize: const Size(64, 44)),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
+            ),
+          ),
         ],
       ),
     );
@@ -1190,17 +1197,42 @@ class ArenaSearchScreen extends StatefulWidget {
   State<ArenaSearchScreen> createState() => _ArenaSearchScreenState();
 }
 
+/// Searches typed in this session, newest first.
+final List<String> _recentSearches = <String>[];
+
 class _ArenaSearchScreenState extends State<ArenaSearchScreen> {
   final TextEditingController _input = TextEditingController();
   List<LiveNewsItemDto> _news = const <LiveNewsItemDto>[];
   String _query = '';
   bool _loading = false;
   int _run = 0;
+  Timer? _debounce;
+
+  /// Results appear while typing from this many characters.
+  static const int instantFrom = 3;
 
   @override
   void dispose() {
+    _debounce?.cancel();
     _input.dispose();
     super.dispose();
+  }
+
+  void _typed(String value) {
+    _debounce?.cancel();
+    if (value.trim().length < instantFrom) {
+      if (_query.isNotEmpty) unawaited(_search(''));
+      return;
+    }
+    _debounce = Timer(
+      const Duration(milliseconds: 350),
+      () => unawaited(_search(value)),
+    );
+  }
+
+  void _pick(String value) {
+    _input.text = value;
+    unawaited(_search(value));
   }
 
   Future<void> _search(String value) async {
@@ -1212,6 +1244,10 @@ class _ArenaSearchScreenState extends State<ArenaSearchScreen> {
       if (query.isEmpty) _news = const <LiveNewsItemDto>[];
     });
     if (query.isEmpty) return;
+    _recentSearches
+      ..remove(query)
+      ..insert(0, query);
+    if (_recentSearches.length > 5) _recentSearches.removeLast();
     try {
       final LiveNewsPageDto page = await widget.store.live.listLiveNews(
         query: query,
@@ -1250,6 +1286,7 @@ class _ArenaSearchScreenState extends State<ArenaSearchScreen> {
           controller: _input,
           autofocus: true,
           textInputAction: TextInputAction.search,
+          onChanged: _typed,
           onSubmitted: _search,
           decoration: const InputDecoration(
             hintText: 'Buscar casos, medios o temas',
@@ -1267,10 +1304,52 @@ class _ArenaSearchScreenState extends State<ArenaSearchScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: <Widget>[
-          if (_query.isEmpty)
-            const ArenaMessage(
-              'Escribe un tema, un nombre o un medio y presiona buscar.',
+          if (_query.isEmpty) ...<Widget>[
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text(
+                'Escribe un tema, un nombre o un medio.',
+                style: ArenaText.body,
+              ),
             ),
+            if (_recentSearches.isNotEmpty) ...<Widget>[
+              const ArenaSectionTitle('Recientes'),
+              for (final String recent in _recentSearches)
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  minTileHeight: 48,
+                  leading: const Icon(Icons.history, color: ArenaColors.muted),
+                  title: Text(recent, style: ArenaText.body),
+                  onTap: () => _pick(recent),
+                ),
+            ],
+            const ArenaSectionTitle('Temas'),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: <Widget>[
+                for (final ArenaTopic topic in const <ArenaTopic>[
+                  ArenaTopic.politica,
+                  ArenaTopic.justicia,
+                  ArenaTopic.economia,
+                  ArenaTopic.seguridad,
+                  ArenaTopic.deportes,
+                  ArenaTopic.sociedad,
+                ])
+                  ArenaPill(
+                    key: ValueKey<String>('arena-search-topic-${topic.name}'),
+                    label: topic.label,
+                    selected: false,
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute<void>(
+                        builder: (_) =>
+                            TopicScreen(topic: topic, store: widget.store),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ],
           if (events.isNotEmpty) const ArenaSectionTitle('Acontecimientos'),
           for (final EventCardDto event in events)
             DevelopingEventCard(event: event, store: store),
@@ -1285,7 +1364,10 @@ class _ArenaSearchScreenState extends State<ArenaSearchScreen> {
           for (final LiveNewsItemDto item in _news)
             ArenaNewsCard(item: item, store: store),
           if (_query.isNotEmpty && !_loading && events.isEmpty && _news.isEmpty)
-            const ArenaMessage('Sin resultados para esta búsqueda.'),
+            const ArenaMessage(
+              'Sin resultados. Prueba con un tema, como «Codelco», o con el '
+              'nombre de un medio.',
+            ),
         ],
       ),
     );

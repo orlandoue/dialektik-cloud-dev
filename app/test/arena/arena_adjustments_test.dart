@@ -110,20 +110,27 @@ void main() {
         // The name stays on a single line instead of breaking inside the word.
         expect(tester.getSize(a).height, lessThan(30 * scale));
 
-        await tester.ensureVisible(find.byTooltip('Abrir duelo completo'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.byTooltip('Abrir duelo completo'));
+        // The whole card opens the duel.
+        await tester.tap(
+          find.descendant(of: duel, matching: find.text(steinertTitle)),
+        );
         await tester.pumpAndSettle();
         expect(find.text(steinertTitle), findsOneWidget);
         expect(
-          find.bySemanticsLabel('Clasificación: Distinto enfoque'),
+          find.bySemanticsLabel(
+            'Tipo de duelo según Dialektik: Distinto enfoque. Toca para '
+            'saber qué significa',
+          ),
           findsOneWidget,
         );
         expect(find.textContaining('nuevo cargo”'), findsNothing);
         expect(find.text('nuevo cargo'), findsNothing);
         expect(find.text(steinertHeadline), findsOneWidget);
         expect(find.text('Titular de su publicación'), findsOneWidget);
-        expect(find.text('Cita literal verificada'), findsOneWidget);
+        expect(
+          find.text('Cita literal · verificada contra el original'),
+          findsOneWidget,
+        );
 
         await reveal(
           tester,
@@ -163,7 +170,7 @@ void main() {
       await tester.tap(find.text(steinertTitle));
       await tester.pumpAndSettle();
 
-      final Finder sources = find.text('📚 2 fuentes');
+      final Finder sources = find.textContaining('2 medios · ');
       final Finder follow = find.byKey(const Key('arena-follow-story'));
       expect(
         tester.getCenter(sources).dy,
@@ -175,67 +182,53 @@ void main() {
       );
       expect(find.textContaining('Sin seguir'), findsNothing);
 
-      expect(find.text('• nuevo cargo'), findsNothing);
-      expect(find.text('• $steinertHeadline'), findsOneWidget);
-      await reveal(tester, find.text('Qué pasó'), 'arena-event-scroll');
-      await reveal(
-        tester,
-        find.text('Quiénes están involucrados'),
-        'arena-event-scroll',
-      );
-      // «Qué pasó» explains the fact; it never repeats the header title.
-      final Iterable<String?> texts = tester
-          .widgetList<Text>(find.byType(Text))
-          .map((Text t) => t.data);
+      // A two-word fragment is never a position; the headline stands in,
+      // attributed to its outlet, once.
+      // The loose fragment alone never stands for a position.
+      expect(find.text('nuevo cargo'), findsNothing);
       expect(
-        texts.where(
-          (String? t) => t != null && t.startsWith('Según BioBioChile:'),
-        ),
-        hasLength(1),
+        find.textContaining('Según T13: nuevo cargo', findRichText: true),
+        findsNothing,
       );
+      expect(
+        find.textContaining('Según BioBioChile: ', findRichText: true),
+        findsOneWidget,
+      );
+      // T13's two-word fragment is replaced by its own headline.
+      expect(
+        find.textContaining('Según T13: $steinertHeadline', findRichText: true),
+        findsOneWidget,
+      );
+      expect(find.text('Qué pasó'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
 
-  testWidgets('Inicio: país en la cabecera y Tema en la fila de píldoras', (
+  testWidgets('Inicio sin selector de país: la edición vive en Perfil', (
     WidgetTester tester,
   ) async {
     await pumpArena(tester, ArenaFakeCore(), size: const Size(360, 740));
-    final Finder country = find.byKey(const Key('arena-country'));
-    final Finder topic = find.byKey(const Key('arena-topic-filter'));
-    final Finder coliseo = find.byKey(
-      const ValueKey<String>('arena-pill-Coliseo'),
-    );
+    expect(find.byKey(const Key('arena-country')), findsNothing);
+    expect(find.byKey(const Key('arena-topic-filter')), findsNothing);
+    // Brand, search and alerts share the header; the duel follows at once.
     expect(
-      tester.getCenter(country).dy,
-      closeTo(tester.getCenter(find.text('Dialektik')).dy, 12),
+      tester.getCenter(find.text('Dialektik')).dy,
+      closeTo(tester.getCenter(find.byKey(const Key('arena-search'))).dy, 12),
     );
-    expect(
-      tester.getCenter(country).dx,
-      lessThan(tester.getCenter(find.byKey(const Key('arena-search'))).dx),
-    );
-    // The topic dropdown sits on the pill row: no extra row of filters.
-    expect(
-      tester.getCenter(topic).dy,
-      closeTo(tester.getCenter(coliseo).dy, 1),
-    );
-    expect(
-      tester.getTopLeft(topic).dx,
-      greaterThan(
-        tester
-            .getTopRight(
-              find.byKey(const ValueKey<String>('arena-pill-Siguiendo')),
-            )
-            .dx,
+    expect(find.byKey(const Key('arena-duel-of-the-day')), findsOneWidget);
+
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('arena-bottom-navigation')),
+        matching: find.text('Perfil'),
       ),
     );
-    final double duelTop = tester
-        .getTopLeft(find.byKey(const Key('arena-duel-of-the-day')))
-        .dy;
-
-    await tester.tap(country);
     await tester.pumpAndSettle();
-    // The four catalog countries are all enabled.
+    final Finder edition = find.byKey(const Key('arena-edition'));
+    await reveal(tester, edition, 'arena-profile-scroll');
+    expect(find.text('Edición: Chile'), findsOneWidget);
+    await tester.tap(edition);
+    await tester.pumpAndSettle();
     for (final String name in <String>[
       'Chile',
       'España',
@@ -244,55 +237,10 @@ void main() {
     ]) {
       expect(find.text(name), findsWidgets);
     }
-    expect(find.text('Próximamente'), findsNothing);
-    await tester.tap(find.text('Chile').last);
+    // Only Chile is open; the others are listed as «Pronto».
+    expect(find.text('Pronto'), findsNWidgets(3));
+    await tester.tap(find.text('Cerrar'));
     await tester.pumpAndSettle();
-
-    await tester.tap(topic);
-    await tester.pumpAndSettle();
-    for (final String option in <String>[
-      'Todos',
-      'Política',
-      'Justicia',
-      'Economía',
-      'Seguridad',
-      'Deportes',
-      'Sociedad',
-    ]) {
-      expect(find.text(option), findsOneWidget);
-    }
-    await tester.tap(
-      find.byKey(const ValueKey<String>('arena-topic-option-economia')),
-    );
-    await tester.pumpAndSettle();
-    // The chip turns soft violet and names the topic.
-    expect(
-      find.descendant(of: topic, matching: find.text('Economía')),
-      findsOneWidget,
-    );
-    expect(
-      tester
-          .widget<Material>(
-            find.descendant(of: topic, matching: find.byType(Material)).first,
-          )
-          .color,
-      const Color(0xFFEDE9FE),
-    );
-    expect(find.byKey(const Key('arena-duel-of-the-day')), findsNothing);
-    expect(find.text('No hay duelos publicados en Economía.'), findsOneWidget);
-    expect(find.text(storyTitle), findsOneWidget);
-
-    await tester.tap(topic);
-    await tester.pumpAndSettle();
-    await tester.tap(
-      find.byKey(const ValueKey<String>('arena-topic-option-todos')),
-    );
-    await tester.pumpAndSettle();
-    // Filtering never pushed the duel of the day down.
-    expect(
-      tester.getTopLeft(find.byKey(const Key('arena-duel-of-the-day'))).dy,
-      duelTop,
-    );
     expect(tester.takeException(), isNull);
   });
 
@@ -301,18 +249,19 @@ void main() {
     (WidgetTester tester) async {
       final ArenaServedCore core = ArenaServedCore()..followed.clear();
       await pumpArena(tester, core, initialTab: ArenaTab.medios);
-      expect(find.text('4 fuentes registradas · sigues 0'), findsOneWidget);
+      expect(find.textContaining('medios · sigues 0'), findsOneWidget);
       expect(find.text('La Tercera'), findsOneWidget);
       final Finder card = find.byKey(
         const ValueKey<String>('arena-media-$terceraId'),
       );
-      expect(tester.getSize(card).width, 168);
+      // One row per outlet, tall enough to tap comfortably.
+      expect(tester.getSize(card).height, greaterThanOrEqualTo(64));
       await tester.tap(
-        find.descendant(of: card, matching: find.text('+ Seguir')),
+        find.descendant(of: card, matching: find.text('Seguir')),
       );
       await tester.pumpAndSettle();
       expect(core.followed, <String>{terceraId, terceraVideo.id});
-      expect(find.text('4 fuentes registradas · sigues 1'), findsOneWidget);
+      expect(find.textContaining('medios · sigues 1'), findsOneWidget);
 
       await tester.tap(
         find.descendant(
@@ -323,7 +272,7 @@ void main() {
       await tester.pumpAndSettle();
       await reveal(
         tester,
-        find.text('Medios que sigues'),
+        find.text('Medios que sigues · 1'),
         'arena-profile-scroll',
       );
       expect(

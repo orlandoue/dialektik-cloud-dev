@@ -218,9 +218,15 @@ void main() {
       expect(sanitizeAlias('José <script>'), 'José script');
       expect(sanitizeAlias('_x'), null);
       expect(sanitizeAlias('a' * 40)?.length, 30);
+      // Never the part of the e-mail before @: a stable reader alias.
+      final String fallback = aliasFor(
+        const SupabaseAuthUser(email: 'maria.jose@correo.cl'),
+      );
+      expect(fallback, matches(RegExp(r'^Lector-\d{4}$')));
+      expect(fallback.contains('maria'), isFalse);
       expect(
         aliasFor(const SupabaseAuthUser(email: 'maria.jose@correo.cl')),
-        'maria.jose',
+        fallback,
       );
       expect(aliasFor(null), 'Lector');
     });
@@ -246,7 +252,24 @@ void main() {
       },
     );
 
-    Future<void> fill(WidgetTester tester, {String alias = ''}) async {
+    /// «Entrar» or «Crear cuenta»: the alias field only exists when creating.
+    Future<void> mode(WidgetTester tester, {required bool create}) async {
+      final Finder segment = find.descendant(
+        of: find.byKey(const Key('login-mode')),
+        matching: find.text(create ? 'Crear cuenta' : 'Entrar'),
+      );
+      await tester.ensureVisible(segment);
+      await tester.pumpAndSettle();
+      await tester.tap(segment);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> fill(
+      WidgetTester tester, {
+      String alias = '',
+      bool create = false,
+    }) async {
+      await mode(tester, create: create);
       await tester.enterText(
         find.byKey(const Key('login-email')),
         'ana.perez@example.test',
@@ -287,9 +310,20 @@ void main() {
       expect(find.text('Continuar con Google'), findsOneWidget);
       expect(find.byKey(const Key('login-email')), findsOneWidget);
       expect(find.byKey(const Key('login-password')), findsOneWidget);
+      // Signing in asks only what it needs; the alias belongs to sign-up.
+      expect(find.byKey(const Key('login-alias')), findsNothing);
+      expect(find.byKey(const Key('login-forgot')), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(const Key('login-submit')),
+          matching: find.text('Entrar'),
+        ),
+        findsOneWidget,
+      );
+      await mode(tester, create: true);
       expect(find.byKey(const Key('login-alias')), findsOneWidget);
-      expect(find.text('Iniciar sesión'), findsOneWidget);
       expect(find.text('Crear cuenta gratis'), findsOneWidget);
+      expect(find.textContaining('Tu correo nunca se muestra'), findsOneWidget);
       // Google must come first, above the email form.
       expect(
         tester.getTopLeft(find.byKey(const Key('login-google'))).dy,
@@ -317,7 +351,7 @@ void main() {
           }),
         ),
       );
-      await fill(tester, alias: 'Ana P.');
+      await fill(tester, alias: 'Ana P.', create: true);
       await tapKey(tester, 'login-sign-up');
       expect(requests.first.url.path, '/auth/v1/signup');
       expect(find.byKey(const Key('arena-bottom-navigation')), findsOneWidget);
@@ -369,7 +403,7 @@ void main() {
           ),
         ),
       );
-      await fill(tester);
+      await fill(tester, create: true);
       await tapKey(tester, 'login-sign-up');
       expect(find.textContaining('para confirmar tu cuenta'), findsOneWidget);
       expect(find.byKey(const Key('arena-bottom-navigation')), findsNothing);
@@ -390,10 +424,10 @@ void main() {
       await tapKey(tester, 'login-submit');
       expect(find.text('Correo o contraseña incorrectos.'), findsOneWidget);
       code = 'user_already_exists';
-      await fill(tester);
+      await fill(tester, create: true);
       await tapKey(tester, 'login-sign-up');
       expect(
-        find.text('Ese correo ya tiene cuenta. Toca «Iniciar sesión».'),
+        find.text('Ese correo ya tiene cuenta. Elige «Entrar».'),
         findsOneWidget,
       );
     });
@@ -404,6 +438,7 @@ void main() {
       await tester.pumpWidget(
         gate(auth: MockClient((_) async => _json(_session()))),
       );
+      await mode(tester, create: true);
       await tester.enterText(
         find.byKey(const Key('login-email')),
         'ana.perez@example.test',
@@ -519,7 +554,7 @@ void main() {
           await tester.pumpAndSettle();
           expect(tester.takeException(), isNull);
         }
-        await fill(tester);
+        await fill(tester, create: true);
         await tapKey(tester, 'login-sign-up');
         await openPerfil(tester);
         expect(find.byKey(const Key('arena-account-card')), findsOneWidget);
