@@ -534,12 +534,35 @@ export class ScienceService implements OnModuleInit {
     await Promise.allSettled(this.#pendingUsage.splice(0));
   }
 
-  async usage(userId: string): Promise<{ days: { source: string; day: string; calls: number; errors: number }[] }> {
+  /**
+   * Calls per metadata API and day (Core and the daily harvest), and the
+   * state of the harvest: a moderator is warned when it has not finished
+   * for 48 hours, whatever happened to the scheduled job.
+   */
+  async usage(userId: string): Promise<{
+    days: { source: string; day: string; calls: number; errors: number }[];
+    harvest: { last_run_at: string | null; last_status: string | null; stale: boolean; added: number; deleted: number };
+  }> {
     this.#requireModerator(userId);
     return this.#guarded(async () => {
       const rows = await sql<{ source: string; day: string; calls: number; errors: number }>`select source, day::text as day, calls, errors
         from public.science_api_usage where day > current_date - 30 order by day desc, source`.execute(this.db.database);
-      return { days: rows.rows };
+      let harvest = { last_run_at: null as string | null, last_status: null as string | null, stale: true, added: 0, deleted: 0 };
+      try {
+        const last = await sql<{ finished_at: Date | null; status: string; added: number; deleted: number; stale: boolean }>`
+          select finished_at, status, added, deleted, coalesce(finished_at < now() - interval '48 hours', true) as stale
+          from public.science_harvest_runs where finished_at is not null order by finished_at desc limit 1`.execute(this.db.database);
+        const row = last.rows[0];
+        if (row) {
+          harvest = { last_run_at: row.finished_at === null ? null : new Date(row.finished_at).toISOString(),
+            last_status: row.status, stale: row.stale, added: row.added, deleted: row.deleted };
+        }
+      } catch (error) {
+        // Before migration 093 there is no run log: report it as stale.
+        if ((error as { code?: unknown })?.code !== '42P01') throw error;
+      }
+      if (harvest.stale) this.#logger.warn('The Science harvest has not finished in the last 48 hours.');
+      return { days: rows.rows, harvest };
     });
   }
 

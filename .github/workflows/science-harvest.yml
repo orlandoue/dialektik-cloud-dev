@@ -1,0 +1,73 @@
+name: Science daily harvest
+
+# Fills the Science cache with recent studies: OpenAlex (Chilean
+# institutions), SciELO Chile, Europe PMC (Chilean affiliation, articles and
+# preprints) and arXiv. Metadata, the authors' abstract and a link only.
+#
+# Secrets:
+# - SCIENCE_HARVEST_DATABASE_URL: login of dialektik_science_harvester
+#   (migration 093), never the service key. Required.
+# - SCIENCE_HARVEST_DATABASE_CA_CERT: CA of the database, as Core uses.
+# - OPENALEX_API_KEY, SCIENCE_CONTACT_EMAIL: as on Render.
+#
+# A failed run opens (or comments on) the issue «Cosecha de Ciencia
+# fallida». Core also warns moderators when no run has finished for 48 hours,
+# even if this schedule stops firing.
+on:
+  schedule:
+    # 03:23 in Chile (UTC−3).
+    - cron: '23 6 * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Read the sources without touching the database
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: science-harvest
+  cancel-in-progress: false
+
+jobs:
+  harvest:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '26'
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - name: Harvest
+        env:
+          SCIENCE_HARVEST_DATABASE_URL: ${{ secrets.SCIENCE_HARVEST_DATABASE_URL }}
+          DATABASE_CA_CERT: ${{ secrets.SCIENCE_HARVEST_DATABASE_CA_CERT }}
+          OPENALEX_API_KEY: ${{ secrets.OPENALEX_API_KEY }}
+          SCIENCE_CONTACT_EMAIL: ${{ secrets.SCIENCE_CONTACT_EMAIL }}
+          DRY_RUN: ${{ inputs.dry_run && 'true' || 'false' }}
+        run: |
+          if [ "$DRY_RUN" = "true" ]; then
+            node services/core-api/dist/science/harvest/harvest.cli.js --dry-run
+          else
+            node services/core-api/dist/science/harvest/harvest.cli.js
+          fi
+      - name: Alert on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title='Cosecha de Ciencia fallida'
+          body="La corrida $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID falló. El resumen de la corrida dice qué fuente o qué paso."
+          number=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh issue comment "$number" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          fi

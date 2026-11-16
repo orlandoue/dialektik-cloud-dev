@@ -14,6 +14,7 @@ export * from './domain/state-dimensions';
 export { socialArenaSql } from './migration/085_social_arena';
 export { scienceCommentsSql } from './migration/091_science_and_story_comments';
 export { scienceModerationSql } from './migration/092_science_moderation';
+export { scienceHarvestSql } from './migration/093_science_harvest';
 export * from './migration/migrator';
 export * from './safety/state-dimension-checker';
 export * from './transaction';
