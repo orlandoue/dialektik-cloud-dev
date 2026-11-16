@@ -94,8 +94,9 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
     if (chosen != null && mounted) setState(() => _topic = _topics[chosen]);
   }
 
-  /// The four countries of the verified catalog; switching updates Coliseo,
-  /// VS, Historias, Explorar and Medios and is remembered on the device.
+  /// The four countries of the verified catalog; only the active ones can be
+  /// chosen. Switching updates Coliseo, VS, Historias, Explorar and Medios
+  /// and is remembered on the device.
   Future<void> _chooseCountry() async {
     final String? chosen = await showModalBottomSheet<String>(
       context: context,
@@ -122,6 +123,10 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
                   style: const TextStyle(fontSize: 22),
                 ),
                 title: Text(country.name, style: ArenaText.cardTitle),
+                subtitle: PublisherMarketSelection.isActiveCountry(country.code)
+                    ? null
+                    : const Text('Pronto'),
+                enabled: PublisherMarketSelection.isActiveCountry(country.code),
                 trailing: country.code == store.country
                     ? const Icon(Icons.check, color: ArenaColors.violet)
                     : null,

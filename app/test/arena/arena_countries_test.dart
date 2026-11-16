@@ -162,7 +162,7 @@ void main() {
 
   for (final double scale in <double>[1, 1.45]) {
     testWidgets(
-      'the header selector offers the four countries · escala $scale',
+      'the header selector lists the four countries, only Chile open · escala $scale',
       (WidgetTester tester) async {
         final ArenaFullCore core = ArenaFullCore();
         final PublisherMarketSelection market = PublisherMarketSelection();
@@ -202,12 +202,23 @@ void main() {
             findsOneWidget,
           );
         }
+        // Only Chile is open for now; the others are shown as «Pronto».
+        expect(find.text('Pronto'), findsNWidgets(3));
         await tester.tap(
           find.byKey(const ValueKey<String>('arena-country-option-ES')),
         );
         await tester.pumpAndSettle();
-        expect(market.value, 'ES');
-        expect(find.text('🇪🇸 España'), findsOneWidget);
+        expect(market.value, 'CL');
+        expect(
+          find.byKey(const ValueKey<String>('arena-country-option-ES')),
+          findsOneWidget,
+          reason: 'a paused country does not close the sheet',
+        );
+        await tester.tap(
+          find.byKey(const ValueKey<String>('arena-country-option-CL')),
+        );
+        await tester.pumpAndSettle();
+        expect(find.text('🇨🇱 Chile'), findsOneWidget);
         expect(tester.takeException(), isNull);
         market.dispose();
       },
