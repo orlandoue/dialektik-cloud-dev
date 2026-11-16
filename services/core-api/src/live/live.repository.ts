@@ -168,9 +168,9 @@ export class LiveRepository {
 
   async list(query: LiveNewsQuery): Promise<LiveReadRow[]> {
     const market = query.market ?? 'CL';
-    const scope = this.marketScope(market, 'source_id', 'canonical_domain');
+    const scope = this.marketScope(market, 'news.source_id', 'news.canonical_domain');
     if (scope === null) return [];
-    const profile = this.profileColumns('source_id');
+    const profile = this.profileColumns('news.source_id');
     const cursor =
       query.cursor === undefined
         ? sql`true`
@@ -191,9 +191,9 @@ export class LiveRepository {
   }
 
   async article(id: Ulid, market: PublisherMarket = 'CL'): Promise<LiveReadRow | undefined> {
-    const scope = this.marketScope(market, 'source_id', 'canonical_domain');
+    const scope = this.marketScope(market, 'news.source_id', 'news.canonical_domain');
     if (scope === null) return undefined;
-    const profile = this.profileColumns('source_id');
+    const profile = this.profileColumns('news.source_id');
     const result =
       await sql<LiveReadRow>`with news as (${this.newsProjection()}) select news.*, ${profile} from news
         where id = ${id} and ${scope}`.execute(

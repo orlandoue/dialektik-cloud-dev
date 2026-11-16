@@ -39,6 +39,9 @@ const HANDLE_RESOLUTIONS_PER_RUN = 4;
 const RETENTION_INTERVAL_MS = 6 * 60 * 60_000;
 const RETENTION_BATCH = 500;
 const RETENTION_MAX_BATCHES = 5;
+/** Redundant receipt sightings (migration 090): up to 10 × 20 000 per run. */
+const RECEIPT_RETENTION_BATCH = 20_000;
+const RECEIPT_RETENTION_MAX_BATCHES = 10;
 
 /**
  * Trims a fetched payload before the rights-gated parser: YouTube Atom feeds
@@ -412,6 +415,23 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
     } catch (error) {
       const { sqlState } = postgresDiagnostic(error);
       if (sqlState !== '42883') this.logger.warn(`Raw article retention failed: ${sqlState ?? 'UNKNOWN'}`);
+    }
+    // Every poll records a receipt per sighting; keep only the latest
+    // sighting of each item and those that versions cite (migration 090).
+    let receipts = 0;
+    try {
+      for (let batch = 0; batch < RECEIPT_RETENTION_MAX_BATCHES; batch += 1) {
+        const result = await sql<{ outcome: { status?: string; deleted?: number } }>`
+          select public.dialektik_purge_redundant_receipts(interval '2 days', ${RECEIPT_RETENTION_BATCH}) as outcome`
+          .execute(this.database);
+        const deleted = Number(result.rows[0]?.outcome?.deleted ?? 0);
+        receipts += deleted;
+        if (result.rows[0]?.outcome?.status !== 'DONE' || deleted < RECEIPT_RETENTION_BATCH) break;
+      }
+      if (receipts > 0) this.logger.log(`Receipt retention removed ${receipts} redundant sightings.`);
+    } catch (error) {
+      const { sqlState } = postgresDiagnostic(error);
+      if (sqlState !== '42883') this.logger.warn(`Receipt retention failed: ${sqlState ?? 'UNKNOWN'}`);
     } finally {
       this.purging = false;
     }

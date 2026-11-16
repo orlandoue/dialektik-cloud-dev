@@ -4,6 +4,7 @@ import { sql } from 'kysely';
 import { CoreDatabaseService } from '../database/core-database.service.js';
 import { LiveRepository } from '../live/live.repository.js';
 import { PublicApiRepository } from '../public-api/public-api.repository.js';
+import { PublicApiService } from '../public-api/public-api.service.js';
 import { sourceProfilesAvailable } from '../public-api/source-profiles.js';
 
 /**
@@ -95,6 +96,15 @@ export class QueryLatencyService {
         (await live.sources(undefined, country)).length);
     }
     timings.live_news_CL = await this.#time(async () => (await live.list({ limit: 25, market: 'CL' })).length);
+    // Event detail with coverage: the carousel opens five of these at once.
+    const service = new PublicApiService(publicApi);
+    for (const country of ['CL', 'ES'] as const) {
+      const first = (await publicApi.listContradictions({ cursor: null, limit: 1, country }).catch(() => []))[0];
+      if (first) {
+        timings[`event_detail_${country}`] = await this.#time(async () =>
+          (await service.event(first.event_id, true)).body.articles?.length ?? 0);
+      }
+    }
 
     const largest: Record<string, number> = {};
     try {
