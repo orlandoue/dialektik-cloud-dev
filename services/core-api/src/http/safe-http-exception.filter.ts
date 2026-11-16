@@ -7,6 +7,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { ModerationHttpError } from '../moderation/moderation-http.error.js';
 import type { ModerationDiagnostic } from '../moderation/moderation-http.error.js';
 import { PublicApiHttpException } from '../public-api/public-api.error.js';
+import { ScienceDuplicateError } from '../science/science-http.error.js';
 import type { PublicErrorCode } from '../public-api/public-api.error.js';
 import type { TombstoneDto } from '../public-api/public-api.types.js';
 
@@ -17,6 +18,7 @@ interface SafeErrorResponse {
   readonly statusCode: number;
   readonly tombstone?: TombstoneDto;
   readonly diagnostic?: ModerationDiagnostic;
+  readonly existing_comment_id?: string;
 }
 
 function defaultPublicCode(statusCode: number): PublicErrorCode {
@@ -75,6 +77,8 @@ export class SafeHttpExceptionFilter implements ExceptionFilter {
         : undefined;
     const diagnostic =
       exception instanceof ModerationHttpError ? exception.diagnostic : undefined;
+    const existingCommentId =
+      exception instanceof ScienceDuplicateError ? exception.existingCommentId : undefined;
 
     request.log.error(
       {
@@ -94,6 +98,7 @@ export class SafeHttpExceptionFilter implements ExceptionFilter {
       ...(safeCode === undefined ? {} : { code: safeCode }),
       ...(tombstone === undefined ? {} : { tombstone }),
       ...(diagnostic === undefined ? {} : { diagnostic }),
+      ...(existingCommentId === undefined ? {} : { existing_comment_id: existingCommentId }),
     };
     void response.header('cache-control', 'no-store');
     if (statusCode === 429) {

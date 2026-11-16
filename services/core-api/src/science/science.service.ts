@@ -18,6 +18,7 @@ import { PublicApiService } from '../public-api/public-api.service.js';
 import {
   isLiteralFragment, resolveStudy, resolverOptionsFromEnv, type FetchLike, type ResolvedStudy, type ScienceSource,
 } from './study-resolver.js';
+import { ScienceDuplicateError } from './science-http.error.js';
 
 /** Same rule as the app: 2-30 letters, digits, spaces or `._-`. */
 export function sanitizeAlias(raw: string | null | undefined): string | null {
@@ -421,10 +422,14 @@ export class ScienceService implements OnModuleInit {
     if (claim === undefined) throw refused(HttpStatus.BAD_REQUEST, 'PUBLIC_SCIENCE_INVALID_CLAIM');
 
     return this.#transaction(userId, async (tx) => {
-      const duplicate = await sql`select 1 from public.story_comment_studies a join public.story_comments c on c.id = a.comment_id
+      // Serialises concurrent attempts on the same study and claim.
+      await sql`select pg_advisory_xact_lock(hashtext(${`science:${eventId}:${study.doi}:${claim.id}`}))`.execute(tx);
+      const duplicate = await sql<{ id: string; status: string }>`select c.id::text as id, c.status
+        from public.story_comment_studies a join public.story_comments c on c.id = a.comment_id
         where a.event_id = ${eventId}::dialektik_ulid and a.doi = ${study.doi} and a.claim_quote_id = ${claim.id}::dialektik_ulid
-          and c.status <> 'rejected'`.execute(tx);
-      if (duplicate.rows.length) throw refused(HttpStatus.CONFLICT, 'PUBLIC_SCIENCE_DUPLICATE');
+          and c.status <> 'rejected'
+        order by (c.status = 'published') desc, c.created_at limit 1`.execute(tx);
+      if (duplicate.rows[0]) throw new ScienceDuplicateError(duplicate.rows[0]);
       const inserted = await sql<{ id: string }>`insert into public.story_comments(event_id,user_id,kind,status,author_alias,body)
         values (${eventId}::dialektik_ulid, ${userId}::uuid, 'study', 'in_review',
           ${await this.#authorAlias(tx, userId)}, ${input.body})

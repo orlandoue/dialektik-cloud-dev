@@ -158,17 +158,32 @@ test('comments: normal ones publish at once, study ones go through review', asyn
 test('study comments are refused for duplicates, paraphrases, unknown claims and new accounts', async () => {
   const { pg, database, service } = await setup();
   try {
-    await service.addStudyComment(veteran, 'event1', studyInput());
-    await rejectsWith(service.addStudyComment(other, 'event1', studyInput()), 409, 'PUBLIC_SCIENCE_DUPLICATE');
+    const first = await service.addStudyComment(veteran, 'event1', studyInput());
+    // In review: refused, without pointing to someone else's draft.
+    await assert.rejects(service.addStudyComment(other, 'event1', studyInput()), (error) => {
+      assert.equal(error.getStatus(), 409);
+      assert.equal(error.getResponse().code, 'PUBLIC_SCIENCE_DUPLICATE_IN_REVIEW');
+      assert.equal(error.existingCommentId, undefined);
+      return true;
+    });
+    process.env.DIALEKTIK_SCIENCE_MODERATORS = moderator;
+    await service.decide(moderator, first.id, true);
+    delete process.env.DIALEKTIK_SCIENCE_MODERATORS;
+    // Published: refused, with its id so «Ver comentario» opens it.
+    await assert.rejects(service.addStudyComment(other, 'event1', studyInput()), (error) => {
+      assert.equal(error.getResponse().code, 'PUBLIC_SCIENCE_DUPLICATE');
+      assert.equal(error.existingCommentId, first.id);
+      return true;
+    });
     // The same study on another claim is fine.
     assert.equal((await service.addStudyComment(other, 'event1', studyInput({ claimQuoteId: 'quote2', relation: 'respalda' }))).status, 'in_review');
     await rejectsWith(service.addStudyComment(other, 'event1', studyInput({ claimQuoteId: 'quote2', abstractFragment: 'vaccines are safe' })), 422, 'PUBLIC_SCIENCE_NOT_LITERAL');
     await rejectsWith(service.addStudyComment(other, 'event1', studyInput({ claimQuoteId: 'nope' })), 400, 'PUBLIC_SCIENCE_INVALID_CLAIM');
     await rejectsWith(service.addStudyComment(newcomer, 'event1', studyInput({ claimQuoteId: 'quote2' })), 403, 'PUBLIC_SCIENCE_ACCOUNT_TOO_NEW');
-    // Literal match tolerates curly quotes and extra spaces.
-    await assert.doesNotReject(service.addStudyComment(moderator, 'event1', studyInput({ claimQuoteId: 'quote2',
-      relation: 'matiza', abstractFragment: '  does not   trigger autism  ' })).catch((e) => {
-      if (e.getResponse?.().code === 'PUBLIC_SCIENCE_DUPLICATE') return; throw e; }));
+    // Literal match tolerates curly quotes and extra spaces, nothing else.
+    const { isLiteralFragment } = await import('../dist/science/study-resolver.js');
+    assert.equal(isLiteralFragment('  does not   trigger autism  ', ABSTRACT), true);
+    assert.equal(isLiteralFragment('does not cause autism', ABSTRACT), false);
   } finally { await database.destroy(); await pg.close(); }
 });
 
