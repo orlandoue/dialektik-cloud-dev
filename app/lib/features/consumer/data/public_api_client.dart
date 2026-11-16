@@ -156,23 +156,23 @@ final class PublicApiClient
     createdAt: entry.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0),
     reactions: entry.upvotes, reacted: entry.myVote == 1, mine: entry.mine);
   @override
-  Future<StoryComment> addComment(String eventId, {required String body, String? parentId, String? alias}) async {
+  Future<StoryComment> addComment(String eventId, {required String body, String? parentId}) async {
     try {
       return await _postJson('/v1/stories/${Uri.encodeComponent(eventId)}/comments',
-        {'body': body, 'parent_id': ?parentId, 'alias': ?alias}, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
+        {'body': body, 'parent_id': ?parentId}, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
     } on PublicApiFailure catch (failure) {
       if (failure.kind != PublicFailureKind.notFound) rethrow;
-      final entries = await addCommunityEntry(eventId, channel: CommunityChannel.debate, body: body, alias: alias);
+      final entries = await addCommunityEntry(eventId, channel: CommunityChannel.debate, body: body);
       return _commentFromEntry(entries.firstWhere((e) => e.mine && e.body == body, orElse: () => entries.first));
     }
   }
   @override
   Future<StoryComment> addStudyComment(String eventId, {required String doi, required String claimQuoteId,
-      required StudyRelation relation, required String abstractFragment, required String body, String? alias}) async {
+      required StudyRelation relation, required String abstractFragment, required String body}) async {
     try {
       return await _postJson('/v1/stories/${Uri.encodeComponent(eventId)}/study-comments', {
         'doi': doi, 'claim_quote_id': claimQuoteId, 'relation': relation.wire,
-        'abstract_fragment': abstractFragment, 'body': body, 'alias': ?alias,
+        'abstract_fragment': abstractFragment, 'body': body,
       }, (value) => StoryComment.fromJson(value! as Map<String,dynamic>));
     } on PublicApiFailure catch (failure) {
       // Core names each refusal with a PUBLIC_SCIENCE_* code.

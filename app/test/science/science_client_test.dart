@@ -55,7 +55,7 @@ void main() {
     );
   });
 
-  test('the alias and the study fields travel as Core expects', () async {
+  test('the author name is left to Core, which reads the profile', () async {
     late Map<String, dynamic> sent;
     final PublicApiClient api = client(
       MockClient((http.Request request) async {
@@ -85,9 +85,8 @@ void main() {
     final StoryComment created = await api.addComment(
       '01JEVENT0000000000000000000',
       body: 'Hola',
-      alias: 'Ana',
     );
-    expect(sent, <String, Object>{'body': 'Hola', 'alias': 'Ana'});
+    expect(sent, <String, Object>{'body': 'Hola'});
     expect(created.author, 'Ana');
 
     final Study retracted = Study.fromJson(<String, dynamic>{

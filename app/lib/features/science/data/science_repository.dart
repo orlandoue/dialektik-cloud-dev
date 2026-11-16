@@ -19,7 +19,6 @@ abstract interface class ScienceRepository {
     String eventId, {
     required String body,
     String? parentId,
-    String? alias,
   });
 
   /// Study comments go to moderation first; the account must be three days
@@ -32,7 +31,6 @@ abstract interface class ScienceRepository {
     required StudyRelation relation,
     required String abstractFragment,
     required String body,
-    String? alias,
   });
 
   /// «Útil» or «Pertinente»; `reacted: false` withdraws it.

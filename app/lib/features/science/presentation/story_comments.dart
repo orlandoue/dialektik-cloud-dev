@@ -105,7 +105,6 @@ class StoryCommentsController extends ChangeNotifier {
         eventId,
         body: text,
         parentId: replyingTo?.id,
-        alias: store.alias,
       );
       add(created);
       replyingTo = null;

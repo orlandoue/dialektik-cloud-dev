@@ -353,7 +353,6 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
         relation: _relation!,
         abstractFragment: _fragment,
         body: _comment.text.trim(),
-        alias: widget.store.alias,
       );
       if (mounted) Navigator.of(context).pop(created);
     } on StudyCommentRejected catch (rejected) {
