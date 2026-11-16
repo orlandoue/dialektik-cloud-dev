@@ -68,6 +68,9 @@ test('with profiles, the catalog country scopes live news, sources, feed and con
     assert.match(news.text, /limit \$\d+\)\s+select page\.\*, \(select max\(seen_at\) from live_acquisition_receipts where exclusion_id = page\.exposure_id\)/u);
     assert.doesNotMatch(news.text, /exclusion_id = a\.live_exposure_id\) as (last_seen_at|receipt_count)/u);
     assert.match(news.text, /where source_id = "?page"?\."?source_id"?/u);
+    // The exclusion is a primary-key lookup per article, never a join the
+    // planner can turn into one full scan per article.
+    assert.match(news.text, /join lateral \(select exclusion\.first_seen_at from live_exposure_exclusions exclusion\s+where exclusion\.id = a\.live_exposure_id offset 0\) e on true/u);
     assert.doesNotMatch(news.text, /market_profile\.source_id = source_id\b/u);
     // Chilean sources without a profile keep their domain mapping.
     assert.match(sources.text, /not exists\(select 1 from media_source_profiles market_profile/u);
