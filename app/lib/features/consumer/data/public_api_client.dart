@@ -56,7 +56,8 @@ final class PublicApiClient
         SemanticShadowRepository,
         EphemeralSemanticRepository,
         SemanticGraphRepository,
-        ScienceRepository {
+        ScienceRepository,
+        ScienceModerationRepository {
   PublicApiClient({
     required ApiConfiguration configuration,
     http.Client? httpClient,
@@ -183,6 +184,7 @@ final class PublicApiClient
         'PUBLIC_SCIENCE_NOT_LITERAL' => 'not_literal',
         'PUBLIC_SCIENCE_ACCOUNT_TOO_NEW' => 'account_too_new',
         'PUBLIC_SCIENCE_INVALID_CLAIM' => 'invalid_claim',
+        'PUBLIC_SCIENCE_NO_ABSTRACT' => 'no_abstract',
         _ => failure.kind == PublicFailureKind.gone ? 'retracted' : null,
       };
       if (reason != null) {
@@ -218,14 +220,41 @@ final class PublicApiClient
     }
   }
 
-  Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder) async {
+  @override
+  Future<void> report(String commentId, ReportReason reason, {String? note}) =>
+    _postJson('/v1/comments/${Uri.encodeComponent(commentId)}/reports',
+      {'reason': reason.wire, 'note': ?note}, (_) {});
+
+  // ---- Moderation (moderator accounts only) ----
+  @override
+  Future<ModerationQueue> moderationQueue() => _get<ModerationQueue>('/v1/science/moderation/queue',
+    decoder: ModerationQueue.fromJson, refresh: true, requestToken: null);
+  @override
+  Future<void> decide(String commentId, {required bool approve, String? reason}) =>
+    _postJson('/v1/science/moderation/comments/${Uri.encodeComponent(commentId)}',
+      {'decision': approve ? 'approve' : 'reject', 'reason': ?reason}, (_) {});
+  @override
+  Future<void> resolveReports(String commentId, {required bool hide, String? reason}) =>
+    _postJson('/v1/science/moderation/reports/${Uri.encodeComponent(commentId)}',
+      {'decision': hide ? 'hide' : 'dismiss', 'reason': ?reason}, (_) {});
+  @override
+  Future<Study> moderateStudy(String doi, StudyModeration fields) =>
+    _postJson('/v1/science/moderation/studies/${Uri.encodeComponent(doi)}', fields.fields,
+      (value) => Study.fromJson(value! as Map<String,dynamic>), method: 'PUT');
+  @override
+  Future<List<ApiUsageDay>> usage() => _get<List<ApiUsageDay>>('/v1/science/moderation/usage',
+    decoder: ApiUsageDay.listFromJson, refresh: true, requestToken: null);
+
+  Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder, {String method = 'POST'}) async {
     final token = await authorizationTokenProvider?.call();
     if (token == null || token.isEmpty) throw const PublicApiFailure(kind: PublicFailureKind.unauthorized);
     late http.Response response;
     try {
-      response = await _httpClient.post(_configuration.resolve(path),
-        headers: {'accept':'application/json','content-type':'application/json','authorization':'Bearer $token'},
-        body:jsonEncode(body)).timeout(timeout);
+      final Map<String,String> headers = {'accept':'application/json','content-type':'application/json','authorization':'Bearer $token'};
+      final Uri uri = _configuration.resolve(path);
+      response = await (method == 'PUT'
+          ? _httpClient.put(uri, headers: headers, body: jsonEncode(body))
+          : _httpClient.post(uri, headers: headers, body: jsonEncode(body))).timeout(timeout);
     } on TimeoutException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
       on http.ClientException { throw const PublicApiFailure(kind: PublicFailureKind.network); }
     if (response.statusCode < 200 || response.statusCode >= 300) {

@@ -40,4 +40,31 @@ abstract interface class ScienceRepository {
 
   /// Whether Science and story comments are on for this account.
   Future<ScienceAccess> access();
+
+  /// «Reportar»: one report per reader; it reaches the moderation queue.
+  Future<void> report(String commentId, ReportReason reason, {String? note});
+}
+
+/// What only accounts in DIALEKTIK_SCIENCE_MODERATORS can do.
+abstract interface class ScienceModerationRepository {
+  Future<ModerationQueue> moderationQueue();
+
+  /// Approves a study comment in review, or rejects it with a reason.
+  Future<void> decide(
+    String commentId, {
+    required bool approve,
+    String? reason,
+  });
+
+  /// Dismisses the reports of a comment, or hides it with a reason.
+  Future<void> resolveReports(
+    String commentId, {
+    required bool hide,
+    String? reason,
+  });
+
+  Future<Study> moderateStudy(String doi, StudyModeration fields);
+
+  /// Calls and errors per metadata API and day, last 30 days.
+  Future<List<ApiUsageDay>> usage();
 }

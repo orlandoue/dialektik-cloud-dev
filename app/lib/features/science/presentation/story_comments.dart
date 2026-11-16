@@ -138,6 +138,32 @@ class StoryCommentsController extends ChangeNotifier {
     }
   }
 
+  /// Comments this reader reported in this session.
+  final Set<String> reported = <String>{};
+
+  /// Others' published comments can be reported, once.
+  bool canReport(StoryComment c) =>
+      !c.mine &&
+      c.status == CommentStatus.published &&
+      !reported.contains(c.id);
+
+  Future<bool> report(
+    StoryComment comment,
+    ReportReason reason, {
+    String? note,
+  }) async {
+    final ScienceRepository? repository = _repository;
+    if (repository == null) return false;
+    try {
+      await repository.report(comment.id, reason, note: note);
+      reported.add(comment.id);
+      _notify();
+      return true;
+    } on Object {
+      return false;
+    }
+  }
+
   void _replace(StoryComment updated) {
     comments = <StoryComment>[
       for (final StoryComment c in comments) c.id == updated.id ? updated : c,
@@ -208,6 +234,7 @@ class CommentTile extends StatelessWidget {
     required this.onReply,
     required this.onReact,
     this.onOpenStudy,
+    this.onReport,
     this.reply = false,
     this.now,
     super.key,
@@ -217,6 +244,9 @@ class CommentTile extends StatelessWidget {
   final VoidCallback? onReply;
   final VoidCallback onReact;
   final VoidCallback? onOpenStudy;
+
+  /// «Reportar», in the comment's menu; null when it cannot be reported.
+  final VoidCallback? onReport;
 
   /// Smaller monogram and text inside a thread.
   final bool reply;
@@ -358,6 +388,28 @@ class CommentTile extends StatelessWidget {
                         active: comment.reacted,
                         onTap: onReact,
                       ),
+                      if (onReport != null)
+                        PopupMenuButton<String>(
+                          key: ValueKey<String>(
+                            'sci-comment-menu-${comment.id}',
+                          ),
+                          tooltip:
+                              'Más opciones del comentario de '
+                              '@${comment.author}',
+                          icon: const Icon(
+                            Icons.more_horiz,
+                            size: 20,
+                            color: SciColors.inkSecondary,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 160),
+                          onSelected: (_) => onReport!(),
+                          itemBuilder: (_) => const <PopupMenuEntry<String>>[
+                            PopupMenuItem<String>(
+                              value: 'report',
+                              child: Text('Reportar'),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),
@@ -399,6 +451,29 @@ class _CommentThreadState extends State<CommentThread> {
     }
   }
 
+  Future<void> _report(StoryComment c) async {
+    final ({ReportReason reason, String? note})? chosen = await showReportSheet(
+      context,
+      c,
+    );
+    if (chosen == null || !mounted) return;
+    final bool sent = await widget.controller.report(
+      c,
+      chosen.reason,
+      note: chosen.note,
+    );
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          sent
+              ? 'Gracias. Un moderador lo revisará.'
+              : 'No pudimos enviar el reporte. Inténtalo de nuevo.',
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final List<StoryComment> replies = widget.replies;
@@ -411,6 +486,9 @@ class _CommentThreadState extends State<CommentThread> {
       onReply: () => widget.controller.replyTo(widget.comment),
       onReact: () => unawaited(widget.controller.react(widget.comment)),
       onOpenStudy: () => _openStudy(widget.comment),
+      onReport: widget.controller.canReport(widget.comment)
+          ? () => _report(widget.comment)
+          : null,
     );
     if (replies.isEmpty) return parent;
     return Stack(
@@ -441,6 +519,9 @@ class _CommentThreadState extends State<CommentThread> {
                     onReply: () => widget.controller.replyTo(widget.comment),
                     onReact: () => unawaited(widget.controller.react(reply)),
                     onOpenStudy: () => _openStudy(reply),
+                    onReport: widget.controller.canReport(reply)
+                        ? () => _report(reply)
+                        : null,
                   ),
                 ),
               ),
@@ -906,6 +987,117 @@ class StoryTabs extends StatelessWidget {
               ),
             ),
         ],
+      ),
+    ),
+  );
+}
+
+/// «Reportar»: a reason and an optional note. Returns null when cancelled.
+Future<({ReportReason reason, String? note})?> showReportSheet(
+  BuildContext context,
+  StoryComment comment,
+) => showModalBottomSheet<({ReportReason reason, String? note})>(
+  context: context,
+  isScrollControlled: true,
+  backgroundColor: SciColors.surface,
+  shape: const RoundedRectangleBorder(
+    borderRadius: BorderRadius.vertical(top: Radius.circular(SciRadius.sheet)),
+  ),
+  builder: (_) => _ReportSheet(comment: comment),
+);
+
+class _ReportSheet extends StatefulWidget {
+  const _ReportSheet({required this.comment});
+
+  final StoryComment comment;
+
+  @override
+  State<_ReportSheet> createState() => _ReportSheetState();
+}
+
+class _ReportSheetState extends State<_ReportSheet> {
+  ReportReason? _reason;
+  final TextEditingController _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+    child: SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.fromLTRB(20, 8, 20, 20),
+        child: Column(
+          key: const Key('sci-report-sheet'),
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: <Widget>[
+            const SheetHandle(),
+            const SizedBox(height: 12),
+            Semantics(
+              header: true,
+              child: Text(
+                'Reportar el comentario de @${widget.comment.author}',
+                style: SciText.cardTitle,
+              ),
+            ),
+            const SizedBox(height: 4),
+            const Text(
+              'Lo revisa un moderador. Quien escribió no sabrá quién reportó.',
+              style: SciText.secondary,
+            ),
+            const SizedBox(height: 12),
+            for (final ReportReason reason in ReportReason.values)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: SelectChip(
+                  key: ValueKey<String>('sci-report-${reason.wire}'),
+                  label: reason.label,
+                  selected: _reason == reason,
+                  expand: true,
+                  radio: true,
+                  onTap: () => setState(() => _reason = reason),
+                ),
+              ),
+            const SizedBox(height: 4),
+            TextField(
+              key: const Key('sci-report-note'),
+              controller: _note,
+              maxLength: 280,
+              minLines: 1,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Detalle (opcional)',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 8),
+            FilledButton(
+              key: const Key('sci-report-send'),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(48),
+                backgroundColor: SciColors.primary,
+                textStyle: const TextStyle(
+                  fontFamily: SciText.sans,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              onPressed: _reason == null
+                  ? null
+                  : () => Navigator.of(context).pop((
+                      reason: _reason!,
+                      note: _note.text.trim().isEmpty
+                          ? null
+                          : _note.text.trim(),
+                    )),
+              child: const Text('Enviar reporte'),
+            ),
+          ],
+        ),
       ),
     ),
   );

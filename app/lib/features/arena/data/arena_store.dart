@@ -187,6 +187,12 @@ final class ArenaStore extends ChangeNotifier {
           ? live as ScienceRepository
           : null);
 
+  /// Moderation calls, for moderator accounts (DIALEKTIK_SCIENCE_MODERATORS).
+  ScienceModerationRepository? get moderation {
+    final Object? source = science;
+    return source is ScienceModerationRepository ? source : null;
+  }
+
   ArenaMode _mode = ArenaMode.general;
 
   /// General news or Science (studies with DOI); remembered on the device.

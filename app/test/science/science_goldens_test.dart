@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/science/data/science_models.dart';
+import 'package:dialektik/features/science/presentation/moderation_screen.dart';
 import 'package:dialektik/features/science/presentation/science_feed.dart';
 import 'package:dialektik/features/science/presentation/science_widgets.dart';
 import 'package:dialektik/features/science/presentation/story_comments.dart';
@@ -194,6 +195,106 @@ void main() {
         height: scale == 1 ? 400 : 900,
       );
       await _golden(tester, 'study_attachment_$s');
+    });
+
+    testWidgets('ModerationCard en revisión · $s', (WidgetTester tester) async {
+      await _pump(
+        tester,
+        ModerationCard(
+          item: ModerationItem(
+            comment: thread[1].copyWith(status: CommentStatus.inReview),
+            eventId: vaccineEventId,
+          ),
+          actions: <Widget>[
+            FilledButton(onPressed: () {}, child: const Text('Aprobar')),
+            OutlinedButton(onPressed: () {}, child: const Text('Rechazar')),
+          ],
+          onEditStudy: (_) {},
+          onOpenStudy: (_) {},
+        ),
+        scale: scale,
+        height: scale == 1 ? 600 : 1300,
+      );
+      await _golden(tester, 'moderation_review_$s');
+    });
+
+    testWidgets('ModerationCard reportado · $s', (WidgetTester tester) async {
+      await _pump(
+        tester,
+        ModerationCard(
+          item: ModerationItem(
+            comment: thread[0],
+            eventId: vaccineEventId,
+            reports: const <CommentReport>[
+              CommentReport(
+                reason: ReportReason.offensive,
+                note: 'Trata mal a otra lectora',
+              ),
+              CommentReport(reason: ReportReason.spam),
+            ],
+          ),
+          actions: <Widget>[
+            OutlinedButton(
+              onPressed: () {},
+              child: const Text('Descartar reportes'),
+            ),
+            FilledButton(
+              onPressed: () {},
+              child: const Text('Ocultar comentario'),
+            ),
+          ],
+          onEditStudy: (_) {},
+          onOpenStudy: (_) {},
+        ),
+        scale: scale,
+        height: scale == 1 ? 400 : 900,
+      );
+      await _golden(tester, 'moderation_reported_$s');
+    });
+
+    testWidgets('ApiUsageView · $s', (WidgetTester tester) async {
+      tester.view.physicalSize = Size(390, scale == 1 ? 700 : 1500);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(fontFamily: SciText.sans),
+          builder: (BuildContext context, Widget? app) => MediaQuery(
+            data: MediaQuery.of(
+              context,
+            ).copyWith(textScaler: TextScaler.linear(scale)),
+            child: app!,
+          ),
+          home: Scaffold(
+            backgroundColor: SciColors.bgApp,
+            body: RepaintBoundary(
+              key: const Key('golden'),
+              child: ApiUsageView(
+                days: <ApiUsageDay>[
+                  for (int d = 0; d < 3; d++) ...<ApiUsageDay>[
+                    ApiUsageDay(
+                      source: 'openalex',
+                      day: DateTime(2026, 11, 16 - d),
+                      calls: 40 - d * 3,
+                      errors: d == 1 ? 2 : 0,
+                    ),
+                    ApiUsageDay(
+                      source: 'crossref',
+                      day: DateTime(2026, 11, 16 - d),
+                      calls: 38 - d * 3,
+                      errors: 0,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      await _golden(tester, 'api_usage_$s');
     });
 
     testWidgets('StudyLabel · $s', (WidgetTester tester) async {
