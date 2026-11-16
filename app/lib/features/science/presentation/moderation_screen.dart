@@ -32,7 +32,7 @@ class ScienceModerationScreen extends StatefulWidget {
 
 class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
   ModerationQueue? _queue;
-  List<ApiUsageDay>? _usage;
+  ApiUsage? _usage;
   bool _failed = false;
 
   ScienceModerationRepository? get _repository => widget.store.moderation;
@@ -50,7 +50,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
       return;
     }
     try {
-      final (ModerationQueue, List<ApiUsageDay>) loaded = await (
+      final (ModerationQueue, ApiUsage) loaded = await (
         repository.moderationQueue(),
         repository.usage(),
       ).wait;
@@ -205,7 +205,10 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
                   ),
                   RefreshIndicator(
                     onRefresh: _load,
-                    child: ApiUsageView(days: _usage ?? const <ApiUsageDay>[]),
+                    child: ApiUsageView(
+                      days: _usage?.days ?? const <ApiUsageDay>[],
+                      harvest: _usage?.harvest,
+                    ),
                   ),
                 ],
               ),
@@ -394,9 +397,12 @@ class ModerationCard extends StatelessWidget {
 /// Calls and errors per metadata API, totals for 30 days and day by day, so
 /// a moderator can check OpenAlex without calling the API by hand.
 class ApiUsageView extends StatelessWidget {
-  const ApiUsageView({required this.days, super.key});
+  const ApiUsageView({required this.days, this.harvest, super.key});
 
   final List<ApiUsageDay> days;
+
+  /// The daily harvest; a notice when it has not finished in 48 hours.
+  final HarvestStatus? harvest;
 
   static String sourceLabel(String source) => switch (source) {
     'openalex' => 'OpenAlex',
@@ -422,6 +428,7 @@ class ApiUsageView extends StatelessWidget {
       key: const Key('sci-mod-usage'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: <Widget>[
+        if (harvest case final HarvestStatus h) HarvestNotice(status: h),
         const _Heading('Últimos 30 días'),
         if (days.isEmpty)
           const _Hint('Todavía no hay llamadas registradas.')
@@ -931,4 +938,57 @@ class _Message extends StatelessWidget {
       ],
     ),
   );
+}
+
+/// State of the daily harvest. When no run finished in 48 hours, it says
+/// so plainly, whatever happened to the scheduled job.
+class HarvestNotice extends StatelessWidget {
+  const HarvestNotice({required this.status, super.key});
+
+  final HarvestStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final DateTime? last = status.lastRunAt;
+    final String text = last == null
+        ? 'La cosecha diaria todavía no ha terminado ninguna corrida.'
+        : status.stale
+        ? 'La cosecha diaria no termina hace más de 48 horas. Última: '
+              '${sciShortDate(last.toLocal())}.'
+        : 'Última cosecha: ${sciShortDate(last.toLocal())}'
+              '${status.lastStatus == 'partial' ? ' (parcial)' : ''} · '
+              '${status.added} ${status.added == 1 ? 'agregado' : 'agregados'} · '
+              '${status.deleted} ${status.deleted == 1 ? 'borrado' : 'borrados'} '
+              'por antigüedad.';
+    final bool warn = status.stale || last == null;
+    return Semantics(
+      container: true,
+      liveRegion: warn,
+      child: Container(
+        key: const Key('sci-mod-harvest'),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: SciColors.surface,
+          borderRadius: BorderRadius.circular(SciRadius.card),
+          border: Border.all(
+            color: warn ? SciColors.ink : SciColors.borderCard,
+            width: warn ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              warn ? Icons.error_outline : Icons.event_available_outlined,
+              size: 20,
+              color: SciColors.ink,
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(text, style: SciText.body)),
+          ],
+        ),
+      ),
+    );
+  }
 }

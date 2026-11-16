@@ -453,6 +453,56 @@ final class ApiUsageDay {
   final int errors;
 }
 
+/// The daily harvest as Core last saw it (`harvest` in the usage answer).
+final class HarvestStatus {
+  const HarvestStatus({
+    this.lastRunAt,
+    this.lastStatus,
+    this.stale = true,
+    this.added = 0,
+    this.deleted = 0,
+  });
+
+  factory HarvestStatus.fromJson(Object? value) {
+    if (value is! Map<String, dynamic>) return const HarvestStatus();
+    return HarvestStatus(
+      lastRunAt: DateTime.tryParse(value['last_run_at'] as String? ?? ''),
+      lastStatus: value['last_status'] as String?,
+      stale: value['stale'] != false,
+      added: (value['added'] as num?)?.toInt() ?? 0,
+      deleted: (value['deleted'] as num?)?.toInt() ?? 0,
+    );
+  }
+
+  final DateTime? lastRunAt;
+
+  /// ok, partial or failed.
+  final String? lastStatus;
+
+  /// No run finished in the last 48 hours.
+  final bool stale;
+  final int added;
+  final int deleted;
+}
+
+/// Calls per metadata API and day, and the harvest state.
+final class ApiUsage {
+  const ApiUsage({
+    this.days = const <ApiUsageDay>[],
+    this.harvest = const HarvestStatus(),
+  });
+
+  factory ApiUsage.fromJson(Object? value) => ApiUsage(
+    days: ApiUsageDay.listFromJson(value),
+    harvest: HarvestStatus.fromJson(
+      (value! as Map<String, dynamic>)['harvest'],
+    ),
+  );
+
+  final List<ApiUsageDay> days;
+  final HarvestStatus harvest;
+}
+
 /// Fields a moderator completes on a study. Only the keys present are sent;
 /// a null value clears the field back to «No informado».
 final class StudyModeration {

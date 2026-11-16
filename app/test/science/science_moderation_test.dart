@@ -1,5 +1,6 @@
 import 'package:dialektik/features/arena/presentation/arena_shell.dart';
 import 'package:dialektik/features/science/data/science_models.dart';
+import 'package:dialektik/features/science/presentation/moderation_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -337,4 +338,46 @@ void main() {
       expect(find.byKey(const Key('sci-mod-queue')), findsOneWidget);
     },
   );
+
+  for (final (String name, HarvestStatus status, String text)
+      in <(String, HarvestStatus, String)>[
+        (
+          'late',
+          HarvestStatus(
+            lastRunAt: DateTime.utc(2026, 11, 13, 12),
+            lastStatus: 'ok',
+            stale: true,
+          ),
+          'La cosecha diaria no termina hace más de 48 horas. Última: 13 nov.',
+        ),
+        (
+          'on time',
+          HarvestStatus(
+            lastRunAt: DateTime.utc(2026, 11, 16, 12),
+            lastStatus: 'partial',
+            stale: false,
+            added: 120,
+            deleted: 1,
+          ),
+          'Última cosecha: 16 nov (parcial) · 120 agregados · 1 borrado por antigüedad.',
+        ),
+        (
+          'never',
+          const HarvestStatus(),
+          'La cosecha diaria todavía no ha terminado ninguna corrida.',
+        ),
+      ]) {
+    testWidgets('moderation · harvest notice when $name', (
+      WidgetTester tester,
+    ) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: ApiUsageView(days: const <ApiUsageDay>[], harvest: status),
+          ),
+        ),
+      );
+      expect(find.text(text), findsOneWidget);
+    });
+  }
 }

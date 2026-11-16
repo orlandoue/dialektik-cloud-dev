@@ -313,6 +313,7 @@ class FakeScienceRepository
   final Map<String, String> decisions = <String, String>{};
 
   List<ApiUsageDay> usageDays = <ApiUsageDay>[];
+  HarvestStatus harvest = const HarvestStatus();
 
   @override
   Future<void> report(
@@ -388,7 +389,7 @@ class FakeScienceRepository
   }
 
   @override
-  Future<List<ApiUsageDay>> usage() async => usageDays;
+  Future<ApiUsage> usage() async => ApiUsage(days: usageDays, harvest: harvest);
 
   @override
   Future<List<StoryComment>> commentsCitingStudy(String doi) async =>
@@ -487,5 +488,5 @@ class ArenaScienceCore extends ArenaFullCore
   Future<Study> moderateStudy(String doi, StudyModeration fields) =>
       science.moderateStudy(doi, fields);
   @override
-  Future<List<ApiUsageDay>> usage() => science.usage();
+  Future<ApiUsage> usage() => science.usage();
 }
