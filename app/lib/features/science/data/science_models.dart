@@ -264,6 +264,25 @@ final class StoryComment {
 }
 
 /// Why publishing a study comment was refused.
+/// Remote flag for Science mode and story comments (`GET /v1/science/access`).
+final class ScienceAccess {
+  const ScienceAccess({this.enabled = false, this.moderator = false});
+
+  factory ScienceAccess.fromJson(Object? value) {
+    if (value is! Map<String, Object?>) return const ScienceAccess();
+    return ScienceAccess(
+      enabled: value['enabled'] == true,
+      moderator: value['moderator'] == true,
+    );
+  }
+
+  /// Hidden by default.
+  static const ScienceAccess off = ScienceAccess();
+
+  final bool enabled;
+  final bool moderator;
+}
+
 final class StudyCommentRejected implements Exception {
   const StudyCommentRejected(this.reason, {this.existingCommentId});
 

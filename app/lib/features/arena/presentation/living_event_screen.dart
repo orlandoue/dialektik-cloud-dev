@@ -59,7 +59,8 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
     _event = store.cachedDetail(widget.eventId);
     stories.addListener(_changed);
     _comments.addListener(_changed);
-    unawaited(_comments.load());
+    // Comments only exist where Science is on for this account.
+    if (store.scienceEnabled) unawaited(_comments.load());
     unawaited(_load());
   }
 
@@ -117,7 +118,8 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
   @override
   Widget build(BuildContext context) {
     final EventDetailDto? event = _event;
-    final bool commenting = _tab == commentsTab && event != null;
+    final bool commenting =
+        store.scienceEnabled && _tab == commentsTab && event != null;
     final Color background = commenting
         ? SciColors.surface
         : ArenaColors.background;
@@ -236,7 +238,8 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
             (EventCoverageArticleDto a) =>
                 extractYouTubeVideoId(a.url.toString()) == videoId,
           );
-    final bool commenting = _tab == commentsTab;
+    final bool science = store.scienceEnabled;
+    final bool commenting = science && _tab == commentsTab;
     final bool quiet =
         timeline.isEmpty ||
         DateTime.now().difference(timeline.last.publishedAt) > quietAfter;
@@ -341,11 +344,24 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
             'Resumen',
             'Cronología',
             'Citas',
-            'Comentarios ${_comments.total}',
+            if (science) 'Comentarios ${_comments.total}',
           ],
           selected: _tab,
           onSelected: (int value) => setState(() => _tab = value),
         ),
+        // Without Science, the case's community stays one tap away.
+        if (!science) ...<Widget>[
+          const SizedBox(height: 10),
+          padded(
+            OutlinedButton.icon(
+              key: const Key('arena-open-community'),
+              onPressed: () => openArenaCommunity(context, store, event),
+              style: arenaSecondaryButtonStyle(),
+              icon: const Icon(Icons.forum_outlined),
+              label: const Text('Comunidad del caso'),
+            ),
+          ),
+        ],
         if (commenting)
           ...storyCommentsChildren(context, _comments, event)
         else ...<Widget>[

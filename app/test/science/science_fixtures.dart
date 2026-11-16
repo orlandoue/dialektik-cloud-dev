@@ -188,12 +188,16 @@ class FakeScienceRepository implements ScienceRepository {
     List<Study>? studies,
     Map<String, List<StoryComment>>? comments,
     this.failStudies = false,
+    this.scienceAccess = const ScienceAccess(enabled: true),
   }) : studies = studies ?? <Study>[hviid, bendavid, wakefield],
        comments = comments ?? <String, List<StoryComment>>{};
 
   final List<Study> studies;
   final Map<String, List<StoryComment>> comments;
   bool failStudies;
+
+  /// The remote flag; on by default so the Science tests see the mode.
+  ScienceAccess scienceAccess;
   int _next = 100;
   final List<String> studyCalls = <String>[];
 
@@ -298,6 +302,9 @@ class FakeScienceRepository implements ScienceRepository {
   }
 
   @override
+  Future<ScienceAccess> access() async => scienceAccess;
+
+  @override
   Future<List<StoryComment>> commentsCitingStudy(String doi) async =>
       <StoryComment>[
         for (final List<StoryComment> list in comments.values)
@@ -370,4 +377,6 @@ class ArenaScienceCore extends ArenaFullCore implements ScienceRepository {
   @override
   Future<List<StoryComment>> commentsCitingStudy(String doi) =>
       science.commentsCitingStudy(doi);
+  @override
+  Future<ScienceAccess> access() => science.access();
 }

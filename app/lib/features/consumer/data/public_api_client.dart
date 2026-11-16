@@ -207,6 +207,17 @@ final class PublicApiClient
     '/v1/science/studies/${Uri.encodeComponent(doi)}/comments',
     decoder: StoryComment.listFromJson, refresh: true, requestToken: null);
 
+  @override
+  Future<ScienceAccess> access() async {
+    try {
+      return await _get<ScienceAccess>('/v1/science/access',
+        decoder: ScienceAccess.fromJson, refresh: true, requestToken: null);
+    } on PublicApiFailure {
+      // An older Core, no session or any error: Science stays hidden.
+      return ScienceAccess.off;
+    }
+  }
+
   Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder) async {
     final token = await authorizationTokenProvider?.call();
     if (token == null || token.isEmpty) throw const PublicApiFailure(kind: PublicFailureKind.unauthorized);

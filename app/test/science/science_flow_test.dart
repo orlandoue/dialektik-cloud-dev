@@ -1,3 +1,4 @@
+import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/science/data/science_models.dart';
 import 'package:dialektik/features/science/presentation/science_format.dart';
 import 'package:dialektik/features/science/presentation/story_comments.dart';
@@ -106,6 +107,45 @@ void main() {
       ),
       isFalse,
     );
+  });
+
+  testWidgets('with the remote flag off, Science and comments stay hidden', (
+    WidgetTester tester,
+  ) async {
+    final ArenaScienceCore core = ArenaScienceCore(
+      science: FakeScienceRepository(scienceAccess: ScienceAccess.off),
+    );
+    await pumpArena(tester, core);
+    expect(find.byKey(const Key('sci-mode-button')), findsNothing);
+    expect(find.byKey(const Key('sci-bottom-bar')), findsNothing);
+    await tester.tap(
+      find.descendant(
+        of: find.byKey(const Key('arena-bottom-navigation')),
+        matching: find.text('Historias'),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text(vaccineTitle).first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(vaccineTitle).first);
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('arena-subtab-Comentarios')),
+      findsNothing,
+    );
+    expect(find.byKey(const Key('arena-open-community')), findsOneWidget);
+  });
+
+  test('a stored Science mode is ignored while the flag is off', () async {
+    final ArenaScienceCore core = ArenaScienceCore(
+      science: FakeScienceRepository(scienceAccess: ScienceAccess.off),
+    );
+    final ArenaStore store = ArenaStore(consumer: core, live: core);
+    addTearDown(store.dispose);
+    await store.load();
+    store.setMode(ArenaMode.ciencia);
+    expect(store.scienceEnabled, isFalse);
+    expect(store.mode, ArenaMode.general);
   });
 
   testWidgets('the mode replaces the country and the Science bar appears', (
