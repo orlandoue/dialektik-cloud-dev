@@ -1,4 +1,4 @@
-import { createDatabase, destroyDatabase, scienceCommentsSql } from '@dialektik/database';
+import { createDatabase, destroyDatabase, scienceCommentsSql, scienceModerationSql } from '@dialektik/database';
 import {
   ForbiddenException,
   GoneException,
@@ -57,6 +57,7 @@ export interface StudyJson {
   retracted_at: string | null;
   abstract: string | null;
   abstract_language: string | null;
+  abstract_source: string | null;
   made_in_chile: boolean;
   connected_stories: number;
   citing_comments: number;
@@ -93,6 +94,15 @@ export interface StudyModeration {
   access?: string | null;
   corrections?: string | null;
   made_in_chile?: boolean;
+  /** Copied from the published article; never generated. Needs its source. */
+  abstract?: { text: string; source: string; language: string | null } | null;
+}
+
+export type ReportReason = 'spam' | 'ofensivo' | 'desinformacion' | 'datos_personales' | 'otro';
+
+export interface ReportedComment extends CommentJson {
+  event_id: string;
+  reports: { reason: ReportReason; note: string | null; created_at: Date }[];
 }
 
 /** Comments with a study need an account at least this old. */
@@ -132,6 +142,7 @@ function studyJson(row: StudyRow): StudyJson {
     retracted_at: day(row.retracted_at),
     abstract: row.abstract,
     abstract_language: row.abstract_language,
+    abstract_source: row.abstract_source ?? null,
     made_in_chile: row.made_in_chile,
     connected_stories: Number(row.connected_stories ?? 0),
     citing_comments: Number(row.citing_comments ?? 0),
@@ -140,7 +151,7 @@ function studyJson(row: StudyRow): StudyJson {
 
 const STUDY_COLUMNS = sql.raw(`s.doi, s.title, s.review, s.authors, s.institution, s.journal, s.published_at,
   s.design, s.population, s.sample_size, s.follow_up, s.funding, s.conflicts, s.access, s.corrections,
-  s.retracted, s.retracted_at, s.abstract, s.abstract_language, s.made_in_chile,
+  s.retracted, s.retracted_at, s.abstract, s.abstract_language, s.abstract_source, s.made_in_chile,
   (select count(distinct a.event_id)::int from public.story_comment_studies a
      join public.story_comments c on c.id = a.comment_id and c.status = 'published' where a.doi = s.doi) as connected_stories,
   (select count(*)::int from public.story_comment_studies a
@@ -220,6 +231,7 @@ export class ScienceService implements OnModuleInit {
         await sql`set local lock_timeout = '10s'`.execute(tx);
         await sql`select pg_advisory_xact_lock(910091)`.execute(tx);
         await sql.raw(scienceCommentsSql).execute(tx);
+        await sql.raw(scienceModerationSql).execute(tx);
       });
       this.#ready = true;
       this.#logger.log('Science storage created at startup.');
@@ -235,7 +247,10 @@ export class ScienceService implements OnModuleInit {
     const present = await sql<{ ready: boolean }>`select to_regclass('public.science_studies') is not null
       and to_regclass('public.story_comments') is not null and to_regclass('public.story_comment_studies') is not null
       and to_regclass('public.story_comment_reactions') is not null and to_regclass('public.science_api_usage') is not null
-      and to_regprocedure('public.dialektik_reader_profile(uuid)') is not null as ready`.execute(database);
+      and to_regprocedure('public.dialektik_reader_profile(uuid)') is not null
+      and to_regclass('public.story_comment_reports') is not null
+      and exists (select 1 from information_schema.columns where table_schema = 'public'
+        and table_name = 'science_studies' and column_name = 'abstract_by_moderator') as ready`.execute(database);
     return present.rows[0]?.ready === true;
   }
 
@@ -310,12 +325,15 @@ export class ScienceService implements OnModuleInit {
   /** Bibliographic fields only; moderator fields are never overwritten. */
   async #store(s: ResolvedStudy): Promise<void> {
     await sql`insert into public.science_studies(doi,title,review,authors,institution,journal,published_at,abstract,
-        abstract_language,access,retracted,retracted_at,made_in_chile,resolved_at)
+        abstract_source,abstract_language,access,retracted,retracted_at,made_in_chile,resolved_at)
       values (${s.doi},${s.title},${s.review},${s.authors},${s.institution},${s.journal},${s.published_at}::date,${s.abstract},
-        ${s.abstract_language},${s.access},${s.retracted},${s.retracted_at}::date,${s.made_in_chile},now())
+        ${s.abstract_source},${s.abstract_language},${s.access},${s.retracted},${s.retracted_at}::date,${s.made_in_chile},now())
       on conflict (doi) do update set title=excluded.title, review=excluded.review, authors=excluded.authors,
         institution=excluded.institution, journal=excluded.journal, published_at=excluded.published_at,
-        abstract=excluded.abstract, abstract_language=excluded.abstract_language,
+        -- An abstract a moderator loaded from the publisher is kept.
+        abstract=case when public.science_studies.abstract_by_moderator then public.science_studies.abstract else excluded.abstract end,
+        abstract_source=case when public.science_studies.abstract_by_moderator then public.science_studies.abstract_source else excluded.abstract_source end,
+        abstract_language=case when public.science_studies.abstract_by_moderator then public.science_studies.abstract_language else excluded.abstract_language end,
         access=coalesce(public.science_studies.access, excluded.access),
         retracted=excluded.retracted or public.science_studies.retracted,
         retracted_at=coalesce(excluded.retracted_at, public.science_studies.retracted_at),
@@ -427,6 +445,8 @@ export class ScienceService implements OnModuleInit {
     });
     const study = await this.study(input.doi);
     if (study.retracted) throw new GoneException({ code: 'PUBLIC_SCIENCE_RETRACTED' });
+    // Without an abstract there is nothing literal to quote.
+    if (study.abstract === null) throw refused(HttpStatus.UNPROCESSABLE_ENTITY, 'PUBLIC_SCIENCE_NO_ABSTRACT');
     if (!isLiteralFragment(input.abstractFragment, study.abstract)) {
       throw refused(HttpStatus.UNPROCESSABLE_ENTITY, 'PUBLIC_SCIENCE_NOT_LITERAL');
     }
@@ -529,17 +549,32 @@ export class ScienceService implements OnModuleInit {
     if (!this.isModerator(userId)) throw new ForbiddenException({ code: 'PUBLIC_FORBIDDEN' });
   }
 
-  async moderationQueue(userId: string): Promise<{ comments: (CommentJson & { event_id: string })[] }> {
+  /**
+   * Study comments waiting for review, and published comments with open
+   * reports, oldest first.
+   */
+  async moderationQueue(userId: string): Promise<{ review: (CommentJson & { event_id: string })[]; reports: ReportedComment[] }> {
     this.#requireModerator(userId);
     return this.#guarded(async () => {
       const rows = await sql<{ id: string; event_id: string }>`select id::text as id, event_id::text as event_id from public.story_comments
         where status = 'in_review' order by created_at limit 100`.execute(this.db.database);
-      const comments: (CommentJson & { event_id: string })[] = [];
+      const review: (CommentJson & { event_id: string })[] = [];
       for (const row of rows.rows) {
         const listed = await this.#reviewRow(row.id, userId);
-        if (listed) comments.push({ ...listed, event_id: row.event_id });
+        if (listed) review.push({ ...listed, event_id: row.event_id });
       }
-      return { comments };
+      const reported = await sql<{ id: string; event_id: string; reports: { reason: ReportReason; note: string | null; created_at: Date }[] }>`
+        select c.id::text as id, c.event_id::text as event_id,
+          jsonb_agg(jsonb_build_object('reason', r.reason, 'note', r.note, 'created_at', r.created_at) order by r.created_at) as reports
+        from public.story_comment_reports r join public.story_comments c on c.id = r.comment_id
+        where r.resolved_at is null and c.status = 'published'
+        group by c.id, c.event_id order by min(r.created_at) limit 100`.execute(this.db.database);
+      const reports: ReportedComment[] = [];
+      for (const row of reported.rows) {
+        const listed = await this.#reviewRow(row.id, userId);
+        if (listed) reports.push({ ...listed, event_id: row.event_id, reports: row.reports });
+      }
+      return { review, reports };
     });
   }
 
@@ -552,15 +587,50 @@ export class ScienceService implements OnModuleInit {
     return listed[0] ? { ...listed[0], mine: owner === userId } : undefined;
   }
 
-  async decide(userId: string, commentId: string, approve: boolean): Promise<{ id: string; status: string }> {
+  /** Approves a study comment in review, or rejects it with a reason. */
+  async decide(userId: string, commentId: string, approve: boolean, reason: string | null): Promise<{ id: string; status: string }> {
     this.#requireModerator(userId);
+    if (!approve && reason === null) throw refused(HttpStatus.BAD_REQUEST, 'PUBLIC_SCIENCE_REASON_REQUIRED');
     return this.#transaction(userId, async (tx) => {
       const updated = await sql<{ status: string }>`update public.story_comments
-        set status = ${approve ? 'published' : 'rejected'}, reviewed_at = now()
+        set status = ${approve ? 'published' : 'rejected'}, reviewed_at = now(), review_reason = ${approve ? null : reason}
         where id = ${commentId}::uuid and status = 'in_review' returning status`.execute(tx);
       if (!updated.rows.length) throw new NotFoundException('Comment in review not found.');
       return { id: commentId, status: updated.rows[0]!.status };
     }, true);
+  }
+
+  /** Reports of a published comment: dismissed, or the comment is hidden. */
+  async resolveReports(userId: string, commentId: string, hide: boolean, reason: string | null): Promise<{ id: string; status: string }> {
+    this.#requireModerator(userId);
+    if (hide && reason === null) throw refused(HttpStatus.BAD_REQUEST, 'PUBLIC_SCIENCE_REASON_REQUIRED');
+    return this.#transaction(userId, async (tx) => {
+      const open = await sql<{ status: string }>`select c.status from public.story_comments c
+        where c.id = ${commentId}::uuid and exists (select 1 from public.story_comment_reports r
+          where r.comment_id = c.id and r.resolved_at is null)`.execute(tx);
+      if (!open.rows.length) throw new NotFoundException('No open reports for this comment.');
+      await sql`update public.story_comment_reports set resolved_at = now(), resolution = ${hide ? 'hidden' : 'dismissed'}
+        where comment_id = ${commentId}::uuid and resolved_at is null`.execute(tx);
+      if (!hide) return { id: commentId, status: open.rows[0]!.status };
+      // Hidden from everyone, author included; kept for the record.
+      await sql`update public.story_comments set status = 'rejected', reviewed_at = now(), review_reason = ${reason}
+        where id = ${commentId}::uuid`.execute(tx);
+      return { id: commentId, status: 'rejected' };
+    }, true);
+  }
+
+  /** «Reportar»: one report per reader; a repeated one changes nothing. */
+  async report(userId: string, commentId: string, reason: ReportReason, note: string | null): Promise<{ reported: true }> {
+    return this.#transaction(userId, async (tx) => {
+      const target = await sql<{ owner: string }>`select c.user_id::text as owner from public.story_comments c
+        join public.public_events e on e.id = c.event_id and e.analysis_state = 'PUBLISHED'
+        where c.id = ${commentId}::uuid and c.status = 'published'`.execute(tx);
+      if (!target.rows[0]) throw new NotFoundException('Comment not found.');
+      if (target.rows[0].owner === userId) throw refused(HttpStatus.BAD_REQUEST, 'PUBLIC_SCIENCE_OWN_COMMENT');
+      await sql`insert into public.story_comment_reports(comment_id, user_id, reason, note)
+        values (${commentId}::uuid, ${userId}::uuid, ${reason}, ${note}) on conflict (comment_id, user_id) do nothing`.execute(tx);
+      return { reported: true as const };
+    });
   }
 
   /** Fields only a moderator completes; null clears one back to «No informado». */
@@ -578,6 +648,10 @@ export class ScienceService implements OnModuleInit {
         access = case when ${has('access')} then ${fields.access ?? null}::text else access end,
         corrections = case when ${has('corrections')} then ${fields.corrections ?? null}::text else corrections end,
         made_in_chile = case when ${has('made_in_chile')} then ${fields.made_in_chile ?? false} else made_in_chile end,
+        abstract = case when ${has('abstract')} then ${fields.abstract?.text ?? null}::text else abstract end,
+        abstract_source = case when ${has('abstract')} then ${fields.abstract?.source ?? null}::text else abstract_source end,
+        abstract_language = case when ${has('abstract')} then ${fields.abstract?.language ?? null}::text else abstract_language end,
+        abstract_by_moderator = case when ${has('abstract')} then ${fields.abstract != null} else abstract_by_moderator end,
         moderated_at = now()
       where doi = ${doi}`.execute(this.db.database));
     return (await this.#readStudy(this.db.database as Kysely<unknown>, doi))!;

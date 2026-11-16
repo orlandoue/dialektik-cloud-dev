@@ -14,6 +14,8 @@ export interface ResolvedStudy {
   journal: string | null;
   published_at: string | null;
   abstract: string | null;
+  /** Crossref or OpenAlex; null without an abstract. */
+  abstract_source: string | null;
   abstract_language: string | null;
   access: string | null;
   retracted: boolean;
@@ -183,7 +185,12 @@ export async function resolveStudy(doi: string, fetcher: FetchLike = fetch as un
     institution: text(institutions[0]?.display_name),
     journal: first(crossref?.['container-title']) ?? text(primarySource?.display_name) ?? (preprint ? first(crossref?.institution) : null),
     published_at: dateParts(crossref?.published) ?? dateParts(crossref?.issued) ?? text(openalex?.publication_date),
-    abstract: stripJats(crossref?.abstract) ?? abstractFromInvertedIndex(openalex?.abstract_inverted_index),
+    ...(() => {
+      const fromCrossref = stripJats(crossref?.abstract);
+      if (fromCrossref !== null) return { abstract: fromCrossref, abstract_source: 'Crossref' };
+      const fromOpenAlex = abstractFromInvertedIndex(openalex?.abstract_inverted_index);
+      return { abstract: fromOpenAlex, abstract_source: fromOpenAlex === null ? null : 'OpenAlex' };
+    })(),
     abstract_language: (() => {
       const language = text(openalex?.language) ?? text(crossref?.language);
       return language !== null && /^[a-z]{2,3}$/u.test(language) ? language : null;

@@ -12,6 +12,7 @@ import { randomBytes } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import pg from 'pg';
 import { scienceCommentsSql } from '../../../packages/database/dist/migration/091_science_and_story_comments.js';
+import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
 
 const ownerUrl = process.env.SCIENCE_TEST_DATABASE_URL;
 if (!ownerUrl && process.env.CI) throw new Error('CI must provide SCIENCE_TEST_DATABASE_URL: row security is not checked otherwise.');
@@ -79,8 +80,10 @@ before(async () => {
   await owner.connect();
   await owner.query(schema);
   await owner.query(scienceCommentsSql);
-  // Applying it twice must change nothing (the owner may re-run it).
+  await owner.query(scienceModerationSql);
+  // Applying them twice must change nothing (the owner may re-run them).
   await owner.query(scienceCommentsSql);
+  await owner.query(scienceModerationSql);
   url.username = 'dialektik_core_app';
   url.password = corePassword;
   core = new pg.Client({ connectionString: url.toString() });
@@ -99,9 +102,10 @@ test('Core connects without any way around row security', { skip }, async () => 
   const role = await core.query(`select current_user as name, rolsuper, rolbypassrls from pg_roles where rolname = current_user`);
   assert.deepEqual(role.rows[0], { name: 'dialektik_core_app', rolsuper: false, rolbypassrls: false });
   const tables = await core.query(`select relname, relrowsecurity, relforcerowsecurity from pg_class
-    where relname in ('science_studies','story_comments','story_comment_studies','story_comment_reactions','science_api_usage')
+    where relname in ('science_studies','story_comments','story_comment_studies','story_comment_reactions','science_api_usage',
+      'story_comment_reports')
     order by relname`);
-  assert.equal(tables.rows.length, 5);
+  assert.equal(tables.rows.length, 6);
   for (const t of tables.rows) assert.ok(t.relrowsecurity && t.relforcerowsecurity, `${t.relname} must force row security`);
 });
 
@@ -212,4 +216,25 @@ test('the service, on real connections, refuses one of two simultaneous duplicat
   } finally {
     await db.destroy();
   }
+});
+
+test('a report is filed in the reader\'s own name, never on their own comment, and only a moderator resolves it', { skip }, async () => {
+  await asCore(reader, async () => {
+    const { id } = (await insertComment(reader)).rows[0];
+    // Own comment.
+    await refused(() => core.query(`insert into public.story_comment_reports(comment_id,user_id,reason) values ($1,$2,'spam')`, [id, reader]), '42501');
+    await core.query("select set_config('dialektik.social_user', $1, true)", [stranger]);
+    // In someone else's name.
+    await refused(() => core.query(`insert into public.story_comment_reports(comment_id,user_id,reason) values ($1,$2,'spam')`, [id, moderator]), '42501');
+    // Already resolved on arrival.
+    await refused(() => core.query(`insert into public.story_comment_reports(comment_id,user_id,reason,resolved_at,resolution)
+      values ($1,$2,'spam',now(),'dismissed')`, [id, stranger]), '42501');
+    await core.query(`insert into public.story_comment_reports(comment_id,user_id,reason) values ($1,$2,'ofensivo')`, [id, stranger]);
+    const unflagged = await core.query(`update public.story_comment_reports set resolved_at = now(), resolution = 'dismissed' returning comment_id`);
+    assert.equal(unflagged.rows.length, 0);
+    await refused(() => core.query('delete from public.story_comment_reports'), '42501');
+    await core.query("select set_config('dialektik.science_moderator', 'on', true)");
+    const flagged = await core.query(`update public.story_comment_reports set resolved_at = now(), resolution = 'dismissed' returning comment_id`);
+    assert.equal(flagged.rows.length, 1);
+  });
 });

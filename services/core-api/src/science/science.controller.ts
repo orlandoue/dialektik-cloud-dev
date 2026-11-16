@@ -3,11 +3,21 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import { parseUlidParameter } from '../public-api/public-api.validation.js';
 import { PublicRateLimitService, rateLimitClient } from '../public-api/public-rate-limit.service.js';
-import { ScienceService, type StudyFilter, type StudyModeration, type StudyRelation } from './science.service.js';
+import { ScienceService, type ReportReason, type StudyFilter, type StudyModeration, type StudyRelation } from './science.service.js';
 import { normalizeDoi } from './study-resolver.js';
 
 const FILTERS = new Set<StudyFilter>(['conectados', 'chile', 'temas', 'recientes']);
 const RELATIONS = new Set<StudyRelation>(['respalda', 'contradice', 'matiza', 'contexto']);
+const REPORT_REASONS = new Set<ReportReason>(['spam', 'ofensivo', 'desinformacion', 'datos_personales', 'otro']);
+
+/** A moderator's reason: required to reject or hide, 2 to 300 characters. */
+function reason(value: unknown): string | null {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string' || value.trim().length < 2 || value.trim().length > 300) {
+    throw new BadRequestException('A reason needs 2 to 300 characters.');
+  }
+  return value.trim();
+}
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function record(body: unknown, message: string): Record<string, unknown> {
@@ -125,6 +135,16 @@ export class ScienceController {
     return this.science.react(this.#reader(request), uuidParameter(id, 'Invalid comment.'), input.reacted);
   }
 
+  @Post('comments/:id/reports')
+  async report(@Req() request: FastifyRequest, @Param('id') id: string, @Body() body: unknown) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    const input = record(body, 'Invalid report.');
+    const chosen = typeof input.reason === 'string' ? input.reason as ReportReason : undefined;
+    if (chosen === undefined || !REPORT_REASONS.has(chosen)) throw new BadRequestException('Invalid report.');
+    const note = input.note === undefined || input.note === null ? null : text(input.note, 280, 'A note needs 1 to 280 characters.');
+    return this.science.report(this.#reader(request), uuidParameter(id, 'Invalid comment.'), chosen, note);
+  }
+
   // ---- Moderation (DIALEKTIK_SCIENCE_MODERATORS) ---------------------------
 
   @Get('science/moderation/queue')
@@ -147,7 +167,18 @@ export class ScienceController {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     const input = record(body, 'Invalid decision.');
     if (input.decision !== 'approve' && input.decision !== 'reject') throw new BadRequestException('Invalid decision.');
-    return this.science.decide(this.#reader(request), uuidParameter(id, 'Invalid comment.'), input.decision === 'approve');
+    return this.science.decide(this.#reader(request), uuidParameter(id, 'Invalid comment.'), input.decision === 'approve',
+      reason(input.reason));
+  }
+
+  /** Reports of a comment: `dismiss` them, or `hide` the comment with a reason. */
+  @Post('science/moderation/reports/:id')
+  async resolveReports(@Req() request: FastifyRequest, @Param('id') id: string, @Body() body: unknown) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    const input = record(body, 'Invalid decision.');
+    if (input.decision !== 'dismiss' && input.decision !== 'hide') throw new BadRequestException('Invalid decision.');
+    return this.science.resolveReports(this.#reader(request), uuidParameter(id, 'Invalid comment.'), input.decision === 'hide',
+      reason(input.reason));
   }
 
   @Put('science/moderation/studies/:doi')
@@ -169,6 +200,24 @@ export class ScienceController {
         throw new BadRequestException('Invalid sample_size.');
       }
       fields.sample_size = value;
+    }
+    if (Object.hasOwn(input, 'abstract')) {
+      // Copied from the published article with its source; never generated.
+      const value = input.abstract;
+      if (value === null) {
+        fields.abstract = null;
+      } else {
+        const given = record(value, 'Invalid abstract.');
+        const language = given.language === undefined || given.language === null ? null : given.language;
+        if (language !== null && (typeof language !== 'string' || !/^[a-z]{2,3}$/u.test(language))) {
+          throw new BadRequestException('Invalid abstract language.');
+        }
+        fields.abstract = {
+          text: text(given.text, 12000, 'An abstract needs 1 to 12000 characters.'),
+          source: text(given.source, 120, 'Name where the abstract was copied from.'),
+          language,
+        };
+      }
     }
     if (Object.hasOwn(input, 'made_in_chile')) {
       if (typeof input.made_in_chile !== 'boolean') throw new BadRequestException('Invalid made_in_chile.');

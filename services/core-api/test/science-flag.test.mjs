@@ -44,6 +44,8 @@ test('without the flag every Science route is 404, and none reaches the database
     addStudyComment: () => controller.addStudyComment(request, ulid, { doi: '10.7326/m18-2101', claim_quote_id: ulid,
       relation: 'respalda', abstract_fragment: 'risk', body: 'x' }),
     react: () => controller.react(request, uuid, { reacted: true }),
+    report: () => controller.report(request, uuid, { reason: 'spam' }),
+    resolveReports: () => controller.resolveReports(request, uuid, { decision: 'dismiss' }),
     queue: () => controller.queue(request, reply),
     usage: () => controller.usage(request, reply),
     decide: () => controller.decide(request, uuid, { decision: 'approve' }),
