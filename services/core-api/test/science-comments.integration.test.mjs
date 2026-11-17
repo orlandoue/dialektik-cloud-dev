@@ -328,3 +328,23 @@ test('rejecting needs a reason; reports reach the queue and a moderator hides or
     await rejectsWith(service.report(veteran, rude.id, 'spam', null), 404);
   } finally { delete process.env.DIALEKTIK_SCIENCE_MODERATORS; await database.destroy(); await pg.close(); }
 });
+
+test('lookup: a link without a DOI is never fetched, and a reader has an hourly limit', async () => {
+  const { pg, database, service } = await setup();
+  const fetched = [];
+  const inner = service.fetcher;
+  service.fetcher = async (url, init) => { fetched.push(url); return inner(url, init); };
+  try {
+    assert.deepEqual(await service.lookup(veteran, 'https://www.nature.com/articles/s41586-024-00001-x'),
+      { candidates: [], reason: 'no_doi_in_link' });
+    assert.deepEqual(fetched, []);
+    const byDoi = await service.lookup(veteran, 'https://doi.org/10.7326/M18-2101');
+    assert.equal(byDoi.candidates[0].doi, DOI);
+    assert.equal(byDoi.candidates[0].year, 2019);
+    const { ScienceService } = await import('../dist/science/science.service.js');
+    for (let i = 2; i < ScienceService.LOOKUPS_PER_HOUR; i++) await service.lookup(veteran, 'https://example.org/sin-doi');
+    await rejectsWith(service.lookup(veteran, 'https://example.org/sin-doi'), 429, 'PUBLIC_RATE_LIMITED');
+    // Another reader is not affected.
+    assert.equal((await service.lookup(other, 'https://example.org/sin-doi')).reason, 'no_doi_in_link');
+  } finally { await database.destroy(); await pg.close(); }
+});
