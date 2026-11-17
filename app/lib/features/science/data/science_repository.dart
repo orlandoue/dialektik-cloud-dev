@@ -12,6 +12,10 @@ abstract interface class ScienceRepository {
   /// Study by DOI, resolved and cached server side (Crossref, OpenAlex).
   Future<Study> study(String doi);
 
+  /// A DOI, a link or a title; up to three candidates from Crossref,
+  /// OpenAlex and arXiv.
+  Future<LookupResult> lookup(String query);
+
   Future<List<StoryComment>> storyComments(String eventId);
 
   /// Normal comments are published at once and can be reported.
