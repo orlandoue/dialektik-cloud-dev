@@ -7,7 +7,12 @@
 library;
 
 /// Peer review status of a study.
-enum StudyReview { peerReviewed, preprint }
+/// Peer review as the source states it. A repository (Zenodo, OSF…) or a
+/// source that says nothing is «No informado», never assumed.
+enum StudyReview { peerReviewed, preprint, notReported }
+
+/// How much of the publication date the source gives.
+enum DatePrecision { day, month, year }
 
 /// What a commenter says a study does to a claim. Always the author's opinion.
 enum StudyRelation {
@@ -52,6 +57,7 @@ final class Study {
     this.institution,
     this.journal,
     this.publishedAt,
+    this.publishedPrecision = DatePrecision.day,
     this.design,
     this.population,
     this.sampleSize,
@@ -73,13 +79,20 @@ final class Study {
   factory Study.fromJson(Map<String, dynamic> json) => Study(
     doi: json['doi'] as String,
     title: json['title'] as String,
-    review: json['review'] == 'preprint'
-        ? StudyReview.preprint
-        : StudyReview.peerReviewed,
+    review: switch (json['review']) {
+      'peer_reviewed' => StudyReview.peerReviewed,
+      'preprint' => StudyReview.preprint,
+      _ => StudyReview.notReported,
+    },
     authors: json['authors'] as String?,
     institution: json['institution'] as String?,
     journal: json['journal'] as String?,
     publishedAt: DateTime.tryParse(json['published_at'] as String? ?? ''),
+    publishedPrecision: switch (json['published_precision']) {
+      'year' => DatePrecision.year,
+      'month' => DatePrecision.month,
+      _ => DatePrecision.day,
+    },
     design: json['design'] as String?,
     population: json['population'] as String?,
     sampleSize: json['sample_size'] as int?,
@@ -112,6 +125,9 @@ final class Study {
   final String? institution;
   final String? journal;
   final DateTime? publishedAt;
+
+  /// Only the year (or year and month) when the source gives no more.
+  final DatePrecision publishedPrecision;
 
   /// Moderator-completed; null until reviewed.
   final String? design;
@@ -154,6 +170,7 @@ final class Study {
       institution: institution,
       journal: journal,
       publishedAt: publishedAt,
+      publishedPrecision: publishedPrecision,
       design: pick<String>('design', design),
       population: pick<String>('population', population),
       sampleSize: pick<int>('sample_size', sampleSize),
@@ -179,8 +196,11 @@ final class Study {
 
   bool get retracted => retractedFlag || retractedAt != null;
   Uri get doiUrl => Uri.parse('https://doi.org/$doi');
-  String get reviewLabel =>
-      review == StudyReview.preprint ? 'Preprint' : 'Revisado por pares';
+  String get reviewLabel => switch (review) {
+    StudyReview.peerReviewed => 'Revisado por pares',
+    StudyReview.preprint => 'Preprint',
+    StudyReview.notReported => 'Revisión no informada',
+  };
 }
 
 /// The claim a study comment answers: a literal quote from the story.

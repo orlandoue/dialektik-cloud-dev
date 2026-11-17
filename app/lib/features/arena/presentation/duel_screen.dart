@@ -190,8 +190,9 @@ class DuelOfTheDayCard extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
         ArenaCover(
+          // Neutral: a picture from one of the two outlets (with its logo)
+          // would side with it before the reader compares them.
           topic: arenaTopicOfEvent(duel.event),
-          videoId: arenaVideoIdOfEvent(duel.event),
           radius: 0,
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -457,24 +458,27 @@ class DuelListCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Wrap(
-            spacing: 8,
-            runSpacing: 6,
-            crossAxisAlignment: WrapCrossAlignment.center,
+          // The same line in every card; «Ya opinaste» only after a vote.
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              ArenaBadge(
-                label: voted ? 'Votaste' : 'Pendiente',
-                background: voted
-                    ? const Color(0xFFE2E8F0)
-                    : ArenaColors.violetSoft,
-                foreground: voted ? ArenaColors.ink : ArenaColors.violetDeep,
+              Expanded(
+                child: Text(
+                  '${arenaTopicOfEvent(duel.event).label} · '
+                  '${arenaDate(duel.contrast.confirmedAt)} · '
+                  '${arenaKindLabel(duel.kind)}',
+                  style: ArenaText.meta,
+                ),
               ),
-              Text(
-                '${arenaTopicOfEvent(duel.event).label} · '
-                '${arenaDate(duel.contrast.confirmedAt)} · '
-                '${arenaKindLabel(duel.kind)}',
-                style: ArenaText.meta,
-              ),
+              if (voted) ...<Widget>[
+                const SizedBox(width: 8),
+                const ArenaBadge(
+                  key: Key('arena-duel-voted'),
+                  label: 'Ya opinaste',
+                  background: SciColors.tagBg,
+                  foreground: SciColors.tagText,
+                ),
+              ],
             ],
           ),
           const SizedBox(height: 10),

@@ -224,7 +224,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byKey(const Key('arena-bottom-navigation')),
-        matching: find.text('Perfil'),
+        matching: find.text('Tú'),
       ),
     );
     await tester.pumpAndSettle();
@@ -249,6 +249,46 @@ void main() {
   });
 
   testWidgets(
+    'si Core rechaza uno de los registros del medio, se sigue igual y sin error',
+    (WidgetTester tester) async {
+      final ArenaServedCore core = ArenaServedCore()..followed.clear();
+      core.refusedFollows.add(terceraVideo.id);
+      await pumpArena(tester, core, initialTab: ArenaTab.medios);
+      final Finder card = find.byKey(
+        const ValueKey<String>('arena-media-$terceraId'),
+      );
+      await tester.tap(
+        find.descendant(of: card, matching: find.text('Seguir')),
+      );
+      await tester.pumpAndSettle();
+      expect(core.followed, <String>{terceraId});
+      expect(find.text('No se pudo actualizar el seguimiento.'), findsNothing);
+      expect(find.textContaining('medios · sigues 1'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'solo si Core rechaza todos los registros del medio se avisa el error',
+    (WidgetTester tester) async {
+      final ArenaServedCore core = ArenaServedCore()..followed.clear();
+      core.refusedFollows.addAll(<String>{terceraId, terceraVideo.id});
+      await pumpArena(tester, core, initialTab: ArenaTab.medios);
+      final Finder card = find.byKey(
+        const ValueKey<String>('arena-media-$terceraId'),
+      );
+      await tester.tap(
+        find.descendant(of: card, matching: find.text('Seguir')),
+      );
+      await tester.pumpAndSettle();
+      expect(core.followed, isEmpty);
+      expect(
+        find.text('No se pudo actualizar el seguimiento.'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
     'un medio registrado dos veces aparece una vez y se sigue completo',
     (WidgetTester tester) async {
       final ArenaServedCore core = ArenaServedCore()..followed.clear();
@@ -270,7 +310,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byKey(const Key('arena-bottom-navigation')),
-          matching: find.text('Perfil'),
+          matching: find.text('Tú'),
         ),
       );
       await tester.pumpAndSettle();

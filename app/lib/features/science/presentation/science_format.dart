@@ -22,6 +22,18 @@ String sciShortDate(DateTime moment) {
   return '${local.day} ${_months[local.month - 1]}';
 }
 
+/// A study's date with only what the source gives: «2026», «ene 2026» or
+/// «10 nov» (short) / «10 nov 2026» (long).
+String sciStudyDate(Study study, {bool long = false}) {
+  final DateTime? date = study.publishedAt;
+  if (date == null) return notInformed;
+  return switch (study.publishedPrecision) {
+    DatePrecision.year => '${date.year}',
+    DatePrecision.month => '${_months[date.month - 1]} ${date.year}',
+    DatePrecision.day => long ? sciLongDate(date) : sciShortDate(date),
+  };
+}
+
 /// «10 nov 2026».
 String sciLongDate(DateTime moment) =>
     '${sciShortDate(moment)} ${moment.toLocal().year}';
@@ -73,7 +85,8 @@ String sampleLabel(int? n) {
 /// Tags of a study card: status, design, population · n, place.
 List<String> studyTagLabels(Study study) => <String>[
   if (study.retracted) 'Retractado',
-  study.reviewLabel,
+  // No tag when the source does not say: never assume a review.
+  if (study.review != StudyReview.notReported) study.reviewLabel,
   ?study.design,
   if (study.population != null)
     study.sampleSize == null

@@ -34,7 +34,7 @@ List<(String, List<StudyRow>)> studyLabelSections(
         label: 'Publicado',
         value: study.publishedAt == null
             ? null
-            : sciLongDate(study.publishedAt!),
+            : sciStudyDate(study, long: true),
         tabular: false,
       ),
       (label: 'DOI', value: study.doi, tabular: true),
@@ -66,9 +66,11 @@ List<(String, List<StudyRow>)> studyLabelSections(
     <StudyRow>[
       (
         label: 'Revisión por pares',
-        value: study.review == StudyReview.peerReviewed
-            ? 'Sí'
-            : 'No (preprint)',
+        value: switch (study.review) {
+          StudyReview.peerReviewed => 'Sí',
+          StudyReview.preprint => 'No (preprint)',
+          StudyReview.notReported => null,
+        },
         tabular: false,
       ),
       (label: 'Correcciones', value: study.corrections, tabular: false),
@@ -246,7 +248,11 @@ class StudyAttachment extends StatelessWidget {
       ('Población', study.population),
       (
         'Revisión',
-        study.review == StudyReview.peerReviewed ? 'Por pares' : 'Preprint',
+        switch (study.review) {
+          StudyReview.peerReviewed => 'Por pares',
+          StudyReview.preprint => 'Preprint',
+          StudyReview.notReported => null,
+        },
       ),
     ];
     Widget cell((String, String?) item, {required bool underline}) {

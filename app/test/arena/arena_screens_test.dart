@@ -50,10 +50,10 @@ void main() {
     final Finder bar = find.byKey(const Key('arena-bottom-navigation'));
     for (final String label in <String>[
       'Inicio',
-      'VS',
-      'Historias',
+      'Duelos',
+      'En desarrollo',
       'Medios',
-      'Perfil',
+      'Tú',
     ]) {
       expect(
         find.descendant(of: bar, matching: find.text(label)),
@@ -63,7 +63,7 @@ void main() {
     await tester.tap(find.descendant(of: bar, matching: find.text('Medios')));
     await tester.pumpAndSettle();
     expect(find.textContaining('medios · sigues 1'), findsOneWidget);
-    await tester.tap(find.descendant(of: bar, matching: find.text('Perfil')));
+    await tester.tap(find.descendant(of: bar, matching: find.text('Tú')));
     await tester.pumpAndSettle();
     expect(find.text('Elegir mis medios'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -128,7 +128,13 @@ void main() {
       expect(find.byTooltip('Abrir duelo completo'), findsNothing);
 
       await reveal(tester, find.text(storyTitle), 'arena-coliseo-scroll');
-      expect(find.text('Historias en desarrollo'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ArenaSectionTitle),
+          matching: find.text('En desarrollo'),
+        ),
+        findsOneWidget,
+      );
       expect(find.textContaining('3 medios · '), findsOneWidget);
 
       final Finder video = find.text(
@@ -188,7 +194,8 @@ void main() {
     );
     expect(find.text('VS · Duelos'), findsOneWidget);
     // The list says whether the reader voted and previews both quotes.
-    expect(find.text('Pendiente'), findsOneWidget);
+    // Nothing before a vote: no «Pendiente», no «Ya opinaste».
+    expect(find.text('Pendiente'), findsNothing);
     expect(find.textContaining('Distinto enfoque'), findsOneWidget);
     await tester.tap(find.text(duelTitle));
     await tester.pumpAndSettle();
@@ -641,7 +648,7 @@ void main() {
       // Trends live in Historias: «Más cubiertas» puts the 3-outlet story first.
       final Finder bar = find.byKey(const Key('arena-bottom-navigation'));
       await tester.tap(
-        find.descendant(of: bar, matching: find.text('Historias')),
+        find.descendant(of: bar, matching: find.text('En desarrollo')),
       );
       await tester.pumpAndSettle();
       await tester.tap(

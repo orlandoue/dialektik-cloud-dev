@@ -20,7 +20,7 @@ Future<void> _openVaccineComments(WidgetTester tester) async {
   await tester.tap(
     find.descendant(
       of: find.byKey(const Key('arena-bottom-navigation')),
-      matching: find.text('Historias'),
+      matching: find.text('En desarrollo'),
     ),
   );
   await tester.pumpAndSettle();
@@ -117,11 +117,10 @@ void main() {
     );
     await pumpArena(tester, core);
     expect(find.byKey(const Key('sci-mode-button')), findsNothing);
-    expect(find.byKey(const Key('sci-bottom-bar')), findsNothing);
     await tester.tap(
       find.descendant(
         of: find.byKey(const Key('arena-bottom-navigation')),
-        matching: find.text('Historias'),
+        matching: find.text('En desarrollo'),
       ),
     );
     await tester.pumpAndSettle();
@@ -165,14 +164,14 @@ void main() {
     for (final String tab in <String>[
       'Inicio',
       'Duelos',
-      'Historias',
-      'Fuentes',
+      'En desarrollo',
+      'Medios',
       'Tú',
     ]) {
-      expect(find.byKey(ValueKey<String>('sci-tab-$tab')), findsOneWidget);
+      expect(find.byKey(ValueKey<String>('arena-tab-$tab')), findsOneWidget);
     }
     expect(
-      tester.getSize(find.byKey(const Key('sci-bottom-bar'))).height,
+      tester.getSize(find.byKey(const Key('arena-bottom-navigation'))).height,
       greaterThanOrEqualTo(68),
     );
     expect(

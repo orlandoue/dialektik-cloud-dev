@@ -330,8 +330,14 @@ class ArenaFakeCore extends Fake
   @override
   Future<Set<String>> listFollowedSources() async => Set<String>.of(followed);
 
+  /// Sources Core refuses to follow (rights not approved).
+  final Set<String> refusedFollows = <String>{};
+
   @override
   Future<void> setFollowing(String sourceId, {required bool following}) async {
+    if (following && refusedFollows.contains(sourceId)) {
+      throw StateError('404 Source not found');
+    }
     if (following) {
       followed.add(sourceId);
     } else {

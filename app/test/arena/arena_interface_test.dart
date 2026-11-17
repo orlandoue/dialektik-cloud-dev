@@ -76,7 +76,10 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpArena(tester, ArenaFakeCore());
-    final Finder stories = find.text('Historias en desarrollo');
+    final Finder stories = find.descendant(
+      of: find.byType(ArenaSectionTitle),
+      matching: find.text('En desarrollo'),
+    );
     await reveal(tester, stories, 'arena-coliseo-scroll');
     expect(
       find.ancestor(of: stories, matching: find.byType(ArenaSectionTitle)),

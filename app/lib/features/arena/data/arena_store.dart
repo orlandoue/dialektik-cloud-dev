@@ -392,10 +392,27 @@ final class ArenaStore extends ChangeNotifier {
     List<LiveSourceDto> brand, {
     required bool value,
   }) async {
+    // One outlet can be registered several times (web, YouTube…). Core may
+    // refuse one of them (rights not approved yet): the outlet counts as
+    // followed when at least one record is, and only a total failure is
+    // reported.
+    Object? failure;
+    StackTrace? trace;
+    var changed = 0;
+    var tried = 0;
     for (final LiveSourceDto source in brand) {
-      if (followed.contains(source.id) != value) {
+      if (followed.contains(source.id) == value) continue;
+      tried += 1;
+      try {
         await setFollowing(source.id, value: value);
+        changed += 1;
+      } on Object catch (error, stack) {
+        failure = error;
+        trace = stack;
       }
+    }
+    if (tried > 0 && changed == 0 && failure != null) {
+      Error.throwWithStackTrace(failure, trace!);
     }
   }
 

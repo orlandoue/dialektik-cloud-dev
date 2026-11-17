@@ -21,7 +21,7 @@ Future<void> _openVaccineComments(WidgetTester tester) async {
   await tester.tap(
     find.descendant(
       of: find.byKey(const Key('arena-bottom-navigation')),
-      matching: find.text('Historias'),
+      matching: find.text('En desarrollo'),
     ),
   );
   await tester.pumpAndSettle();
