@@ -133,40 +133,50 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
             padding: const EdgeInsets.fromLTRB(20, 14, 16, 6),
             child: Row(
               children: <Widget>[
+                // The logo shrinks first: the mode keeps its whole name.
                 Expanded(
-                  child: Row(
-                    children: <Widget>[
-                      const Flexible(
-                        child: FittedBox(
-                          fit: BoxFit.scaleDown,
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            'Dialektik',
-                            style: TextStyle(
-                              fontFamily: SciText.serif,
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: SciColors.ink,
+                  child: LayoutBuilder(
+                    builder: (BuildContext context, BoxConstraints box) => Row(
+                      children: <Widget>[
+                        const Flexible(
+                          child: FittedBox(
+                            fit: BoxFit.scaleDown,
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Dialektik',
+                              style: TextStyle(
+                                fontFamily: SciText.serif,
+                                fontSize: 24,
+                                fontWeight: FontWeight.w700,
+                                color: SciColors.ink,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      if (store.scienceEnabled) ...<Widget>[
-                        const SizedBox(width: 10),
-                        Flexible(
-                          child: ModeButton(
-                            mode: store.mode,
-                            onTap: () async {
-                              final ArenaMode? chosen = await showModeSheet(
-                                context,
-                                store.mode,
-                              );
-                              if (chosen != null) store.setMode(chosen);
-                            },
+                        if (store.scienceEnabled) ...<Widget>[
+                          const SizedBox(width: 10),
+                          ConstrainedBox(
+                            constraints: BoxConstraints(
+                              maxWidth: box.maxWidth * 0.66,
+                            ),
+                            child: FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: ModeButton(
+                                mode: store.mode,
+                                onTap: () async {
+                                  final ArenaMode? chosen = await showModeSheet(
+                                    context,
+                                    store.mode,
+                                  );
+                                  if (chosen != null) store.setMode(chosen);
+                                },
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
                 ),
                 IconButton(
@@ -280,7 +290,9 @@ class _Coliseo extends StatelessWidget {
               else
                 ArenaMessage(
                   'Hoy no hay duelos nuevos.',
-                  actionLabel: onOpenStories == null ? null : 'Ver historias',
+                  actionLabel: onOpenStories == null
+                      ? null
+                      : 'Ver En desarrollo',
                   onAction: onOpenStories,
                 ),
               const SizedBox(height: 16),
@@ -291,7 +303,7 @@ class _Coliseo extends StatelessWidget {
                 preview: true,
               ),
               if (developing.isNotEmpty) ...<Widget>[
-                const ArenaSectionTitle('Historias en desarrollo'),
+                const ArenaSectionTitle('En desarrollo'),
                 for (final EventCardDto event in developing.take(storiesInHome))
                   DevelopingEventCard(event: event, store: store),
               ],
@@ -332,7 +344,7 @@ class _Coliseo extends StatelessWidget {
                         ),
                         onPressed: onOpenStories,
                         child: const Text(
-                          'Ver todas las historias →',
+                          'Ver todo En desarrollo →',
                           style: TextStyle(fontWeight: FontWeight.w700),
                         ),
                       ),
@@ -1030,7 +1042,7 @@ class _FollowingFeedState extends State<_FollowingFeed> {
             )
           else ...<Widget>[
             if (followedStories.isNotEmpty) ...<Widget>[
-              const ArenaSectionTitle('Historias que sigues'),
+              const ArenaSectionTitle('Lo que sigues'),
               for (final EventCardDto event in followedStories)
                 DevelopingEventCard(event: event, store: store),
             ],
@@ -1175,7 +1187,7 @@ class _AlertsSheet extends StatelessWidget {
               stories.followedIds.isEmpty
                   ? 'Sigue un acontecimiento y aquí verás cuando un medio '
                         'nuevo publique sobre él.'
-                  : 'Sin novedades en las historias que sigues.',
+                  : 'Sin novedades en lo que sigues.',
               style: ArenaText.body,
             ),
             if (suggestions.isNotEmpty) ...<Widget>[
@@ -1203,7 +1215,7 @@ class _AlertsSheet extends StatelessWidget {
                   Navigator.of(context).pop();
                   onOpenStories!();
                 },
-                child: const Text('Ver historias en desarrollo'),
+                child: const Text('Ver En desarrollo'),
               ),
             ],
           ],

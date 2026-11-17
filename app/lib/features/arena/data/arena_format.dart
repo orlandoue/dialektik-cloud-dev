@@ -161,7 +161,8 @@ final Map<ArenaTopic, RegExp> _topicPatterns = <ArenaTopic, RegExp>{
     'polític|politic|gobierno|presidente|ministr|congreso|diputad|senado|'
     'elecci|alcald|subsecretar|partido republican|oposición|oposicion|'
     'comisión|comision|acusación constitucional|acusacion constitucional|'
-    'rabat|oficialismo|parlamentari',
+    'rabat|oficialismo|parlamentari|encuesta|sondeo|cadem|aprobación|'
+    'aprobacion|desaprobación|desaprobacion|gabinete|la moneda|mandatari',
   ),
   ArenaTopic.justicia: RegExp(
     'justicia|judicial|tribunal|corte|juez|jueza|fiscal|condena|querella',
@@ -197,7 +198,10 @@ final RegExp _accusationAbbreviation = RegExp(r'\bAC\b');
 
 ArenaTopic arenaTopicOfText(String text, {String category = ''}) {
   final String normalized = category.toLowerCase();
-  for (final ArenaTopic topic in ArenaTopic.values) {
+  // «Otros» from Core is no answer: the headline may still say the topic.
+  for (final ArenaTopic topic in ArenaTopic.values.where(
+    (ArenaTopic t) => t != ArenaTopic.otros,
+  )) {
     if (topic.serverKey == normalized ||
         topic.label.toLowerCase() == normalized) {
       return topic;

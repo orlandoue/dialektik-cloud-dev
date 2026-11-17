@@ -56,17 +56,14 @@ class ModeButton extends StatelessWidget {
               children: <Widget>[
                 Icon(modeIcon(mode), size: 18, color: SciColors.primary),
                 const SizedBox(width: 6),
-                Flexible(
-                  child: Text(
-                    modeLabel(mode),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontFamily: SciText.sans,
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: SciColors.ink,
-                    ),
+                Text(
+                  modeLabel(mode),
+                  maxLines: 1,
+                  style: const TextStyle(
+                    fontFamily: SciText.sans,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: SciColors.ink,
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -402,10 +399,11 @@ class ReactionButton extends StatelessWidget {
   );
 }
 
-/// Bottom bar of the Science mode: Inicio · Duelos · Historias · Fuentes · Tú.
-/// With very large text the labels hide and stay in the semantics.
-class SciBottomBar extends StatelessWidget {
-  const SciBottomBar({
+/// The app's bottom bar, the same in General and Ciencia:
+/// Inicio · Duelos · En desarrollo · Medios · Tú. Labels are capped at 1.3×
+/// and shrink to fit, so they stay visible at 200 %.
+class ArenaBottomBar extends StatelessWidget {
+  const ArenaBottomBar({
     required this.current,
     required this.onSelected,
     super.key,
@@ -418,20 +416,17 @@ class SciBottomBar extends StatelessWidget {
       <(IconData, IconData, String)>[
         (Icons.home_outlined, Icons.home_rounded, 'Inicio'),
         (Icons.compare_arrows_rounded, Icons.compare_arrows_rounded, 'Duelos'),
-        (
-          Icons.chat_bubble_outline_rounded,
-          Icons.chat_bubble_rounded,
-          'Historias',
-        ),
-        (Icons.cell_tower_rounded, Icons.cell_tower_rounded, 'Fuentes'),
+        (Icons.timeline_rounded, Icons.timeline_rounded, 'En desarrollo'),
+        (Icons.cell_tower_rounded, Icons.cell_tower_rounded, 'Medios'),
         (Icons.person_outline_rounded, Icons.person_rounded, 'Tú'),
       ];
 
   @override
   Widget build(BuildContext context) {
-    final bool showLabels = MediaQuery.textScalerOf(context).scale(10) < 15;
+    // Labels always show: capped at 1.3× and shrunk to fit, even at 200 %.
+    const bool showLabels = true;
     return Material(
-      key: const Key('sci-bottom-bar'),
+      key: const Key('arena-bottom-navigation'),
       color: SciColors.surface,
       child: SafeArea(
         top: false,
@@ -451,7 +446,7 @@ class SciBottomBar extends StatelessWidget {
                       label: items[i].$3,
                       excludeSemantics: true,
                       child: InkWell(
-                        key: ValueKey<String>('sci-tab-${items[i].$3}'),
+                        key: ValueKey<String>('arena-tab-${items[i].$3}'),
                         onTap: () => onSelected(i),
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -467,19 +462,28 @@ class SciBottomBar extends StatelessWidget {
                               const SizedBox(height: 3),
                               MediaQuery.withClampedTextScaling(
                                 maxScaleFactor: 1.3,
-                                child: Text(
-                                  items[i].$3,
-                                  maxLines: 1,
-                                  style: TextStyle(
-                                    fontFamily: SciText.sans,
-                                    fontSize: 11,
-                                    height: 14 / 11,
-                                    fontWeight: i == current
-                                        ? FontWeight.w600
-                                        : FontWeight.w500,
-                                    color: i == current
-                                        ? SciColors.primary
-                                        : SciColors.inkSecondary,
+                                // «En desarrollo» shrinks instead of cutting.
+                                child: FittedBox(
+                                  fit: BoxFit.scaleDown,
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 2,
+                                    ),
+                                    child: Text(
+                                      items[i].$3,
+                                      maxLines: 1,
+                                      style: TextStyle(
+                                        fontFamily: SciText.sans,
+                                        fontSize: 11,
+                                        height: 14 / 11,
+                                        fontWeight: i == current
+                                            ? FontWeight.w600
+                                            : FontWeight.w500,
+                                        color: i == current
+                                            ? SciColors.primary
+                                            : SciColors.inkSecondary,
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),

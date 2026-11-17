@@ -196,7 +196,7 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
               padding: const EdgeInsets.only(bottom: 24),
               children: <Widget>[
                 const _TabHeader(
-                  title: 'Historias',
+                  title: 'En desarrollo',
                   subtitle:
                       'Cada acontecimiento conserva su cronología y lo que '
                       'dijo cada medio.',
@@ -244,7 +244,7 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                         )
                       else if (store.error != null && store.events.isEmpty)
                         ArenaMessage(
-                          'No se pudieron cargar las historias.',
+                          'No se pudo cargar En desarrollo.',
                           actionLabel: 'Reintentar',
                           onAction: () => unawaited(store.load(refresh: true)),
                         )
@@ -736,14 +736,14 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                       onPressed: widget.onConfigureRadar,
                     ),
                     ArenaSectionTitle(
-                      'Historias que sigues · ${followedStories.length}',
+                      'Lo que sigues · ${followedStories.length}',
                     ),
                     if (followedStories.isEmpty)
                       _EmptySection(
                         text:
                             'Sigue un acontecimiento para guardarlo aquí y '
                             'ver sus novedades.',
-                        actionLabel: 'Explorar historias',
+                        actionLabel: 'Ver En desarrollo',
                         onAction: widget.onOpenStories,
                       ),
                     for (final EventCardDto event in followedStories)

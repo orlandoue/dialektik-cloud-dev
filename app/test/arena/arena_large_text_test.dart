@@ -207,11 +207,11 @@ void main() {
         await tester.tap(find.byTooltip('Volver'));
         await tester.pumpAndSettle();
 
-        await tapTab(tester, 'Perfil');
+        await tapTab(tester, 'Tú');
         await scrollThrough(tester, 'arena-profile-scroll');
         await tapTab(tester, 'Inicio');
-        await tapTab(tester, 'VS');
-        await tapTab(tester, 'Historias');
+        await tapTab(tester, 'Duelos');
+        await tapTab(tester, 'En desarrollo');
       },
     );
   }

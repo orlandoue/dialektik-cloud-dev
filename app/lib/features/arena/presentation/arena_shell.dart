@@ -185,113 +185,11 @@ class _ArenaShellState extends State<ArenaShell> {
             ),
         ],
       ),
-      bottomNavigationBar: ListenableBuilder(
-        listenable: _store,
-        builder: (BuildContext context, _) => _store.mode == ArenaMode.ciencia
-            ? SciBottomBar(
-                current: _tab.index,
-                onSelected: (int index) => _select(ArenaTab.values[index]),
-              )
-            : DecoratedBox(
-                decoration: const BoxDecoration(
-                  border: Border(top: BorderSide(color: ArenaColors.border)),
-                ),
-                // Labels stay on one line: large system text is capped in the bar
-                // only, never in the content above it.
-                child: MediaQuery.withClampedTextScaling(
-                  maxScaleFactor: 1.15,
-                  child: BottomNavigationBar(
-                    key: const Key('arena-bottom-navigation'),
-                    type: BottomNavigationBarType.fixed,
-                    backgroundColor: ArenaColors.card,
-                    elevation: 0,
-                    currentIndex: _tab.index,
-                    onTap: (int index) => _select(ArenaTab.values[index]),
-                    selectedItemColor: ArenaColors.violet,
-                    unselectedItemColor: ArenaColors.muted,
-                    selectedFontSize: 12,
-                    unselectedFontSize: 12,
-                    selectedLabelStyle: const TextStyle(
-                      fontWeight: FontWeight.w700,
-                    ),
-                    items: const <BottomNavigationBarItem>[
-                      BottomNavigationBarItem(
-                        icon: Icon(Icons.home_outlined),
-                        activeIcon: Icon(Icons.home),
-                        label: 'Inicio',
-                        tooltip: 'Inicio',
-                      ),
-                      BottomNavigationBarItem(
-                        icon: _VsIcon(),
-                        label: 'VS',
-                        tooltip: 'VS',
-                      ),
-                      BottomNavigationBarItem(
-                        icon: Icon(Icons.auto_stories_outlined),
-                        activeIcon: Icon(Icons.auto_stories),
-                        label: 'Historias',
-                        tooltip: 'Historias',
-                      ),
-                      BottomNavigationBarItem(
-                        icon: Icon(Icons.cell_tower),
-                        label: 'Medios',
-                        tooltip: 'Medios',
-                      ),
-                      BottomNavigationBarItem(
-                        icon: Icon(Icons.person_outline),
-                        activeIcon: Icon(Icons.person),
-                        label: 'Perfil',
-                        tooltip: 'Perfil',
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+      // One bar for every mode: same names, icons and order.
+      bottomNavigationBar: ArenaBottomBar(
+        current: _tab.index,
+        onSelected: (int index) => _select(ArenaTab.values[index]),
       ),
     ),
   );
-}
-
-/// Crossed-swords glyph for the duel tab, tinted like the other icons.
-class _VsIcon extends StatelessWidget {
-  const _VsIcon();
-
-  @override
-  Widget build(BuildContext context) {
-    final IconThemeData theme = IconTheme.of(context);
-    final double size = theme.size ?? 24;
-    return SizedBox.square(
-      dimension: size,
-      child: CustomPaint(
-        painter: _SwordsPainter(theme.color ?? ArenaColors.muted),
-      ),
-    );
-  }
-}
-
-class _SwordsPainter extends CustomPainter {
-  _SwordsPainter(this.color);
-
-  final Color color;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final double s = size.shortestSide;
-    final Paint blade = Paint()
-      ..color = color
-      ..strokeWidth = s * 0.09
-      ..strokeCap = StrokeCap.round
-      ..style = PaintingStyle.stroke;
-    for (final bool mirrored in <bool>[false, true]) {
-      Offset at(double x, double y) =>
-          Offset((mirrored ? 1 - x : x) * s, y * s);
-      canvas
-        ..drawLine(at(0.84, 0.12), at(0.28, 0.68), blade)
-        ..drawLine(at(0.16, 0.56), at(0.40, 0.80), blade)
-        ..drawLine(at(0.24, 0.72), at(0.12, 0.88), blade);
-    }
-  }
-
-  @override
-  bool shouldRepaint(_SwordsPainter oldDelegate) => oldDelegate.color != color;
 }

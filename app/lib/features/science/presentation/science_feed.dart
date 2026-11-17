@@ -158,7 +158,7 @@ class StudyCard extends StatelessWidget {
     final List<String> origin = <String>[
       ?study.institution,
       ?study.journal,
-      if (study.publishedAt != null) sciShortDate(study.publishedAt!),
+      if (study.publishedAt != null) sciStudyDate(study),
     ];
     final String meta =
         '${origin.isEmpty ? notInformed : origin.join(' · ')}'
