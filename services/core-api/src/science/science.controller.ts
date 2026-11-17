@@ -74,6 +74,15 @@ export class ScienceController {
     return this.science.listStudies(chosen);
   }
 
+  /** C2: a DOI, a link or a title; up to three candidates. */
+  @Get('science/lookup')
+  async lookup(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Query('q') q?: string) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    if (typeof q !== 'string' || q.trim().length < 3 || q.length > 500) throw new BadRequestException('Write a DOI, a link or a title.');
+    void reply.header('cache-control', 'private, no-store');
+    return this.science.lookup(this.#reader(request), q);
+  }
+
   /** DOIs contain slashes; the app sends them URL-encoded as one segment. */
   @Get('science/studies/:doi')
   async study(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Param('doi') doi: string) {

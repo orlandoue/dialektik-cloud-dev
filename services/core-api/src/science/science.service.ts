@@ -21,6 +21,7 @@ import {
   isLiteralFragment, resolveStudy, resolverOptionsFromEnv, type FetchLike, type ResolvedStudy, type ScienceSource,
 } from './study-resolver.js';
 import { ScienceDuplicateError } from './science-http.error.js';
+import { classifyLookup, resolveArxiv, searchByTitle, type LookupCandidate } from './study-lookup.js';
 
 /** Same rule as the app: 2-30 letters, digits, spaces or `._-`. */
 export function sanitizeAlias(raw: string | null | undefined): string | null {
@@ -312,7 +313,10 @@ export class ScienceService implements OnModuleInit {
       const fresh = cached !== null && (await sql<{ fresh: boolean }>`select resolved_at > now() - make_interval(days => ${REFRESH_AFTER_DAYS}) as fresh
         from public.science_studies where doi = ${doi}`.execute(this.db.database)).rows[0]?.fresh === true;
       if (cached !== null && fresh) return cached;
-      const resolved = await resolveStudy(doi, this.fetcher, { ...resolverOptionsFromEnv(), onCall: (source, ok) => this.recordCall(source, ok) });
+      const options = { ...resolverOptionsFromEnv(), onCall: (source: ScienceSource, ok: boolean) => this.recordCall(source, ok) };
+      // arXiv preprints are not in Crossref; their own API describes them.
+      const resolved = await resolveStudy(doi, this.fetcher, options)
+        ?? (doi.startsWith('10.48550/arxiv.') ? await resolveArxiv(doi, this.fetcher, options) : null);
       await this.flushUsage();
       if (resolved === null) {
         if (cached !== null) return cached;
@@ -345,6 +349,48 @@ export class ScienceService implements OnModuleInit {
         retracted_at=coalesce(excluded.retracted_at, public.science_studies.retracted_at),
         made_in_chile=public.science_studies.made_in_chile or excluded.made_in_chile,
         resolved_at=now()`.execute(this.db.database);
+  }
+
+  // ---- Lookup (C2: DOI, link or title) -----------------------------------
+
+  /** Searches per reader and hour; each title search calls three APIs. */
+  static readonly LOOKUPS_PER_HOUR = 30;
+  #lookups = new Map<string, number[]>();
+
+  #allowLookup(userId: string, now = Date.now()): boolean {
+    const recent = (this.#lookups.get(userId) ?? []).filter((t) => now - t < 3_600_000);
+    if (recent.length >= ScienceService.LOOKUPS_PER_HOUR) {
+      this.#lookups.set(userId, recent);
+      return false;
+    }
+    recent.push(now);
+    this.#lookups.set(userId, recent);
+    return true;
+  }
+
+  /**
+   * A DOI or a link that carries one (arXiv included) resolves to that
+   * study; a title returns up to three candidates. A link without a DOI is
+   * never downloaded: the reader is asked for the title.
+   */
+  async lookup(userId: string, input: string): Promise<{ candidates: LookupCandidate[]; reason: 'no_doi_in_link' | null }> {
+    if (!this.#allowLookup(userId)) throw new HttpException({ code: 'PUBLIC_RATE_LIMITED' }, HttpStatus.TOO_MANY_REQUESTS);
+    const query = classifyLookup(input);
+    if (query.kind === 'link_without_doi') return { candidates: [], reason: 'no_doi_in_link' };
+    if (query.kind === 'doi') {
+      try {
+        const study = await this.study(query.doi);
+        return { candidates: [{ doi: study.doi, title: study.title, authors: study.authors, journal: study.journal,
+          year: study.published_at === null ? null : Number(study.published_at.slice(0, 4)), review: study.review }], reason: null };
+      } catch (error) {
+        if (error instanceof NotFoundException) return { candidates: [], reason: null };
+        throw error;
+      }
+    }
+    const candidates = await searchByTitle(query.text, this.fetcher,
+      { ...resolverOptionsFromEnv(), onCall: (source: ScienceSource, ok: boolean) => this.recordCall(source, ok) });
+    await this.flushUsage();
+    return { candidates, reason: null };
   }
 
   // ---- Comments ------------------------------------------------------------
