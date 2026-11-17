@@ -8,7 +8,8 @@
 export interface ResolvedStudy {
   doi: string;
   title: string;
-  review: 'peer_reviewed' | 'preprint';
+  review: StudyReview;
+  published_precision: DatePrecision;
   authors: string | null;
   institution: string | null;
   journal: string | null;
@@ -21,6 +22,43 @@ export interface ResolvedStudy {
   retracted: boolean;
   retracted_at: string | null;
   made_in_chile: boolean;
+}
+
+export type StudyReview = 'peer_reviewed' | 'preprint' | 'not_reported';
+export type DatePrecision = 'day' | 'month' | 'year';
+
+/** DOI prefixes of repositories (Zenodo, figshare, OSF): no review implied. */
+const REPOSITORY_PREFIXES = ['10.5281/', '10.6084/', '10.31219/', '10.17605/'];
+
+/**
+ * Peer review only when a source says the work is a journal article in a
+ * journal; a preprint when a source says so; otherwise «not_reported».
+ * A repository (Zenodo…) never implies review.
+ */
+export function reviewOf(input: {
+  doi: string; crossrefType?: string | null; crossrefSubtype?: string | null;
+  openalexType?: string | null; openalexSourceType?: string | null;
+}): StudyReview {
+  if (input.crossrefSubtype === 'preprint' || input.crossrefType === 'posted-content' || input.openalexType === 'preprint') {
+    return 'preprint';
+  }
+  if (REPOSITORY_PREFIXES.some((p) => input.doi.startsWith(p)) || input.openalexSourceType === 'repository') {
+    return 'not_reported';
+  }
+  if (input.crossrefType === 'journal-article' || input.openalexSourceType === 'journal') return 'peer_reviewed';
+  return 'not_reported';
+}
+
+/** Crossref date-parts say how much of the date is known. */
+export function precisionOf(value: unknown): DatePrecision | null {
+  const parts = (value as { 'date-parts'?: unknown[][] } | undefined)?.['date-parts']?.[0];
+  if (!Array.isArray(parts) || typeof parts[0] !== 'number') return null;
+  return parts.length >= 3 ? 'day' : parts.length === 2 ? 'month' : 'year';
+}
+
+/** OpenAlex fills unknown months and days with 1 January. */
+export function openAlexPrecision(date: string | null): DatePrecision {
+  return date !== null && date.endsWith('-01-01') ? 'year' : 'day';
 }
 
 export type FetchLike = (url: string, init?: { headers?: Record<string, string>; signal?: AbortSignal }) =>
@@ -165,6 +203,7 @@ export async function resolveStudy(doi: string, fetcher: FetchLike = fetch as un
   const crossrefSubtype = text(crossref?.subtype);
   const openalexType = text(openalex?.type);
   const preprint = crossrefSubtype === 'preprint' || crossrefType === 'posted-content' || openalexType === 'preprint';
+  const openalexSourceType = text((openalex?.primary_location as { source?: { type?: unknown } } | undefined)?.source?.type);
 
   const authorships = Array.isArray(openalex?.authorships) ? (openalex!.authorships as Record<string, unknown>[]) : [];
   const institutions = authorships.flatMap((a) => (Array.isArray(a.institutions) ? (a.institutions as Record<string, unknown>[]) : []));
@@ -180,11 +219,13 @@ export async function resolveStudy(doi: string, fetcher: FetchLike = fetch as un
   return {
     doi,
     title,
-    review: preprint ? 'preprint' : 'peer_reviewed',
+    review: reviewOf({ doi, crossrefType, crossrefSubtype, openalexType, openalexSourceType }),
     authors: authorsOf(crossref),
     institution: text(institutions[0]?.display_name),
     journal: first(crossref?.['container-title']) ?? text(primarySource?.display_name) ?? (preprint ? first(crossref?.institution) : null),
     published_at: dateParts(crossref?.published) ?? dateParts(crossref?.issued) ?? text(openalex?.publication_date),
+    published_precision: precisionOf(crossref?.published) ?? precisionOf(crossref?.issued)
+      ?? openAlexPrecision(text(openalex?.publication_date)),
     ...(() => {
       const fromCrossref = stripJats(crossref?.abstract);
       if (fromCrossref !== null) return { abstract: fromCrossref, abstract_source: 'Crossref' };

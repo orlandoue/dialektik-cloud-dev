@@ -3,7 +3,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import { parseUlidParameter } from '../public-api/public-api.validation.js';
 import { PublicRateLimitService, rateLimitClient } from '../public-api/public-rate-limit.service.js';
-import { ScienceService, type ReportReason, type StudyFilter, type StudyModeration, type StudyRelation } from './science.service.js';
+import {
+  ScienceService, STUDY_DESIGNS, type ReportReason, type StudyFilter, type StudyModeration, type StudyRelation,
+} from './science.service.js';
 import { normalizeDoi } from './study-resolver.js';
 
 const FILTERS = new Set<StudyFilter>(['conectados', 'chile', 'temas', 'recientes']);
@@ -88,6 +90,14 @@ export class ScienceController {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     void reply.header('cache-control', 'private, no-store');
     return this.science.commentsCitingStudy(this.#reader(request), doiParameter(doi));
+  }
+
+  /** «Tus comentarios» in Perfil: the reader's comments and their state. */
+  @Get('science/my-comments')
+  async myComments(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    void reply.header('cache-control', 'private, no-store');
+    return this.science.myComments(this.#reader(request));
   }
 
   @Get('stories/:id/comments')
@@ -186,6 +196,17 @@ export class ScienceController {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     const input = record(body, 'Invalid study fields.');
     const fields: StudyModeration = {};
+    // «Tipo de estudio» is one of a fixed list; «Revisión» one of three.
+    if (Object.hasOwn(input, 'design') && input.design !== null
+      && !(STUDY_DESIGNS as readonly unknown[]).includes(input.design)) {
+      throw new BadRequestException('Invalid design.');
+    }
+    if (Object.hasOwn(input, 'review')) {
+      if (input.review !== 'peer_reviewed' && input.review !== 'preprint' && input.review !== 'not_reported') {
+        throw new BadRequestException('Invalid review.');
+      }
+      fields.review = input.review;
+    }
     for (const key of ['design', 'population', 'follow_up', 'funding', 'conflicts', 'access', 'corrections'] as const) {
       if (!Object.hasOwn(input, key)) continue;
       const value = input[key];

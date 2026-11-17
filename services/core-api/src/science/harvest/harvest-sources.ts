@@ -1,7 +1,8 @@
 import { XMLParser } from 'fast-xml-parser';
 
 import {
-  abstractFromInvertedIndex, authorsOf, dateParts, normalizeDoi, stripJats, type FetchLike, type ResolvedStudy,
+  abstractFromInvertedIndex, authorsOf, dateParts, normalizeDoi, openAlexPrecision, precisionOf, reviewOf, stripJats,
+  type FetchLike, type ResolvedStudy,
 } from '../study-resolver.js';
 
 /**
@@ -133,13 +134,16 @@ export function parseOpenAlexWork(work: Record<string, unknown>): HarvestedStudy
   if (doi === null || title === null) return null;
   const authorships = Array.isArray(work.authorships) ? (work.authorships as Record<string, unknown>[]) : [];
   const institutions = authorships.flatMap((a) => (Array.isArray(a.institutions) ? (a.institutions as Record<string, unknown>[]) : []));
-  const source = (work.primary_location as { source?: { display_name?: unknown } } | undefined)?.source;
+  const source = (work.primary_location as { source?: { display_name?: unknown; type?: unknown } } | undefined)?.source;
   const openAccess = work.open_access as { is_oa?: unknown } | undefined;
   const abstract = clip(abstractFromInvertedIndex(work.abstract_inverted_index), 12000);
   return {
     doi,
     title,
-    review: work.type === 'preprint' ? 'preprint' : 'peer_reviewed',
+    review: reviewOf({ doi, openalexType: typeof work.type === 'string' ? work.type : null,
+      openalexSourceType: typeof (source as { type?: unknown } | undefined)?.type === 'string'
+        ? (source as { type: string }).type : null }),
+    published_precision: openAlexPrecision(typeof work.publication_date === 'string' ? work.publication_date : null),
     authors: authorList(authorships.map((a) => String((a.author as { display_name?: unknown } | undefined)?.display_name ?? ''))),
     institution: clip(clean(institutions.find((i) => String(i.country_code ?? '').toUpperCase() === 'CL')?.display_name)
       ?? clean(institutions[0]?.display_name), 300),
@@ -202,7 +206,9 @@ export function parseEuropePmcResult(result: Record<string, unknown>): Harvested
   return {
     doi,
     title,
+    // MEDLINE indexes journals; a preprint server says so.
     review: preprint ? 'preprint' : 'peer_reviewed',
+    published_precision: 'day',
     authors: authorList(String(result.authorString ?? '').replace(/\.$/u, '').split(/,\s*/u)),
     institution: clip(affiliation, 300),
     journal: clip(clean(journalInfo?.journal?.title) ?? clean(bookOrPreprintServer), 300),
@@ -275,6 +281,7 @@ export function parseArxivFeed(body: string): SourceBatch {
       doi: `10.48550/arxiv.${id.toLowerCase()}`,
       title,
       review: 'preprint',
+      published_precision: 'day',
       authors: authorList(authors.map((a) => textOf(a.name) ?? '')),
       institution: clip(affiliations[0] ?? null, 300),
       journal: 'arXiv',
@@ -326,7 +333,8 @@ export function parseCrossrefScieloItem(item: Record<string, unknown>): Harveste
   return {
     doi,
     title,
-    review: 'peer_reviewed',
+    review: reviewOf({ doi, crossrefType: typeof item.type === 'string' ? item.type : 'journal-article' }),
+    published_precision: precisionOf(item.published) ?? precisionOf(item.issued) ?? 'day',
     authors: clip(authorsOf(item), 600),
     institution: clip(affiliations.find((a) => /\bchile\b/iu.test(a)) ?? affiliations[0] ?? null, 300),
     journal: clip(clean(containers[0]), 300),

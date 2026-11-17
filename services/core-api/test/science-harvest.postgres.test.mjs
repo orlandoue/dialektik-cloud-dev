@@ -10,6 +10,7 @@ import pg from 'pg';
 import { scienceCommentsSql } from '../../../packages/database/dist/migration/091_science_and_story_comments.js';
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
 import { scienceHarvestSql } from '../../../packages/database/dist/migration/093_science_harvest.js';
+import { scienceStudyReviewSql } from '../../../packages/database/dist/migration/095_science_study_review.js';
 
 const ownerUrl = process.env.SCIENCE_TEST_DATABASE_URL;
 if (!ownerUrl && process.env.CI) throw new Error('CI must provide SCIENCE_TEST_DATABASE_URL.');
@@ -61,7 +62,8 @@ before(async () => {
     create domain dialektik_ulid as text;
     create table public.events(id dialektik_ulid primary key);
     insert into auth.users(id) values ('${reader}'); insert into public.events values ('event1');`);
-  for (const migration of [scienceCommentsSql, scienceModerationSql, scienceHarvestSql, scienceHarvestSql]) await owner.query(migration);
+  for (const migration of [scienceCommentsSql, scienceModerationSql, scienceHarvestSql, scienceHarvestSql, scienceStudyReviewSql,
+    scienceStudyReviewSql]) await owner.query(migration);
   // What the owner does once in the SQL editor.
   await admin.query(`alter role dialektik_science_harvester login password '${password}'`);
   url.username = 'dialektik_science_harvester';

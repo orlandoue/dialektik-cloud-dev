@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { scienceCommentsSql } from '../../../packages/database/dist/migration/091_science_and_story_comments.js';
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
+import { scienceStudyReviewSql } from '../../../packages/database/dist/migration/095_science_study_review.js';
 
 const veteran = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
@@ -13,7 +14,8 @@ const baseSchema = `create schema auth; create table auth.users(id uuid primary 
   create domain dialektik_ulid as text;
   create role anon; create role authenticated; create role service_role; create role dialektik_core_app;
   create table public.events(id dialektik_ulid primary key);
-  create table public.public_events(id dialektik_ulid primary key, analysis_state text, detected_at timestamptz default now());
+  create table public.public_events(id dialektik_ulid primary key, analysis_state text, detected_at timestamptz default now(),
+    title_descriptive text);
   insert into auth.users values('${veteran}', now() - interval '30 days', 'Veterano@Example.cl', '{}'),
     ('${other}', now() - interval '10 days', 'ana@example.cl', '{"alias":"Ana <b>","full_name":"Ana Pérez"}'),
     ('${newcomer}', now() - interval '1 day', 'nuevo@example.cl', '{"full_name":"Nuevo Lector"}'),
@@ -59,6 +61,7 @@ async function setup({ retracted = false } = {}) {
   await pg.exec(baseSchema);
   await pg.exec(scienceCommentsSql);
   await pg.exec(scienceModerationSql);
+  await pg.exec(scienceStudyReviewSql);
   await pg.exec('set role dialektik_core_app');
   const { Kysely, PostgresDialect } = await import('kysely');
   const { ScienceService } = await import('../dist/science/science.service.js');
@@ -180,7 +183,9 @@ test('study comments are refused for duplicates, paraphrases, unknown claims and
     });
     // The same study on another claim is fine.
     assert.equal((await service.addStudyComment(other, 'event1', studyInput({ claimQuoteId: 'quote2', relation: 'respalda' }))).status, 'in_review');
-    await rejectsWith(service.addStudyComment(other, 'event1', studyInput({ claimQuoteId: 'quote2', abstractFragment: 'vaccines are safe' })), 422, 'PUBLIC_SCIENCE_NOT_LITERAL');
+    await rejectsWith(service.addStudyComment(other, 'event1', studyInput({ claimQuoteId: 'quote2', abstractFragment: 'the vaccine is completely safe for every child in the country' })), 422, 'PUBLIC_SCIENCE_NOT_LITERAL');
+    // Too short to show any relation, even when literal.
+    await rejectsWith(service.addStudyComment(other, 'event1', studyInput({ claimQuoteId: 'quote2', abstractFragment: 'autism' })), 422, 'PUBLIC_SCIENCE_FRAGMENT_TOO_SHORT');
     await rejectsWith(service.addStudyComment(other, 'event1', studyInput({ claimQuoteId: 'nope' })), 400, 'PUBLIC_SCIENCE_INVALID_CLAIM');
     await rejectsWith(service.addStudyComment(newcomer, 'event1', studyInput({ claimQuoteId: 'quote2' })), 403, 'PUBLIC_SCIENCE_ACCOUNT_TOO_NEW');
     // Literal match tolerates curly quotes and extra spaces, nothing else.
@@ -326,5 +331,47 @@ test('rejecting needs a reason; reports reach the queue and a moderator hides or
     assert.ok(!bodies.includes('Comentario ofensivo'));
     assert.ok(bodies.includes('Comentario normal'));
     await rejectsWith(service.report(veteran, rude.id, 'spam', null), 404);
+  } finally { delete process.env.DIALEKTIK_SCIENCE_MODERATORS; await database.destroy(); await pg.close(); }
+});
+
+test('peer review is never assumed: repositories and silent sources are «not_reported»', async () => {
+  const { reviewOf, precisionOf, openAlexPrecision } = await import('../dist/science/study-resolver.js');
+  assert.equal(reviewOf({ doi: '10.5281/zenodo.123', crossrefType: 'journal-article' }), 'not_reported');
+  assert.equal(reviewOf({ doi: '10.1000/x', openalexSourceType: 'repository' }), 'not_reported');
+  assert.equal(reviewOf({ doi: '10.1000/x' }), 'not_reported');
+  assert.equal(reviewOf({ doi: '10.1000/x', crossrefType: 'journal-article' }), 'peer_reviewed');
+  assert.equal(reviewOf({ doi: '10.1101/x', crossrefType: 'posted-content' }), 'preprint');
+  assert.equal(precisionOf({ 'date-parts': [[2026]] }), 'year');
+  assert.equal(precisionOf({ 'date-parts': [[2026, 3]] }), 'month');
+  assert.equal(precisionOf({ 'date-parts': [[2026, 3, 9]] }), 'day');
+  assert.equal(openAlexPrecision('2026-01-01'), 'year');
+  assert.equal(openAlexPrecision('2026-03-09'), 'day');
+  const { fragmentLongEnough } = await import('../dist/science/science.service.js');
+  assert.equal(fragmentLongEnough('seroprevalence'), false);
+  assert.equal(fragmentLongEnough('does not trigger autism in children'), true);
+  assert.equal(fragmentLongEnough('antibody seroprevalence in Santa Clara County'), true);
+});
+
+test('a moderator sets the review and it survives a new resolution; «Tus comentarios» lists every state', async () => {
+  const { pg, database, service } = await setup();
+  process.env.DIALEKTIK_SCIENCE_MODERATORS = moderator;
+  try {
+    const study = await service.study(DOI);
+    assert.equal(study.review, 'peer_reviewed');
+    assert.equal(study.published_precision, 'day');
+    assert.equal((await service.moderateStudy(moderator, DOI, { review: 'not_reported', design: 'Cohorte' })).review, 'not_reported');
+    await pg.exec(`update public.science_studies set resolved_at = now() - interval '8 days'`);
+    assert.equal((await service.study(DOI)).review, 'not_reported');
+
+    const shown = await service.addComment(other, 'event1', { body: 'Publicado', parentId: null });
+    const pending = await service.addStudyComment(other, 'event1', studyInput());
+    const hidden = await service.addComment(other, 'event1', { body: 'Será ocultado', parentId: null });
+    await service.report(veteran, hidden.id, 'ofensivo', null);
+    await service.resolveReports(moderator, hidden.id, true, 'Insulto');
+    const mine = await service.myComments(other);
+    assert.deepEqual(Object.fromEntries(mine.comments.map((c) => [c.id, c.status])),
+      { [shown.id]: 'published', [pending.id]: 'in_review', [hidden.id]: 'rejected' });
+    assert.ok(mine.comments.every((c) => c.event_id === 'event1'));
+    assert.deepEqual((await service.myComments(veteran)).comments, []);
   } finally { delete process.env.DIALEKTIK_SCIENCE_MODERATORS; await database.destroy(); await pg.close(); }
 });
