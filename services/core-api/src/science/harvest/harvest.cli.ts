@@ -29,6 +29,13 @@ async function main(): Promise<void> {
   const url = env.SCIENCE_HARVEST_DATABASE_URL?.trim();
   if (!dryRun && !url) throw new Error('SCIENCE_HARVEST_DATABASE_URL is required (or pass --dry-run).');
   const categories = (env.SCIENCE_HARVEST_ARXIV_CATEGORIES ?? '').split(',').map((c) => c.trim()).filter(Boolean);
+  const ca = env.DATABASE_CA_CERT?.trim() ?? '';
+  if (!dryRun) {
+    // Whether a CA arrived, never its content.
+    process.stdout.write(ca.includes('BEGIN CERTIFICATE')
+      ? 'Database CA: provided (SCIENCE_HARVEST_DATABASE_CA_CERT).\n'
+      : ca === '' ? 'Database CA: not provided.\n' : 'Database CA: provided but not a PEM certificate.\n');
+  }
   const database = dryRun ? null : createDatabase({
     connectionString: url!,
     applicationName: 'dialektik-science-harvest',
@@ -54,6 +61,11 @@ async function main(): Promise<void> {
 }
 
 main().catch((error: unknown) => {
-  process.stderr.write(`Science harvest failed: ${error instanceof Error ? error.message : String(error)}\n`);
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`Science harvest failed: ${message}\n`);
+  if (/certificate/iu.test(message)) {
+    process.stderr.write('The database TLS chain did not verify: store in SCIENCE_HARVEST_DATABASE_CA_CERT the same Supabase CA\n'
+      + 'certificate that Core uses on Render (Supabase → Database settings → SSL → download), PEM text included.\n');
+  }
   process.exitCode = 1;
 });

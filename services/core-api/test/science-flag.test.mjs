@@ -38,6 +38,7 @@ test('without the flag every Science route is 404, and none reaches the database
   const calls = {
     studies: () => controller.studies(request, reply, 'conectados'),
     study: () => controller.study(request, reply, doi),
+    lookup: () => controller.lookup(request, reply, 'measles autism'),
     citing: () => controller.citing(request, reply, doi),
     comments: () => controller.comments(request, reply, ulid),
     addComment: () => controller.addComment(request, ulid, { body: 'Hola' }),

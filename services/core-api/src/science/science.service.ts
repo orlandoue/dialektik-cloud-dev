@@ -1,5 +1,5 @@
 import {
-  createDatabase, destroyDatabase, scienceCommentsSql, scienceModerationSql, scienceStudyReviewSql,
+  createDatabase, destroyDatabase, scienceCommentsSql, scienceModerationSql, scienceReportPrivacySql, scienceStudyReviewSql,
 } from '@dialektik/database';
 import {
   ForbiddenException,
@@ -21,6 +21,7 @@ import {
   isLiteralFragment, resolveStudy, resolverOptionsFromEnv, type FetchLike, type ResolvedStudy, type ScienceSource,
 } from './study-resolver.js';
 import { ScienceDuplicateError } from './science-http.error.js';
+import { classifyLookup, resolveArxiv, searchByTitle, type LookupCandidate } from './study-lookup.js';
 
 /** Same rule as the app: 2-30 letters, digits, spaces or `._-`. */
 export function sanitizeAlias(raw: string | null | undefined): string | null {
@@ -249,6 +250,7 @@ export class ScienceService implements OnModuleInit {
         await sql`select pg_advisory_xact_lock(910091)`.execute(tx);
         await sql.raw(scienceCommentsSql).execute(tx);
         await sql.raw(scienceModerationSql).execute(tx);
+        await sql.raw(scienceReportPrivacySql).execute(tx);
         await sql.raw(scienceStudyReviewSql).execute(tx);
       });
       this.#ready = true;
@@ -270,7 +272,10 @@ export class ScienceService implements OnModuleInit {
       and exists (select 1 from information_schema.columns where table_schema = 'public'
         and table_name = 'science_studies' and column_name = 'abstract_by_moderator')
       and exists (select 1 from information_schema.columns where table_schema = 'public'
-        and table_name = 'science_studies' and column_name = 'published_precision') as ready`.execute(database);
+        and table_name = 'science_studies' and column_name = 'published_precision')
+      -- 094: reports are no longer readable by every Core session.
+      and exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'story_comment_reports'
+        and policyname = 'story_comment_reports_read' and qual <> 'true') as ready`.execute(database);
     return present.rows[0]?.ready === true;
   }
 
@@ -326,7 +331,10 @@ export class ScienceService implements OnModuleInit {
       const fresh = cached !== null && (await sql<{ fresh: boolean }>`select resolved_at > now() - make_interval(days => ${REFRESH_AFTER_DAYS}) as fresh
         from public.science_studies where doi = ${doi}`.execute(this.db.database)).rows[0]?.fresh === true;
       if (cached !== null && fresh) return cached;
-      const resolved = await resolveStudy(doi, this.fetcher, { ...resolverOptionsFromEnv(), onCall: (source, ok) => this.recordCall(source, ok) });
+      const options = { ...resolverOptionsFromEnv(), onCall: (source: ScienceSource, ok: boolean) => this.recordCall(source, ok) };
+      // arXiv preprints are not in Crossref; their own API describes them.
+      const resolved = await resolveStudy(doi, this.fetcher, options)
+        ?? (doi.startsWith('10.48550/arxiv.') ? await resolveArxiv(doi, this.fetcher, options) : null);
       await this.flushUsage();
       if (resolved === null) {
         if (cached !== null) return cached;
@@ -364,6 +372,48 @@ export class ScienceService implements OnModuleInit {
         retracted_at=coalesce(excluded.retracted_at, public.science_studies.retracted_at),
         made_in_chile=public.science_studies.made_in_chile or excluded.made_in_chile,
         resolved_at=now()`.execute(this.db.database);
+  }
+
+  // ---- Lookup (C2: DOI, link or title) -----------------------------------
+
+  /** Searches per reader and hour; each title search calls three APIs. */
+  static readonly LOOKUPS_PER_HOUR = 30;
+  #lookups = new Map<string, number[]>();
+
+  #allowLookup(userId: string, now = Date.now()): boolean {
+    const recent = (this.#lookups.get(userId) ?? []).filter((t) => now - t < 3_600_000);
+    if (recent.length >= ScienceService.LOOKUPS_PER_HOUR) {
+      this.#lookups.set(userId, recent);
+      return false;
+    }
+    recent.push(now);
+    this.#lookups.set(userId, recent);
+    return true;
+  }
+
+  /**
+   * A DOI or a link that carries one (arXiv included) resolves to that
+   * study; a title returns up to three candidates. A link without a DOI is
+   * never downloaded: the reader is asked for the title.
+   */
+  async lookup(userId: string, input: string): Promise<{ candidates: LookupCandidate[]; reason: 'no_doi_in_link' | null }> {
+    if (!this.#allowLookup(userId)) throw new HttpException({ code: 'PUBLIC_RATE_LIMITED' }, HttpStatus.TOO_MANY_REQUESTS);
+    const query = classifyLookup(input);
+    if (query.kind === 'link_without_doi') return { candidates: [], reason: 'no_doi_in_link' };
+    if (query.kind === 'doi') {
+      try {
+        const study = await this.study(query.doi);
+        return { candidates: [{ doi: study.doi, title: study.title, authors: study.authors, journal: study.journal,
+          year: study.published_at === null ? null : Number(study.published_at.slice(0, 4)), review: study.review }], reason: null };
+      } catch (error) {
+        if (error instanceof NotFoundException) return { candidates: [], reason: null };
+        throw error;
+      }
+    }
+    const candidates = await searchByTitle(query.text, this.fetcher,
+      { ...resolverOptionsFromEnv(), onCall: (source: ScienceSource, ok: boolean) => this.recordCall(source, ok) });
+    await this.flushUsage();
+    return { candidates, reason: null };
   }
 
   // ---- Comments ------------------------------------------------------------
@@ -648,12 +698,15 @@ export class ScienceService implements OnModuleInit {
         const listed = await this.#reviewRow(row.id, userId);
         if (listed) review.push({ ...listed, event_id: row.event_id });
       }
-      const reported = await sql<{ id: string; event_id: string; reports: { reason: ReportReason; note: string | null; created_at: Date }[] }>`
+      // Reports are readable only with the moderator flag (migration 094).
+      const reported = await this.#transaction(userId, (tx) => sql<{
+        id: string; event_id: string; reports: { reason: ReportReason; note: string | null; created_at: Date }[];
+      }>`
         select c.id::text as id, c.event_id::text as event_id,
           jsonb_agg(jsonb_build_object('reason', r.reason, 'note', r.note, 'created_at', r.created_at) order by r.created_at) as reports
         from public.story_comment_reports r join public.story_comments c on c.id = r.comment_id
         where r.resolved_at is null and c.status = 'published'
-        group by c.id, c.event_id order by min(r.created_at) limit 100`.execute(this.db.database);
+        group by c.id, c.event_id order by min(r.created_at) limit 100`.execute(tx), true);
       const reports: ReportedComment[] = [];
       for (const row of reported.rows) {
         const listed = await this.#reviewRow(row.id, userId);

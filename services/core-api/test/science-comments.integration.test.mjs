@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { scienceCommentsSql } from '../../../packages/database/dist/migration/091_science_and_story_comments.js';
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
+import { scienceReportPrivacySql } from '../../../packages/database/dist/migration/094_science_report_privacy.js';
 import { scienceStudyReviewSql } from '../../../packages/database/dist/migration/095_science_study_review.js';
 
 const veteran = '11111111-1111-4111-8111-111111111111';
@@ -61,6 +62,7 @@ async function setup({ retracted = false } = {}) {
   await pg.exec(baseSchema);
   await pg.exec(scienceCommentsSql);
   await pg.exec(scienceModerationSql);
+  await pg.exec(scienceReportPrivacySql);
   await pg.exec(scienceStudyReviewSql);
   await pg.exec('set role dialektik_core_app');
   const { Kysely, PostgresDialect } = await import('kysely');
@@ -208,7 +210,7 @@ test('a retracted study cannot be attached', async () => {
 test('row security binds comments and reactions to the reader and review to moderators', async () => {
   const pg = new PGlite();
   try {
-    await pg.exec(baseSchema); await pg.exec(scienceCommentsSql); await pg.exec(scienceModerationSql);
+    await pg.exec(baseSchema); await pg.exec(scienceCommentsSql); await pg.exec(scienceModerationSql); await pg.exec(scienceReportPrivacySql);
     await pg.exec('set role dialektik_core_app');
     await pg.exec(`begin; select set_config('dialektik.social_user','${veteran}',true);`);
     await assert.rejects(pg.exec(`insert into public.story_comments(event_id,user_id,kind,status,author_alias,body) values('event1','${other}','normal','published','Spoof','x')`));
@@ -374,4 +376,24 @@ test('a moderator sets the review and it survives a new resolution; «Tus coment
     assert.ok(mine.comments.every((c) => c.event_id === 'event1'));
     assert.deepEqual((await service.myComments(veteran)).comments, []);
   } finally { delete process.env.DIALEKTIK_SCIENCE_MODERATORS; await database.destroy(); await pg.close(); }
+});
+
+test('lookup: a link without a DOI is never fetched, and a reader has an hourly limit', async () => {
+  const { pg, database, service } = await setup();
+  const fetched = [];
+  const inner = service.fetcher;
+  service.fetcher = async (url, init) => { fetched.push(url); return inner(url, init); };
+  try {
+    assert.deepEqual(await service.lookup(veteran, 'https://www.nature.com/articles/s41586-024-00001-x'),
+      { candidates: [], reason: 'no_doi_in_link' });
+    assert.deepEqual(fetched, []);
+    const byDoi = await service.lookup(veteran, 'https://doi.org/10.7326/M18-2101');
+    assert.equal(byDoi.candidates[0].doi, DOI);
+    assert.equal(byDoi.candidates[0].year, 2019);
+    const { ScienceService } = await import('../dist/science/science.service.js');
+    for (let i = 2; i < ScienceService.LOOKUPS_PER_HOUR; i++) await service.lookup(veteran, 'https://example.org/sin-doi');
+    await rejectsWith(service.lookup(veteran, 'https://example.org/sin-doi'), 429, 'PUBLIC_RATE_LIMITED');
+    // Another reader is not affected.
+    assert.equal((await service.lookup(other, 'https://example.org/sin-doi')).reason, 'no_doi_in_link');
+  } finally { await database.destroy(); await pg.close(); }
 });

@@ -80,8 +80,9 @@ const TIMEOUT_MS = 8_000;
 export const METADATA_HOSTS: Readonly<Record<string, ScienceSource>> = {
   'api.crossref.org': 'crossref',
   'api.openalex.org': 'openalex',
+  'export.arxiv.org': 'arxiv',
 };
-export type ScienceSource = 'crossref' | 'openalex';
+export type ScienceSource = 'crossref' | 'openalex' | 'arxiv';
 
 /** One call to a metadata API, for the daily usage record. */
 export type UsageRecorder = (source: ScienceSource, ok: boolean) => void;
