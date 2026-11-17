@@ -1,5 +1,6 @@
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/science/data/science_models.dart';
+import 'package:dialektik/features/science/presentation/science_feed.dart';
 import 'package:dialektik/features/science/presentation/science_format.dart';
 import 'package:dialektik/features/science/presentation/story_comments.dart';
 import 'package:flutter/material.dart';
@@ -72,7 +73,7 @@ Future<void> _selectFragment(WidgetTester tester, String fragment) async {
 }
 
 Future<void> _filter(WidgetTester tester, String wire) async {
-  final Finder chip = find.byKey(ValueKey<String>('sci-filter-$wire'));
+  final Finder chip = find.byKey(ValueKey<String>('sci-topic-$wire'));
   await tester.ensureVisible(chip);
   await tester.pumpAndSettle();
   await tester.tap(chip);
@@ -180,23 +181,33 @@ void main() {
     );
   });
 
-  testWidgets('C1 · studies, filters, empty and error states', (
+  testWidgets('C1 · topics, order, empty and error states', (
     WidgetTester tester,
   ) async {
     final ArenaScienceCore core = ArenaScienceCore();
     await pumpArena(tester, core);
     await _switchToScience(tester);
-    // «Conectados a noticias» by default: only the connected cohort.
-    expect(find.text(hviid.title), findsOneWidget);
-    expect(find.text('Conectado a 1 historia'), findsOneWidget);
-    expect(find.text('Revisado por pares'), findsOneWidget);
-    expect(find.text('Humanos (niños) · n = 657 461'), findsOneWidget);
-
-    await _filter(tester, 'recientes');
-    await tester.pumpAndSettle();
+    // «Todos» and «Recientes» by default; every topic is a chip.
+    for (final StudyTopic topic in StudyTopic.values) {
+      expect(
+        find.byKey(ValueKey<String>('sci-topic-${topic.wire}')),
+        findsOneWidget,
+        reason: topic.label,
+      );
+    }
+    expect(core.science.browseCalls.last, (StudyTopic.all, StudySort.recent));
+    expect(find.text('Recientes'), findsOneWidget);
+    expect(find.text(hviid.title, skipOffstage: false), findsOneWidget);
+    expect(
+      find.text('Conectado a 1 historia', skipOffstage: false),
+      findsOneWidget,
+    );
     expect(find.text('Preprint', skipOffstage: false), findsOneWidget);
     // Unconnected studies say so in their meta line.
-    expect(find.textContaining('aún sin conectar'), findsWidgets);
+    expect(
+      find.textContaining('aún sin conectar', skipOffstage: false),
+      findsWidgets,
+    );
     // A retracted study cannot be connected.
     await tester.scrollUntilVisible(
       find.text(wakefield.title),
@@ -217,16 +228,41 @@ void main() {
     );
     expect(connect.onPressed, isNull);
 
-    await _filter(tester, 'chile');
+    // «Recientes ▾» becomes «Conectados a noticias».
+    await tester.tap(find.byKey(const Key('sci-sort')));
     await tester.pumpAndSettle();
-    expect(find.text('Aún no hay estudios con este filtro'), findsOneWidget);
-    await tester.tap(find.text('Ver recientes'));
+    await tester.tap(find.byKey(const ValueKey<String>('sci-sort-conectados')));
     await tester.pumpAndSettle();
-    expect(find.text(bendavid.title), findsOneWidget);
+    expect(core.science.browseCalls.last, (
+      StudyTopic.all,
+      StudySort.connected,
+    ));
+    expect(find.text('Conectados a noticias'), findsOneWidget);
+    // The most connected study comes first.
+    expect(
+      tester.widgetList<StudyCard>(find.byType(StudyCard)).first.study.doi,
+      hviid.doi,
+    );
+
+    await _filter(tester, 'salud');
+    expect(core.science.browseCalls.last, (
+      StudyTopic.health,
+      StudySort.connected,
+    ));
+    expect(find.text(hviid.title), findsOneWidget);
+
+    await _filter(tester, 'astronomia');
+    expect(
+      find.text('Aún no hay estudios en «Astronomía y espacio»'),
+      findsOneWidget,
+    );
+    await tester.tap(find.text('Ver todos'));
+    await tester.pumpAndSettle();
+    expect(core.science.browseCalls.last.$1, StudyTopic.all);
+    expect(find.text(bendavid.title, skipOffstage: false), findsOneWidget);
 
     core.science.failStudies = true;
-    await _filter(tester, 'conectados');
-    await tester.pumpAndSettle();
+    await _filter(tester, 'chile');
     expect(find.text('No pudimos cargar los estudios'), findsOneWidget);
     expect(find.text('Reintentar'), findsOneWidget);
   });
@@ -502,8 +538,6 @@ void main() {
     final ArenaScienceCore core = ArenaScienceCore();
     await pumpArena(tester, core);
     await _switchToScience(tester);
-    await _filter(tester, 'recientes');
-    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.text(wakefield.title),
       300,

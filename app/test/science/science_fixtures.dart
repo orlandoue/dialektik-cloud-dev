@@ -12,6 +12,7 @@ import '../support/public_api_fixtures.dart';
 ///
 /// Hviid et al., Ann Intern Med 2019 — nationwide Danish cohort.
 final Study hviid = Study(
+  topic: StudyTopic.health,
   doi: '10.7326/M18-2101',
   title:
       'Measles, Mumps, Rubella Vaccination and Autism: A Nationwide Cohort '
@@ -36,6 +37,7 @@ final Study hviid = Study(
 
 /// Bendavid et al., medRxiv 2020 — preprint.
 final Study bendavid = Study(
+  topic: StudyTopic.health,
   doi: '10.1101/2020.04.14.20062463',
   title: 'COVID-19 Antibody Seroprevalence in Santa Clara County, California',
   review: StudyReview.preprint,
@@ -54,6 +56,7 @@ final Study bendavid = Study(
 
 /// Wakefield et al., The Lancet 1998 — retracted in 2010.
 final Study wakefield = Study(
+  topic: StudyTopic.health,
   doi: '10.1016/S0140-6736(97)11096-0',
   title:
       'Ileal-lymphoid-nodular hyperplasia, non-specific colitis, and '
@@ -201,6 +204,26 @@ class FakeScienceRepository
   ScienceAccess scienceAccess;
   int _next = 100;
   final List<String> studyCalls = <String>[];
+
+  /// Every topic and order C1 asked for.
+  final List<(StudyTopic, StudySort)> browseCalls = <(StudyTopic, StudySort)>[];
+
+  @override
+  Future<List<Study>> browseStudies(StudyTopic topic, StudySort sort) async {
+    browseCalls.add((topic, sort));
+    if (failStudies) throw StateError('requires API');
+    final List<Study> picked = switch (topic) {
+      StudyTopic.all => studies.toList(),
+      StudyTopic.chile => studies.where((Study s) => s.madeInChile).toList(),
+      _ => studies.where((Study s) => s.topic == topic).toList(),
+    };
+    if (sort == StudySort.connected) {
+      picked.sort(
+        (Study a, Study b) => b.connectedStories.compareTo(a.connectedStories),
+      );
+    }
+    return picked;
+  }
 
   @override
   Future<List<Study>> listStudies(StudyFilter filter) async {
@@ -469,6 +492,9 @@ class ArenaScienceCore extends ArenaFullCore
   @override
   Future<List<Study>> listStudies(StudyFilter filter) =>
       science.listStudies(filter);
+  @override
+  Future<List<Study>> browseStudies(StudyTopic topic, StudySort sort) =>
+      science.browseStudies(topic, sort);
   @override
   Future<Study> study(String doi) => science.study(doi);
   @override

@@ -33,7 +33,45 @@ enum StudyRelation {
       .firstOrNull;
 }
 
-/// Feed filters of the Science mode.
+/// C1 topics: «Todos», «Hecha en Chile» and eight topics taken from each
+/// source's own taxonomy (OpenAlex field, arXiv category; Europe PMC is
+/// health). Never classified by AI. Discovery only, never a quality label.
+enum StudyTopic {
+  all('todos', 'Todos'),
+  chile('chile', 'Hecha en Chile'),
+  health('salud', 'Salud y medicina'),
+  space('astronomia', 'Astronomía y espacio'),
+  biology('biologia', 'Biología'),
+  environment('medioambiente', 'Medioambiente y clima'),
+  archaeology('arqueologia', 'Arqueología e historia'),
+  physics('fisica_quimica', 'Física y química'),
+  technology('tecnologia', 'Tecnología'),
+  society('sociedad', 'Sociedad y educación');
+
+  const StudyTopic(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  /// A study's own topic; «todos» and «chile» are scopes, not topics.
+  static StudyTopic? parse(Object? value) => StudyTopic.values
+      .where(
+        (StudyTopic t) =>
+            t != StudyTopic.all && t != StudyTopic.chile && t.wire == value,
+      )
+      .firstOrNull;
+}
+
+/// C1 order: newest first, or most connected to stories first.
+enum StudySort {
+  recent('recientes', 'Recientes'),
+  connected('conectados', 'Conectados a noticias');
+
+  const StudySort(this.wire, this.label);
+  final String wire;
+  final String label;
+}
+
+/// Feed filters of the Science mode (before topics; C2 still lists recent).
 enum StudyFilter {
   connected('conectados', 'Conectados a noticias'),
   chile('chile', 'Hecha en Chile'),
@@ -72,6 +110,7 @@ final class Study {
     this.abstractLanguage,
     this.abstractSource,
     this.madeInChile = false,
+    this.topic,
     this.connectedStories = 0,
     this.citingComments = 0,
   });
@@ -107,6 +146,7 @@ final class Study {
     abstractLanguage: json['abstract_language'] as String?,
     abstractSource: json['abstract_source'] as String?,
     madeInChile: json['made_in_chile'] as bool? ?? false,
+    topic: StudyTopic.parse(json['topic']),
     connectedStories: json['connected_stories'] as int? ?? 0,
     citingComments: json['citing_comments'] as int? ?? 0,
   );
@@ -190,12 +230,16 @@ final class Study {
       abstractLanguage: sets ? given['language'] as String? : abstractLanguage,
       abstractSource: sets ? given['source'] as String? : abstractSource,
       madeInChile: madeInChile,
+      topic: topic,
       connectedStories: connectedStories,
       citingComments: citingComments,
     );
   }
 
   final bool madeInChile;
+
+  /// From the source's taxonomy; null when the source has none.
+  final StudyTopic? topic;
   final int connectedStories;
   final int citingComments;
 

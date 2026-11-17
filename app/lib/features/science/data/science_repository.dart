@@ -9,6 +9,9 @@ import 'package:dialektik/features/science/data/science_models.dart';
 abstract interface class ScienceRepository {
   Future<List<Study>> listStudies(StudyFilter filter);
 
+  /// C1 by topics: «Todos», «Hecha en Chile» or one topic, in [sort] order.
+  Future<List<Study>> browseStudies(StudyTopic topic, StudySort sort);
+
   /// Study by DOI, resolved and cached server side (Crossref, OpenAlex).
   Future<Study> study(String doi);
 

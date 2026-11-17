@@ -21,7 +21,8 @@ class ScienceFeed extends StatefulWidget {
 }
 
 class _ScienceFeedState extends State<ScienceFeed> {
-  StudyFilter _filter = StudyFilter.connected;
+  StudyTopic _topic = StudyTopic.all;
+  StudySort _sort = StudySort.recent;
   List<Study>? _studies;
   bool _failed = false;
   int _run = 0;
@@ -46,16 +47,22 @@ class _ScienceFeedState extends State<ScienceFeed> {
       return;
     }
     try {
-      final List<Study> studies = await repository.listStudies(_filter);
+      final List<Study> studies = await repository.browseStudies(_topic, _sort);
       if (mounted && run == _run) setState(() => _studies = studies);
     } on Object {
       if (mounted && run == _run) setState(() => _failed = true);
     }
   }
 
-  void _choose(StudyFilter filter) {
-    if (filter == _filter) return;
-    setState(() => _filter = filter);
+  void _choose(StudyTopic topic) {
+    if (topic == _topic) return;
+    setState(() => _topic = topic);
+    unawaited(_load());
+  }
+
+  void _order(StudySort sort) {
+    if (sort == _sort) return;
+    setState(() => _sort = sort);
     unawaited(_load());
   }
 
@@ -68,20 +75,26 @@ class _ScienceFeedState extends State<ScienceFeed> {
         SingleChildScrollView(
           key: const Key('sci-filters'),
           scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.fromLTRB(20, 6, 20, 12),
+          padding: const EdgeInsets.fromLTRB(20, 6, 20, 4),
           child: Row(
             children: <Widget>[
-              for (final StudyFilter filter in StudyFilter.values) ...<Widget>[
-                if (filter != StudyFilter.values.first)
-                  const SizedBox(width: 8),
+              for (final StudyTopic topic in StudyTopic.values) ...<Widget>[
+                if (topic != StudyTopic.values.first) const SizedBox(width: 8),
                 SelectChip(
-                  key: ValueKey<String>('sci-filter-${filter.wire}'),
-                  label: filter.label,
-                  selected: filter == _filter,
-                  onTap: () => _choose(filter),
+                  key: ValueKey<String>('sci-topic-${topic.wire}'),
+                  label: topic.label,
+                  selected: topic == _topic,
+                  onTap: () => _choose(topic),
                 ),
               ],
             ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(12, 0, 12, 4),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: _SortButton(sort: _sort, onSelected: _order),
           ),
         ),
         Expanded(child: _body(context)),
@@ -115,12 +128,18 @@ class _ScienceFeedState extends State<ScienceFeed> {
     if (studies.isEmpty) {
       return _StateMessage(
         key: const Key('sci-feed-empty'),
-        text: 'Aún no hay estudios con este filtro',
-        action: 'Ver recientes',
-        onAction: () => _choose(StudyFilter.recent),
+        text: _topic == StudyTopic.all
+            ? 'Aún no hay estudios'
+            : 'Aún no hay estudios en «${_topic.label}»',
+        action: _topic == StudyTopic.all ? 'Reintentar' : 'Ver todos',
+        onAction: () => _topic == StudyTopic.all
+            ? unawaited(_load())
+            : _choose(StudyTopic.all),
       );
     }
+    // A new list per topic and order starts at the top.
     return RefreshIndicator(
+      key: ValueKey<int>(_run),
       color: SciColors.primary,
       onRefresh: _load,
       child: ListView.separated(
@@ -138,6 +157,61 @@ class _ScienceFeedState extends State<ScienceFeed> {
       ),
     );
   }
+}
+
+/// «Recientes ▾»: the order of C1, in a standard menu.
+class _SortButton extends StatelessWidget {
+  const _SortButton({required this.sort, required this.onSelected});
+
+  final StudySort sort;
+  final ValueChanged<StudySort> onSelected;
+
+  @override
+  Widget build(BuildContext context) => PopupMenuButton<StudySort>(
+    key: const Key('sci-sort'),
+    tooltip: 'Ordenar estudios',
+    initialValue: sort,
+    onSelected: onSelected,
+    color: SciColors.surface,
+    surfaceTintColor: Colors.transparent,
+    elevation: 3,
+    shadowColor: const Color(0x33111827),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    itemBuilder: (_) => <PopupMenuEntry<StudySort>>[
+      for (final StudySort s in StudySort.values)
+        CheckedPopupMenuItem<StudySort>(
+          key: ValueKey<String>('sci-sort-${s.wire}'),
+          value: s,
+          checked: s == sort,
+          child: Text(s.label),
+        ),
+    ],
+    child: ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: 44),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            Text(
+              sort.label,
+              style: const TextStyle(
+                fontFamily: SciText.sans,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: SciColors.primaryText,
+              ),
+            ),
+            const Icon(
+              SciIcons.chevronDown,
+              size: 20,
+              color: SciColors.primaryText,
+            ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 /// One study of the feed: tags, title, origin, stories and two actions.
