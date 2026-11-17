@@ -165,3 +165,28 @@ test('a source of records without DOI stops after a bounded number of pages', as
   assert.equal(calls, MAX_PAGES);
   assert.equal(batch.skipped, MAX_PAGES);
 });
+
+test('a source that asks to slow down (429) is retried after a pause, then given up', async () => {
+  const { RETRY_DELAYS_MS } = await import('../dist/science/harvest/harvest-sources.js');
+  const waits = [];
+  const sleep = async (ms) => { waits.push(ms); };
+  let calls = 0;
+  const flaky = async () => {
+    calls += 1;
+    if (calls === 1) return { ok: false, status: 429, headers: { get: (h) => (h === 'retry-after' ? '3' : null) }, async text() { return ''; } };
+    return { ok: true, status: 200, async text() { return arxivFeed; } };
+  };
+  const recovered = await harvestArxiv({ fetcher: flaky, sleep, now: new Date('2026-11-16T00:00:00Z'), days: 30, limit: 10, arxivCategories: ['astro-ph.GA'] });
+  assert.equal(recovered.studies.length, 1);
+  assert.deepEqual(waits, [3000]);
+  waits.length = 0;
+  const always = async () => ({ ok: false, status: 429, async text() { return ''; } });
+  await assert.rejects(harvestArxiv({ fetcher: always, sleep, now: new Date(), days: 30, limit: 10, arxivCategories: ['astro-ph.GA'] }),
+    /arxiv answered 429/u);
+  assert.deepEqual(waits, RETRY_DELAYS_MS);
+  // Other refusals are not retried.
+  waits.length = 0;
+  const forbidden = async () => ({ ok: false, status: 403, async text() { return ''; } });
+  await assert.rejects(harvestArxiv({ fetcher: forbidden, sleep, now: new Date(), days: 30, limit: 10, arxivCategories: ['astro-ph.GA'] }), /403/u);
+  assert.deepEqual(waits, []);
+});

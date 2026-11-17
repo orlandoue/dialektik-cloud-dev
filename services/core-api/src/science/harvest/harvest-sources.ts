@@ -33,7 +33,13 @@ export interface HarvestOptions {
   arxivCategories: string[];
   /** Counts each request for science_api_usage. */
   onCall?: (source: string, ok: boolean) => void;
+  /** Waits between retries; replaced in tests. */
+  sleep?: (ms: number) => Promise<void>;
 }
+
+/** 429 and 503 are retried after a pause: arXiv asks clients to slow down. */
+export const RETRY_DELAYS_MS = [5_000, 15_000];
+const MAX_RETRY_AFTER_MS = 30_000;
 
 const TIMEOUT_MS = 30_000;
 /** Pages per source and run: a source of records without DOI cannot loop forever. */
@@ -45,7 +51,8 @@ function userAgent(options: HarvestOptions): string {
     : 'Dialektik-harvest/1.0 (+https://dialektik-core-dev.onrender.com)';
 }
 
-async function fetchText(options: HarvestOptions, source: string, url: URL, accept: string): Promise<string> {
+async function fetchOnce(options: HarvestOptions, source: string, url: URL, accept: string):
+  Promise<{ body: string } | { status: number; retryAfterMs: number | null }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   let ok = false;
@@ -54,13 +61,28 @@ async function fetchText(options: HarvestOptions, source: string, url: URL, acce
       headers: { accept, 'user-agent': userAgent(options) },
       signal: controller.signal,
     });
-    if (!response.ok) throw new Error(`${source} answered ${response.status}`);
+    if (!response.ok) {
+      const header = (response as unknown as { headers?: { get?(name: string): string | null } }).headers?.get?.('retry-after');
+      const seconds = header === null || header === undefined ? Number.NaN : Number.parseInt(header, 10);
+      return { status: response.status, retryAfterMs: Number.isFinite(seconds) ? seconds * 1000 : null };
+    }
     const body = await (response as unknown as { text(): Promise<string> }).text();
     ok = true;
-    return body;
+    return { body };
   } finally {
     clearTimeout(timer);
     options.onCall?.(source, ok);
+  }
+}
+
+async function fetchText(options: HarvestOptions, source: string, url: URL, accept: string): Promise<string> {
+  const sleep = options.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  for (let attempt = 0; ; attempt++) {
+    const result = await fetchOnce(options, source, url, accept);
+    if ('body' in result) return result.body;
+    const retryable = result.status === 429 || result.status === 503;
+    if (!retryable || attempt >= RETRY_DELAYS_MS.length) throw new Error(`${source} answered ${result.status}`);
+    await sleep(Math.min(result.retryAfterMs ?? RETRY_DELAYS_MS[attempt]!, MAX_RETRY_AFTER_MS));
   }
 }
 
