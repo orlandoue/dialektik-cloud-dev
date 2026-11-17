@@ -4,9 +4,10 @@ import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-a
 import { parseUlidParameter } from '../public-api/public-api.validation.js';
 import { PublicRateLimitService, rateLimitClient } from '../public-api/public-rate-limit.service.js';
 import {
-  ScienceService, STUDY_DESIGNS, type ReportReason, type StudyFilter, type StudyModeration, type StudyRelation,
+  ScienceService, STUDY_DESIGNS, type ReportReason, type StudyFilter, type StudyScope, type StudyModeration, type StudyRelation,
 } from './science.service.js';
 import { normalizeDoi } from './study-resolver.js';
+import { isStudyTopic } from './study-topics.js';
 
 const FILTERS = new Set<StudyFilter>(['conectados', 'chile', 'temas', 'recientes']);
 const RELATIONS = new Set<StudyRelation>(['respalda', 'contradice', 'matiza', 'contexto']);
@@ -67,12 +68,21 @@ export class ScienceController {
   }
 
   @Get('science/studies')
-  async studies(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Query('filter') filter?: string) {
+  async studies(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply, @Query('filter') filter?: string,
+    @Query('topic') topic?: string, @Query('sort') sort?: string) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     this.#reader(request);
+    void reply.header('cache-control', 'private, no-store');
+    // Topics (0.1.38+): ?topic=todos|chile|<topic>&sort=recientes|conectados.
+    if (topic !== undefined || sort !== undefined) {
+      const scope = topic ?? 'todos';
+      if (scope !== 'todos' && scope !== 'chile' && !isStudyTopic(scope)) throw new BadRequestException('Unknown topic.');
+      const order = sort ?? 'recientes';
+      if (order !== 'recientes' && order !== 'conectados') throw new BadRequestException('Unknown sort.');
+      return this.science.browseStudies(scope as StudyScope, order);
+    }
     const chosen = (filter ?? 'conectados') as StudyFilter;
     if (!FILTERS.has(chosen)) throw new BadRequestException('Unknown filter.');
-    void reply.header('cache-control', 'private, no-store');
     return this.science.listStudies(chosen);
   }
 

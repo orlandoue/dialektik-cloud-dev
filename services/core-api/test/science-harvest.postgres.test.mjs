@@ -11,6 +11,7 @@ import { scienceCommentsSql } from '../../../packages/database/dist/migration/09
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
 import { scienceHarvestSql } from '../../../packages/database/dist/migration/093_science_harvest.js';
 import { scienceStudyReviewSql } from '../../../packages/database/dist/migration/095_science_study_review.js';
+import { scienceTopicsSql } from '../../../packages/database/dist/migration/096_science_topics.js';
 
 const ownerUrl = process.env.SCIENCE_TEST_DATABASE_URL;
 if (!ownerUrl && process.env.CI) throw new Error('CI must provide SCIENCE_TEST_DATABASE_URL.');
@@ -28,6 +29,7 @@ const work = (doi, abstract = 'Resumen de los autores.') => ({
   doi, display_name: `Estudio ${doi}`, type: 'article', publication_date: '2026-11-10',
   authorships: [{ author: { display_name: 'Ana Pérez' }, institutions: [{ display_name: 'Universidad de Chile', country_code: 'CL' }] }],
   abstract_inverted_index: abstract === null ? null : Object.fromEntries(abstract.split(' ').map((w, i) => [w, [i]])),
+  primary_topic: { field: { display_name: 'Earth and Planetary Sciences' }, subfield: { display_name: 'Space and Planetary Science' } },
 });
 
 function openAlexOnly(works) {
@@ -63,7 +65,7 @@ before(async () => {
     create table public.events(id dialektik_ulid primary key);
     insert into auth.users(id) values ('${reader}'); insert into public.events values ('event1');`);
   for (const migration of [scienceCommentsSql, scienceModerationSql, scienceHarvestSql, scienceHarvestSql, scienceStudyReviewSql,
-    scienceStudyReviewSql]) await owner.query(migration);
+    scienceStudyReviewSql, scienceTopicsSql, scienceTopicsSql]) await owner.query(migration);
   // What the owner does once in the SQL editor.
   await admin.query(`alter role dialektik_science_harvester login password '${password}'`);
   url.username = 'dialektik_science_harvester';
@@ -109,6 +111,8 @@ test('a run adds, updates without losing an abstract, and leaves a moderator\'s 
   assert.equal(first.updated, 0);
   const second = await runHarvest(db, options([work('10.1000/a', null)]));
   assert.equal(second.updated, 1);
+  const topics = await owner.query(`select topic from public.science_studies where doi = '10.1000/b'`);
+  assert.equal(topics.rows[0].topic, 'astronomia');
   const rows = await owner.query(`select doi, abstract, abstract_source, harvest_source, harvested_at is not null as harvested, made_in_chile
     from public.science_studies where doi in ('10.1000/a', '10.1000/moderated') order by doi`);
   assert.deepEqual(rows.rows, [

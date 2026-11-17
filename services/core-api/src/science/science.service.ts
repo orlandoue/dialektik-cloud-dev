@@ -1,5 +1,6 @@
 import {
   createDatabase, destroyDatabase, scienceCommentsSql, scienceModerationSql, scienceReportPrivacySql, scienceStudyReviewSql,
+  scienceTopicsSql,
 } from '@dialektik/database';
 import {
   ForbiddenException,
@@ -21,6 +22,7 @@ import {
   isLiteralFragment, resolveStudy, resolverOptionsFromEnv, type FetchLike, type ResolvedStudy, type ScienceSource,
 } from './study-resolver.js';
 import { ScienceDuplicateError } from './science-http.error.js';
+import type { StudyTopic } from './study-topics.js';
 import { classifyLookup, resolveArxiv, searchByTitle, type LookupCandidate } from './study-lookup.js';
 
 /** Same rule as the app: 2-30 letters, digits, spaces or `._-`. */
@@ -38,6 +40,10 @@ export function profileAlias(row: { alias: string | null; display_name: string |
 }
 
 export type StudyFilter = 'conectados' | 'chile' | 'temas' | 'recientes';
+
+/** C1 by topics: «Todos», «Hecha en Chile» or one topic; sorted by date or by connected stories. */
+export type StudyScope = 'todos' | 'chile' | StudyTopic;
+export type StudySort = 'recientes' | 'conectados';
 export type StudyRelation = 'respalda' | 'contradice' | 'matiza' | 'contexto';
 
 export interface StudyJson {
@@ -63,6 +69,8 @@ export interface StudyJson {
   abstract_language: string | null;
   abstract_source: string | null;
   made_in_chile: boolean;
+  /** From the source's taxonomy (study-topics.ts); null when it has none. */
+  topic: StudyTopic | null;
   connected_stories: number;
   citing_comments: number;
 }
@@ -162,6 +170,7 @@ function studyJson(row: StudyRow): StudyJson {
     abstract_language: row.abstract_language,
     abstract_source: row.abstract_source ?? null,
     made_in_chile: row.made_in_chile,
+    topic: row.topic ?? null,
     connected_stories: Number(row.connected_stories ?? 0),
     citing_comments: Number(row.citing_comments ?? 0),
   };
@@ -169,7 +178,7 @@ function studyJson(row: StudyRow): StudyJson {
 
 const STUDY_COLUMNS = sql.raw(`s.doi, s.title, s.review, s.authors, s.institution, s.journal, s.published_at, s.published_precision,
   s.design, s.population, s.sample_size, s.follow_up, s.funding, s.conflicts, s.access, s.corrections,
-  s.retracted, s.retracted_at, s.abstract, s.abstract_language, s.abstract_source, s.made_in_chile,
+  s.retracted, s.retracted_at, s.abstract, s.abstract_language, s.abstract_source, s.made_in_chile, s.topic,
   (select count(distinct a.event_id)::int from public.story_comment_studies a
      join public.story_comments c on c.id = a.comment_id and c.status = 'published' where a.doi = s.doi) as connected_stories,
   (select count(*)::int from public.story_comment_studies a
@@ -252,6 +261,7 @@ export class ScienceService implements OnModuleInit {
         await sql.raw(scienceModerationSql).execute(tx);
         await sql.raw(scienceReportPrivacySql).execute(tx);
         await sql.raw(scienceStudyReviewSql).execute(tx);
+        await sql.raw(scienceTopicsSql).execute(tx);
       });
       this.#ready = true;
       this.#logger.log('Science storage created at startup.');
@@ -273,6 +283,8 @@ export class ScienceService implements OnModuleInit {
         and table_name = 'science_studies' and column_name = 'abstract_by_moderator')
       and exists (select 1 from information_schema.columns where table_schema = 'public'
         and table_name = 'science_studies' and column_name = 'published_precision')
+      and exists (select 1 from information_schema.columns where table_schema = 'public'
+        and table_name = 'science_studies' and column_name = 'topic')
       -- 094: reports are no longer readable by every Core session.
       and exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'story_comment_reports'
         and policyname = 'story_comment_reports_read' and qual <> 'true') as ready`.execute(database);
@@ -324,6 +336,19 @@ export class ScienceService implements OnModuleInit {
     });
   }
 
+  /** C1: «Todos», «Hecha en Chile» or one topic, newest first or most connected first. */
+  async browseStudies(scope: StudyScope, sort: StudySort): Promise<{ studies: StudyJson[] }> {
+    return this.#guarded(async () => {
+      const where = scope === 'todos' ? sql`true` : scope === 'chile' ? sql`s.made_in_chile` : sql`s.topic = ${scope}`;
+      const order = sort === 'conectados'
+        ? sql`connected_stories desc, s.published_at desc nulls last, s.doi`
+        : sql`s.published_at desc nulls last, s.doi`;
+      const rows = await sql<StudyRow>`select ${STUDY_COLUMNS} from public.science_studies s
+        where ${where} order by ${order} limit 50`.execute(this.db.database);
+      return { studies: rows.rows.map(studyJson) };
+    });
+  }
+
   /** Cached study, resolved from Crossref and OpenAlex when missing or stale. */
   async study(doi: string): Promise<StudyJson> {
     return this.#guarded(async () => {
@@ -353,10 +378,10 @@ export class ScienceService implements OnModuleInit {
   /** Bibliographic fields only; moderator fields are never overwritten. */
   async #store(s: ResolvedStudy): Promise<void> {
     await sql`insert into public.science_studies(doi,title,review,authors,institution,journal,published_at,published_precision,
-        abstract,abstract_source,abstract_language,access,retracted,retracted_at,made_in_chile,resolved_at)
+        abstract,abstract_source,abstract_language,access,retracted,retracted_at,made_in_chile,topic,resolved_at)
       values (${s.doi},${s.title},${s.review},${s.authors},${s.institution},${s.journal},${s.published_at}::date,
         ${s.published_precision},${s.abstract},
-        ${s.abstract_source},${s.abstract_language},${s.access},${s.retracted},${s.retracted_at}::date,${s.made_in_chile},now())
+        ${s.abstract_source},${s.abstract_language},${s.access},${s.retracted},${s.retracted_at}::date,${s.made_in_chile},${s.topic},now())
       on conflict (doi) do update set title=excluded.title,
         -- A review a moderator set stays.
         review=case when public.science_studies.review_by_moderator then public.science_studies.review else excluded.review end,
@@ -371,6 +396,7 @@ export class ScienceService implements OnModuleInit {
         retracted=excluded.retracted or public.science_studies.retracted,
         retracted_at=coalesce(excluded.retracted_at, public.science_studies.retracted_at),
         made_in_chile=public.science_studies.made_in_chile or excluded.made_in_chile,
+        topic=coalesce(excluded.topic, public.science_studies.topic),
         resolved_at=now()`.execute(this.db.database);
   }
 

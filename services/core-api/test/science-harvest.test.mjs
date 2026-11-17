@@ -190,3 +190,35 @@ test('a source that asks to slow down (429) is retried after a pause, then given
   await assert.rejects(harvestArxiv({ fetcher: forbidden, sleep, now: new Date(), days: 30, limit: 10, arxivCategories: ['astro-ph.GA'] }), /403/u);
   assert.deepEqual(waits, []);
 });
+
+test('topics come from each source\'s own taxonomy, never from AI', async () => {
+  const { openAlexTopic, arxivTopic, STUDY_TOPICS } = await import('../dist/science/study-topics.js');
+  assert.equal(STUDY_TOPICS.length, 8);
+  const t = (field, subfield) => openAlexTopic({ field: { display_name: field }, subfield: { display_name: subfield } });
+  assert.equal(t('Medicine', 'Epidemiology'), 'salud');
+  assert.equal(t('Physics and Astronomy', 'Astronomy and Astrophysics'), 'astronomia');
+  assert.equal(t('Physics and Astronomy', 'Condensed Matter Physics'), 'fisica_quimica');
+  assert.equal(t('Earth and Planetary Sciences', 'Space and Planetary Science'), 'astronomia');
+  assert.equal(t('Earth and Planetary Sciences', 'Oceanography'), 'medioambiente');
+  assert.equal(t('Arts and Humanities', 'Archeology (arts and humanities)'), 'arqueologia');
+  assert.equal(t('Social Sciences', 'Archeology'), 'arqueologia');
+  assert.equal(t('Social Sciences', 'Education'), 'sociedad');
+  assert.equal(t('Agricultural and Biological Sciences', 'Ecology'), 'biologia');
+  assert.equal(t('Computer Science', 'Artificial Intelligence'), 'tecnologia');
+  assert.equal(t('Mathematics', 'Algebra and Number Theory'), null);
+  assert.equal(openAlexTopic(null), null);
+  assert.equal(arxivTopic('astro-ph.GA'), 'astronomia');
+  assert.equal(arxivTopic('q-bio.PE'), 'biologia');
+  assert.equal(arxivTopic('physics.ao-ph'), 'medioambiente');
+  assert.equal(arxivTopic('cs.CL'), 'tecnologia');
+  assert.equal(arxivTopic('quant-ph'), 'fisica_quimica');
+  assert.equal(arxivTopic('math.PR'), null);
+  // Each reader carries it.
+  assert.equal(parseOpenAlexWork({ ...openAlexWork, primary_topic: { field: { display_name: 'Environmental Science' } } }).topic, 'medioambiente');
+  assert.equal(parseOpenAlexWork(openAlexWork).topic, null);
+  assert.equal(parseEuropePmcResult({ doi: '10.1000/x', title: 'Título', source: 'MED' }).topic, 'salud');
+  assert.equal(parseCrossrefScieloItem(scieloItem).topic, null);
+  const feed = arxivFeed.replace('<published>2026-11-10', '<arxiv:primary_category term="astro-ph.GA"/><category term="astro-ph.GA"/><published>2026-11-10');
+  assert.equal(parseArxivFeed(feed).studies[0].topic, 'astronomia');
+  assert.equal(parseArxivFeed(arxivFeed.replace('<published>2026-11-10', '<category term="q-bio.NC"/><published>2026-11-10')).studies[0].topic, 'biologia');
+});

@@ -15,6 +15,7 @@ import { scienceCommentsSql } from '../../../packages/database/dist/migration/09
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
 import { scienceReportPrivacySql } from '../../../packages/database/dist/migration/094_science_report_privacy.js';
 import { scienceStudyReviewSql } from '../../../packages/database/dist/migration/095_science_study_review.js';
+import { scienceTopicsSql } from '../../../packages/database/dist/migration/096_science_topics.js';
 
 const ownerUrl = process.env.SCIENCE_TEST_DATABASE_URL;
 if (!ownerUrl && process.env.CI) throw new Error('CI must provide SCIENCE_TEST_DATABASE_URL: row security is not checked otherwise.');
@@ -85,6 +86,8 @@ before(async () => {
   await owner.query(scienceModerationSql);
   await owner.query(scienceReportPrivacySql);
   await owner.query(scienceStudyReviewSql);
+  await owner.query(scienceTopicsSql);
+  await owner.query(scienceTopicsSql);
   // Applying them twice must change nothing (the owner may re-run them).
   await owner.query(scienceCommentsSql);
   await owner.query(scienceModerationSql);

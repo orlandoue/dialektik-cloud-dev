@@ -33,11 +33,11 @@ async function store(db: Kysely<unknown>, s: HarvestedStudy): Promise<'added' | 
   const rows = await sql<{ inserted: boolean }>`
     insert into public.science_studies(doi, title, review, authors, institution, journal, published_at, published_precision,
       abstract, abstract_source, abstract_language, access, retracted, retracted_at, made_in_chile, resolved_at, harvested_at,
-      harvest_source)
+      harvest_source, topic)
     values (${s.doi}, ${s.title}, ${s.review}, ${s.authors}, ${s.institution}, ${s.journal}, ${s.published_at}::date,
       ${s.published_precision},
       ${s.abstract}, ${s.abstract_source}, ${s.abstract_language}, ${s.access}, ${s.retracted}, ${s.retracted_at}::date,
-      ${s.made_in_chile}, now(), now(), ${s.harvest_source})
+      ${s.made_in_chile}, now(), now(), ${s.harvest_source}, ${s.topic})
     on conflict (doi) do update set
       title = excluded.title,
       -- A review a moderator set stays; «not_reported» never overwrites one.
@@ -56,7 +56,8 @@ async function store(db: Kysely<unknown>, s: HarvestedStudy): Promise<'added' | 
       abstract_language = coalesce(public.science_studies.abstract_language, excluded.abstract_language),
       access = coalesce(public.science_studies.access, excluded.access),
       retracted = public.science_studies.retracted or excluded.retracted,
-      made_in_chile = public.science_studies.made_in_chile or excluded.made_in_chile
+      made_in_chile = public.science_studies.made_in_chile or excluded.made_in_chile,
+      topic = coalesce(excluded.topic, public.science_studies.topic)
     where not public.science_studies.abstract_by_moderator
     returning (xmax = 0) as inserted`.execute(db);
   const row = rows.rows[0];
