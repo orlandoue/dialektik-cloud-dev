@@ -302,10 +302,25 @@ void main() {
       await tester.tap(find.byKey(const ValueKey<String>('sci-mod-edit-c9')));
       await tester.pumpAndSettle();
       expect(find.byKey(const Key('sci-mod-study-form')), findsOneWidget);
-      await tester.enterText(
-        find.byKey(const ValueKey<String>('sci-mod-field-design')),
-        'Estudio transversal',
-      );
+      // «Tipo de estudio» and «Revisión» are fixed lists.
+      await tester.tap(find.byKey(const Key('sci-mod-field-design')));
+      await tester.pumpAndSettle();
+      for (final String design in studyDesigns) {
+        expect(find.text(design), findsWidgets, reason: design);
+      }
+      await tester.tap(find.text('Transversal').last);
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('sci-mod-field-review')));
+      await tester.pumpAndSettle();
+      for (final String review in <String>[
+        'Revisado por pares',
+        'Preprint',
+        'No informado',
+      ]) {
+        expect(find.text(review), findsWidgets, reason: review);
+      }
+      await tester.tap(find.text('No informado').last);
+      await tester.pumpAndSettle();
       await tester.enterText(
         find.byKey(const ValueKey<String>('sci-mod-field-sample_size')),
         '1200',
@@ -330,7 +345,8 @@ void main() {
       final Study saved = repository.studies.firstWhere(
         (Study s) => s.doi == withoutAbstract.doi,
       );
-      expect(saved.design, 'Estudio transversal');
+      expect(saved.design, 'Transversal');
+      expect(saved.review, StudyReview.notReported);
       expect(saved.sampleSize, 1200);
       expect(saved.population, isNull);
       expect(saved.abstractSource, 'Revista de ejemplo');

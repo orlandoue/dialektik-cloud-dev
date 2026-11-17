@@ -18,6 +18,7 @@ import 'package:dialektik/features/live/data/publisher_market_selection.dart';
 import 'package:dialektik/features/live/presentation/chile_seismic_observations_panel.dart';
 import 'package:dialektik/features/live/presentation/source_sync_sheet.dart';
 import 'package:dialektik/features/science/presentation/moderation_screen.dart';
+import 'package:dialektik/features/science/presentation/my_comments.dart';
 import 'package:flutter/material.dart';
 
 class _TabHeader extends StatelessWidget {
@@ -782,12 +783,16 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                       ),
                     for (final ArenaDuel duel in savedDuels)
                       DuelListCard(duel: duel, store: store),
-                    const ArenaSectionTitle('Aportes'),
-                    const Text(
-                      'Tus aportes con fuente se publican en la «Comunidad '
-                      'del caso» de cada acontecimiento.',
-                      style: ArenaText.body,
-                    ),
+                    if (store.scienceEnabled)
+                      MyCommentsSection(store: store)
+                    else ...<Widget>[
+                      const ArenaSectionTitle('Aportes'),
+                      const Text(
+                        'Tus aportes con fuente se publican en la «Comunidad '
+                        'del caso» de cada acontecimiento.',
+                        style: ArenaText.body,
+                      ),
+                    ],
                     const ArenaSectionTitle('Ajustes'),
                     ArenaCard(
                       key: const Key('arena-edition'),

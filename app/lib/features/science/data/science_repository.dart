@@ -41,6 +41,9 @@ abstract interface class ScienceRepository {
   /// Whether Science and story comments are on for this account.
   Future<ScienceAccess> access();
 
+  /// «Tus comentarios»: the reader's comments and their state.
+  Future<List<MyComment>> myComments();
+
   /// «Reportar»: one report per reader; it reaches the moderation queue.
   Future<void> report(String commentId, ReportReason reason, {String? note});
 }

@@ -402,6 +402,16 @@ class CommentTile extends StatelessWidget {
                             color: SciColors.inkSecondary,
                           ),
                           constraints: const BoxConstraints(minWidth: 160),
+                          // A standard menu: white, radius 12, soft shadow,
+                          // no outline.
+                          color: SciColors.surface,
+                          surfaceTintColor: Colors.transparent,
+                          elevation: 3,
+                          shadowColor: const Color(0x33111827),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          menuPadding: const EdgeInsets.symmetric(vertical: 4),
                           onSelected: (_) => onReport!(),
                           itemBuilder: (_) => const <PopupMenuEntry<String>>[
                             PopupMenuItem<String>(

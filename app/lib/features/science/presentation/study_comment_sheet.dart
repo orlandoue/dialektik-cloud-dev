@@ -39,9 +39,46 @@ Future<StoryComment?> showStudyCommentSheet(
   List<StoryComment> existing = const <StoryComment>[],
   ValueChanged<String>? onShowExisting,
 }) async {
-  final Study? chosen = study ?? await _pickStudy(context, store);
-  if (chosen == null || !context.mounted) return null;
-  final StoryComment? created = await showModalBottomSheet<StoryComment>(
+  Study? chosen = study;
+  Object? outcome;
+  // «Elegir otro estudio» closes the sheet and opens the picker again.
+  do {
+    if (chosen == null) {
+      if (!context.mounted) return null;
+      chosen = await _pickStudy(context, store);
+    }
+    if (chosen == null || !context.mounted) return null;
+    outcome = await _openSheet(
+      context,
+      store,
+      chosen,
+      event,
+      existing,
+      onShowExisting,
+    );
+    chosen = null;
+  } while (identical(outcome, chooseOtherStudy) && context.mounted);
+  final StoryComment? created = outcome is StoryComment ? outcome : null;
+  if (created != null && context.mounted) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Tu comentario está en revisión')),
+    );
+  }
+  return created;
+}
+
+/// Returned by the sheet when the reader asks for another study.
+const Object chooseOtherStudy = Object();
+
+Future<Object?> _openSheet(
+  BuildContext context,
+  ArenaStore store,
+  Study chosen,
+  EventDetailDto? event,
+  List<StoryComment> existing,
+  ValueChanged<String>? onShowExisting,
+) {
+  return showModalBottomSheet<Object>(
     context: context,
     isScrollControlled: true,
     backgroundColor: SciColors.surface,
@@ -59,12 +96,6 @@ Future<StoryComment?> showStudyCommentSheet(
       onShowExisting: onShowExisting,
     ),
   );
-  if (created != null && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Tu comentario está en revisión')),
-    );
-  }
-  return created;
 }
 
 /// Choose the study first when the sheet opens from a story.
@@ -233,6 +264,7 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
   StudyRelation? _relation;
   String _fragment = '';
   bool _fragmentInvalid = false;
+  bool _fragmentTooShort = false;
   bool _busy = false;
   String? _error;
 
@@ -289,7 +321,12 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
       _relation != null &&
       _fragment.isNotEmpty &&
       !_fragmentInvalid &&
+      !_fragmentTooShort &&
       _comment.text.trim().isNotEmpty;
+
+  /// A retracted study or one without an abstract cannot be cited: steps 3
+  /// to 5 stay closed and the reader can pick another study.
+  bool get _blocked => study.retracted || !study.hasAbstract;
 
   Future<void> _changeStory() async {
     final EventCardDto? picked = await showModalBottomSheet<EventCardDto>(
@@ -348,6 +385,7 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
       _fragment = text;
       _fragmentInvalid =
           text.isNotEmpty && !isLiteralFragment(text, study.abstractText ?? '');
+      _fragmentTooShort = text.isNotEmpty && !fragmentLongEnough(text);
     });
   }
 
@@ -385,6 +423,8 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
             _duplicateId = null;
           case 'not_literal':
             _fragmentInvalid = true;
+          case 'fragment_too_short':
+            _fragmentTooShort = true;
           case 'no_abstract':
             _error = 'Este estudio no tiene resumen disponible';
           case 'account_too_new':
@@ -519,6 +559,31 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
                     '${study.design == null ? '' : ' · ${study.design}'}',
                     style: SciText.meta,
                   ),
+                  if (_blocked) ...<Widget>[
+                    const SizedBox(height: 8),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: OutlinedButton.icon(
+                        key: const Key('sci-choose-other'),
+                        onPressed: () =>
+                            Navigator.of(context).pop(chooseOtherStudy),
+                        style: OutlinedButton.styleFrom(
+                          minimumSize: const Size(44, 44),
+                          foregroundColor: SciColors.primaryText,
+                          side: const BorderSide(
+                            color: SciColors.borderControl,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(
+                              SciRadius.rowButton,
+                            ),
+                          ),
+                        ),
+                        icon: const Icon(SciIcons.search, size: 18),
+                        label: const Text('Elegir otro estudio'),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   _stepLabel(1, 'Noticia'),
                   _StoryField(
@@ -602,7 +667,9 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
                             radius: 10,
                             expand: true,
                             radio: true,
-                            onTap: () => setState(() => _relation = relation),
+                            onTap: _blocked
+                                ? null
+                                : () => setState(() => _relation = relation),
                           ),
                       ],
                     ),
@@ -611,16 +678,19 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
                   _stepLabel(4, 'Fragmento literal del resumen'),
                   // Nothing literal to quote without an abstract: step 4 stays
                   // closed until a moderator loads it from the publisher.
-                  if (study.hasAbstract)
+                  if (study.hasAbstract && !study.retracted)
                     _AbstractPicker(
                       study: study,
                       fragment: _fragment,
                       invalid: _fragmentInvalid,
+                      tooShort: _fragmentTooShort,
                       onSelected: _selectFragment,
                     )
                   else
                     Container(
-                      key: const Key('sci-no-abstract'),
+                      key: Key(
+                        study.retracted ? 'sci-step-closed' : 'sci-no-abstract',
+                      ),
                       width: double.infinity,
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -628,8 +698,10 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
                         borderRadius: BorderRadius.circular(SciRadius.card),
                         border: Border.all(color: SciColors.borderCard),
                       ),
-                      child: const Text(
-                        'Este estudio no tiene resumen disponible',
+                      child: Text(
+                        study.retracted
+                            ? 'Un artículo retractado no se puede citar'
+                            : 'Este estudio no tiene resumen disponible',
                         style: SciText.body,
                       ),
                     ),
@@ -638,6 +710,7 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
                   TextField(
                     key: const Key('sci-comment-input'),
                     controller: _comment,
+                    enabled: !_blocked,
                     minLines: 2,
                     maxLines: 5,
                     maxLength: maxLength,
@@ -903,11 +976,13 @@ class _AbstractPicker extends StatelessWidget {
     required this.fragment,
     required this.invalid,
     required this.onSelected,
+    this.tooShort = false,
   });
 
   final Study study;
   final String fragment;
   final bool invalid;
+  final bool tooShort;
   final ValueChanged<String> onSelected;
 
   @override
@@ -966,6 +1041,22 @@ class _AbstractPicker extends StatelessWidget {
             ),
           ),
         ],
+        if (tooShort && !invalid)
+          const Padding(
+            padding: EdgeInsets.only(top: 6),
+            child: Text(
+              'Selecciona al menos 6 palabras o 40 caracteres que muestren la '
+              'relación',
+              key: Key('sci-fragment-short'),
+              style: TextStyle(
+                fontFamily: SciText.sans,
+                fontSize: 13,
+                height: 18 / 13,
+                fontWeight: FontWeight.w600,
+                color: SciColors.ink,
+              ),
+            ),
+          ),
         if (invalid)
           const Padding(
             padding: EdgeInsets.only(top: 6),

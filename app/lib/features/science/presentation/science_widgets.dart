@@ -193,8 +193,11 @@ class SelectChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool reduce = MediaQuery.disableAnimationsOf(context);
+    // Closed (no onTap): greyed, like any disabled control.
+    final bool enabled = onTap != null;
     return Semantics(
       button: !radio,
+      enabled: enabled,
       selected: selected,
       checked: radio ? selected : null,
       inMutuallyExclusiveGroup: radio,
@@ -211,10 +214,18 @@ class SelectChip extends StatelessWidget {
           // Hugs its label unless it fills a grid cell.
           alignment: expand ? Alignment.center : null,
           decoration: BoxDecoration(
-            color: selected ? SciColors.ink : SciColors.surface,
+            color: selected
+                ? SciColors.ink
+                : enabled
+                ? SciColors.surface
+                : SciColors.bgApp,
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(
-              color: selected ? SciColors.ink : SciColors.borderControl,
+              color: selected
+                  ? SciColors.ink
+                  : enabled
+                  ? SciColors.borderControl
+                  : SciColors.borderCard,
             ),
           ),
           child: Center(
@@ -231,7 +242,11 @@ class SelectChip extends StatelessWidget {
                   fontFamily: SciText.sans,
                   fontSize: fontSize,
                   fontWeight: FontWeight.w600,
-                  color: selected ? Colors.white : SciColors.ink,
+                  color: selected
+                      ? Colors.white
+                      : enabled
+                      ? SciColors.ink
+                      : SciColors.inkSecondary,
                 ),
               ),
             ),

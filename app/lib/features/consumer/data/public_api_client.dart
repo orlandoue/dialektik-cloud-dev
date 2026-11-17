@@ -185,6 +185,7 @@ final class PublicApiClient
         'PUBLIC_SCIENCE_ACCOUNT_TOO_NEW' => 'account_too_new',
         'PUBLIC_SCIENCE_INVALID_CLAIM' => 'invalid_claim',
         'PUBLIC_SCIENCE_NO_ABSTRACT' => 'no_abstract',
+        'PUBLIC_SCIENCE_FRAGMENT_TOO_SHORT' => 'fragment_too_short',
         _ => failure.kind == PublicFailureKind.gone ? 'retracted' : null,
       };
       if (reason != null) {
@@ -220,6 +221,9 @@ final class PublicApiClient
     }
   }
 
+  @override
+  Future<List<MyComment>> myComments() => _get<List<MyComment>>('/v1/science/my-comments',
+    decoder: MyComment.listFromJson, refresh: true, requestToken: null);
   @override
   Future<void> report(String commentId, ReportReason reason, {String? note}) =>
     _postJson('/v1/comments/${Uri.encodeComponent(commentId)}/reports',

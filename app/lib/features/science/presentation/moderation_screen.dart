@@ -17,6 +17,22 @@ Future<void> openScienceModeration(BuildContext context, ArenaStore store) =>
       ),
     );
 
+/// «Tipo de estudio»: the fixed list Core accepts. A design outside it
+/// (from before the list) is kept until the moderator picks one.
+const List<String> studyDesigns = <String>[
+  'Ensayo aleatorizado',
+  'Cohorte',
+  'Casos y controles',
+  'Transversal',
+  'Serie de casos',
+  'Revisión sistemática',
+  'Metaanálisis',
+  'Estudio en animales',
+  'Estudio in vitro',
+  'Modelación',
+  'Otro',
+];
+
 /// Minimal moderation for Science: the review queue (study comments and
 /// reported comments), the fields of each study a moderator completes, and
 /// the daily use of the metadata APIs.
@@ -132,6 +148,22 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
     if (saved != null) await _load();
   }
 
+  /// A tab label that wraps to two lines with large text. A [Tab] with an
+  /// explicit height also gives the app bar its full height.
+  static Tab _tab(BuildContext context, Key key, String label) {
+    final double line = MediaQuery.textScalerOf(context).scale(15) * 1.25;
+    return Tab(
+      key: key,
+      height: line > 26 ? line * 2 + 12 : 46,
+      child: Text(
+        label,
+        maxLines: 2,
+        textAlign: TextAlign.center,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ModerationQueue? queue = _queue;
@@ -163,9 +195,8 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
             ),
           ],
           bottom: TabBar(
-            // Large text: the tabs scroll instead of cutting their labels.
-            isScrollable: true,
-            tabAlignment: TabAlignment.start,
+            // Two fixed halves; with large text a label wraps to a second
+            // line instead of running off screen or over its neighbour.
             labelColor: SciColors.primaryText,
             unselectedLabelColor: SciColors.inkSecondary,
             indicatorColor: SciColors.primary,
@@ -175,8 +206,8 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
               fontWeight: FontWeight.w600,
             ),
             tabs: <Widget>[
-              Tab(key: const Key('sci-mod-tab-queue'), text: 'Cola · $pending'),
-              const Tab(key: Key('sci-mod-tab-usage'), text: 'Consumo de APIs'),
+              _tab(context, const Key('sci-mod-tab-queue'), 'Cola · $pending'),
+              _tab(context, const Key('sci-mod-tab-usage'), 'Consumo de APIs'),
             ],
           ),
         ),
@@ -483,7 +514,9 @@ class ApiUsageView extends StatelessWidget {
               borderRadius: BorderRadius.circular(SciRadius.card),
               border: Border.all(color: SciColors.borderCard),
             ),
+            // Full width: every day starts at the same left edge.
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: <Widget>[
                 for (int i = 0; i < dates.length; i++)
                   Container(
@@ -549,7 +582,6 @@ class StudyModerationScreen extends StatefulWidget {
 class _StudyModerationScreenState extends State<StudyModerationScreen> {
   late final Map<String, TextEditingController> _fields =
       <String, TextEditingController>{
-        'design': TextEditingController(text: widget.study.design),
         'population': TextEditingController(text: widget.study.population),
         'sample_size': TextEditingController(
           text: widget.study.sampleSize?.toString(),
@@ -565,8 +597,10 @@ class _StudyModerationScreenState extends State<StudyModerationScreen> {
   bool _saving = false;
   String? _error;
 
+  late String? _design = widget.study.design;
+  late StudyReview _review = widget.study.review;
+
   static const List<(String, String)> labels = <(String, String)>[
-    ('design', 'Tipo de estudio'),
     ('population', 'Población'),
     ('sample_size', 'Muestra (n)'),
     ('follow_up', 'Seguimiento'),
@@ -608,6 +642,14 @@ class _StudyModerationScreenState extends State<StudyModerationScreen> {
       for (final (String key, String _) in labels)
         if (key != 'sample_size') key: _text(key),
       'sample_size': n,
+      // A free-text design from before the fixed list is kept unless changed.
+      if (_design != widget.study.design) 'design': _design,
+      if (_review != widget.study.review)
+        'review': switch (_review) {
+          StudyReview.peerReviewed => 'peer_reviewed',
+          StudyReview.preprint => 'preprint',
+          StudyReview.notReported => 'not_reported',
+        },
     };
     // Only touch the abstract when it changed: Crossref's stays untouched.
     if (abstract != widget.study.abstractText?.trim() ||
@@ -646,6 +688,9 @@ class _StudyModerationScreenState extends State<StudyModerationScreen> {
         helperText: helper,
         helperMaxLines: 3,
         border: const OutlineInputBorder(),
+        enabledBorder: const OutlineInputBorder(
+          borderSide: BorderSide(color: SciColors.borderControl),
+        ),
       );
 
   @override
@@ -677,6 +722,51 @@ class _StudyModerationScreenState extends State<StudyModerationScreen> {
           style: SciText.secondary,
         ),
         const SizedBox(height: 16),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: DropdownButtonFormField<String?>(
+            key: const Key('sci-mod-field-design'),
+            initialValue: _design,
+            isExpanded: true,
+            decoration: _decoration('Tipo de estudio'),
+            items: <DropdownMenuItem<String?>>[
+              const DropdownMenuItem<String?>(child: Text(notInformed)),
+              for (final String d in <String>[
+                ...studyDesigns,
+                if (_design != null && !studyDesigns.contains(_design))
+                  _design!,
+              ])
+                DropdownMenuItem<String?>(value: d, child: Text(d)),
+            ],
+            onChanged: (String? value) => setState(() => _design = value),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: DropdownButtonFormField<StudyReview>(
+            key: const Key('sci-mod-field-review'),
+            initialValue: _review,
+            isExpanded: true,
+            decoration: _decoration('Revisión'),
+            items: const <DropdownMenuItem<StudyReview>>[
+              DropdownMenuItem<StudyReview>(
+                value: StudyReview.peerReviewed,
+                child: Text('Revisado por pares'),
+              ),
+              DropdownMenuItem<StudyReview>(
+                value: StudyReview.preprint,
+                child: Text('Preprint'),
+              ),
+              DropdownMenuItem<StudyReview>(
+                value: StudyReview.notReported,
+                child: Text(notInformed),
+              ),
+            ],
+            onChanged: (StudyReview? value) {
+              if (value != null) setState(() => _review = value);
+            },
+          ),
+        ),
         for (final (String key, String label) in labels)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
