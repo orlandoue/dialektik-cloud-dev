@@ -624,7 +624,12 @@ List<Widget> storyCommentsChildren(
     ];
   }
   final List<StoryComment> top = controller.topLevel;
+  final bool quotable = claimQuotesOf(event).isNotEmpty;
   return <Widget>[
+    _KnowStudyPrompt(
+      quotable: quotable,
+      onConnect: () => unawaited(_openStudySheet(context, controller, event)),
+    ),
     _FilterBar(controller: controller),
     if (controller.comments.isEmpty)
       Padding(
@@ -636,16 +641,6 @@ List<Widget> storyCommentsChildren(
               'Sé la primera persona en comentar',
               textAlign: TextAlign.center,
               style: SciText.cardTitle,
-            ),
-            TextButton.icon(
-              style: TextButton.styleFrom(
-                minimumSize: const Size(44, 44),
-                foregroundColor: SciColors.primaryText,
-              ),
-              onPressed: () =>
-                  unawaited(_openStudySheet(context, controller, event)),
-              icon: const Icon(SciIcons.flask, size: 18),
-              label: const Text('También puedes aportar un estudio'),
             ),
           ],
         ),
@@ -679,6 +674,56 @@ Future<void> _openStudySheet(
     existing: controller.comments,
   );
   if (created != null) controller.add(created);
+}
+
+/// «¿Conoces un estudio sobre esto?»: opens C2 with this story chosen. A
+/// story without literal quotes cannot be connected and says so instead.
+class _KnowStudyPrompt extends StatelessWidget {
+  const _KnowStudyPrompt({required this.quotable, required this.onConnect});
+
+  final bool quotable;
+  final VoidCallback onConnect;
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    key: const Key('sci-know-study'),
+    padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+    child: DecoratedBox(
+      decoration: BoxDecoration(
+        color: SciColors.surface,
+        borderRadius: BorderRadius.circular(SciRadius.card),
+        border: Border.all(color: SciColors.borderCard),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        child: Row(
+          children: <Widget>[
+            const Icon(SciIcons.flask, size: 20, color: SciColors.inkSecondary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                quotable
+                    ? '¿Conoces un estudio sobre esto?'
+                    : 'Esta noticia aún no tiene citas literales para '
+                          'conectar un estudio.',
+                style: quotable ? SciText.cardTitle : SciText.secondary,
+              ),
+            ),
+            if (quotable)
+              TextButton(
+                key: const Key('sci-know-study-open'),
+                style: TextButton.styleFrom(
+                  minimumSize: const Size(44, 44),
+                  foregroundColor: SciColors.primaryText,
+                ),
+                onPressed: onConnect,
+                child: const Text('Aportar'),
+              ),
+          ],
+        ),
+      ),
+    ),
+  );
 }
 
 class _FilterBar extends StatelessWidget {
