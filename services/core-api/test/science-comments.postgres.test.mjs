@@ -13,6 +13,7 @@ import { after, before, test } from 'node:test';
 import pg from 'pg';
 import { scienceCommentsSql } from '../../../packages/database/dist/migration/091_science_and_story_comments.js';
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
+import { scienceReportPrivacySql } from '../../../packages/database/dist/migration/094_science_report_privacy.js';
 
 const ownerUrl = process.env.SCIENCE_TEST_DATABASE_URL;
 if (!ownerUrl && process.env.CI) throw new Error('CI must provide SCIENCE_TEST_DATABASE_URL: row security is not checked otherwise.');
@@ -81,9 +82,11 @@ before(async () => {
   await owner.query(schema);
   await owner.query(scienceCommentsSql);
   await owner.query(scienceModerationSql);
+  await owner.query(scienceReportPrivacySql);
   // Applying them twice must change nothing (the owner may re-run them).
   await owner.query(scienceCommentsSql);
   await owner.query(scienceModerationSql);
+  await owner.query(scienceReportPrivacySql);
   url.username = 'dialektik_core_app';
   url.password = corePassword;
   core = new pg.Client({ connectionString: url.toString() });
@@ -237,4 +240,62 @@ test('a report is filed in the reader\'s own name, never on their own comment, a
     const flagged = await core.query(`update public.story_comment_reports set resolved_at = now(), resolution = 'dismissed' returning comment_id`);
     assert.equal(flagged.rows.length, 1);
   });
+});
+
+test('who reported whom is readable only by moderators and by the reporter', { skip }, async () => {
+  let commentId;
+  await core.query('begin');
+  await core.query("select set_config('dialektik.social_user', $1, true)", [reader]);
+  commentId = (await insertComment(reader)).rows[0].id;
+  await core.query("select set_config('dialektik.social_user', $1, true)", [stranger]);
+  await core.query(`insert into public.story_comment_reports(comment_id,user_id,reason,note) values ($1,$2,'ofensivo','nota privada')`, [commentId, stranger]);
+  await core.query('commit');
+  try {
+    // Another reader (the comment's author included) sees no report.
+    await asCore(reader, async () => {
+      assert.equal((await core.query('select * from public.story_comment_reports')).rows.length, 0);
+    });
+    // A Core session without a reader sees none either.
+    await asCore(null, async () => {
+      assert.equal((await core.query('select * from public.story_comment_reports')).rows.length, 0);
+    });
+    // The reporter sees their own report.
+    await asCore(stranger, async () => {
+      assert.equal((await core.query('select reason from public.story_comment_reports')).rows[0].reason, 'ofensivo');
+    });
+    // A moderator sees it.
+    await asCore(moderator, async () => {
+      const rows = await core.query('select user_id::text as user_id from public.story_comment_reports');
+      assert.deepEqual(rows.rows.map((r) => r.user_id), [stranger]);
+    }, { moderatorFlag: true });
+  } finally {
+    await owner.query('delete from public.story_comment_reports');
+    await owner.query('delete from public.story_comments where id = $1', [commentId]);
+  }
+});
+
+test('a moderator only resolves a report: reporter, comment and reason cannot change', { skip }, async () => {
+  let commentId;
+  await core.query('begin');
+  await core.query("select set_config('dialektik.social_user', $1, true)", [reader]);
+  commentId = (await insertComment(reader)).rows[0].id;
+  await core.query("select set_config('dialektik.social_user', $1, true)", [stranger]);
+  await core.query(`insert into public.story_comment_reports(comment_id,user_id,reason) values ($1,$2,'spam')`, [commentId, stranger]);
+  await core.query('commit');
+  try {
+    await asCore(moderator, async () => {
+      for (const change of [`user_id = '${moderator}'`, `reason = 'otro'`, `note = 'cambiada'`, `comment_id = comment_id`, `created_at = now()`]) {
+        await refused(() => core.query(`update public.story_comment_reports set ${change}`), '42501');
+      }
+      const resolved = await core.query(`update public.story_comment_reports set resolved_at = now(), resolution = 'hidden' returning reason`);
+      assert.equal(resolved.rows[0].reason, 'spam');
+      // «Ocultar comentario» leaves the comment as rejected, which the check allows.
+      const hidden = await core.query(`update public.story_comments set status = 'rejected', reviewed_at = now(),
+        review_reason = 'Insulto personal' where id = $1 returning status`, [commentId]);
+      assert.equal(hidden.rows[0].status, 'rejected');
+    }, { moderatorFlag: true });
+  } finally {
+    await owner.query('delete from public.story_comment_reports');
+    await owner.query('delete from public.story_comments where id = $1', [commentId]);
+  }
 });

@@ -10,6 +10,7 @@ import { redundantReceiptRetentionMigration } from './090_redundant_receipt_rete
 import { scienceCommentsMigration } from './091_science_and_story_comments.js';
 import { scienceModerationMigration } from './092_science_moderation.js';
 import { scienceHarvestMigration } from './093_science_harvest.js';
+import { scienceReportPrivacyMigration } from './094_science_report_privacy.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -101,6 +102,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '091_science_and_story_comments': scienceCommentsMigration,
   '092_science_moderation': scienceModerationMigration,
   '093_science_harvest': scienceHarvestMigration,
+  '094_science_report_privacy': scienceReportPrivacyMigration,
   '085_social_arena': socialArenaMigration,
   '084_social_follower_count': socialFollowerCountMigration,
   '083_social_community': socialCommunityMigration,
