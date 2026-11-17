@@ -59,11 +59,12 @@ revoke all on function public.dialektik_science_study_connected(text) from publi
 do $role$
 begin
   if not exists (select 1 from pg_roles where rolname = 'dialektik_science_harvester') then
-    create role dialektik_science_harvester nologin nosuperuser nocreatedb nocreaterole noinherit nobypassrls;
+    -- New roles are never superuser nor BYPASSRLS. Those attributes are not
+    -- named here: in Supabase only a superuser may write them, even to deny.
+    create role dialektik_science_harvester nologin noinherit;
   end if;
 end
 $role$;
-alter role dialektik_science_harvester nosuperuser nobypassrls;
 
 alter table public.science_harvest_runs enable row level security;
 alter table public.science_harvest_runs force row level security;
