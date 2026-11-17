@@ -242,8 +242,8 @@ final class PublicApiClient
     _postJson('/v1/science/moderation/studies/${Uri.encodeComponent(doi)}', fields.fields,
       (value) => Study.fromJson(value! as Map<String,dynamic>), method: 'PUT');
   @override
-  Future<List<ApiUsageDay>> usage() => _get<List<ApiUsageDay>>('/v1/science/moderation/usage',
-    decoder: ApiUsageDay.listFromJson, refresh: true, requestToken: null);
+  Future<ApiUsage> usage() => _get<ApiUsage>('/v1/science/moderation/usage',
+    decoder: ApiUsage.fromJson, refresh: true, requestToken: null);
 
   Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder, {String method = 'POST'}) async {
     final token = await authorizationTokenProvider?.call();

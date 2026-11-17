@@ -65,6 +65,7 @@ abstract interface class ScienceModerationRepository {
 
   Future<Study> moderateStudy(String doi, StudyModeration fields);
 
-  /// Calls and errors per metadata API and day, last 30 days.
-  Future<List<ApiUsageDay>> usage();
+  /// Calls and errors per metadata API and day, last 30 days, and whether
+  /// the daily harvest is running.
+  Future<ApiUsage> usage();
 }
