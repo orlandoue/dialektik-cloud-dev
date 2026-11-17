@@ -583,3 +583,62 @@ final class MyComment {
   final String eventId;
   final String? eventTitle;
 }
+
+/// A possible match for what the reader wrote in C2 (DOI, link or title).
+final class LookupCandidate {
+  const LookupCandidate({
+    required this.doi,
+    required this.title,
+    this.authors,
+    this.journal,
+    this.year,
+    this.review = StudyReview.notReported,
+  });
+
+  factory LookupCandidate.fromJson(Map<String, dynamic> json) =>
+      LookupCandidate(
+        doi: json['doi'] as String,
+        title: json['title'] as String,
+        authors: json['authors'] as String?,
+        journal: json['journal'] as String?,
+        year: (json['year'] as num?)?.toInt(),
+        // Peer review is never assumed: only Core's explicit value counts.
+        review: switch (json['review']) {
+          'peer_reviewed' => StudyReview.peerReviewed,
+          'preprint' => StudyReview.preprint,
+          _ => StudyReview.notReported,
+        },
+      );
+
+  final String doi;
+  final String title;
+  final String? authors;
+  final String? journal;
+  final int? year;
+  final StudyReview review;
+}
+
+/// Answer of `GET /v1/science/lookup`: up to three candidates, or why none.
+final class LookupResult {
+  const LookupResult({
+    this.candidates = const <LookupCandidate>[],
+    this.linkWithoutDoi = false,
+  });
+
+  factory LookupResult.fromJson(Object? value) {
+    final Map<String, dynamic> json = value! as Map<String, dynamic>;
+    return LookupResult(
+      candidates: <LookupCandidate>[
+        for (final Object? c
+            in (json['candidates'] as List<dynamic>?) ?? const <dynamic>[])
+          LookupCandidate.fromJson(c! as Map<String, dynamic>),
+      ],
+      linkWithoutDoi: json['reason'] == 'no_doi_in_link',
+    );
+  }
+
+  final List<LookupCandidate> candidates;
+
+  /// A link was written, but it carries no DOI; it is never downloaded.
+  final bool linkWithoutDoi;
+}

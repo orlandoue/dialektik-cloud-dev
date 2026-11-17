@@ -102,6 +102,19 @@ void main() {
     );
   });
 
+  test('a lookup candidate is never assumed to be peer reviewed', () {
+    LookupCandidate of(Object? review) =>
+        LookupCandidate.fromJson(<String, dynamic>{
+          'doi': '10.5281/zenodo.1',
+          'title': 'T',
+          'review': review,
+        });
+    expect(of('not_reported').review, StudyReview.notReported);
+    expect(of(null).review, StudyReview.notReported);
+    expect(of('preprint').review, StudyReview.preprint);
+    expect(of('peer_reviewed').review, StudyReview.peerReviewed);
+  });
+
   test('«Tus comentarios» reads every state from Core', () {
     final List<MyComment> list = MyComment.listFromJson(<String, dynamic>{
       'comments': <Map<String, dynamic>>[

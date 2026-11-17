@@ -139,6 +139,10 @@ final class PublicApiClient
     '/v1/science/studies', query: {'filter': filter.wire},
     decoder: Study.listFromJson, refresh: true, requestToken: null);
   @override
+  Future<LookupResult> lookup(String query) => _get<LookupResult>(
+    '/v1/science/lookup?q=${Uri.encodeQueryComponent(query)}',
+    decoder: LookupResult.fromJson, refresh: true, requestToken: null);
+  @override
   Future<Study> study(String doi) => _get<Study>(
     '/v1/science/studies/${Uri.encodeComponent(doi)}',
     decoder: (value) => Study.fromJson(value! as Map<String,dynamic>), refresh: false, requestToken: null);

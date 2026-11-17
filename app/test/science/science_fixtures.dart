@@ -213,6 +213,37 @@ class FakeScienceRepository
     };
   }
 
+  /// Every query the C2 search sent.
+  final List<String> lookups = <String>[];
+
+  @override
+  Future<LookupResult> lookup(String query) async {
+    lookups.add(query);
+    final String q = query.trim().toLowerCase();
+    LookupCandidate candidate(Study s) => LookupCandidate(
+      doi: s.doi,
+      title: s.title,
+      authors: s.authors,
+      journal: s.journal,
+      year: s.publishedAt?.year,
+      review: s.review,
+    );
+    for (final Study s in studies) {
+      if (q.contains(s.doi.toLowerCase())) {
+        return LookupResult(candidates: <LookupCandidate>[candidate(s)]);
+      }
+    }
+    if (q.startsWith('http')) return const LookupResult(linkWithoutDoi: true);
+    final List<String> words = q.split(RegExp(r'\s+'));
+    return LookupResult(
+      candidates: <LookupCandidate>[
+        for (final Study s in studies)
+          if (words.every((String w) => s.title.toLowerCase().contains(w)))
+            candidate(s),
+      ].take(3).toList(),
+    );
+  }
+
   @override
   Future<Study> study(String doi) async =>
       studies.firstWhere((Study s) => s.doi.toLowerCase() == doi.toLowerCase());
@@ -440,6 +471,8 @@ class ArenaScienceCore extends ArenaFullCore
       science.listStudies(filter);
   @override
   Future<Study> study(String doi) => science.study(doi);
+  @override
+  Future<LookupResult> lookup(String query) => science.lookup(query);
   @override
   Future<List<StoryComment>> storyComments(String eventId) =>
       science.storyComments(eventId);

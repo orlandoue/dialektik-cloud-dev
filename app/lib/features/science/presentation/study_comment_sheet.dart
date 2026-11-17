@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
+import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/science/data/science_models.dart';
 import 'package:dialektik/features/science/data/science_repository.dart';
@@ -123,10 +124,14 @@ class _StudyPicker extends StatefulWidget {
 }
 
 class _StudyPickerState extends State<_StudyPicker> {
-  final TextEditingController _doi = TextEditingController();
+  final TextEditingController _query = TextEditingController();
   Future<List<Study>>? _studies;
-  String? _error;
+
+  /// Candidates of the last search; null before any search.
+  List<LookupCandidate>? _candidates;
+  String? _message;
   bool _busy = false;
+  String? _opening;
 
   @override
   void initState() {
@@ -136,30 +141,70 @@ class _StudyPickerState extends State<_StudyPicker> {
 
   @override
   void dispose() {
-    _doi.dispose();
+    _query.dispose();
     super.dispose();
   }
 
-  Future<void> _lookup() async {
+  /// A DOI, a link or a title: Core answers with up to three candidates.
+  Future<void> _search() async {
     final ScienceRepository? repository = widget.store.science;
-    final String doi = _doi.text.trim().replaceFirst(
-      RegExp(r'^(https?://)?(dx\.)?doi\.org/'),
-      '',
-    );
-    if (repository == null || doi.isEmpty || _busy) return;
+    final String query = _query.text.trim();
+    if (repository == null || query.length < 3 || _busy) return;
     setState(() {
       _busy = true;
-      _error = null;
+      _message = null;
     });
     try {
-      final Study study = await repository.study(doi);
-      if (mounted) Navigator.of(context).pop(study);
+      final LookupResult result = await repository.lookup(query);
+      if (!mounted) return;
+      setState(() {
+        _candidates = result.candidates;
+        _message = result.linkWithoutDoi
+            ? 'Este enlace no trae un DOI. Escribe el título del estudio.'
+            : result.candidates.isEmpty
+            ? 'No encontramos coincidencias. Prueba con el DOI o con otras '
+                  'palabras del título.'
+            : null;
+      });
+    } on PublicApiFailure catch (failure) {
+      if (mounted) {
+        setState(
+          () => _message = failure.kind == PublicFailureKind.rateLimited
+              ? 'Hiciste muchas búsquedas. Inténtalo en un rato.'
+              : 'No pudimos buscar. Inténtalo de nuevo.',
+        );
+      }
     } on Object {
-      if (mounted) setState(() => _error = 'No encontramos ese DOI');
+      if (mounted) {
+        setState(() => _message = 'No pudimos buscar. Inténtalo de nuevo.');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
   }
+
+  Future<void> _open(LookupCandidate candidate) async {
+    final ScienceRepository? repository = widget.store.science;
+    if (repository == null || _opening != null) return;
+    setState(() => _opening = candidate.doi);
+    try {
+      final Study study = await repository.study(candidate.doi);
+      if (mounted) Navigator.of(context).pop(study);
+    } on Object {
+      if (mounted) {
+        setState(() {
+          _opening = null;
+          _message = 'No pudimos abrir ese estudio. Inténtalo de nuevo.';
+        });
+      }
+    }
+  }
+
+  String _meta(LookupCandidate c) => <String>[
+    if (c.authors != null) c.authors!,
+    if (c.journal != null) c.journal!,
+    if (c.year != null) '${c.year}',
+  ].join(' · ');
 
   @override
   Widget build(BuildContext context) => SafeArea(
@@ -188,48 +233,121 @@ class _StudyPickerState extends State<_StudyPicker> {
           const SizedBox(height: 12),
           TextField(
             key: const Key('sci-doi-input'),
-            controller: _doi,
+            controller: _query,
             textInputAction: TextInputAction.search,
-            onSubmitted: (_) => unawaited(_lookup()),
+            onSubmitted: (_) => unawaited(_search()),
             style: SciText.body,
             decoration: InputDecoration(
-              hintText: 'DOI, por ejemplo 10.7326/M18-2101',
-              errorText: _error,
+              labelText: 'DOI, enlace o título',
+              hintText: 'Por ejemplo 10.7326/M18-2101',
               constraints: const BoxConstraints(minHeight: 44),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(SciRadius.rowButton),
                 borderSide: const BorderSide(color: SciColors.borderControl),
               ),
-              suffixIcon: IconButton(
-                tooltip: 'Buscar DOI',
-                onPressed: () => unawaited(_lookup()),
-                icon: const Icon(SciIcons.search),
-              ),
+              suffixIcon: _busy
+                  ? const Padding(
+                      padding: EdgeInsets.all(12),
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    )
+                  : IconButton(
+                      key: const Key('sci-lookup-search'),
+                      tooltip: 'Buscar',
+                      onPressed: () => unawaited(_search()),
+                      icon: const Icon(SciIcons.search),
+                    ),
             ),
           ),
+          if (_message != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Semantics(
+                liveRegion: true,
+                child: Text(
+                  _message!,
+                  key: const Key('sci-lookup-message'),
+                  style: SciText.secondary,
+                ),
+              ),
+            ),
           const SizedBox(height: 8),
           Flexible(
-            child: FutureBuilder<List<Study>>(
-              future: _studies,
-              builder: (BuildContext context, AsyncSnapshot<List<Study>> s) =>
-                  ListView(
+            child: _candidates != null && _candidates!.isNotEmpty
+                ? ListView(
+                    key: const Key('sci-lookup-results'),
                     shrinkWrap: true,
                     children: <Widget>[
-                      for (final Study study in s.data ?? const <Study>[])
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          _candidates!.length == 1
+                              ? '1 coincidencia'
+                              : '${_candidates!.length} coincidencias',
+                          style: SciText.label,
+                        ),
+                      ),
+                      for (final LookupCandidate c in _candidates!)
                         ListTile(
-                          minTileHeight: 56,
+                          key: ValueKey<String>('sci-lookup-${c.doi}'),
+                          minTileHeight: 64,
                           contentPadding: EdgeInsets.zero,
                           leading: const Icon(
                             SciIcons.flask,
                             size: 22,
                             color: SciColors.ink,
                           ),
-                          title: Text(study.title, style: SciText.secondary),
-                          onTap: () => Navigator.of(context).pop(study),
+                          title: Text(c.title, style: SciText.body),
+                          subtitle: Text(
+                            <String>[
+                              if (_meta(c).isNotEmpty) _meta(c),
+                              if (c.review == StudyReview.preprint) 'Preprint',
+                            ].join(' · '),
+                            style: SciText.meta,
+                          ),
+                          trailing: _opening == c.doi
+                              ? const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : null,
+                          onTap: () => unawaited(_open(c)),
                         ),
                     ],
+                  )
+                : FutureBuilder<List<Study>>(
+                    future: _studies,
+                    builder:
+                        (BuildContext context, AsyncSnapshot<List<Study>> s) =>
+                            ListView(
+                              shrinkWrap: true,
+                              children: <Widget>[
+                                for (final Study study
+                                    in s.data ?? const <Study>[])
+                                  ListTile(
+                                    minTileHeight: 56,
+                                    contentPadding: EdgeInsets.zero,
+                                    leading: const Icon(
+                                      SciIcons.flask,
+                                      size: 22,
+                                      color: SciColors.ink,
+                                    ),
+                                    title: Text(
+                                      study.title,
+                                      style: SciText.secondary,
+                                    ),
+                                    onTap: () =>
+                                        Navigator.of(context).pop(study),
+                                  ),
+                              ],
+                            ),
                   ),
-            ),
           ),
         ],
       ),
