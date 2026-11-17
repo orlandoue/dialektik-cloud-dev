@@ -109,7 +109,7 @@ const text = (value: unknown): string | null =>
 
 const first = (value: unknown): string | null => (Array.isArray(value) ? text(value[0]) : text(value));
 
-function dateParts(value: unknown): string | null {
+export function dateParts(value: unknown): string | null {
   const parts = (value as { 'date-parts'?: unknown[][] } | undefined)?.['date-parts']?.[0];
   if (!Array.isArray(parts) || typeof parts[0] !== 'number') return null;
   const [year, month = 1, day = 1] = parts as number[];
@@ -117,7 +117,7 @@ function dateParts(value: unknown): string | null {
 }
 
 /** Crossref abstracts come as JATS XML. */
-function stripJats(value: unknown): string | null {
+export function stripJats(value: unknown): string | null {
   const raw = text(value);
   if (raw === null) return null;
   const plain = raw.replace(/<jats:title>[^<]*<\/jats:title>/giu, ' ').replace(/<[^>]+>/gu, ' ')
@@ -136,7 +136,7 @@ export function abstractFromInvertedIndex(index: unknown): string | null {
   return text(words.filter((w) => w !== undefined).join(' '));
 }
 
-function authorsOf(crossref: Record<string, unknown> | null): string | null {
+export function authorsOf(crossref: Record<string, unknown> | null): string | null {
   const list = Array.isArray(crossref?.author) ? (crossref!.author as Record<string, unknown>[]) : [];
   const names = list
     .map((a) => {
