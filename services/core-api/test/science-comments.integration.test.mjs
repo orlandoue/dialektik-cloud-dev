@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { PGlite } from '@electric-sql/pglite';
 import { scienceCommentsSql } from '../../../packages/database/dist/migration/091_science_and_story_comments.js';
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
+import { scienceReportPrivacySql } from '../../../packages/database/dist/migration/094_science_report_privacy.js';
 
 const veteran = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
@@ -59,6 +60,7 @@ async function setup({ retracted = false } = {}) {
   await pg.exec(baseSchema);
   await pg.exec(scienceCommentsSql);
   await pg.exec(scienceModerationSql);
+  await pg.exec(scienceReportPrivacySql);
   await pg.exec('set role dialektik_core_app');
   const { Kysely, PostgresDialect } = await import('kysely');
   const { ScienceService } = await import('../dist/science/science.service.js');
@@ -203,7 +205,7 @@ test('a retracted study cannot be attached', async () => {
 test('row security binds comments and reactions to the reader and review to moderators', async () => {
   const pg = new PGlite();
   try {
-    await pg.exec(baseSchema); await pg.exec(scienceCommentsSql); await pg.exec(scienceModerationSql);
+    await pg.exec(baseSchema); await pg.exec(scienceCommentsSql); await pg.exec(scienceModerationSql); await pg.exec(scienceReportPrivacySql);
     await pg.exec('set role dialektik_core_app');
     await pg.exec(`begin; select set_config('dialektik.social_user','${veteran}',true);`);
     await assert.rejects(pg.exec(`insert into public.story_comments(event_id,user_id,kind,status,author_alias,body) values('event1','${other}','normal','published','Spoof','x')`));

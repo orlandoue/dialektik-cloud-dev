@@ -1,4 +1,6 @@
-import { createDatabase, destroyDatabase, scienceCommentsSql, scienceModerationSql } from '@dialektik/database';
+import {
+  createDatabase, destroyDatabase, scienceCommentsSql, scienceModerationSql, scienceReportPrivacySql,
+} from '@dialektik/database';
 import {
   ForbiddenException,
   GoneException,
@@ -233,6 +235,7 @@ export class ScienceService implements OnModuleInit {
         await sql`select pg_advisory_xact_lock(910091)`.execute(tx);
         await sql.raw(scienceCommentsSql).execute(tx);
         await sql.raw(scienceModerationSql).execute(tx);
+        await sql.raw(scienceReportPrivacySql).execute(tx);
       });
       this.#ready = true;
       this.#logger.log('Science storage created at startup.');
@@ -251,7 +254,10 @@ export class ScienceService implements OnModuleInit {
       and to_regprocedure('public.dialektik_reader_profile(uuid)') is not null
       and to_regclass('public.story_comment_reports') is not null
       and exists (select 1 from information_schema.columns where table_schema = 'public'
-        and table_name = 'science_studies' and column_name = 'abstract_by_moderator') as ready`.execute(database);
+        and table_name = 'science_studies' and column_name = 'abstract_by_moderator')
+      -- 094: reports are no longer readable by every Core session.
+      and exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'story_comment_reports'
+        and policyname = 'story_comment_reports_read' and qual <> 'true') as ready`.execute(database);
     return present.rows[0]?.ready === true;
   }
 
@@ -632,12 +638,15 @@ export class ScienceService implements OnModuleInit {
         const listed = await this.#reviewRow(row.id, userId);
         if (listed) review.push({ ...listed, event_id: row.event_id });
       }
-      const reported = await sql<{ id: string; event_id: string; reports: { reason: ReportReason; note: string | null; created_at: Date }[] }>`
+      // Reports are readable only with the moderator flag (migration 094).
+      const reported = await this.#transaction(userId, (tx) => sql<{
+        id: string; event_id: string; reports: { reason: ReportReason; note: string | null; created_at: Date }[];
+      }>`
         select c.id::text as id, c.event_id::text as event_id,
           jsonb_agg(jsonb_build_object('reason', r.reason, 'note', r.note, 'created_at', r.created_at) order by r.created_at) as reports
         from public.story_comment_reports r join public.story_comments c on c.id = r.comment_id
         where r.resolved_at is null and c.status = 'published'
-        group by c.id, c.event_id order by min(r.created_at) limit 100`.execute(this.db.database);
+        group by c.id, c.event_id order by min(r.created_at) limit 100`.execute(tx), true);
       const reports: ReportedComment[] = [];
       for (const row of reported.rows) {
         const listed = await this.#reviewRow(row.id, userId);
