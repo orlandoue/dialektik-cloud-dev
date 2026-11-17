@@ -18,6 +18,28 @@ void main() {
       expect(arenaTitle(steinertTitle), steinertTitle);
     });
 
+    test('una encuesta de aprobación es Política aunque Core diga Otros', () {
+      expect(
+        arenaTopicOfText('Aprobación de Kast baja a 27%', category: 'otros'),
+        ArenaTopic.politica,
+      );
+      expect(
+        arenaTopicOfText(
+          'La aprobación de Kast se sitúa por primera vez bajo el 20%',
+        ),
+        ArenaTopic.politica,
+      );
+      // A real topic from Core still wins over the headline.
+      expect(
+        arenaTopicOfText('Encuesta sobre fútbol', category: 'deportes'),
+        ArenaTopic.deportes,
+      );
+      expect(
+        arenaTopicOfText('Hallazgo sin tema', category: 'otros'),
+        ArenaTopic.otros,
+      );
+    });
+
     test('el proceso político no cae en Otros', () {
       for (final String title in <String>[
         '¿Qué va a pasar con la presentación de la AC contra Rabat?',
