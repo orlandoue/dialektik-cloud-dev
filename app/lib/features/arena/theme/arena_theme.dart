@@ -81,6 +81,7 @@ abstract final class SciColors {
   /// Never lighter than this for text.
   static const Color inkSecondary = Color(0xFF4B5563);
   static const Color borderCard = Color(0xFFE5E7EB);
+
   /// Control borders: ≥3:1 on white (3.35) and on bgApp (3.10), WCAG 1.4.11.
   static const Color borderControl = Color(0xFF858D9A);
   static const Color divider = Color(0xFFF1F2F4);
