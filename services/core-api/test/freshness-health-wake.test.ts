@@ -37,11 +37,13 @@ describe('freshness wake', () => {
     service.wakeFromHealthPing();
     expect(run).not.toHaveBeenCalled();
   });
-  it('keeps liveness synchronous when starting a background wake', () => {
+  it('never wakes the semantic engine from a liveness ping', () => {
     const wake=vi.spyOn(service,'wakeFromHealthPing').mockImplementation(()=>{});
+    const run=vi.spyOn(service,'runScheduled');
     const health={liveness:()=>({status:'live'})};
     const controller=new HealthController(health as never,service);
     expect(controller.liveness()).toEqual({status:'live'});
-    expect(wake).toHaveBeenCalledOnce();
+    expect(wake).not.toHaveBeenCalled();
+    expect(run).not.toHaveBeenCalled();
   });
 });

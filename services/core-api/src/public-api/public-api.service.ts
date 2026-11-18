@@ -29,6 +29,7 @@ import { MINIMUM_QUOTE_CODE_POINTS, widenShortQuote } from '../semantic/live-sem
 import { encodeCursor } from './public-api.validation.js';
 import type { PageRequest } from './public-api.validation.js';
 import type { PublicCountry } from './source-profiles.js';
+import { SHARED_READ_TTL_MS, SharedReadCache } from './shared-read-cache.js';
 
 const EDITORIAL_DISPLAY = 'equipo editorial' as const;
 
@@ -135,6 +136,9 @@ function assertionDto(
 
 @Injectable()
 export class PublicApiService {
+  /** Common (non-personalized) feed and duel pages, shared by every reader. */
+  readonly #shared = new SharedReadCache<PublicReadResult<unknown>>(SHARED_READ_TTL_MS);
+
   public constructor(
     @Inject(PublicApiRepository)
     private readonly repository: PublicApiRepository,
@@ -151,6 +155,15 @@ export class PublicApiService {
     /** Only clients that ask for a country get country_code (older apps reject unknown fields). */
     readonly includeCountry?: boolean;
   }): Promise<PublicReadResult<PublicPage<EventCardDto>>> {
+    // Personal pages (follows, blind spots) never touch the shared cache.
+    if (input.followedSourceIds === undefined && !input.blindspots) {
+      const key = `feed:${JSON.stringify([input.category, input.topic, input.page, input.includeSynthesis, input.country, input.includeCountry])}`;
+      return this.#shared.get(key, () => this.#feed(input)) as Promise<PublicReadResult<PublicPage<EventCardDto>>>;
+    }
+    return this.#feed(input);
+  }
+
+  async #feed(input: Parameters<PublicApiService['feed']>[0]): Promise<PublicReadResult<PublicPage<EventCardDto>>> {
     const rows = await this.repository.listFeed({
       ...(input.country === undefined ? {} : { country: input.country }),
       ...(input.category === undefined ? {} : { category: input.category }),
@@ -385,6 +398,20 @@ export class PublicApiService {
     followedSourceIds?: readonly string[],
     country?: PublicCountry,
     includeCountry = false,
+  ): Promise<PublicReadResult<PublicPage<ContradictionDto>>> {
+    if (followedSourceIds === undefined) {
+      const key = `contradictions:${JSON.stringify([page, country, includeCountry])}`;
+      return this.#shared.get(key, () => this.#contradictions(page, undefined, country, includeCountry)) as
+        Promise<PublicReadResult<PublicPage<ContradictionDto>>>;
+    }
+    return this.#contradictions(page, followedSourceIds, country, includeCountry);
+  }
+
+  async #contradictions(
+    page: PageRequest,
+    followedSourceIds: readonly string[] | undefined,
+    country: PublicCountry | undefined,
+    includeCountry: boolean,
   ): Promise<PublicReadResult<PublicPage<ContradictionDto>>> {
     const rows = await this.repository.listContradictions({
       ...(country === undefined ? {} : { country }),

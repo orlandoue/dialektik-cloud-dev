@@ -7,6 +7,7 @@ import {
   type LiveReadRow,
   type LiveSourceReadRow,
 } from './live.repository.js';
+import { SHARED_READ_TTL_MS, SharedReadCache } from '../public-api/shared-read-cache.js';
 
 function sourceDto(row: LiveSourceReadRow) {
   return {
@@ -79,7 +80,15 @@ function provenanceDto(row: LiveReadRow) {
 @Injectable()
 export class LiveApplicationService {
   constructor(@Inject(LiveRepository) private readonly repository: LiveRepository) {}
+  /** Common pages (no follow scope), shared by every reader for 60 s. */
+  readonly #shared = new SharedReadCache<Awaited<ReturnType<LiveApplicationService['listUncached']>>>(SHARED_READ_TTL_MS);
+
   async list(query: LiveNewsQuery) {
+    if (query.sourceScope !== undefined || query.followedSourceIds !== undefined) return this.listUncached(query);
+    return this.#shared.get(`live:${JSON.stringify(query)}`, () => this.listUncached(query));
+  }
+
+  async listUncached(query: LiveNewsQuery) {
     const rows = await this.repository.list(query);
     const items = rows.slice(0, query.limit).map(newsDto);
     return {
