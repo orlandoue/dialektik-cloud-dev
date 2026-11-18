@@ -13,6 +13,7 @@ import { scienceHarvestMigration } from './093_science_harvest.js';
 import { scienceReportPrivacyMigration } from './094_science_report_privacy.js';
 import { scienceStudyReviewMigration } from './095_science_study_review.js';
 import { scienceTopicsMigration } from './096_science_topics.js';
+import { duelPollDecisionsMigration } from './097_duel_poll_decisions.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -107,6 +108,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '094_science_report_privacy': scienceReportPrivacyMigration,
   '095_science_study_review': scienceStudyReviewMigration,
   '096_science_topics': scienceTopicsMigration,
+  '097_duel_poll_decisions': duelPollDecisionsMigration,
   '085_social_arena': socialArenaMigration,
   '084_social_follower_count': socialFollowerCountMigration,
   '083_social_community': socialCommunityMigration,

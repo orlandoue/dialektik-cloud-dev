@@ -191,6 +191,14 @@ export class ScienceController {
     return this.science.usage(this.#reader(request));
   }
 
+  /** Duels the poll rule separated, last 14 days. */
+  @Get('science/moderation/poll-decisions')
+  async pollDecisions(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    void reply.header('cache-control', 'private, no-store');
+    return this.science.pollDecisions(this.#reader(request));
+  }
+
   @Post('science/moderation/comments/:id')
   async decide(@Req() request: FastifyRequest, @Param('id') id: string, @Body() body: unknown) {
     this.rateLimit.assertAllowed(rateLimitClient(request));

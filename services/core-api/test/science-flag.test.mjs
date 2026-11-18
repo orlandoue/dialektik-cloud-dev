@@ -50,6 +50,7 @@ test('without the flag every Science route is 404, and none reaches the database
     resolveReports: () => controller.resolveReports(request, uuid, { decision: 'dismiss' }),
     queue: () => controller.queue(request, reply),
     usage: () => controller.usage(request, reply),
+    pollDecisions: () => controller.pollDecisions(request, reply),
     decide: () => controller.decide(request, uuid, { decision: 'approve' }),
     moderateStudy: () => controller.moderateStudy(request, doi, { design: 'Cohorte' }),
   };
