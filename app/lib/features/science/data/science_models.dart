@@ -687,6 +687,23 @@ final class LookupResult {
   final bool linkWithoutDoi;
 }
 
+/// When the poll rule acted on a pair.
+enum PollDecisionStage {
+  beforeAi('candidate', 'antes de la IA'),
+  atPublication('promotion', 'al publicar'),
+  retroactive('retroactive', 'duelo ya publicado, retirado');
+
+  const PollDecisionStage(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static PollDecisionStage parse(Object? value) =>
+      PollDecisionStage.values
+          .where((PollDecisionStage s) => s.wire == value)
+          .firstOrNull ??
+      PollDecisionStage.atPublication;
+}
+
 /// Why the poll rule separated two stories (or kept them as «Distinta cifra»).
 enum PollDecisionReason {
   differentPollster('different_pollster', 'Encuestadoras distintas'),
@@ -714,7 +731,7 @@ final class PollDecision {
   const PollDecision({
     required this.decidedAt,
     required this.reason,
-    required this.beforeAi,
+    required this.stage,
     required this.leftTitle,
     required this.rightTitle,
     this.leftOutlet,
@@ -728,7 +745,7 @@ final class PollDecision {
         DateTime.tryParse(json['decided_at'] as String? ?? '') ??
         DateTime.fromMillisecondsSinceEpoch(0),
     reason: PollDecisionReason.parse(json['outcome'], json['reason']),
-    beforeAi: json['stage'] == 'candidate',
+    stage: PollDecisionStage.parse(json['stage']),
     leftTitle: json['left_title'] as String? ?? '',
     rightTitle: json['right_title'] as String? ?? '',
     leftOutlet: json['left_outlet'] as String?,
@@ -747,8 +764,8 @@ final class PollDecision {
   final DateTime decidedAt;
   final PollDecisionReason reason;
 
-  /// Vetoed before the AI compared the pair; otherwise at publication.
-  final bool beforeAi;
+  /// Before the AI, at publication, or a duel published before the rule.
+  final PollDecisionStage stage;
   final String leftTitle;
   final String rightTitle;
   final String? leftOutlet;

@@ -59,9 +59,13 @@ void main() {
       ],
     });
     expect(list.first.reason, PollDecisionReason.differentPollster);
-    expect(list.first.beforeAi, isTrue);
+    expect(list.first.stage, PollDecisionStage.beforeAi);
     expect(list.last.reason, PollDecisionReason.differentFigure);
-    expect(list.last.beforeAi, isFalse);
+    expect(list.last.stage, PollDecisionStage.atPublication);
+    expect(
+      PollDecisionStage.parse('retroactive').label,
+      'duelo ya publicado, retirado',
+    );
     expect(
       PollDecisionReason.values.map((PollDecisionReason r) => r.label),
       containsAll(<String>[
@@ -82,7 +86,7 @@ void main() {
         PollDecision(
           decidedAt: DateTime.utc(2026, 11, 16, 12),
           reason: PollDecisionReason.differentPollster,
-          beforeAi: true,
+          stage: PollDecisionStage.beforeAi,
           leftTitle: 'Criteria: aprobación de Kast se sitúa bajo el 20%',
           rightTitle: 'Cadem: aprobación de Kast cayó al 27%',
           leftOutlet: 'Ex-Ante',
@@ -93,7 +97,7 @@ void main() {
         PollDecision(
           decidedAt: DateTime.utc(2026, 11, 15, 12),
           reason: PollDecisionReason.pollAndNonPoll,
-          beforeAi: false,
+          stage: PollDecisionStage.retroactive,
           leftTitle: 'El Presidente Kast rechaza la política transaccional',
           rightTitle: 'Criteria: aprobación a Kast cayó a 18%',
           leftOutlet: 'La Tercera',
@@ -109,7 +113,7 @@ void main() {
     expect(find.text('Ex-Ante · Criteria'), findsOneWidget);
     expect(find.text('La Tercera · sin encuestadora'), findsOneWidget);
     expect(find.textContaining('antes de la IA'), findsOneWidget);
-    expect(find.textContaining('al publicar'), findsOneWidget);
+    expect(find.textContaining('duelo ya publicado, retirado'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
