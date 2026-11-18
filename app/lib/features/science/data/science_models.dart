@@ -581,6 +581,7 @@ final class ApiUsage {
   const ApiUsage({
     this.days = const <ApiUsageDay>[],
     this.harvest = const HarvestStatus(),
+    this.database,
   });
 
   factory ApiUsage.fromJson(Object? value) => ApiUsage(
@@ -588,10 +589,51 @@ final class ApiUsage {
     harvest: HarvestStatus.fromJson(
       (value! as Map<String, dynamic>)['harvest'],
     ),
+    database: DatabaseSize.fromJson(
+      (value as Map<String, dynamic>)['database'],
+    ),
   );
 
   final List<ApiUsageDay> days;
   final HarvestStatus harvest;
+
+  /// Null when Core does not report it (older Core, or the query failed).
+  final DatabaseSize? database;
+}
+
+/// Size of the database against the free plan, with the largest tables.
+final class DatabaseSize {
+  const DatabaseSize({
+    required this.sizeMb,
+    this.limitMb = 500,
+    this.warning = false,
+    this.largestTables = const <(String, double)>[],
+  });
+
+  static DatabaseSize? fromJson(Object? value) {
+    if (value is! Map<String, dynamic>) return null;
+    return DatabaseSize(
+      sizeMb: (value['size_mb'] as num?)?.toDouble() ?? 0,
+      limitMb: (value['limit_mb'] as num?)?.toDouble() ?? 500,
+      warning: value['warning'] == true,
+      largestTables: <(String, double)>[
+        for (final Object? t
+            in (value['largest_tables'] as List<dynamic>?) ?? const <dynamic>[])
+          if (t is Map<String, dynamic>)
+            (
+              t['name'] as String? ?? '',
+              (t['size_mb'] as num?)?.toDouble() ?? 0,
+            ),
+      ],
+    );
+  }
+
+  final double sizeMb;
+  final double limitMb;
+
+  /// From 450 MB (Core decides).
+  final bool warning;
+  final List<(String, double)> largestTables;
 }
 
 /// Fields a moderator completes on a study. Only the keys present are sent;

@@ -272,6 +272,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
                     child: ApiUsageView(
                       days: _usage?.days ?? const <ApiUsageDay>[],
                       harvest: _usage?.harvest,
+                      database: _usage?.database,
                     ),
                   ),
                   RefreshIndicator(
@@ -557,9 +558,17 @@ class _PollDecisionCard extends StatelessWidget {
 }
 
 class ApiUsageView extends StatelessWidget {
-  const ApiUsageView({required this.days, this.harvest, super.key});
+  const ApiUsageView({
+    required this.days,
+    this.harvest,
+    this.database,
+    super.key,
+  });
 
   final List<ApiUsageDay> days;
+
+  /// Database size against the free plan; a warning from 450 MB.
+  final DatabaseSize? database;
 
   /// The daily harvest; a notice when it has not finished in 48 hours.
   final HarvestStatus? harvest;
@@ -588,6 +597,7 @@ class ApiUsageView extends StatelessWidget {
       key: const Key('sci-mod-usage'),
       padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
       children: <Widget>[
+        if (database case final DatabaseSize d) DatabaseSizeNotice(size: d),
         if (harvest case final HarvestStatus h) HarvestNotice(status: h),
         const _Heading('Últimos 30 días'),
         if (days.isEmpty)
@@ -1161,6 +1171,78 @@ class _Message extends StatelessWidget {
 
 /// State of the daily harvest. When no run finished in 48 hours, it says
 /// so plainly, whatever happened to the scheduled job.
+/// «Base de datos: 430,6 MB de 500 MB», with a visible warning from 450 MB.
+class DatabaseSizeNotice extends StatelessWidget {
+  const DatabaseSizeNotice({required this.size, super.key});
+
+  final DatabaseSize size;
+
+  static String mb(double value) =>
+      value.toStringAsFixed(1).replaceAll('.', ',');
+
+  @override
+  Widget build(BuildContext context) {
+    final bool warn = size.warning;
+    final String head =
+        'Base de datos: ${mb(size.sizeMb)} MB de ${mb(size.limitMb)} MB';
+    final String tables = size.largestTables
+        .take(3)
+        .map(((String, double) t) => '${t.$1} ${mb(t.$2)} MB')
+        .join(' · ');
+    return Semantics(
+      container: true,
+      liveRegion: warn,
+      child: Container(
+        key: const Key('sci-mod-database'),
+        margin: const EdgeInsets.only(bottom: 16),
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: SciColors.surface,
+          borderRadius: BorderRadius.circular(SciRadius.card),
+          border: Border.all(
+            color: warn ? SciColors.ink : SciColors.borderCard,
+            width: warn ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              warn ? Icons.error_outline : Icons.storage_outlined,
+              size: 20,
+              color: SciColors.ink,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(head, style: SciText.cardTitle),
+                  if (warn)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 4),
+                      child: Text(
+                        'Cerca del límite del plan gratuito: revisa la '
+                        'retención o el plan antes de llegar a 500 MB.',
+                        key: Key('sci-mod-database-warning'),
+                        style: SciText.body,
+                      ),
+                    ),
+                  if (tables.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 4),
+                      child: Text(tables, style: SciText.meta),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class HarvestNotice extends StatelessWidget {
   const HarvestNotice({required this.status, super.key});
 
