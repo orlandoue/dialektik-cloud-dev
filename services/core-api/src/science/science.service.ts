@@ -138,7 +138,8 @@ const MISSING_STORAGE = new Set(['42P01', '42883']);
 
 export interface PollDecisionJson {
   decided_at: Date;
-  stage: 'candidate' | 'promotion';
+  /** «retroactive»: a duel published before the rule, retracted by the owner. */
+  stage: 'candidate' | 'promotion' | 'retroactive';
   outcome: 'veto' | 'distinta_cifra';
   reason: 'poll_and_non_poll' | 'pollster_missing' | 'different_pollster' | 'different_subject' | 'different_round' | null;
   left_outlet: string | null;
