@@ -165,7 +165,12 @@ final class Study {
     return Study(
       doi: doi,
       title: title,
-      review: review,
+      review: switch (f['review']) {
+        'peer_reviewed' => StudyReview.peerReviewed,
+        'preprint' => StudyReview.preprint,
+        'not_reported' => StudyReview.notReported,
+        _ => review,
+      },
       authors: authors,
       institution: institution,
       journal: journal,
@@ -234,7 +239,9 @@ final class StudyAttachmentData {
   final String abstractFragment;
 }
 
-enum CommentStatus { published, inReview }
+/// A rejected study comment or a hidden reported one is «hidden»: only its
+/// author sees it, in «Tus comentarios».
+enum CommentStatus { published, inReview, hidden }
 
 final class StoryComment {
   const StoryComment({
@@ -260,9 +267,11 @@ final class StoryComment {
           DateTime.tryParse(json['created_at'] as String? ?? '') ??
           DateTime.fromMillisecondsSinceEpoch(0),
       parentId: json['parent_id'] as String?,
-      status: json['status'] == 'in_review'
-          ? CommentStatus.inReview
-          : CommentStatus.published,
+      status: switch (json['status']) {
+        'in_review' => CommentStatus.inReview,
+        'rejected' => CommentStatus.hidden,
+        _ => CommentStatus.published,
+      },
       reactions: json['reactions'] as int? ?? 0,
       reacted: json['reacted'] as bool? ?? false,
       mine: json['mine'] as bool? ?? false,
@@ -360,6 +369,24 @@ String normalizeLiteral(String text) => text
     .replaceAll(RegExp('[‘’‚`´]'), "'")
     .replaceAll(RegExp(r'\s+'), ' ')
     .trim();
+
+/// Same minimum as Core: a fragment shows a relation with at least 6 words
+/// or 40 characters.
+const int fragmentMinWords = 6;
+const int fragmentMinChars = 40;
+
+bool fragmentLongEnough(String fragment) {
+  final String text = fragment.replaceAll(RegExp(r'\s+'), ' ').trim();
+  return text.length >= fragmentMinChars ||
+      text
+              .split(' ')
+              .where(
+                (String w) =>
+                    RegExp(r'[\p{L}\p{N}]', unicode: true).hasMatch(w),
+              )
+              .length >=
+          fragmentMinWords;
+}
 
 bool isLiteralFragment(String fragment, String abstractText) {
   final String needle = normalizeLiteral(fragment);
@@ -531,6 +558,32 @@ final class StudyModeration {
   final Map<String, Object?> fields;
 }
 
+/// One of the reader's comments in «Tus comentarios», with its story.
+final class MyComment {
+  const MyComment({
+    required this.comment,
+    required this.eventId,
+    this.eventTitle,
+  });
+
+  factory MyComment.fromJson(Map<String, dynamic> json) => MyComment(
+    comment: StoryComment.fromJson(json),
+    eventId: json['event_id'] as String? ?? '',
+    eventTitle: json['event_title'] as String?,
+  );
+
+  static List<MyComment> listFromJson(Object? value) => <MyComment>[
+    for (final Object? item
+        in ((value! as Map<String, dynamic>)['comments'] as List<dynamic>?) ??
+            const <dynamic>[])
+      MyComment.fromJson(item! as Map<String, dynamic>),
+  ];
+
+  final StoryComment comment;
+  final String eventId;
+  final String? eventTitle;
+}
+
 /// A possible match for what the reader wrote in C2 (DOI, link or title).
 final class LookupCandidate {
   const LookupCandidate({
@@ -539,7 +592,7 @@ final class LookupCandidate {
     this.authors,
     this.journal,
     this.year,
-    this.review = StudyReview.peerReviewed,
+    this.review = StudyReview.notReported,
   });
 
   factory LookupCandidate.fromJson(Map<String, dynamic> json) =>
@@ -549,9 +602,12 @@ final class LookupCandidate {
         authors: json['authors'] as String?,
         journal: json['journal'] as String?,
         year: (json['year'] as num?)?.toInt(),
-        review: json['review'] == 'preprint'
-            ? StudyReview.preprint
-            : StudyReview.peerReviewed,
+        // Peer review is never assumed: only Core's explicit value counts.
+        review: switch (json['review']) {
+          'peer_reviewed' => StudyReview.peerReviewed,
+          'preprint' => StudyReview.preprint,
+          _ => StudyReview.notReported,
+        },
       );
 
   final String doi;

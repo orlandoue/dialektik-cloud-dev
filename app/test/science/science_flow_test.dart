@@ -327,7 +327,15 @@ void main() {
       find.byKey(const ValueKey<String>('sci-relation-contexto')),
     );
     await tester.pump();
+    // A fragment shorter than 6 words and 40 characters shows no relation.
     await _selectFragment(tester, 'prevalence of antibodies to SARS-CoV-2');
+    expect(find.byKey(const Key('sci-fragment-short')), findsOneWidget);
+    await _selectFragment(
+      tester,
+      'prevalence of antibodies to SARS-CoV-2 in Santa Clara',
+    );
+    expect(find.byKey(const Key('sci-fragment-short')), findsNothing);
+    expect(find.byKey(const Key('sci-fragment')), findsOneWidget);
     await tester.enterText(
       find.byKey(const Key('sci-comment-input')),
       'Da contexto sobre cómo se mide la inmunidad.',

@@ -336,6 +336,12 @@ class FakeScienceRepository
   @override
   Future<ScienceAccess> access() async => scienceAccess;
 
+  /// «Tus comentarios» served to the reader.
+  List<MyComment> mine = <MyComment>[];
+
+  @override
+  Future<List<MyComment>> myComments() async => mine;
+
   /// Reports filed, by comment id.
   final Map<String, List<CommentReport>> reports =
       <String, List<CommentReport>>{};
@@ -500,6 +506,8 @@ class ArenaScienceCore extends ArenaFullCore
       science.commentsCitingStudy(doi);
   @override
   Future<ScienceAccess> access() => science.access();
+  @override
+  Future<List<MyComment>> myComments() => science.myComments();
   @override
   Future<void> report(String commentId, ReportReason reason, {String? note}) =>
       science.report(commentId, reason, note: note);
