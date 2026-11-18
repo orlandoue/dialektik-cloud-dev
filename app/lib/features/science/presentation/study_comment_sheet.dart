@@ -9,26 +9,12 @@ import 'package:dialektik/features/science/data/science_models.dart';
 import 'package:dialektik/features/science/data/science_repository.dart';
 import 'package:dialektik/features/science/presentation/science_format.dart';
 import 'package:dialektik/features/science/presentation/science_widgets.dart';
+import 'package:dialektik/features/science/presentation/story_picker.dart';
+
 import 'package:flutter/material.dart';
 
-/// Literal quotes of a story that a study comment can answer.
-List<ClaimQuote> claimQuotesOf(EventDetailDto event) {
-  final Map<String, EventCoverageArticleDto> articles =
-      <String, EventCoverageArticleDto>{
-        for (final EventCoverageArticleDto a in event.articles) a.id: a,
-      };
-  return <ClaimQuote>[
-    for (final EventCoveragePositionDto position in event.coveragePositions)
-      for (final EventCoverageAssertionDto a in position.assertions)
-        if (a.quotedText.trim().isNotEmpty)
-          ClaimQuote(
-            id: a.id,
-            text: a.quotedText.trim(),
-            outlet: arenaSourceName(a.sourceName),
-            publishedAt: articles[a.articleId]?.publishedAt,
-          ),
-  ];
-}
+export 'package:dialektik/features/science/presentation/story_picker.dart'
+    show claimQuotesOf;
 
 /// C2 · «Comentar con un estudio». Returns the comment created (in review),
 /// or the id of an existing one when the reader chose «Ver comentario».
@@ -447,33 +433,10 @@ class _StudyCommentSheetState extends State<StudyCommentSheet> {
   bool get _blocked => study.retracted || !study.hasAbstract;
 
   Future<void> _changeStory() async {
-    final EventCardDto? picked = await showModalBottomSheet<EventCardDto>(
-      context: context,
-      backgroundColor: SciColors.surface,
-      barrierColor: SciColors.scrim,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(SciRadius.sheet),
-        ),
-      ),
-      builder: (BuildContext sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
-          children: <Widget>[
-            const SheetHandle(),
-            const SizedBox(height: 12),
-            const Text('Noticia', style: SciText.cardTitle),
-            for (final EventCardDto e in widget.store.events)
-              ListTile(
-                minTileHeight: 56,
-                contentPadding: EdgeInsets.zero,
-                title: Text(e.arenaTitle, style: SciText.secondary),
-                onTap: () => Navigator.of(sheetContext).pop(e),
-              ),
-          ],
-        ),
-      ),
+    final EventCardDto? picked = await showStoryPicker(
+      context,
+      widget.store,
+      topic: study.topic,
     );
     if (picked == null) return;
     try {
