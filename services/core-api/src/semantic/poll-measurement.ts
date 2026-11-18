@@ -46,6 +46,27 @@ const POLLSTERS: readonly (readonly [string, RegExp])[] = [
 
 const POLL_WORDS = /\bencuesta|\bsondeo|\baprobaci[oó]n|\bdesaprobaci[oó]n|\bintenci[oó]n de voto|\bpreferencias? presidencial/iu;
 const PERCENT = /(\d{1,3}(?:[.,]\d)?)\s?(?:%|por ciento|puntos)/iu;
+/** «bajo el 20%», «más del 30%»: a threshold, not the figure measured. */
+const THRESHOLD = /(?:bajo|sobre|menos|mas|encima|debajo)\s+(?:de\s+)?(?:el|del)\s*$/u;
+
+const MEASURES = /\b(desaprobacion|aprobacion|desacuerdo|acuerdo|rechazo|rechaza|respaldo|apoyo|intencion de voto)/gu;
+
+/**
+ * The approval figure: the first percentage, not a threshold, whose nearest
+ * measure word before it is «aprobación»; else the first one not a threshold.
+ */
+function figureOf(text: string): number | null {
+  let first: number | null = null;
+  for (const m of text.matchAll(/(\d{1,3}(?:[.,]\d)?)\s?(?:%|por ciento)/giu)) {
+    const before = fold(text.slice(Math.max(0, m.index! - 120), m.index!));
+    if (THRESHOLD.test(before.slice(-20))) continue;
+    const value = Number(m[1]!.replace(',', '.'));
+    first ??= value;
+    const measures = [...before.matchAll(MEASURES)];
+    if (measures.at(-1)?.[1] === 'aprobacion') return value;
+  }
+  return first;
+}
 
 const MONTHS: Record<string, number> = {
   enero: 1, febrero: 2, marzo: 3, abril: 4, mayo: 5, junio: 6, julio: 7, agosto: 8,
@@ -56,21 +77,27 @@ const MONTHS: Record<string, number> = {
 const NOT_SUBJECTS = new Set([
   'encuesta', 'sondeo', 'aprobacion', 'desaprobacion', 'segun', 'tras', 'chile', 'chilenos', 'chilenas', 'gobierno',
   'presidente', 'presidenta', 'mandatario', 'mandataria', 'la', 'el', 'los', 'las', 'un', 'una', 'en', 'de', 'del',
-  'cae', 'sube', 'baja', 'alcanza', 'llega', 'marca', 'registra', 'nueva', 'nuevo', 'semana', 'puntos', 'por',
+  'con', 'lea', 'aqui', 'ejecutivo', 'moneda', 'cae', 'sube', 'baja', 'alcanza', 'llega', 'marca', 'registra', 'nueva', 'nuevo', 'semana', 'puntos', 'por',
   ...Object.keys(MONTHS), 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado', 'domingo',
 ]);
 
 const fold = (value: string): string => value.normalize('NFKD').replace(/[̀-ͯ]/gu, '').toLowerCase();
 
+/** One pollster named; a text naming several reports no single measurement. */
 function pollsterOf(text: string): string | null {
-  for (const [name, pattern] of POLLSTERS) if (pattern.test(text)) return name;
-  return null;
+  const named = POLLSTERS.filter(([, pattern]) => pattern.test(text)).map(([name]) => name);
+  return named.length === 1 ? named[0]! : null;
 }
+
+const namesPollster = (text: string): boolean => POLLSTERS.some(([, pattern]) => pattern.test(text));
 
 function subjectsOf(text: string, pollster: string | null): string[] {
   const pollsterWords = new Set(pollster === null ? [] : fold(pollster).split(/\W+/u));
   const names = new Set<string>();
-  for (const match of text.matchAll(/\b[\p{Lu}][\p{Ll}]+(?:[- ][\p{Lu}][\p{Ll}]+)*/gu)) {
+  // «aprobación de/a/del (Presidente) José Antonio Kast»: the evaluated one.
+  const evaluated = [...text.matchAll(/aprobaci[oó]n\s+(?:de|a|al|del)\s+(?:la\s+|el\s+)?(?:(?:Presidente|Presidenta|mandatario|ministr[oa])\s+)?((?:[\p{Lu}][\p{Ll}]+\s*){1,4})/giu)]
+    .map((m) => m[1]!).join(' ');
+  for (const match of (evaluated || text).matchAll(/\b[\p{Lu}][\p{Ll}]+(?:[- ][\p{Lu}][\p{Ll}]+)*/gu)) {
     for (const word of fold(match[0]).split(/[\s-]+/u)) {
       if (word.length >= 3 && !NOT_SUBJECTS.has(word) && !pollsterWords.has(word)) names.add(word);
     }
@@ -81,7 +108,7 @@ function subjectsOf(text: string, pollster: string | null): string[] {
 /** «levantada entre el 12 y el 14 de noviembre», «realizada el 13 de noviembre». */
 function fieldworkOf(text: string, publishedAt: Date): string | null {
   const t = fold(text);
-  const match = t.match(/(?:levantad[ao]s?|realizad[ao]s?|aplicad[ao]s?|terreno)\b[^.]{0,40}?\b(\d{1,2})(?:\s*(?:y|al|-)\s*(?:el\s*)?(\d{1,2}))?\s+de\s+([a-z]+)/u);
+  const match = t.match(/(?:levantad[ao]s?|levanto|realizad[ao]s?|realizo|aplicad[ao]s?|aplico|terreno|muestreo)\b[^.]{0,40}?\b(\d{1,2})(?:\s*(?:y|al|-)\s*(?:el\s*)?(\d{1,2}))?\s+de\s+([a-z]+)/u);
   if (!match) return null;
   const month = MONTHS[match[3]!];
   if (month === undefined) return null;
@@ -95,13 +122,13 @@ export function readPoll(input: PollText): PollReading {
   const pollster = pollsterOf(input.text);
   const words = POLL_WORDS.test(input.text);
   const percent = input.text.match(PERCENT);
-  const isPoll = pollster !== null ? words || percent !== null : words && percent !== null;
+  const isPoll = namesPollster(input.text) ? words || percent !== null : words && percent !== null;
   return {
     isPoll,
     pollster: isPoll ? pollster : null,
     subjects: isPoll ? subjectsOf(input.text, pollster) : [],
     fieldwork: isPoll ? fieldworkOf(input.text, input.publishedAt) : null,
-    figure: isPoll && percent ? Number(percent[1]!.replace(',', '.')) : null,
+    figure: isPoll ? figureOf(input.text) : null,
   };
 }
 

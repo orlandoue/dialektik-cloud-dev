@@ -47,6 +47,19 @@ test('two different polls are different events', () => {
     t('Cadem: aprobación de Kast 27%, encuesta realizada el 7 de noviembre', 16)).kind, 'different');
 });
 
+test('what the first real dry run taught: several pollsters, thresholds, «se realizó»', () => {
+  const both = readPoll(t('Kast cae al 18% de aprobación: el analista revisó los resultados de Cadem y Criteria'));
+  assert.equal(both.isPoll, true);
+  assert.equal(both.pollster, null, 'two pollsters named: no single measurement');
+  const criteria = readPoll(t('Criteria: aprobación de Kast se sitúa por primera vez bajo el 20%. La aprobación del Presidente José Antonio Kast bajó seis puntos llegando a 18%'));
+  assert.equal(criteria.figure, 18);
+  assert.equal(readPoll(t('Criteria: aprobación de Kast bajo el 20% y desacuerdo con que siga Rabat sube al 79%. La aprobación del Presidente bajó seis puntos llegando a 18%')).figure, 18);
+  assert.ok(criteria.subjects.includes('kast'));
+  assert.ok(!criteria.subjects.includes('criteria'));
+  const fieldwork = readPoll(t('Criteria: aprobación a Kast cayó a 18%. El muestreo se realizó entre el 12 y 13 de noviembre', 15));
+  assert.equal(fieldwork.fieldwork, '2026-11-13');
+});
+
 test('a poll event\'s title names its pollster', () => {
   assert.equal(pollTitle('Aprobación de Kast en 27%', 'Cadem'), 'Cadem: Aprobación de Kast en 27%');
   assert.equal(pollTitle('Cadem: aprobación de Kast', 'Cadem'), 'Cadem: aprobación de Kast');
