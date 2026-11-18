@@ -44,7 +44,7 @@ enum StudyTopic {
   biology('biologia', 'Biología'),
   environment('medioambiente', 'Medioambiente y clima'),
   archaeology('arqueologia', 'Arqueología e historia'),
-  physics('fisica_quimica', 'Física y química'),
+  exact('ciencias_exactas', 'Ciencias exactas'),
   technology('tecnologia', 'Tecnología'),
   society('sociedad', 'Sociedad y educación');
 
