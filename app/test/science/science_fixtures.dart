@@ -451,6 +451,13 @@ class FakeScienceRepository
   @override
   Future<ApiUsage> usage() async => ApiUsage(days: usageDays, harvest: harvest);
 
+  /// The poll rule's log served to moderators; null makes the call fail.
+  List<PollDecision>? polls = <PollDecision>[];
+
+  @override
+  Future<List<PollDecision>> pollDecisions() async =>
+      polls ?? (throw StateError('requires API'));
+
   @override
   Future<List<StoryComment>> commentsCitingStudy(String doi) async =>
       <StoryComment>[
@@ -556,4 +563,6 @@ class ArenaScienceCore extends ArenaFullCore
       science.moderateStudy(doi, fields);
   @override
   Future<ApiUsage> usage() => science.usage();
+  @override
+  Future<List<PollDecision>> pollDecisions() => science.pollDecisions();
 }
