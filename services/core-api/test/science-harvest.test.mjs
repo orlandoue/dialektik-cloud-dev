@@ -223,3 +223,13 @@ test('topics come from each source\'s own taxonomy, never from AI', async () => 
   assert.equal(parseArxivFeed(feed).studies[0].topic, 'astronomia');
   assert.equal(parseArxivFeed(arxivFeed.replace('<published>2026-11-10', '<category term="q-bio.NC"/><published>2026-11-10')).studies[0].topic, 'biologia');
 });
+
+test('the database size warns from 450 MB of the 500 MB free plan', async () => {
+  const { databaseSizeJson } = await import('../dist/science/science.service.js');
+  const mb = (n) => n * 1048576;
+  assert.deepEqual(databaseSizeJson(mb(430.6), [{ name: 'live_acquisition_receipts', bytes: mb(310) }]), {
+    size_mb: 430.6, limit_mb: 500, warning: false, largest_tables: [{ name: 'live_acquisition_receipts', size_mb: 310 }],
+  });
+  assert.equal(databaseSizeJson(mb(449.9), []).warning, false);
+  assert.equal(databaseSizeJson(mb(450), []).warning, true);
+});
