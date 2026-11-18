@@ -374,6 +374,7 @@ class FakeScienceRepository
 
   List<ApiUsageDay> usageDays = <ApiUsageDay>[];
   HarvestStatus harvest = const HarvestStatus();
+  DatabaseSize? database;
 
   @override
   Future<void> report(
@@ -449,7 +450,8 @@ class FakeScienceRepository
   }
 
   @override
-  Future<ApiUsage> usage() async => ApiUsage(days: usageDays, harvest: harvest);
+  Future<ApiUsage> usage() async =>
+      ApiUsage(days: usageDays, harvest: harvest, database: database);
 
   /// The poll rule's log served to moderators; null makes the call fail.
   List<PollDecision>? polls = <PollDecision>[];
