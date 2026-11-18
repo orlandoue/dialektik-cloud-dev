@@ -6,6 +6,7 @@ import { randomBytes } from 'node:crypto';
 import { after, before, test } from 'node:test';
 import pg from 'pg';
 import { duelPollDecisionsSql } from '../../../packages/database/dist/migration/097_duel_poll_decisions.js';
+import { duelPollRetroactiveSql } from '../../../packages/database/dist/migration/098_duel_poll_retroactive.js';
 
 const ownerUrl = process.env.SCIENCE_TEST_DATABASE_URL;
 if (!ownerUrl && process.env.CI) throw new Error('CI must provide SCIENCE_TEST_DATABASE_URL.');
@@ -35,6 +36,8 @@ before(async () => {
     grant select on public.sources to dialektik_core_app;`);
   await owner.query(duelPollDecisionsSql);
   await owner.query(duelPollDecisionsSql);
+  await owner.query(duelPollRetroactiveSql);
+  await owner.query(duelPollRetroactiveSql);
   url.username = 'dialektik_core_app';
   url.password = password;
   coreUrl = url.toString();
@@ -101,4 +104,13 @@ test('each veto is logged once with its reason; only moderators read it; old row
       await assert.rejects(service.pollDecisions('11111111-1111-4111-8111-111111111111'), (e) => e.getStatus() === 403);
     } finally { delete process.env.DIALEKTIK_SCIENCE_MODERATORS; }
   } finally { await db.destroy(); }
+});
+
+test('098: a duel published before the rule is logged as «retroactive» with its duel id', { skip }, async () => {
+  await owner.query(`insert into public.duel_poll_decisions(stage, outcome, reason, duel_id, left_article_id, right_article_id,
+    left_title, right_title) values ('retroactive', 'veto', 'different_pollster', 'D1', 'R1', 'R2', 'Criteria', 'Cadem')`);
+  const row = await owner.query(`select stage, duel_id from public.duel_poll_decisions where left_article_id = 'R1'`);
+  assert.deepEqual(row.rows, [{ stage: 'retroactive', duel_id: 'D1' }]);
+  await assert.rejects(owner.query(`insert into public.duel_poll_decisions(stage, outcome, reason, left_article_id, right_article_id,
+    left_title, right_title) values ('otra', 'veto', 'different_pollster', 'R3', 'R4', 'x', 'y')`), { code: '23514' });
 });
