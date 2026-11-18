@@ -1,5 +1,5 @@
 import { parseArxivFeed } from './harvest/harvest-sources.js';
-import { authorsOf, dateParts, normalizeDoi, type FetchLike, type ResolvedStudy, type ResolverOptions } from './study-resolver.js';
+import { authorsOf, dateParts, normalizeDoi, reviewOf, type FetchLike, type StudyReview, type ResolvedStudy, type ResolverOptions } from './study-resolver.js';
 
 /**
  * C2 lookup: a DOI, a link or a title. A link is never downloaded (no
@@ -18,7 +18,8 @@ export interface LookupCandidate {
   authors: string | null;
   journal: string | null;
   year: number | null;
-  review: 'peer_reviewed' | 'preprint';
+  /** Never assumed: «not_reported» unless the source says. */
+  review: StudyReview;
 }
 
 const ARXIV_ID = /(?:arxiv\.org\/(?:abs|pdf|html)\/|^arxiv:\s*)(\d{4}\.\d{4,5})(?:v\d+)?(?:\.pdf)?/iu;
@@ -85,7 +86,8 @@ async function fromCrossref(text: string, fetcher: FetchLike, options: ResolverO
       doi, title, authors: authorsOf(item),
       journal: clean(Array.isArray(item['container-title']) ? item['container-title'][0] : null),
       year: date === null ? null : Number(date.slice(0, 4)),
-      review: item.type === 'posted-content' || item.subtype === 'preprint' ? 'preprint' as const : 'peer_reviewed' as const,
+      review: reviewOf({ doi, crossrefType: typeof item.type === 'string' ? item.type : null,
+        crossrefSubtype: typeof item.subtype === 'string' ? item.subtype : null }),
     }];
   });
 }
@@ -110,7 +112,11 @@ async function fromOpenAlex(text: string, fetcher: FetchLike, options: ResolverO
       authors: names.length === 0 ? null : names.length > 4 ? `${names.slice(0, 3).join(', ')}, et al.` : names.join(', '),
       journal: clean((work.primary_location as { source?: { display_name?: unknown } } | undefined)?.source?.display_name),
       year: typeof work.publication_year === 'number' ? work.publication_year : null,
-      review: work.type === 'preprint' ? 'preprint' as const : 'peer_reviewed' as const,
+      review: reviewOf({ doi, openalexType: typeof work.type === 'string' ? work.type : null,
+        openalexSourceType: (() => {
+          const type = (work.primary_location as { source?: { type?: unknown } } | undefined)?.source?.type;
+          return typeof type === 'string' ? type : null;
+        })() }),
     }];
   });
 }

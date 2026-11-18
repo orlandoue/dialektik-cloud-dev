@@ -31,13 +31,20 @@ const TABLES = ['science_studies', 'story_comments', 'story_comment_studies', 's
  */
 async function store(db: Kysely<unknown>, s: HarvestedStudy): Promise<'added' | 'updated' | null> {
   const rows = await sql<{ inserted: boolean }>`
-    insert into public.science_studies(doi, title, review, authors, institution, journal, published_at, abstract,
-      abstract_source, abstract_language, access, retracted, retracted_at, made_in_chile, resolved_at, harvested_at, harvest_source)
+    insert into public.science_studies(doi, title, review, authors, institution, journal, published_at, published_precision,
+      abstract, abstract_source, abstract_language, access, retracted, retracted_at, made_in_chile, resolved_at, harvested_at,
+      harvest_source)
     values (${s.doi}, ${s.title}, ${s.review}, ${s.authors}, ${s.institution}, ${s.journal}, ${s.published_at}::date,
+      ${s.published_precision},
       ${s.abstract}, ${s.abstract_source}, ${s.abstract_language}, ${s.access}, ${s.retracted}, ${s.retracted_at}::date,
       ${s.made_in_chile}, now(), now(), ${s.harvest_source})
     on conflict (doi) do update set
       title = excluded.title,
+      -- A review a moderator set stays; «not_reported» never overwrites one.
+      review = case when public.science_studies.review_by_moderator or excluded.review = 'not_reported'
+        then public.science_studies.review else excluded.review end,
+      published_precision = case when public.science_studies.published_at is null
+        then excluded.published_precision else public.science_studies.published_precision end,
       authors = coalesce(excluded.authors, public.science_studies.authors),
       institution = coalesce(public.science_studies.institution, excluded.institution),
       journal = coalesce(public.science_studies.journal, excluded.journal),

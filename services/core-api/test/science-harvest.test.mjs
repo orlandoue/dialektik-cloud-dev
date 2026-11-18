@@ -15,7 +15,7 @@ const openAlexWork = {
   language: 'es',
   is_retracted: false,
   open_access: { is_oa: true },
-  primary_location: { source: { display_name: 'Revista de Ejemplo' } },
+  primary_location: { source: { display_name: 'Revista de Ejemplo', type: 'journal' } },
   authorships: [
     { author: { display_name: 'Ana María Pérez' }, institutions: [{ display_name: 'Universidad de Chile', country_code: 'CL' }] },
     { author: { display_name: 'John Smith' }, institutions: [{ display_name: 'MIT', country_code: 'US' }] },

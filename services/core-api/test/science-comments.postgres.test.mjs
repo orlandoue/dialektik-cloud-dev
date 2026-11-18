@@ -14,6 +14,7 @@ import pg from 'pg';
 import { scienceCommentsSql } from '../../../packages/database/dist/migration/091_science_and_story_comments.js';
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
 import { scienceReportPrivacySql } from '../../../packages/database/dist/migration/094_science_report_privacy.js';
+import { scienceStudyReviewSql } from '../../../packages/database/dist/migration/095_science_study_review.js';
 
 const ownerUrl = process.env.SCIENCE_TEST_DATABASE_URL;
 if (!ownerUrl && process.env.CI) throw new Error('CI must provide SCIENCE_TEST_DATABASE_URL: row security is not checked otherwise.');
@@ -83,6 +84,7 @@ before(async () => {
   await owner.query(scienceCommentsSql);
   await owner.query(scienceModerationSql);
   await owner.query(scienceReportPrivacySql);
+  await owner.query(scienceStudyReviewSql);
   // Applying them twice must change nothing (the owner may re-run them).
   await owner.query(scienceCommentsSql);
   await owner.query(scienceModerationSql);

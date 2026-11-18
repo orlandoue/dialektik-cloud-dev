@@ -1,5 +1,5 @@
 import {
-  createDatabase, destroyDatabase, scienceCommentsSql, scienceModerationSql, scienceReportPrivacySql,
+  createDatabase, destroyDatabase, scienceCommentsSql, scienceModerationSql, scienceReportPrivacySql, scienceStudyReviewSql,
 } from '@dialektik/database';
 import {
   ForbiddenException,
@@ -43,7 +43,8 @@ export type StudyRelation = 'respalda' | 'contradice' | 'matiza' | 'contexto';
 export interface StudyJson {
   doi: string;
   title: string;
-  review: 'peer_reviewed' | 'preprint';
+  review: 'peer_reviewed' | 'preprint' | 'not_reported';
+  published_precision: 'day' | 'month' | 'year';
   authors: string | null;
   institution: string | null;
   journal: string | null;
@@ -97,6 +98,7 @@ export interface StudyModeration {
   access?: string | null;
   corrections?: string | null;
   made_in_chile?: boolean;
+  review?: 'peer_reviewed' | 'preprint' | 'not_reported';
   /** Copied from the published article; never generated. Needs its source. */
   abstract?: { text: string; source: string; language: string | null } | null;
 }
@@ -107,6 +109,18 @@ export interface ReportedComment extends CommentJson {
   event_id: string;
   reports: { reason: ReportReason; note: string | null; created_at: Date }[];
 }
+
+/** Minimum of a quoted fragment: 6 words or 40 characters. */
+export const FRAGMENT_MIN_WORDS = 6;
+export const FRAGMENT_MIN_CHARS = 40;
+export function fragmentLongEnough(fragment: string): boolean {
+  const text = fragment.replace(/\s+/gu, ' ').trim();
+  return text.length >= FRAGMENT_MIN_CHARS || text.split(' ').filter((w) => /[\p{L}\p{N}]/u.test(w)).length >= FRAGMENT_MIN_WORDS;
+}
+
+/** «Tipo de estudio»: a fixed list. */
+export const STUDY_DESIGNS = ['Ensayo aleatorizado', 'Cohorte', 'Casos y controles', 'Transversal', 'Serie de casos',
+  'Revisión sistemática', 'Metaanálisis', 'Estudio en animales', 'Estudio in vitro', 'Modelación', 'Otro'] as const;
 
 /** Comments with a study need an account at least this old. */
 export const MINIMUM_ACCOUNT_AGE_DAYS = 3;
@@ -133,6 +147,7 @@ function studyJson(row: StudyRow): StudyJson {
     institution: row.institution,
     journal: row.journal,
     published_at: day(row.published_at),
+    published_precision: row.published_precision ?? 'day',
     design: row.design,
     population: row.population,
     sample_size: row.sample_size,
@@ -152,7 +167,7 @@ function studyJson(row: StudyRow): StudyJson {
   };
 }
 
-const STUDY_COLUMNS = sql.raw(`s.doi, s.title, s.review, s.authors, s.institution, s.journal, s.published_at,
+const STUDY_COLUMNS = sql.raw(`s.doi, s.title, s.review, s.authors, s.institution, s.journal, s.published_at, s.published_precision,
   s.design, s.population, s.sample_size, s.follow_up, s.funding, s.conflicts, s.access, s.corrections,
   s.retracted, s.retracted_at, s.abstract, s.abstract_language, s.abstract_source, s.made_in_chile,
   (select count(distinct a.event_id)::int from public.story_comment_studies a
@@ -236,6 +251,7 @@ export class ScienceService implements OnModuleInit {
         await sql.raw(scienceCommentsSql).execute(tx);
         await sql.raw(scienceModerationSql).execute(tx);
         await sql.raw(scienceReportPrivacySql).execute(tx);
+        await sql.raw(scienceStudyReviewSql).execute(tx);
       });
       this.#ready = true;
       this.#logger.log('Science storage created at startup.');
@@ -255,6 +271,8 @@ export class ScienceService implements OnModuleInit {
       and to_regclass('public.story_comment_reports') is not null
       and exists (select 1 from information_schema.columns where table_schema = 'public'
         and table_name = 'science_studies' and column_name = 'abstract_by_moderator')
+      and exists (select 1 from information_schema.columns where table_schema = 'public'
+        and table_name = 'science_studies' and column_name = 'published_precision')
       -- 094: reports are no longer readable by every Core session.
       and exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'story_comment_reports'
         and policyname = 'story_comment_reports_read' and qual <> 'true') as ready`.execute(database);
@@ -334,12 +352,17 @@ export class ScienceService implements OnModuleInit {
 
   /** Bibliographic fields only; moderator fields are never overwritten. */
   async #store(s: ResolvedStudy): Promise<void> {
-    await sql`insert into public.science_studies(doi,title,review,authors,institution,journal,published_at,abstract,
-        abstract_source,abstract_language,access,retracted,retracted_at,made_in_chile,resolved_at)
-      values (${s.doi},${s.title},${s.review},${s.authors},${s.institution},${s.journal},${s.published_at}::date,${s.abstract},
+    await sql`insert into public.science_studies(doi,title,review,authors,institution,journal,published_at,published_precision,
+        abstract,abstract_source,abstract_language,access,retracted,retracted_at,made_in_chile,resolved_at)
+      values (${s.doi},${s.title},${s.review},${s.authors},${s.institution},${s.journal},${s.published_at}::date,
+        ${s.published_precision},${s.abstract},
         ${s.abstract_source},${s.abstract_language},${s.access},${s.retracted},${s.retracted_at}::date,${s.made_in_chile},now())
-      on conflict (doi) do update set title=excluded.title, review=excluded.review, authors=excluded.authors,
+      on conflict (doi) do update set title=excluded.title,
+        -- A review a moderator set stays.
+        review=case when public.science_studies.review_by_moderator then public.science_studies.review else excluded.review end,
+        authors=excluded.authors,
         institution=excluded.institution, journal=excluded.journal, published_at=excluded.published_at,
+        published_precision=excluded.published_precision,
         -- An abstract a moderator loaded from the publisher is kept.
         abstract=case when public.science_studies.abstract_by_moderator then public.science_studies.abstract else excluded.abstract end,
         abstract_source=case when public.science_studies.abstract_by_moderator then public.science_studies.abstract_source else excluded.abstract_source end,
@@ -449,6 +472,39 @@ export class ScienceService implements OnModuleInit {
     });
   }
 
+  /**
+   * «Tus comentarios»: every comment of the reader with its state, rejected
+   * or hidden ones included, and the story it belongs to.
+   */
+  async myComments(userId: string): Promise<{ comments: (CommentJson & { event_id: string; event_title: string | null })[] }> {
+    return this.#guarded(async () => {
+      const rows = await sql<{ id: string; event_id: string; event_title: string | null; status: CommentJson['status'] }>`
+        select c.id::text as id, c.event_id::text as event_id, e.title_descriptive as event_title, c.status
+        from public.story_comments c left join public.public_events e on e.id = c.event_id
+        where c.user_id = ${userId}::uuid order by c.created_at desc limit 200`.execute(this.db.database);
+      const comments: (CommentJson & { event_id: string; event_title: string | null })[] = [];
+      for (const row of rows.rows) {
+        // The thread query lists published and in-review ones; a hidden one
+        // is described here from its own row.
+        const listed = (await this.#comments(this.db.database as Kysely<unknown>, userId, sql`c.id = ${row.id}::uuid`))[0]
+          ?? (await this.#hiddenComment(row.id, userId));
+        if (listed) comments.push({ ...listed, status: row.status, event_id: row.event_id, event_title: row.event_title });
+      }
+      return { comments };
+    });
+  }
+
+  async #hiddenComment(id: string, userId: string): Promise<CommentJson | undefined> {
+    const rows = await sql<{ author: string; body: string; created_at: Date; parent_id: string | null }>`
+      select author_alias as author, body, created_at, parent_id::text as parent_id from public.story_comments
+      where id = ${id}::uuid and user_id = ${userId}::uuid`.execute(this.db.database);
+    const row = rows.rows[0];
+    return row === undefined ? undefined : {
+      id, author: row.author, body: row.body, created_at: row.created_at, parent_id: row.parent_id,
+      status: 'rejected', reactions: 0, reacted: false, mine: true, attachment: null,
+    };
+  }
+
   async #comment(database: Kysely<unknown>, userId: string, id: string): Promise<CommentJson> {
     const rows = await this.#comments(database, userId, sql`c.id = ${id}::uuid`);
     if (!rows[0]) throw new NotFoundException('Comment not found.');
@@ -499,6 +555,10 @@ export class ScienceService implements OnModuleInit {
     if (study.retracted) throw new GoneException({ code: 'PUBLIC_SCIENCE_RETRACTED' });
     // Without an abstract there is nothing literal to quote.
     if (study.abstract === null) throw refused(HttpStatus.UNPROCESSABLE_ENTITY, 'PUBLIC_SCIENCE_NO_ABSTRACT');
+    // A fragment has to show the relation: at least 6 words or 40 characters.
+    if (!fragmentLongEnough(input.abstractFragment)) {
+      throw refused(HttpStatus.UNPROCESSABLE_ENTITY, 'PUBLIC_SCIENCE_FRAGMENT_TOO_SHORT');
+    }
     if (!isLiteralFragment(input.abstractFragment, study.abstract)) {
       throw refused(HttpStatus.UNPROCESSABLE_ENTITY, 'PUBLIC_SCIENCE_NOT_LITERAL');
     }
@@ -726,6 +786,8 @@ export class ScienceService implements OnModuleInit {
         access = case when ${has('access')} then ${fields.access ?? null}::text else access end,
         corrections = case when ${has('corrections')} then ${fields.corrections ?? null}::text else corrections end,
         made_in_chile = case when ${has('made_in_chile')} then ${fields.made_in_chile ?? false} else made_in_chile end,
+        review = case when ${has('review')} then ${fields.review ?? 'not_reported'}::text else review end,
+        review_by_moderator = case when ${has('review')} then true else review_by_moderator end,
         abstract = case when ${has('abstract')} then ${fields.abstract?.text ?? null}::text else abstract end,
         abstract_source = case when ${has('abstract')} then ${fields.abstract?.source ?? null}::text else abstract_source end,
         abstract_language = case when ${has('abstract')} then ${fields.abstract?.language ?? null}::text else abstract_language end,
