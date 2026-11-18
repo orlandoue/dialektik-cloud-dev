@@ -39,8 +39,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run build
       - run: node --test services/core-api/test/science-comments.integration.test.mjs services/core-api/test/science-flag.test.mjs
-      - run: node --test services/core-api/test/science-harvest.test.mjs services/core-api/test/science-lookup.test.mjs services/core-api/test/poll-measurement.test.mjs
-      - run: node --test --test-concurrency=1 services/core-api/test/science-comments.postgres.test.mjs services/core-api/test/science-harvest.postgres.test.mjs services/core-api/test/poll-duel-rule.postgres.test.mjs
+      - run: node --test services/core-api/test/science-harvest.test.mjs services/core-api/test/science-lookup.test.mjs services/core-api/test/poll-measurement.test.mjs services/core-api/test/live-sightings.test.mjs
+      - run: node --test --test-concurrency=1 services/core-api/test/science-comments.postgres.test.mjs services/core-api/test/science-harvest.postgres.test.mjs services/core-api/test/poll-duel-rule.postgres.test.mjs services/core-api/test/live-sightings.postgres.test.mjs
       # Live: the four sources answer and parse (no database, no secrets).
       - run: node services/core-api/dist/science/harvest/harvest.cli.js --dry-run
         env:

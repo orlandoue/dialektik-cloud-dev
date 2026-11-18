@@ -12,6 +12,7 @@ import {
 } from './live.adapter.js';
 import { assertLiveSourceReady, type LiveSourcePolicy } from './live.registry.js';
 import { fetchMetaDescription } from './meta-description.js';
+import { latestReceiptEvidence, receiptNeeded, sightings } from './live-sightings.js';
 
 export interface LivePreflightExposure {
   readonly canonicalUrl: string | null;
@@ -396,6 +397,22 @@ async function refreshLiveArticleTextProjection(
   return true;
 }
 
+interface PersistOutcome {
+  readonly result: 'new' | 'updated' | 'unchanged';
+  readonly exclusionId: string;
+  /** No receipt was written: the repeat is recorded as an hourly sighting. */
+  readonly sighted: boolean;
+}
+
+/** A sighting never fails the poll: it is a counter, not evidence. */
+async function recordSighting(database: Kysely<Database>, exclusionId: string, now: Date): Promise<void> {
+  try {
+    await sightings.record(database, exclusionId, now);
+  } catch {
+    /* The receipt evidence is untouched; only the counter is skipped. */
+  }
+}
+
 async function persistItem(
   transaction: Transaction<Database>,
   policy: LiveSourcePolicy,
@@ -404,7 +421,7 @@ async function persistItem(
   exclusionId: string,
   now: Date,
   discoveryUrl: string,
-): Promise<'new' | 'updated' | 'unchanged'> {
+): Promise<PersistOutcome> {
   if (item.canonicalUrl === null || item.headline === null || item.publishedAt === null)
     throw new Error('INVALID_ITEM');
   await sql`select pg_advisory_xact_lock(hashtextextended(${`live-source:${policy.sourceId}`}, 0))`.execute(
@@ -463,7 +480,27 @@ async function persistItem(
     discoveryUrl,
     null,
   );
-  await transaction.insertInto('live_acquisition_receipts').values(acquisition).execute();
+  // A receipt is written only when its evidence differs from the latest one
+  // of this item (new item, changed payload, policy, URL or adapter). An
+  // unchanged repeat is counted as a sighting instead, outside this
+  // transaction and at most hourly.
+  let receiptWritten = false;
+  const writeReceipt = async (): Promise<void> => {
+    if (receiptWritten) return;
+    await transaction.insertInto('live_acquisition_receipts').values(acquisition).execute();
+    receiptWritten = true;
+  };
+  if (
+    existing === undefined ||
+    receiptNeeded(await latestReceiptEvidence(transaction, linkedExclusion), acquisition)
+  ) {
+    await writeReceipt();
+  }
+  const outcome = (result: 'new' | 'updated' | 'unchanged'): PersistOutcome => ({
+    result,
+    exclusionId: linkedExclusion,
+    sighted: !receiptWritten,
+  });
   const originalText = [item.headline, item.excerpt]
     .filter((part): part is string => part !== null)
     .join('. ');
@@ -522,7 +559,7 @@ async function persistItem(
     latest.declared_upstream === item.declaredUpstream &&
     latest.version_canonical_url === item.canonicalUrl
   )
-    return existing !== undefined &&
+    return outcome(existing !== undefined &&
       (await refreshLiveArticleTextProjection(
         transaction,
         articleId,
@@ -532,7 +569,9 @@ async function persistItem(
         item.excerpt,
       ))
       ? 'updated'
-      : 'unchanged';
+      : 'unchanged');
+  // A new version always cites the receipt that saw it.
+  await writeReceipt();
   const legalText = [item.headline, item.excerpt].filter((part) => part !== null).join('\n');
   const versionId = nextId(now);
   await transaction
@@ -564,7 +603,7 @@ async function persistItem(
       item.excerpt,
     );
   }
-  return existing === undefined ? 'new' : 'updated';
+  return outcome(existing === undefined ? 'new' : 'updated');
 }
 
 export async function syncLivePayload(
@@ -736,8 +775,9 @@ export async function syncLivePayload(
             await options.authorizePersistence?.(transaction);
             return persistItem(transaction, policy, policyId, item, excluded, now, discoveryUrl);
           });
-          if (result === 'new') summary.newArticles++;
-          else if (result === 'updated') summary.updatedArticles++;
+          if (result.sighted) await recordSighting(database, result.exclusionId, now);
+          if (result.result === 'new') summary.newArticles++;
+          else if (result.result === 'updated') summary.updatedArticles++;
           else {
             summary.unchangedArticles++;
             summary.duplicateArticles++;
@@ -748,10 +788,13 @@ export async function syncLivePayload(
       }
       if (error !== null) {
         summary.failedItems++;
-        await database
-          .insertInto('live_acquisition_receipts')
-          .values(receipt(policy, policyId, item, excluded, now, discoveryUrl, error))
-          .execute();
+        const quarantine = receipt(policy, policyId, item, excluded, now, discoveryUrl, error);
+        // An item that stays quarantined with the same evidence is a sighting.
+        if (receiptNeeded(await latestReceiptEvidence(database, excluded), quarantine)) {
+          await database.insertInto('live_acquisition_receipts').values(quarantine).execute();
+        } else {
+          await recordSighting(database, excluded, now);
+        }
         summary.quarantinedItems++;
       }
     }
