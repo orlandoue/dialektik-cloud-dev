@@ -256,6 +256,9 @@ final class PublicApiClient
   @override
   Future<ApiUsage> usage() => _get<ApiUsage>('/v1/science/moderation/usage',
     decoder: ApiUsage.fromJson, refresh: true, requestToken: null);
+  @override
+  Future<List<PollDecision>> pollDecisions() => _get<List<PollDecision>>('/v1/science/moderation/poll-decisions',
+    decoder: PollDecision.listFromJson, refresh: true, requestToken: null);
 
   Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder, {String method = 'POST'}) async {
     final token = await authorizationTokenProvider?.call();

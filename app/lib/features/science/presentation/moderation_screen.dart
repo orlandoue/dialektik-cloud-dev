@@ -49,6 +49,9 @@ class ScienceModerationScreen extends StatefulWidget {
 class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
   ModerationQueue? _queue;
   ApiUsage? _usage;
+
+  /// The poll rule's log; null when Core does not answer it yet.
+  List<PollDecision>? _polls;
   bool _failed = false;
 
   ScienceModerationRepository? get _repository => widget.store.moderation;
@@ -70,10 +73,18 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
         repository.moderationQueue(),
         repository.usage(),
       ).wait;
+      // An older Core without the poll log still moderates.
+      List<PollDecision>? polls;
+      try {
+        polls = await repository.pollDecisions();
+      } on Object {
+        polls = null;
+      }
       if (!mounted) return;
       setState(() {
         _queue = loaded.$1;
         _usage = loaded.$2;
+        _polls = polls;
         _failed = false;
       });
     } on Object {
@@ -155,11 +166,32 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
     return Tab(
       key: key,
       height: line > 26 ? line * 2 + 12 : 46,
-      child: Text(
-        label,
-        maxLines: 2,
-        textAlign: TextAlign.center,
-        overflow: TextOverflow.ellipsis,
+      // Wraps to two lines first; only a word longer than a third of the
+      // width shrinks, instead of being cut.
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints c) {
+          // Never break a word: the label is laid out at least as wide as
+          // its longest word and FittedBox scales it down to the tab.
+          final TextStyle style = DefaultTextStyle.of(context).style;
+          final TextScaler scaler = MediaQuery.textScalerOf(context);
+          double widest = 0;
+          for (final String word in label.split(' ')) {
+            final TextPainter painter = TextPainter(
+              text: TextSpan(text: word, style: style),
+              textDirection: TextDirection.ltr,
+              textScaler: scaler,
+            )..layout();
+            if (painter.width > widest) widest = painter.width;
+            painter.dispose();
+          }
+          return FittedBox(
+            fit: BoxFit.scaleDown,
+            child: SizedBox(
+              width: widest > c.maxWidth ? widest + 1 : c.maxWidth,
+              child: Text(label, maxLines: 2, textAlign: TextAlign.center),
+            ),
+          );
+        },
       ),
     );
   }
@@ -171,7 +203,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
         ? 0
         : queue.review.length + queue.reports.length;
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: SciColors.bgApp,
         appBar: AppBar(
@@ -208,6 +240,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
             tabs: <Widget>[
               _tab(context, const Key('sci-mod-tab-queue'), 'Cola · $pending'),
               _tab(context, const Key('sci-mod-tab-usage'), 'Consumo de APIs'),
+              _tab(context, const Key('sci-mod-tab-polls'), 'Encuestas'),
             ],
           ),
         ),
@@ -240,6 +273,10 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
                       days: _usage?.days ?? const <ApiUsageDay>[],
                       harvest: _usage?.harvest,
                     ),
+                  ),
+                  RefreshIndicator(
+                    onRefresh: _load,
+                    child: PollDecisionsView(decisions: _polls),
                   ),
                 ],
               ),
@@ -427,6 +464,98 @@ class ModerationCard extends StatelessWidget {
 
 /// Calls and errors per metadata API, totals for 30 days and day by day, so
 /// a moderator can check OpenAlex without calling the API by hand.
+/// «Encuestas»: the pairs the poll rule separated in the last 14 days, with
+/// their reason, so a moderator can see whether it separates too much.
+class PollDecisionsView extends StatelessWidget {
+  const PollDecisionsView({required this.decisions, super.key});
+
+  /// Null when Core does not answer the log yet.
+  final List<PollDecision>? decisions;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<PollDecision>? list = decisions;
+    return ListView(
+      key: const Key('sci-mod-polls'),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: <Widget>[
+        const _Hint(
+          'Duelos que la regla de encuestas separó en los últimos 14 días: '
+          'solo se compara la misma medición (misma encuestadora, sujeto y '
+          'ronda). Revisa si separa de más.',
+        ),
+        const SizedBox(height: 12),
+        if (list == null)
+          const _Hint('Core todavía no entrega este registro.')
+        else if (list.isEmpty)
+          const _Hint('La regla no ha separado duelos en estos 14 días.')
+        else
+          for (final PollDecision d in list) _PollDecisionCard(decision: d),
+      ],
+    );
+  }
+}
+
+class _PollDecisionCard extends StatelessWidget {
+  const _PollDecisionCard({required this.decision});
+
+  final PollDecision decision;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget side(String? outlet, String title, String? pollster) => Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            '${outlet ?? 'Medio sin nombre'} · '
+            '${pollster ?? 'sin encuestadora'}',
+            style: SciText.meta,
+          ),
+          Text(title, style: SciText.body),
+        ],
+      ),
+    );
+    return Container(
+      key: ValueKey<String>(
+        'sci-mod-poll-${decision.reason.name}-${decision.leftTitle.hashCode}',
+      ),
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: SciColors.surface,
+        borderRadius: BorderRadius.circular(SciRadius.card),
+        border: Border.all(color: SciColors.borderCard),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: <Widget>[
+              StudyTag(decision.reason.label),
+              Text(
+                '${sciShortDate(decision.decidedAt)} · '
+                '${decision.beforeAi ? 'antes de la IA' : 'al publicar'}',
+                style: SciText.meta,
+              ),
+            ],
+          ),
+          side(decision.leftOutlet, decision.leftTitle, decision.leftPollster),
+          side(
+            decision.rightOutlet,
+            decision.rightTitle,
+            decision.rightPollster,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class ApiUsageView extends StatelessWidget {
   const ApiUsageView({required this.days, this.harvest, super.key});
 

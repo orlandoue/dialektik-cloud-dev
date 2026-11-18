@@ -686,3 +686,73 @@ final class LookupResult {
   /// A link was written, but it carries no DOI; it is never downloaded.
   final bool linkWithoutDoi;
 }
+
+/// Why the poll rule separated two stories (or kept them as «Distinta cifra»).
+enum PollDecisionReason {
+  differentPollster('different_pollster', 'Encuestadoras distintas'),
+  pollsterMissing('pollster_missing', 'Falta encuestadora'),
+  pollAndNonPoll('poll_and_non_poll', 'Encuesta contra no encuesta'),
+  differentRound('different_round', 'Ronda distinta'),
+  differentSubject('different_subject', 'Sujeto evaluado distinto'),
+  differentFigure('', 'Distinta cifra');
+
+  const PollDecisionReason(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static PollDecisionReason parse(Object? outcome, Object? reason) =>
+      outcome == 'distinta_cifra'
+      ? PollDecisionReason.differentFigure
+      : PollDecisionReason.values
+                .where((PollDecisionReason r) => r.wire == reason)
+                .firstOrNull ??
+            PollDecisionReason.pollsterMissing;
+}
+
+/// One pair the poll rule vetoed, or a «Distinta cifra» duel, for moderators.
+final class PollDecision {
+  const PollDecision({
+    required this.decidedAt,
+    required this.reason,
+    required this.beforeAi,
+    required this.leftTitle,
+    required this.rightTitle,
+    this.leftOutlet,
+    this.rightOutlet,
+    this.leftPollster,
+    this.rightPollster,
+  });
+
+  factory PollDecision.fromJson(Map<String, dynamic> json) => PollDecision(
+    decidedAt:
+        DateTime.tryParse(json['decided_at'] as String? ?? '') ??
+        DateTime.fromMillisecondsSinceEpoch(0),
+    reason: PollDecisionReason.parse(json['outcome'], json['reason']),
+    beforeAi: json['stage'] == 'candidate',
+    leftTitle: json['left_title'] as String? ?? '',
+    rightTitle: json['right_title'] as String? ?? '',
+    leftOutlet: json['left_outlet'] as String?,
+    rightOutlet: json['right_outlet'] as String?,
+    leftPollster: json['left_pollster'] as String?,
+    rightPollster: json['right_pollster'] as String?,
+  );
+
+  static List<PollDecision> listFromJson(Object? value) => <PollDecision>[
+    for (final Object? item
+        in ((value! as Map<String, dynamic>)['decisions'] as List<dynamic>?) ??
+            const <dynamic>[])
+      PollDecision.fromJson(item! as Map<String, dynamic>),
+  ];
+
+  final DateTime decidedAt;
+  final PollDecisionReason reason;
+
+  /// Vetoed before the AI compared the pair; otherwise at publication.
+  final bool beforeAi;
+  final String leftTitle;
+  final String rightTitle;
+  final String? leftOutlet;
+  final String? rightOutlet;
+  final String? leftPollster;
+  final String? rightPollster;
+}
