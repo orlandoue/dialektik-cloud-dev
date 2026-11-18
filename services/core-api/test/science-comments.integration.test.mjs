@@ -5,6 +5,7 @@ import { scienceCommentsSql } from '../../../packages/database/dist/migration/09
 import { scienceModerationSql } from '../../../packages/database/dist/migration/092_science_moderation.js';
 import { scienceReportPrivacySql } from '../../../packages/database/dist/migration/094_science_report_privacy.js';
 import { scienceStudyReviewSql } from '../../../packages/database/dist/migration/095_science_study_review.js';
+import { scienceTopicsSql } from '../../../packages/database/dist/migration/096_science_topics.js';
 
 const veteran = '11111111-1111-4111-8111-111111111111';
 const other = '22222222-2222-4222-8222-222222222222';
@@ -64,6 +65,7 @@ async function setup({ retracted = false } = {}) {
   await pg.exec(scienceModerationSql);
   await pg.exec(scienceReportPrivacySql);
   await pg.exec(scienceStudyReviewSql);
+  await pg.exec(scienceTopicsSql);
   await pg.exec('set role dialektik_core_app');
   const { Kysely, PostgresDialect } = await import('kysely');
   const { ScienceService } = await import('../dist/science/science.service.js');
@@ -395,5 +397,32 @@ test('lookup: a link without a DOI is never fetched, and a reader has an hourly 
     await rejectsWith(service.lookup(veteran, 'https://example.org/sin-doi'), 429, 'PUBLIC_RATE_LIMITED');
     // Another reader is not affected.
     assert.equal((await service.lookup(other, 'https://example.org/sin-doi')).reason, 'no_doi_in_link');
+  } finally { await database.destroy(); await pg.close(); }
+});
+
+test('C1 by topics: «Todos», «Hecha en Chile» or one topic, by date or by connected stories', async () => {
+  const { pg, database, service } = await setup();
+  try {
+    await pg.exec(`reset role;
+      insert into public.science_studies(doi, title, review, published_at, topic, made_in_chile) values
+        ('10.1000/astro-old', 'Galaxias', 'preprint', '2026-01-02', 'astronomia', true),
+        ('10.1000/astro-new', 'Estrellas', 'preprint', '2026-11-02', 'astronomia', false),
+        ('10.1000/salud', 'Vacunas', 'peer_reviewed', '2026-06-01', 'salud', true),
+        ('10.1000/none', 'Sin tema', 'not_reported', '2026-07-01', null, false);
+      set role dialektik_core_app;`);
+    const dois = async (scope, sort) => (await service.browseStudies(scope, sort)).studies.map((s) => s.doi)
+      .filter((d) => d.startsWith('10.1000/'));
+    assert.deepEqual(await dois('astronomia', 'recientes'), ['10.1000/astro-new', '10.1000/astro-old']);
+    assert.deepEqual(await dois('chile', 'recientes'), ['10.1000/salud', '10.1000/astro-old']);
+    assert.deepEqual(await dois('todos', 'recientes'), ['10.1000/astro-new', '10.1000/none', '10.1000/salud', '10.1000/astro-old']);
+    assert.equal((await service.browseStudies('salud', 'recientes')).studies.find((s) => s.doi === '10.1000/salud').topic, 'salud');
+    // «Conectados a noticias» puts a study cited in a published comment first.
+    await pg.exec(`reset role;
+      insert into public.story_comments(id, event_id, user_id, kind, status, author_alias, body, reviewed_at)
+        values ('6f0c2b1e-7a3d-4c8e-9b21-0d6e4f3a2c10', 'event1', '${other}', 'study', 'published', 'Lectora', 'x', now());
+      insert into public.story_comment_studies(comment_id, event_id, doi, claim_quote_id, claim_text, claim_outlet, relation, abstract_fragment)
+        values ('6f0c2b1e-7a3d-4c8e-9b21-0d6e4f3a2c10', 'event1', '10.1000/astro-old', 'q1', 'Cita', 'Medio', 'respalda', 'fragmento');
+      set role dialektik_core_app;`);
+    assert.deepEqual(await dois('astronomia', 'conectados'), ['10.1000/astro-old', '10.1000/astro-new']);
   } finally { await database.destroy(); await pg.close(); }
 });

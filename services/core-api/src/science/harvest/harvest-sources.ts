@@ -1,5 +1,7 @@
 import { XMLParser } from 'fast-xml-parser';
 
+import { arxivTopic, openAlexTopic } from '../study-topics.js';
+
 import {
   abstractFromInvertedIndex, authorsOf, dateParts, normalizeDoi, openAlexPrecision, precisionOf, reviewOf, stripJats,
   type FetchLike, type ResolvedStudy,
@@ -156,6 +158,7 @@ export function parseOpenAlexWork(work: Record<string, unknown>): HarvestedStudy
     retracted: work.is_retracted === true,
     retracted_at: null,
     made_in_chile: institutions.some((i) => String(i.country_code ?? '').toUpperCase() === 'CL'),
+    topic: openAlexTopic(work.primary_topic),
     harvest_source: 'openalex_cl',
   };
 }
@@ -220,6 +223,8 @@ export function parseEuropePmcResult(result: Record<string, unknown>): Harvested
     retracted: typeList.some((t) => t.includes('retracted publication')),
     retracted_at: null,
     made_in_chile: affiliation !== null && /\bchile\b/iu.test(affiliation),
+    // Europe PMC indexes life sciences and medicine.
+    topic: 'salud',
     harvest_source: 'europepmc',
   };
 }
@@ -265,6 +270,16 @@ const textOf = (value: unknown): string | null => {
   return clean(typeof value === 'number' ? String(value) : value);
 };
 
+/** `<arxiv:primary_category term="astro-ph.GA"/>`, else the first category. */
+function primaryCategory(entry: Record<string, unknown>): string | null {
+  const term = (value: unknown): string | null => {
+    const item = Array.isArray(value) ? value[0] : value;
+    const t = item !== null && typeof item === 'object' ? (item as Record<string, unknown>)['@_term'] : null;
+    return typeof t === 'string' ? t : null;
+  };
+  return term(entry.primary_category) ?? term(entry.category);
+}
+
 export function parseArxivFeed(body: string): SourceBatch {
   const feed = (xml.parse(body) as { feed?: { entry?: Record<string, unknown>[] } }).feed;
   const studies: HarvestedStudy[] = [];
@@ -293,6 +308,7 @@ export function parseArxivFeed(body: string): SourceBatch {
       retracted: false,
       retracted_at: null,
       made_in_chile: affiliations.some((a) => /\bchile\b/iu.test(a)),
+      topic: arxivTopic(primaryCategory(entry)),
       harvest_source: 'arxiv',
     });
   }
@@ -346,6 +362,8 @@ export function parseCrossrefScieloItem(item: Record<string, unknown>): Harveste
     retracted: false,
     retracted_at: null,
     made_in_chile: affiliations.some((a) => /\bchile\b/iu.test(a)),
+    // Crossref keeps no subject taxonomy for these records.
+    topic: null,
     harvest_source: 'scielo_cl',
   };
 }

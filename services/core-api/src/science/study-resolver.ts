@@ -5,6 +5,8 @@
  * Chile. Design, population, sample, follow-up, funding and conflicts are
  * left to a moderator: nothing is extracted by a model.
  */
+import { openAlexTopic, type StudyTopic } from './study-topics.js';
+
 export interface ResolvedStudy {
   doi: string;
   title: string;
@@ -22,6 +24,8 @@ export interface ResolvedStudy {
   retracted: boolean;
   retracted_at: string | null;
   made_in_chile: boolean;
+  /** From the source's own taxonomy; null when it has none. */
+  topic: StudyTopic | null;
 }
 
 export type StudyReview = 'peer_reviewed' | 'preprint' | 'not_reported';
@@ -241,6 +245,7 @@ export async function resolveStudy(doi: string, fetcher: FetchLike = fetch as un
     retracted,
     retracted_at: retractedAt,
     made_in_chile: institutions.some((i) => text(i.country_code)?.toUpperCase() === 'CL'),
+    topic: openAlexTopic(openalex?.primary_topic),
   };
 }
 
