@@ -6,21 +6,21 @@
  * appears in «Todos» and, when it applies, in «Hecha en Chile».
  */
 export const STUDY_TOPICS = [
-  'salud', 'astronomia', 'biologia', 'medioambiente', 'arqueologia', 'fisica_quimica', 'tecnologia', 'sociedad',
+  'salud', 'astronomia', 'biologia', 'medioambiente', 'arqueologia', 'ciencias_exactas', 'tecnologia', 'sociedad',
 ] as const;
 export type StudyTopic = (typeof STUDY_TOPICS)[number];
 
 export const isStudyTopic = (value: unknown): value is StudyTopic =>
   typeof value === 'string' && (STUDY_TOPICS as readonly string[]).includes(value);
 
-/** OpenAlex's 26 fields. Mathematics has no topic of its own here. */
+/** OpenAlex's 26 fields. Physics, chemistry and mathematics are «Ciencias exactas». */
 const OPENALEX_FIELDS: Record<string, StudyTopic | null> = {
   'agricultural and biological sciences': 'biologia',
   'arts and humanities': 'sociedad',
   'biochemistry, genetics and molecular biology': 'biologia',
   'business, management and accounting': 'sociedad',
-  'chemical engineering': 'fisica_quimica',
-  'chemistry': 'fisica_quimica',
+  'chemical engineering': 'ciencias_exactas',
+  'chemistry': 'ciencias_exactas',
   'computer science': 'tecnologia',
   'decision sciences': 'tecnologia',
   'dentistry': 'salud',
@@ -31,13 +31,13 @@ const OPENALEX_FIELDS: Record<string, StudyTopic | null> = {
   'environmental science': 'medioambiente',
   'health professions': 'salud',
   'immunology and microbiology': 'salud',
-  'materials science': 'fisica_quimica',
-  'mathematics': null,
+  'materials science': 'ciencias_exactas',
+  'mathematics': 'ciencias_exactas',
   'medicine': 'salud',
   'neuroscience': 'salud',
   'nursing': 'salud',
   'pharmacology, toxicology and pharmaceutics': 'salud',
-  'physics and astronomy': 'fisica_quimica',
+  'physics and astronomy': 'ciencias_exactas',
   'psychology': 'sociedad',
   'social sciences': 'sociedad',
   'veterinary': 'biologia',
@@ -69,7 +69,7 @@ export function arxivTopic(category: string | null | undefined): StudyTopic | nu
   if (c === 'physics.bio-ph' || c.startsWith('q-bio')) return 'biologia';
   if (c === 'physics.soc-ph' || c === 'physics.ed-ph' || c === 'physics.hist-ph' || c.startsWith('econ') || c.startsWith('q-fin')) return 'sociedad';
   if (c.startsWith('cs.') || c.startsWith('eess')) return 'tecnologia';
-  if (c.startsWith('math') || c.startsWith('stat')) return null;
-  if (/^(cond-mat|hep-|nucl-|gr-qc|quant-ph|physics|nlin)/u.test(c)) return 'fisica_quimica';
+  if (c.startsWith('math') || c.startsWith('stat')) return 'ciencias_exactas';
+  if (/^(cond-mat|hep-|nucl-|gr-qc|quant-ph|physics|nlin)/u.test(c)) return 'ciencias_exactas';
   return null;
 }

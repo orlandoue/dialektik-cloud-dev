@@ -197,7 +197,7 @@ test('topics come from each source\'s own taxonomy, never from AI', async () => 
   const t = (field, subfield) => openAlexTopic({ field: { display_name: field }, subfield: { display_name: subfield } });
   assert.equal(t('Medicine', 'Epidemiology'), 'salud');
   assert.equal(t('Physics and Astronomy', 'Astronomy and Astrophysics'), 'astronomia');
-  assert.equal(t('Physics and Astronomy', 'Condensed Matter Physics'), 'fisica_quimica');
+  assert.equal(t('Physics and Astronomy', 'Condensed Matter Physics'), 'ciencias_exactas');
   assert.equal(t('Earth and Planetary Sciences', 'Space and Planetary Science'), 'astronomia');
   assert.equal(t('Earth and Planetary Sciences', 'Oceanography'), 'medioambiente');
   assert.equal(t('Arts and Humanities', 'Archeology (arts and humanities)'), 'arqueologia');
@@ -205,14 +205,15 @@ test('topics come from each source\'s own taxonomy, never from AI', async () => 
   assert.equal(t('Social Sciences', 'Education'), 'sociedad');
   assert.equal(t('Agricultural and Biological Sciences', 'Ecology'), 'biologia');
   assert.equal(t('Computer Science', 'Artificial Intelligence'), 'tecnologia');
-  assert.equal(t('Mathematics', 'Algebra and Number Theory'), null);
+  assert.equal(t('Mathematics', 'Algebra and Number Theory'), 'ciencias_exactas');
   assert.equal(openAlexTopic(null), null);
   assert.equal(arxivTopic('astro-ph.GA'), 'astronomia');
   assert.equal(arxivTopic('q-bio.PE'), 'biologia');
   assert.equal(arxivTopic('physics.ao-ph'), 'medioambiente');
   assert.equal(arxivTopic('cs.CL'), 'tecnologia');
-  assert.equal(arxivTopic('quant-ph'), 'fisica_quimica');
-  assert.equal(arxivTopic('math.PR'), null);
+  assert.equal(arxivTopic('quant-ph'), 'ciencias_exactas');
+  assert.equal(arxivTopic('math.PR'), 'ciencias_exactas');
+  assert.equal(arxivTopic('stat.ME'), 'ciencias_exactas');
   // Each reader carries it.
   assert.equal(parseOpenAlexWork({ ...openAlexWork, primary_topic: { field: { display_name: 'Environmental Science' } } }).topic, 'medioambiente');
   assert.equal(parseOpenAlexWork(openAlexWork).topic, null);

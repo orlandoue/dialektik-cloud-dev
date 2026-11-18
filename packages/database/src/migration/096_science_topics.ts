@@ -10,7 +10,7 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'science_studies_topic_check') then
     alter table public.science_studies add constraint science_studies_topic_check
       check (topic is null or topic in ('salud', 'astronomia', 'biologia', 'medioambiente', 'arqueologia',
-        'fisica_quimica', 'tecnologia', 'sociedad'));
+        'ciencias_exactas', 'tecnologia', 'sociedad'));
   end if;
 end
 $checks$;
