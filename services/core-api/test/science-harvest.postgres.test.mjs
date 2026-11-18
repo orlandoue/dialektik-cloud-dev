@@ -160,6 +160,12 @@ test('Core reads the run log to warn when the harvest is late', { skip }, async 
     const { harvest } = await service.usage(reader);
     assert.equal(harvest.stale, true);
     assert.equal(harvest.last_status, 'ok');
+    // The database size travels with the usage, for the moderation screen.
+    const { database: size } = await service.usage(reader);
+    assert.ok(size.size_mb > 0);
+    assert.equal(size.limit_mb, 500);
+    assert.equal(size.warning, false);
+    assert.ok(size.largest_tables.length > 0 && size.largest_tables.length <= 5);
     await owner.query(`update public.science_harvest_runs set finished_at = now()`);
     assert.equal((await service.usage(reader)).harvest.stale, false);
   } finally {

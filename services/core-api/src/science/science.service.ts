@@ -136,6 +136,30 @@ export const MINIMUM_ACCOUNT_AGE_DAYS = 3;
 const REFRESH_AFTER_DAYS = 7;
 const MISSING_STORAGE = new Set(['42P01', '42883']);
 
+/** Supabase free plan. */
+export const DATABASE_LIMIT_MB = 500;
+/** From here the moderation screen shows a warning. */
+export const DATABASE_WARNING_MB = 450;
+
+export interface DatabaseSizeJson {
+  size_mb: number;
+  limit_mb: number;
+  warning: boolean;
+  largest_tables: { name: string; size_mb: number }[];
+}
+
+/** Bytes to the moderation summary; the warning starts at 450 MB. */
+export function databaseSizeJson(bytes: number, tables: { name: string; bytes: number }[]): DatabaseSizeJson {
+  const mb = (value: number) => Math.round(value / 104_857.6) / 10;
+  const sizeMb = mb(bytes);
+  return {
+    size_mb: sizeMb,
+    limit_mb: DATABASE_LIMIT_MB,
+    warning: sizeMb >= DATABASE_WARNING_MB,
+    largest_tables: tables.map((table) => ({ name: table.name, size_mb: mb(table.bytes) })),
+  };
+}
+
 export interface PollDecisionJson {
   decided_at: Date;
   /** «retroactive»: a duel published before the rule, retracted by the owner. */
@@ -713,6 +737,7 @@ export class ScienceService implements OnModuleInit {
   async usage(userId: string): Promise<{
     days: { source: string; day: string; calls: number; errors: number }[];
     harvest: { last_run_at: string | null; last_status: string | null; stale: boolean; added: number; deleted: number };
+    database: DatabaseSizeJson | null;
   }> {
     this.#requireModerator(userId);
     return this.#guarded(async () => {
@@ -733,8 +758,29 @@ export class ScienceService implements OnModuleInit {
         if ((error as { code?: unknown })?.code !== '42P01') throw error;
       }
       if (harvest.stale) this.#logger.warn('The Science harvest has not finished in the last 48 hours.');
-      return { days: rows.rows, harvest };
+      return { days: rows.rows, harvest, database: await this.#databaseSize() };
     });
+  }
+
+  /**
+   * Size of the database against the free plan (500 MB), with the five
+   * largest tables, so moderators see it without measuring by hand.
+   */
+  async #databaseSize(): Promise<DatabaseSizeJson | null> {
+    try {
+      const size = await sql<{ bytes: string }>`select pg_database_size(current_database())::text as bytes`
+        .execute(this.db.database);
+      const tables = await sql<{ name: string; bytes: string }>`select c.relname as name,
+          pg_total_relation_size(c.oid)::text as bytes
+        from pg_class c join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public' and c.relkind = 'r'
+        order by pg_total_relation_size(c.oid) desc limit 5`.execute(this.db.database);
+      return databaseSizeJson(Number(size.rows[0]?.bytes ?? 0),
+        tables.rows.map((row) => ({ name: row.name, bytes: Number(row.bytes) })));
+    } catch (error) {
+      this.#logger.warn(`Database size unavailable: ${(error as { code?: string }).code ?? 'UNKNOWN'}`);
+      return null;
+    }
   }
 
   // ---- Moderation ----------------------------------------------------------
