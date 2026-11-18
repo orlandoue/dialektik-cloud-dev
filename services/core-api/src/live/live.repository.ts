@@ -2,6 +2,7 @@ import type { Database, Ulid } from '@dialektik/database';
 import { sql, type Kysely, type RawBuilder } from 'kysely';
 import { sourceProfilesAvailable } from '../public-api/source-profiles.js';
 import { CHILE_PUBLISHER_DOMAINS, isCatalogMarket, publisherDomainsForMarket, UK_BETA_SOURCE_IDS, type PublisherMarket } from './live.publisher-market.js';
+import { liveSightingsAvailable } from './live-sightings.js';
 
 function publisherIdentityFilter(market: PublisherMarket, sourceColumn: string) {
   return market === 'UK'
@@ -129,7 +130,12 @@ export class LiveRepository {
    */
   private receiptColumns(rowAlias: string) {
     const exposure = sql.raw(`${rowAlias}.exposure_id`);
-    return sql`(select max(seen_at) from live_acquisition_receipts where exclusion_id = ${exposure}) as last_seen_at,
+    // Unchanged repeats are hourly sightings (migration 099), not receipts.
+    const lastSeen = liveSightingsAvailable()
+      ? sql`greatest((select max(seen_at) from live_acquisition_receipts where exclusion_id = ${exposure}),
+          (select last_seen_at from live_item_sightings where exclusion_id = ${exposure}))`
+      : sql`(select max(seen_at) from live_acquisition_receipts where exclusion_id = ${exposure})`;
+    return sql`${lastSeen} as last_seen_at,
       (select count(id)::int from live_acquisition_receipts where exclusion_id = ${exposure}) as receipt_count`;
   }
 

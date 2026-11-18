@@ -5,6 +5,7 @@ import { CoreDatabaseService } from '../database/core-database.service.js';
 import { PrivateBetaAuthModule } from '../private-beta/private-beta-auth.module.js';
 import { PrivateBetaLiveController } from './private-beta-live.controller.js';
 import { LiveController } from './live.controller.js';
+import { LiveSightingsMonitor } from './live-sightings.js';
 import { LiveRepository } from './live.repository.js';
 import { LiveApplicationService } from './live.service.js';
 import { assertLiveDatabase } from './live.sync.js';
@@ -24,6 +25,7 @@ export class LiveModule {
         useFactory: (database: CoreDatabaseService) => new LiveRepository(database.database),
       },
       LiveApplicationService,
+      LiveSightingsMonitor,
     ];
 
     if (config.nodeEnvironment === 'production') {
