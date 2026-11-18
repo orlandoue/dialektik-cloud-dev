@@ -136,6 +136,19 @@ export const MINIMUM_ACCOUNT_AGE_DAYS = 3;
 const REFRESH_AFTER_DAYS = 7;
 const MISSING_STORAGE = new Set(['42P01', '42883']);
 
+export interface PollDecisionJson {
+  decided_at: Date;
+  stage: 'candidate' | 'promotion';
+  outcome: 'veto' | 'distinta_cifra';
+  reason: 'poll_and_non_poll' | 'pollster_missing' | 'different_pollster' | 'different_subject' | 'different_round' | null;
+  left_outlet: string | null;
+  right_outlet: string | null;
+  left_title: string;
+  right_title: string;
+  left_pollster: string | null;
+  right_pollster: string | null;
+}
+
 /** A typed refusal the app can act on (`code` survives the safe filter). */
 function refused(status: HttpStatus, code: string): HttpException {
   return new HttpException({ code }, status);
@@ -677,6 +690,25 @@ export class ScienceService implements OnModuleInit {
    * state of the harvest: a moderator is warned when it has not finished
    * for 48 hours, whatever happened to the scheduled job.
    */
+  /**
+   * Duels the poll rule separated (and «Distinta cifra» duels), last 14 days,
+   * so moderators can check it does not separate too much. Empty until
+   * migration 097 exists.
+   */
+  async pollDecisions(userId: string): Promise<{ decisions: PollDecisionJson[] }> {
+    this.#requireModerator(userId);
+    try {
+      const rows = await this.#transaction(userId, (tx) => sql<PollDecisionJson>`select decided_at, stage, outcome, reason,
+          left_outlet, right_outlet, left_title, right_title, left_pollster, right_pollster
+        from public.duel_poll_decisions where decided_at > now() - interval '14 days'
+        order by decided_at desc limit 200`.execute(tx), true);
+      return { decisions: rows.rows };
+    } catch (error) {
+      if (error instanceof ServiceUnavailableException) return { decisions: [] };
+      throw error;
+    }
+  }
+
   async usage(userId: string): Promise<{
     days: { source: string; day: string; calls: number; errors: number }[];
     harvest: { last_run_at: string | null; last_status: string | null; stale: boolean; added: number; deleted: number };

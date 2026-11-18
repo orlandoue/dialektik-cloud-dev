@@ -18,6 +18,7 @@ export { scienceHarvestSql } from './migration/093_science_harvest';
 export { scienceReportPrivacySql } from './migration/094_science_report_privacy';
 export { scienceStudyReviewSql } from './migration/095_science_study_review';
 export { scienceTopicsSql } from './migration/096_science_topics';
+export { duelPollDecisionsSql } from './migration/097_duel_poll_decisions';
 export * from './migration/migrator';
 export * from './safety/state-dimension-checker';
 export * from './transaction';

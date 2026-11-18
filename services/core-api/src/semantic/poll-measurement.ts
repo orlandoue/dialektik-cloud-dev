@@ -6,9 +6,27 @@
  * its type is «Distinta cifra». Deterministic text rules, no AI.
  */
 export interface PollText {
-  /** Headline and first lines, as the engine compares them. */
-  readonly text: string;
+  readonly title: string;
+  /** Lead and body; only its first paragraph decides whether it is a poll. */
+  readonly body?: string;
   readonly publishedAt: Date;
+}
+
+/**
+ * The first paragraph: up to a blank line, else the first two sentences
+ * (feeds flatten paragraphs), at most 400 characters.
+ */
+export function firstParagraph(body: string): string {
+  const paragraph = body.trim().split(/\n\s*\n/u)[0] ?? '';
+  const sentences = paragraph.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/gu) ?? [paragraph];
+  return sentences.slice(0, 2).join('').slice(0, 400).trim();
+}
+
+/** «Título. Bajada…» as one string (CSV export, `text_original`). */
+export function splitTitle(text: string, publishedAt: Date): PollText {
+  const flat = text.trim();
+  const end = flat.search(/[.!?](?:\s|$)/u);
+  return end < 0 ? { title: flat, publishedAt } : { title: flat.slice(0, end + 1), body: flat.slice(end + 1).trim(), publishedAt };
 }
 
 export interface PollReading {
@@ -21,6 +39,11 @@ export interface PollReading {
   readonly fieldwork: string | null;
   /** First percentage next to an approval or voting word. */
   readonly figure: number | null;
+}
+
+/** Pollster names of each side, for the veto log. */
+export function pollstersOf(left: PollText, right: PollText): [string | null, string | null] {
+  return [readPoll(left).pollster, readPoll(right).pollster];
 }
 
 export type PollPairVerdict =
@@ -119,16 +142,20 @@ function fieldworkOf(text: string, publishedAt: Date): string | null {
 }
 
 export function readPoll(input: PollText): PollReading {
-  const pollster = pollsterOf(input.text);
-  const words = POLL_WORDS.test(input.text);
-  const percent = input.text.match(PERCENT);
-  const isPoll = namesPollster(input.text) ? words || percent !== null : words && percent !== null;
+  // Only the title and the first paragraph make a story a poll story: a
+  // passing mention further down does not.
+  const scope = `${input.title} ${firstParagraph(input.body ?? '')}`;
+  const pollster = pollsterOf(scope);
+  const words = POLL_WORDS.test(scope);
+  const percent = scope.match(PERCENT);
+  const isPoll = namesPollster(scope) ? words || percent !== null : words && percent !== null;
   return {
     isPoll,
     pollster: isPoll ? pollster : null,
-    subjects: isPoll ? subjectsOf(input.text, pollster) : [],
-    fieldwork: isPoll ? fieldworkOf(input.text, input.publishedAt) : null,
-    figure: isPoll ? figureOf(input.text) : null,
+    subjects: isPoll ? subjectsOf(scope, pollster) : [],
+    // The fieldwork date may come further down.
+    fieldwork: isPoll ? fieldworkOf(`${input.title} ${input.body ?? ''}`, input.publishedAt) : null,
+    figure: isPoll ? figureOf(scope) : null,
   };
 }
 

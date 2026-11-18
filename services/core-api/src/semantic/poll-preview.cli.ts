@@ -4,7 +4,7 @@
 //   node dist/semantic/poll-preview.cli.js duelos.csv > informe.md
 import { readFileSync } from 'node:fs';
 
-import { comparePolls, readPoll, type PollPairVerdict, type PollText } from './poll-measurement.js';
+import { comparePolls, readPoll, splitTitle, type PollPairVerdict, type PollText } from './poll-measurement.js';
 
 /** RFC 4180: quoted fields, doubled quotes, newlines inside quotes. */
 export function parseCsv(body: string): Record<string, string>[] {
@@ -58,7 +58,8 @@ export function previewMarkdown(rows: Record<string, string>[]): string {
   const duels = new Map<string, Duel>();
   for (const r of rows) {
     const duel = duels.get(r.duel_id!) ?? { id: r.duel_id!, title: r.event_title ?? '', a: [], b: [] };
-    const side: Side = { outlet: r.outlet ?? '', text: { text: `${r.text_start ?? ''} ${r.quotes ?? ''}`, publishedAt: new Date(r.published_at ?? '') } };
+    // Title and lead only: quotes may come from further down the story.
+    const side: Side = { outlet: r.outlet ?? '', text: splitTitle(r.text_start ?? '', new Date(r.published_at ?? '')) };
     (r.side === 'A' ? duel.a : duel.b).push(side);
     duels.set(duel.id, duel);
   }

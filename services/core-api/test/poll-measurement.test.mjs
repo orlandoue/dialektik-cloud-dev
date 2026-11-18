@@ -6,7 +6,8 @@ const { readPoll, comparePolls, pollTitle } = await import('../dist/semantic/pol
 const { parseCsv, judgeDuel, previewMarkdown } = await import('../dist/semantic/poll-preview.cli.js');
 
 const at = (day) => new Date(`2026-11-${String(day).padStart(2, '0')}T12:00:00Z`);
-const t = (text, day = 16) => ({ text, publishedAt: at(day) });
+const { splitTitle, firstParagraph } = await import('../dist/semantic/poll-measurement.js');
+const t = (text, day = 16) => splitTitle(text, at(day));
 
 test('a poll is recognised with its pollster, subject, round and figure', () => {
   const p = readPoll(t('Aprobación de Kast cae a 27% según Cadem. La encuesta fue levantada entre el 12 y el 14 de noviembre.'));
@@ -60,6 +61,16 @@ test('what the first real dry run taught: several pollsters, thresholds, «se re
   assert.equal(fieldwork.fieldwork, '2026-11-13');
 });
 
+test('only the title and the first paragraph make a poll story', () => {
+  const passing = t('Kast defiende a Rabat en La Moneda. El Presidente habló tras el consejo de gabinete. Respondió a la oposición. '
+    + 'En la última encuesta Cadem, su aprobación bajó a 27%.');
+  assert.equal(passing.title, 'Kast defiende a Rabat en La Moneda.');
+  assert.equal(firstParagraph(passing.body), 'El Presidente habló tras el consejo de gabinete. Respondió a la oposición.');
+  assert.equal(readPoll(passing).isPoll, false);
+  assert.equal(readPoll({ title: 'Kast defiende a Rabat', body: 'Habló en La Moneda.\n\nSegún Cadem, su aprobación es 27%.', publishedAt: at(16) }).isPoll, false);
+  assert.equal(readPoll(t('Cadem: aprobación de Kast baja a 27%. Lea aquí la encuesta.')).isPoll, true);
+});
+
 test('a poll event\'s title names its pollster', () => {
   assert.equal(pollTitle('Aprobación de Kast en 27%', 'Cadem'), 'Cadem: Aprobación de Kast en 27%');
   assert.equal(pollTitle('Cadem: aprobación de Kast', 'Cadem'), 'Cadem: aprobación de Kast');
@@ -81,4 +92,17 @@ test('the dry run reads the Supabase CSV and sorts duels', () => {
   assert.match(md, /«Distinta cifra» \(misma medición, cifras distintas\) \(1\)[\s\S]*Kast y la encuesta/u);
   assert.match(md, /No son encuestas: la regla no aplica \(1\)/u);
   assert.equal(judgeDuel({ id: 'x', title: '', a: [], b: [] }).outcome, 'no_aplica');
+});
+
+test('the rule is on unless DIALEKTIK_POLL_DUEL_RULE is «off»; a poll title names its pollster', async () => {
+  const { pollDuelRuleEnabled, titleForPoll, pollRejectCode } = await import('../dist/semantic/poll-duel-rule.js');
+  assert.equal(pollDuelRuleEnabled({}), true);
+  assert.equal(pollDuelRuleEnabled({ DIALEKTIK_POLL_DUEL_RULE: 'on' }), true);
+  assert.equal(pollDuelRuleEnabled({ DIALEKTIK_POLL_DUEL_RULE: ' OFF ' }), false);
+  const a = t('Aprobación de Kast baja a 27% según Cadem', 16);
+  const b = t('Kast marca 27% de aprobación en la encuesta Cadem', 16);
+  assert.equal(titleForPoll('Aprobación de Kast en 27 %', a, b), 'Cadem: Aprobación de Kast en 27 %');
+  assert.equal(titleForPoll('Kast viaja', t('Kast viaja a Argentina'), t('Kast se reúne con Milei')), 'Kast viaja');
+  assert.equal(pollRejectCode({ kind: 'different', reason: 'pollster_missing' }), 'PAIR_POLL_POLLSTER_MISSING');
+  assert.equal(pollRejectCode({ kind: 'not_poll' }), null);
 });

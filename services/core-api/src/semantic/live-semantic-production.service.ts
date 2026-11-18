@@ -6,6 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
   Logger,
+  Optional,
   type OnApplicationBootstrap,
   type OnModuleDestroy,
 } from "@nestjs/common";
@@ -15,6 +16,9 @@ import type { Database } from "@dialektik/database";
 import { LiveSemanticCallBudget } from "./live-semantic-call-budget.js";
 import { controversyScore, hasSpecificHeadlineOverlap, hasStrongPairOverlap, isSportsText } from "./live-semantic-scheduler-prefilter.js";
 import { validateAutoScope } from "./live-semantic-auto-guard.js";
+import { comparePolls } from "./poll-measurement.js";
+import { pollDuelRuleEnabled, pollRejectCode, promotionText, purgePollDecisions, recordPollDecision, titleForPoll } from "./poll-duel-rule.js";
+import { CoreDatabaseService } from "../database/core-database.service.js";
 import { CloudflareWorkersAITransport } from "../llm-shadow/llm.cloudflare.js";
 import {
   CLOUDFLARE_JSON_MODE_MODEL,
@@ -317,7 +321,17 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
     private readonly writer: HeadlineSemanticDatabaseService,
     @Inject(ModerationDatabaseService)
     private readonly moderationWriter: ModerationDatabaseService,
+    // Core's own role logs the poll vetoes (duel_poll_decisions, 097).
+    @Optional() @Inject(CoreDatabaseService)
+    private readonly core?: CoreDatabaseService,
   ) {}
+
+  /** Best effort: a missing table or grant never stops a run. */
+  private async logPoll(...args: Parameters<typeof recordPollDecision> extends [unknown, ...infer R] ? R : never): Promise<void> {
+    if (this.core === undefined) return;
+    try { await recordPollDecision(this.core.database as unknown as Kysely<unknown>, ...args); }
+    catch (error) { this.logger.warn(`Poll decision not logged: ${safeReasonCode(error)}`); }
+  }
 
   private lastRun: SemanticRunSummary | undefined;
   private lastSkip: { readonly at: string; readonly trigger: SchedulerTrigger; readonly status: string } | undefined;
@@ -473,9 +487,25 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
         const overlapping=sameDomain.filter(pair=>hasStrongPairOverlap(
           pair.left.headline,excerpts.get(pair.left.articleId) ?? '',pair.right.headline,excerpts.get(pair.right.articleId) ?? ''));
         count('PAIR_OVERLAP_TOO_WEAK',sameDomain.length-generic.length-overlapping.length);
+        // Polls: a duel only compares the same measurement (same pollster,
+        // subject and round). Each veto is logged for moderators.
+        const pollRule=pollDuelRuleEnabled();
+        const pollChecked:typeof overlapping=[];
+        for (const pair of overlapping) {
+          if(!pollRule) { pollChecked.push(pair); continue; }
+          const side=(a:typeof pair.left)=>({articleId:a.articleId,sourceId:a.sourceId,
+            text:{title:a.headline,body:excerpts.get(a.articleId) ?? '',publishedAt:a.publishedAt}});
+          const verdict=comparePolls(side(pair.left).text,side(pair.right).text);
+          const code=pollRejectCode(verdict);
+          if(code===null) { pollChecked.push(pair); continue; }
+          count(code);
+          await this.logPoll('candidate',side(pair.left),side(pair.right),verdict);
+        }
+        if(pollRule && this.core) await purgePollDecisions(this.core.database as unknown as Kysely<unknown>)
+          .catch(error=>this.logger.warn(`Poll decisions not purged: ${safeReasonCode(error)}`));
         const clusterSources=sourcesPerCluster(clustered);
         const nowMs=Date.now();
-        const rankedPairs=overlapping.map(pair=>{
+        const rankedPairs=pollChecked.map(pair=>{
             const newest=Math.max(pair.left.publishedAt.getTime(),pair.right.publishedAt.getTime());
             return {pair,newest,
               fresh:nowMs-newest<=FRESH_PAIR_WINDOW_MS ? 0 : 1,
@@ -605,6 +635,21 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
         tally.reject('PAIR_SAME_MEDIA_GROUP_OR_COUNTRY');
         continue;
       }
+      let title=row.title;
+      if (pollDuelRuleEnabled()) {
+        const left={articleId:row.leftId,sourceId:row.leftSource,text:promotionText(row.leftText,row.leftDate)};
+        const right={articleId:row.rightId,sourceId:row.rightSource,text:promotionText(row.rightText,row.rightDate)};
+        const verdict=comparePolls(left.text,right.text);
+        await this.logPoll('promotion',left,right,verdict);
+        const code=pollRejectCode(verdict);
+        if (code!==null) {
+          tried.add(row.groupId);
+          tally.reject(code);
+          continue;
+        }
+        // «Cadem: aprobación de Kast en 27 %».
+        title=titleForPoll(row.title,left.text,right.text);
+      }
       try {
         const article=(sourceId:string,textOriginal:string,publishedAt:Date,span:Record<string,unknown>) => ({
           sourceId,textOriginal,publishedAt,selectedQuote:String(span?.quoted_text ?? ''),
@@ -621,7 +666,7 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
           const claims=[{articleId:row.leftId,ordinal:row.leftOrdinal},{articleId:row.rightId,ordinal:row.rightOrdinal}];
           await sql`select public.dialektik_record_live_semantic_editorial_decision(
             ${row.groupId}::dialektik_ulid,${actor}::dialektik_ulid,${commandId}::dialektik_ulid,
-            'APPROVED','AUTO_ENGINE: promoción automática de citas y evaluación verificadas',${row.title},
+            'APPROVED','AUTO_ENGINE: promoción automática de citas y evaluación verificadas',${title},
             ${JSON.stringify(claims)}::jsonb,${JSON.stringify(conflictIds)}::jsonb)`.execute(transaction);
           const result=await sql<{result:{status:string}}>`select public.dialektik_promote_live_semantic_event_group(
             ${row.groupId}::dialektik_ulid,${actor}::dialektik_ulid,${commandId}::dialektik_ulid) as result`.execute(transaction);
