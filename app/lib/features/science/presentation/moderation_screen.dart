@@ -539,7 +539,7 @@ class _PollDecisionCard extends StatelessWidget {
               StudyTag(decision.reason.label),
               Text(
                 '${sciShortDate(decision.decidedAt)} · '
-                '${decision.beforeAi ? 'antes de la IA' : 'al publicar'}',
+                '${decision.stage.label}',
                 style: SciText.meta,
               ),
             ],
