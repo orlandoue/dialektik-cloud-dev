@@ -28,7 +28,9 @@ export class HealthController {
 
   @Get('live')
   public liveness(): LivenessResult {
-    this.semantic?.wakeFromHealthPing();
+    // A liveness ping never starts semantic work: on the free instance an
+    // engine run slows every app read for minutes. The engine keeps its own
+    // 5-minute scheduler.
     return this.health.liveness();
   }
 
