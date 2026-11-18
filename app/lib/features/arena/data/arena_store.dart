@@ -456,22 +456,42 @@ final class ArenaStore extends ChangeNotifier {
       _loadVideos(refresh: refresh),
     ]);
     try {
+      // Inicio paints with the first page of each list; the next pages are
+      // fetched behind it instead of keeping the whole tab on a spinner.
+      final _Paged<EventCardDto> eventPages = _paged<EventCardDto>(
+        (String? cursor) => _feedPage(cursor, refresh: refresh),
+      );
+      final _Paged<ContradictionDto> contrastPages = _paged<ContradictionDto>(
+        (String? cursor) => _contrastPage(cursor, refresh: refresh),
+      );
       final List<Object> primary = await Future.wait(<Future<Object>>[
-        _allEvents(refresh: refresh),
-        _allContrasts(refresh: refresh),
+        eventPages.first,
+        contrastPages.first,
       ]);
-      final List<EventCardDto> allEvents = primary[0] as List<EventCardDto>
-        ..sort(
-          (EventCardDto a, EventCardDto b) =>
-              b.detectedAt.compareTo(a.detectedAt),
-        );
-      final List<ContradictionDto> contrasts =
-          primary[1] as List<ContradictionDto>..sort(
-            (ContradictionDto a, ContradictionDto b) =>
-                b.confirmedAt.compareTo(a.confirmedAt),
-          );
+      final List<EventCardDto> allEvents = _sortedEvents(
+        primary[0] as List<EventCardDto>,
+      );
+      final List<ContradictionDto> contrasts = _sortedContrasts(
+        primary[1] as List<ContradictionDto>,
+      );
       stories.rememberRelations(allEvents);
       events = allEvents;
+      unawaited(
+        eventPages.rest.then((List<EventCardDto> more) {
+          if (_disposed || more.isEmpty) return;
+          final Set<String> known = events
+              .map((EventCardDto e) => e.id)
+              .toSet();
+          final List<EventCardDto> merged = _sortedEvents(<EventCardDto>[
+            ...events,
+            for (final EventCardDto e in more)
+              if (known.add(e.id)) e,
+          ]);
+          stories.rememberRelations(merged);
+          events = merged;
+          _notify();
+        }),
+      );
       // The Coliseo can show its stories now; duels fill in as their
       // details arrive instead of keeping the whole tab behind a spinner.
       loaded = true;
@@ -488,9 +508,12 @@ final class ArenaStore extends ChangeNotifier {
       duels = joined;
       duelsLoading = false;
       _notify();
-      final List<ContradictionDto> rest = contrasts
-          .skip(firstDuelWave)
-          .toList(growable: false);
+      final List<ContradictionDto> rest = _sortedContrasts(<ContradictionDto>[
+        ...contrasts.skip(firstDuelWave),
+        ...await contrastPages.rest.catchError(
+          (Object _) => const <ContradictionDto>[],
+        ),
+      ]);
       for (var start = 0; start < rest.length; start += backgroundDuelWave) {
         if (_disposed) break;
         final List<ArenaDuel> more = await _joinDuels(
@@ -541,56 +564,83 @@ final class ArenaStore extends ChangeNotifier {
     return joined.whereType<ArenaDuel>().toList(growable: false);
   }
 
-  Future<List<EventCardDto>> _allEvents({required bool refresh}) async {
-    final List<EventCardDto> all = <EventCardDto>[];
-    final Set<String> seen = <String>{};
-    String? cursor;
-    var pages = 0;
-    do {
-      final ConsumerRepository repository = consumer;
-      // VS and Historias are universal: never narrowed to followed sources.
-      final PublicPage<EventCardDto> page = repository is PublicApiClient
-          ? await repository.listFeed(
-              cursor: cursor,
-              limit: 50,
-              refresh: refresh,
-              personalized: false,
-            )
-          : await repository.listFeed(
-              cursor: cursor,
-              limit: 50,
-              refresh: refresh,
-            );
-      all.addAll(page.items);
-      cursor = page.nextCursor;
-    } while (cursor != null && seen.add(cursor) && ++pages < 6);
-    return all;
+  /// At most this many pages of each list are read on opening.
+  static const int maxListPages = 6;
+
+  Future<PublicPage<EventCardDto>> _feedPage(
+    String? cursor, {
+    required bool refresh,
+  }) {
+    final ConsumerRepository repository = consumer;
+    // VS and Historias are universal: never narrowed to followed sources.
+    return repository is PublicApiClient
+        ? repository.listFeed(
+            cursor: cursor,
+            limit: 50,
+            refresh: refresh,
+            personalized: false,
+          )
+        : repository.listFeed(cursor: cursor, limit: 50, refresh: refresh);
   }
 
-  Future<List<ContradictionDto>> _allContrasts({required bool refresh}) async {
-    final List<ContradictionDto> all = <ContradictionDto>[];
-    final Set<String> seen = <String>{};
-    String? cursor;
-    var pages = 0;
-    do {
-      final ConsumerRepository repository = consumer;
-      final PublicPage<ContradictionDto> page = repository is PublicApiClient
-          ? await repository.listContradictions(
-              cursor: cursor,
-              limit: 50,
-              refresh: refresh,
-              personalized: false,
-            )
-          : await repository.listContradictions(
-              cursor: cursor,
-              limit: 50,
-              refresh: refresh,
-            );
-      all.addAll(page.items);
-      cursor = page.nextCursor;
-    } while (cursor != null && seen.add(cursor) && ++pages < 6);
-    return all;
+  Future<PublicPage<ContradictionDto>> _contrastPage(
+    String? cursor, {
+    required bool refresh,
+  }) {
+    final ConsumerRepository repository = consumer;
+    return repository is PublicApiClient
+        ? repository.listContradictions(
+            cursor: cursor,
+            limit: 50,
+            refresh: refresh,
+            personalized: false,
+          )
+        : repository.listContradictions(
+            cursor: cursor,
+            limit: 50,
+            refresh: refresh,
+          );
   }
+
+  /// The first page as soon as it arrives, and the following pages (up to
+  /// [maxListPages] in all) in order behind it.
+  _Paged<T> _paged<T>(Future<PublicPage<T>> Function(String? cursor) fetch) {
+    final Future<PublicPage<T>> firstPage = fetch(null);
+    Future<List<T>> rest() async {
+      final List<T> more = <T>[];
+      try {
+        final Set<String> seen = <String>{};
+        String? cursor = (await firstPage).nextCursor;
+        var pages = 1;
+        while (cursor != null && seen.add(cursor) && pages < maxListPages) {
+          final PublicPage<T> page = await fetch(cursor);
+          more.addAll(page.items);
+          cursor = page.nextCursor;
+          pages++;
+        }
+      } on Object {
+        // The first page already shows; a later page that fails keeps
+        // what was read (the first-page failure is reported there).
+      }
+      return more;
+    }
+
+    return _Paged<T>(
+      firstPage.then((PublicPage<T> page) => page.items.toList()),
+      rest(),
+    );
+  }
+
+  static List<EventCardDto> _sortedEvents(List<EventCardDto> list) => list
+    ..sort(
+      (EventCardDto a, EventCardDto b) => b.detectedAt.compareTo(a.detectedAt),
+    );
+
+  static List<ContradictionDto> _sortedContrasts(List<ContradictionDto> list) =>
+      list..sort(
+        (ContradictionDto a, ContradictionDto b) =>
+            b.confirmedAt.compareTo(a.confirmedAt),
+      );
 
   Future<void> _loadSources({required bool refresh}) async {
     try {
@@ -731,4 +781,12 @@ final class ArenaStore extends ChangeNotifier {
     market?.removeListener(_marketChanged);
     super.dispose();
   }
+}
+
+/// The first page of a list, and the rest of its pages.
+final class _Paged<T> {
+  const _Paged(this.first, this.rest);
+
+  final Future<List<T>> first;
+  final Future<List<T>> rest;
 }
