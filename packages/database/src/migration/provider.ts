@@ -16,6 +16,7 @@ import { scienceTopicsMigration } from './096_science_topics.js';
 import { duelPollDecisionsMigration } from './097_duel_poll_decisions.js';
 import { duelPollRetroactiveMigration } from './098_duel_poll_retroactive.js';
 import { liveItemSightingsMigration } from './099_live_item_sightings.js';
+import { liveVersionsByPublishedMigration } from './100_live_versions_by_published.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -113,6 +114,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '097_duel_poll_decisions': duelPollDecisionsMigration,
   '098_duel_poll_retroactive': duelPollRetroactiveMigration,
   '099_live_item_sightings': liveItemSightingsMigration,
+  '100_live_versions_by_published': liveVersionsByPublishedMigration,
   '085_social_arena': socialArenaMigration,
   '084_social_follower_count': socialFollowerCountMigration,
   '083_social_community': socialCommunityMigration,

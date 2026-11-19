@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 
 import { gone, analysisUnavailable, notFound } from './public-api.error.js';
 import { PublicApiRepository } from './public-api.repository.js';
@@ -29,7 +29,7 @@ import { MINIMUM_QUOTE_CODE_POINTS, widenShortQuote } from '../semantic/live-sem
 import { encodeCursor } from './public-api.validation.js';
 import type { PageRequest } from './public-api.validation.js';
 import type { PublicCountry } from './source-profiles.js';
-import { SHARED_READ_TTL_MS, SharedReadCache } from './shared-read-cache.js';
+import { SHARED_READ_OPTIONS, SHARED_READ_WARM_INTERVAL_MS, SharedReadCache } from './shared-read-cache.js';
 
 const EDITORIAL_DISPLAY = 'equipo editorial' as const;
 
@@ -135,14 +135,22 @@ function assertionDto(
 }
 
 @Injectable()
-export class PublicApiService {
+export class PublicApiService implements OnModuleInit, OnModuleDestroy {
   /** Common (non-personalized) feed and duel pages, shared by every reader. */
-  readonly #shared = new SharedReadCache<PublicReadResult<unknown>>(SHARED_READ_TTL_MS);
+  readonly #shared = new SharedReadCache<PublicReadResult<unknown>>(SHARED_READ_OPTIONS);
 
   public constructor(
     @Inject(PublicApiRepository)
     private readonly repository: PublicApiRepository,
   ) {}
+
+  onModuleInit(): void {
+    this.#shared.startWarming(SHARED_READ_WARM_INTERVAL_MS);
+  }
+
+  onModuleDestroy(): void {
+    this.#shared.stopWarming();
+  }
 
   public async feed(input: {
     readonly category?: string;
@@ -158,7 +166,7 @@ export class PublicApiService {
     // Personal pages (follows, blind spots) never touch the shared cache.
     if (input.followedSourceIds === undefined && !input.blindspots) {
       const key = `feed:${JSON.stringify([input.category, input.topic, input.page, input.includeSynthesis, input.country, input.includeCountry])}`;
-      return this.#shared.get(key, () => this.#feed(input)) as Promise<PublicReadResult<PublicPage<EventCardDto>>>;
+      return this.#shared.get(key, () => this.#feed(input), input.page.cursor === null) as Promise<PublicReadResult<PublicPage<EventCardDto>>>;
     }
     return this.#feed(input);
   }
@@ -401,7 +409,7 @@ export class PublicApiService {
   ): Promise<PublicReadResult<PublicPage<ContradictionDto>>> {
     if (followedSourceIds === undefined) {
       const key = `contradictions:${JSON.stringify([page, country, includeCountry])}`;
-      return this.#shared.get(key, () => this.#contradictions(page, undefined, country, includeCountry)) as
+      return this.#shared.get(key, () => this.#contradictions(page, undefined, country, includeCountry), page.cursor === null) as
         Promise<PublicReadResult<PublicPage<ContradictionDto>>>;
     }
     return this.#contradictions(page, followedSourceIds, country, includeCountry);
