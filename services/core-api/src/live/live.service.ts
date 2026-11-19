@@ -1,4 +1,4 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, type OnModuleDestroy, type OnModuleInit } from '@nestjs/common';
 import type { Ulid } from '@dialektik/database';
 import type { PublisherMarket } from './live.publisher-market.js';
 import {
@@ -7,7 +7,7 @@ import {
   type LiveReadRow,
   type LiveSourceReadRow,
 } from './live.repository.js';
-import { SHARED_READ_TTL_MS, SharedReadCache } from '../public-api/shared-read-cache.js';
+import { SHARED_READ_OPTIONS, SHARED_READ_WARM_INTERVAL_MS, SharedReadCache } from '../public-api/shared-read-cache.js';
 
 function sourceDto(row: LiveSourceReadRow) {
   return {
@@ -78,14 +78,23 @@ function provenanceDto(row: LiveReadRow) {
 }
 
 @Injectable()
-export class LiveApplicationService {
+export class LiveApplicationService implements OnModuleInit, OnModuleDestroy {
   constructor(@Inject(LiveRepository) private readonly repository: LiveRepository) {}
-  /** Common pages (no follow scope), shared by every reader for 60 s. */
-  readonly #shared = new SharedReadCache<Awaited<ReturnType<LiveApplicationService['listUncached']>>>(SHARED_READ_TTL_MS);
+  /** Common pages (no follow scope), shared by every reader; first pages kept warm. */
+  readonly #shared = new SharedReadCache<Awaited<ReturnType<LiveApplicationService['listUncached']>>>(SHARED_READ_OPTIONS);
+
+  onModuleInit(): void {
+    this.#shared.startWarming(SHARED_READ_WARM_INTERVAL_MS);
+  }
+
+  onModuleDestroy(): void {
+    this.#shared.stopWarming();
+  }
 
   async list(query: LiveNewsQuery) {
     if (query.sourceScope !== undefined || query.followedSourceIds !== undefined) return this.listUncached(query);
-    return this.#shared.get(`live:${JSON.stringify(query)}`, () => this.listUncached(query));
+    return this.#shared.get(`live:${JSON.stringify(query)}`, () => this.listUncached(query),
+      query.cursor === undefined && query.q === undefined);
   }
 
   async listUncached(query: LiveNewsQuery) {

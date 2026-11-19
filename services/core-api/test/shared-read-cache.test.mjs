@@ -30,23 +30,73 @@ function repository(calls) {
   };
 }
 
-test('one database read serves every common request for 60 s, including concurrent ones', async () => {
+const flush = () => new Promise((resolve) => setImmediate(resolve));
+
+test('a recent copy is served at once; a stale one is served and refreshed behind', async () => {
   let clock = 0;
   let loads = 0;
-  const cache = new SharedReadCache(60_000, 10, () => clock);
+  const cache = new SharedReadCache({ freshMs: 60_000, staleMs: 600_000, maxEntries: 10, now: () => clock });
   const load = async () => { loads += 1; return loads; };
+  // Concurrent misses share one database read.
   const [a, b] = await Promise.all([cache.get('k', load), cache.get('k', load)]);
   assert.deepEqual([a, b, loads], [1, 1, 1]);
   clock = 59_999;
   assert.equal(await cache.get('k', load), 1);
+  assert.equal(loads, 1, 'fresh: no read');
+  // Stale: the reader gets the old copy without waiting; one read refreshes it.
   clock = 60_000;
+  assert.deepEqual(await Promise.all([cache.get('k', load), cache.get('k', load)]), [1, 1]);
+  await flush();
+  assert.equal(loads, 2, 'one background read for both stale readers');
   assert.equal(await cache.get('k', load), 2);
-  // A failed read is not kept.
+  // Too old: the reader waits for a new read.
+  clock = 60_000 + 600_000;
+  assert.equal(await cache.get('k', load), 3);
+  // A failed read is not kept, and never replaces a good copy.
   await assert.rejects(cache.get('bad', async () => { throw new Error('db'); }));
   assert.equal(await cache.get('bad', async () => 'ok'), 'ok');
+  clock += 120_000;
+  assert.equal(await cache.get('k', async () => { throw new Error('db'); }), 3, 'stale copy served');
+  await flush();
+  clock += 1;
+  assert.equal(await cache.get('k', load), 3, 'the failed refresh kept the good copy');
   // Bounded.
   for (let i = 0; i < 20; i++) await cache.get(`x${i}`, load);
-  assert.ok(cache.size <= 11);
+  assert.ok(cache.size <= 10);
+});
+
+test('warm() re-reads recently requested first pages before they get old, never later pages', async () => {
+  let clock = 0;
+  const reads = [];
+  const cache = new SharedReadCache({ freshMs: 60_000, staleMs: 600_000, warmAfterMs: 240_000,
+    keepWarmMs: 3_600_000, now: () => clock });
+  const loader = (key) => async () => { reads.push(key); return `${key}@${clock}`; };
+  await cache.get('first', loader('first'));
+  await cache.get('page2', loader('page2'), false);
+  clock = 100_000;
+  assert.equal(await cache.warm(), 0, 'nothing old enough yet');
+  clock = 240_000;
+  assert.equal(await cache.warm(), 1);
+  assert.deepEqual(reads, ['first', 'page2', 'first']);
+  // The next reader is answered from memory with the warmed copy.
+  assert.equal(await cache.get('first', loader('first')), 'first@240000');
+  assert.equal(reads.length, 3);
+  // A key nobody asked for within keepWarmMs stops being re-read.
+  clock = 240_000 + 3_600_000;
+  assert.equal(await cache.warm(), 0);
+});
+
+test('a quiet hour still answers from memory when the copy was kept warm', async () => {
+  let clock = 0;
+  let slow = false;
+  const cache = new SharedReadCache({ freshMs: 60_000, staleMs: 600_000, warmAfterMs: 240_000, now: () => clock });
+  const load = async () => { if (slow) await new Promise((resolve) => setTimeout(resolve, 50)); return clock; };
+  await cache.get('feed', load);
+  for (clock = 60_000; clock <= 3_600_000; clock += 60_000) await cache.warm();
+  slow = true; // the engine is loading the database
+  const started = Date.now();
+  assert.ok((await cache.get('feed', load)) >= 3_600_000 - 300_000);
+  assert.ok(Date.now() - started < 40, 'served without waiting for the slow read');
 });
 
 test('the common feed and duels are read once; personal pages always go to the database', async () => {

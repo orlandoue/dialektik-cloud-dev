@@ -21,6 +21,7 @@ export { scienceTopicsSql } from './migration/096_science_topics';
 export { duelPollDecisionsSql } from './migration/097_duel_poll_decisions';
 export { duelPollRetroactiveSql } from './migration/098_duel_poll_retroactive';
 export { liveItemSightingsSql } from './migration/099_live_item_sightings';
+export { liveVersionsByPublishedSql } from './migration/100_live_versions_by_published';
 export * from './migration/migrator';
 export * from './safety/state-dimension-checker';
 export * from './transaction';

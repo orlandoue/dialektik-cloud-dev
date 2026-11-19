@@ -84,6 +84,25 @@ export interface LiveNewsQuery {
   readonly followedSourceIds?: readonly string[];
 }
 
+/** Recent versions read per candidate wanted (most are of other markets). */
+const LIVE_SCAN_PER_CANDIDATE = 16;
+
+/**
+ * A source policy that allows showing items. LIVE_READY is not proof of
+ * lawful reuse: an independent, explicitly reviewed source-specific
+ * authorization record is required too.
+ */
+function approvedPolicy(alias: string) {
+  const p = sql.raw(alias);
+  return sql`${p}.active = true and ${p}.rights_class = 'LIVE_READY'
+        and ${p}.policy->>'rightsReviewStatus' = 'APPROVED'
+        and nullif(${p}.policy->>'authorizationReference', '') is not null
+        and nullif(${p}.policy->>'rightsEvidenceUrl', '') is not null
+        and nullif(${p}.policy->>'endpoint', '') is not null
+        and ${p}.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
+        and ${p}.policy->>'endpoint' <> 'https://supabase.com'`;
+}
+
 export class LiveRepository {
   constructor(private readonly database: Kysely<Database>) {}
 
@@ -159,15 +178,7 @@ export class LiveRepository {
       join live_source_policies p on p.source_id = a.source_id and p.id =
         (select id from live_source_policies where source_id = a.source_id
           order by recorded_at desc, id desc limit 1)
-        and p.active = true and p.rights_class = 'LIVE_READY'
-        -- LIVE_READY is not proof of lawful reuse. Require an independent,
-        -- explicitly reviewed source-specific authorization record.
-        and p.policy->>'rightsReviewStatus' = 'APPROVED'
-        and nullif(p.policy->>'authorizationReference', '') is not null
-        and nullif(p.policy->>'rightsEvidenceUrl', '') is not null
-        and nullif(p.policy->>'endpoint', '') is not null
-        and p.policy->>'rightsEvidenceUrl' <> 'https://supabase.com'
-        and p.policy->>'endpoint' <> 'https://supabase.com'
+        and ${approvedPolicy('p')}
       -- One primary-key lookup per article. As a plain join the planner,
       -- misled by the correlated version/receipt/policy conditions above,
       -- expects one article and scans this whole table once per article
@@ -200,14 +211,22 @@ export class LiveRepository {
   async list(query: LiveNewsQuery): Promise<LiveReadRow[]> {
     const market = query.market ?? 'CL';
     const wanted = query.limit + 1;
-    for (let window = wanted * 4; ; window *= 4) {
-      const result = await this.#page(query, market, window);
+    // A text search or one source keeps few of the newest versions, so its
+    // walk is not bounded: bounded, it would only take more rounds.
+    const selective = query.q !== undefined || query.topic !== undefined || query.sourceId !== undefined;
+    for (let window = wanted * 4, scan = selective ? null : window * LIVE_SCAN_PER_CANDIDATE; ;
+      window *= 4, scan = scan === null ? null : scan * 4) {
+      const result = await this.#page(query, market, window, scan);
       if (result === null) return [];
-      if (result.rows.length >= wanted || result.candidates < window) return result.rows;
+      if (result.rows.length >= wanted) return result.rows;
+      // Done only when neither limit cut anything: fewer candidates than
+      // the window, taken from fewer recent versions than the scan.
+      if (result.candidates < window && (scan === null || result.scanned < scan)) return result.rows;
     }
   }
 
-  async #page(query: LiveNewsQuery, market: PublisherMarket, window: number): Promise<{ rows: LiveReadRow[]; candidates: number } | null> {
+  async #page(query: LiveNewsQuery, market: PublisherMarket, window: number, scan: number | null):
+    Promise<{ rows: LiveReadRow[]; candidates: number; scanned: number } | null> {
     const scope = this.marketScope(market, 'news.source_id', 'news.canonical_domain');
     const candidateScope = this.marketScope(market, 's.id', 's.canonical_domain');
     if (scope === null || candidateScope === null) return null;
@@ -219,7 +238,7 @@ export class LiveRepository {
     // Candidates match headline and excerpt before the storage policy hides
     // the excerpt: matching more text can only add candidates.
     const candidateText = sql`(v.headline || ' ' || coalesce(v.excerpt, ''))`;
-    const candidateCursor = query.cursor === undefined ? sql`true` : sql`(v.published_at, a.id) <
+    const candidateCursor = query.cursor === undefined ? sql`true` : sql`(v.published_at, v.article_id) <
       (select cursor_version.published_at, cursor_article.id from articles cursor_article
         join live_article_versions cursor_version on cursor_version.article_id = cursor_article.id
           and cursor_version.version_number = (select max(version_number) from live_article_versions where article_id = cursor_article.id)
@@ -230,22 +249,64 @@ export class LiveRepository {
         ? sql`true`
         : sql`(published_at, id) <
       (select cursor_news.published_at, cursor_news.id from (${this.newsProjection(sql`a.id = ${query.cursor}`)}) cursor_news)`;
-    const result = await sql<LiveReadRow & { candidate_count: number }>`with candidates as materialized (
-        select a.id from articles a
-        join sources s on s.id = a.source_id
-        join live_article_versions v on v.article_id = a.id
-          and v.version_number = (select max(version_number) from live_article_versions where article_id = a.id)
-        where a.origin = 'LIVE_REAL' and a.live_exposure_id is not null
-          and ${candidateCursor}
+    const filters = sql`true
           and ${candidateScope}
           and ${following('a.source_id')}
           and ${format('s.canonical_domain')}
           and ${query.topic === undefined ? sql`true` : sql`${candidateText} ~* ${LIVE_NEWS_TOPIC_PATTERNS[query.topic]}`}
           and ${query.q === undefined ? sql`true` : sql`position(lower(${query.q}) in lower(${candidateText})) > 0`}
-          and ${query.sourceId === undefined ? sql`true` : sql`a.source_id = ${query.sourceId}`}
+          and ${query.sourceId === undefined ? sql`true` : sql`a.source_id = ${query.sourceId}`}`;
+    // Walk (common lists): the newest versions first, bounded by `scan`.
+    // Full (searches, one source): every article, as such filters keep few
+    // of the newest versions and a bounded walk would only add rounds.
+    const candidateSql = scan !== null ? sql`-- The newest versions first, read along live_versions_by_published
+      -- (migration 100) instead of finding the latest version of every
+      -- live article: the planner cannot see that the filters below keep
+      -- enough of the newest rows, so the walk is bounded explicitly and
+      -- widened by list() when it was not enough.
+      recent as materialized (
+        select v.article_id, v.version_number, v.published_at, v.headline, v.excerpt from live_article_versions v
+        where ${candidateCursor}
           and ${query.publishedFrom === undefined ? sql`true` : sql`v.published_at >= ${query.publishedFrom}`}
           and ${query.publishedTo === undefined ? sql`true` : sql`v.published_at < ${query.publishedTo}`}
-        order by v.published_at desc, a.id desc limit ${window}),
+        order by v.published_at desc, v.article_id desc limit ${scan}),
+      -- Primary-key lookups per recent version, in this order: as plain
+      -- joins the planner, misjudging how few sources are approved, scanned
+      -- the whole walk once per article. offset 0 keeps them as lookups.
+      candidates as materialized (
+        select a.id from recent v
+        cross join lateral (select article.id, article.source_id, article.origin, article.live_exposure_id
+          from articles article where article.id = v.article_id offset 0) a
+        cross join lateral (select source.id, source.canonical_domain
+          from sources source where source.id = a.source_id offset 0) s
+        where v.version_number = (select max(version_number) from live_article_versions where article_id = v.article_id)
+          and a.origin = 'LIVE_REAL' and a.live_exposure_id is not null
+          and exists (select 1 from approved_sources where approved_sources.source_id = a.source_id)
+          and ${filters}
+        order by v.published_at desc, v.article_id desc limit ${window}),` : sql`recent as materialized (select null::text as article_id where false),
+      candidates as materialized (
+        select a.id from articles a
+        join sources s on s.id = a.source_id
+        join live_article_versions v on v.article_id = a.id
+          and v.version_number = (select max(version_number) from live_article_versions where article_id = a.id)
+        where a.origin = 'LIVE_REAL' and a.live_exposure_id is not null
+          and exists (select 1 from approved_sources where approved_sources.source_id = a.source_id)
+          and ${candidateCursor}
+          and ${filters}
+          and ${query.publishedFrom === undefined ? sql`true` : sql`v.published_at >= ${query.publishedFrom}`}
+          and ${query.publishedTo === undefined ? sql`true` : sql`v.published_at < ${query.publishedTo}`}
+        order by v.published_at desc, v.article_id desc limit ${window}),`;
+    // Sources whose latest policy allows showing their items: the same
+    // per-source condition as the projection, so applying it to candidates
+    // drops nothing the projection keeps. Without it, a page of a market
+    // whose newest items come from unapproved channels widened the window
+    // (×4 each time) and re-scanned the whole table.
+    const result = await sql<LiveReadRow & { candidate_count: number; scanned_count: number }>`with approved_sources as materialized (
+        select p.source_id from live_source_policies p
+        where p.id = (select id from live_source_policies where source_id = p.source_id
+            order by recorded_at desc, id desc limit 1)
+          and ${approvedPolicy('p')}),
+      ${candidateSql}
       news as (${this.newsProjection(sql`a.id in (select candidates.id from candidates)`)}), page as (select news.* from news
       where ${cursor}
         and ${scope}
@@ -257,14 +318,16 @@ export class LiveRepository {
         and ${query.publishedFrom === undefined ? sql`true` : sql`published_at >= ${query.publishedFrom}`}
         and ${query.publishedTo === undefined ? sql`true` : sql`published_at < ${query.publishedTo}`}
       order by published_at desc, id desc limit ${query.limit + 1})
-      select page.*, ${this.receiptColumns('page')}, ${this.profileColumns('page.source_id')}, meta.candidate_count
-      from (select count(*)::int as candidate_count from candidates) meta left join page on true
+      select page.*, ${this.receiptColumns('page')}, ${this.profileColumns('page.source_id')}, meta.candidate_count, meta.scanned_count
+      from (select (select count(*)::int from candidates) as candidate_count,
+        (select count(*)::int from recent) as scanned_count) meta left join page on true
       order by page.published_at desc, page.id desc`.execute(this.database);
     // The one-row meta keeps the candidate count when the page is empty.
     const candidates = Number(result.rows[0]?.candidate_count ?? 0);
+    const scanned = Number(result.rows[0]?.scanned_count ?? 0);
     const rows = result.rows.filter((row) => row.id !== null && row.id !== undefined)
-      .map(({ candidate_count: _count, ...row }) => row as LiveReadRow);
-    return { rows, candidates };
+      .map(({ candidate_count: _count, scanned_count: _scanned, ...row }) => row as LiveReadRow);
+    return { rows, candidates, scanned };
   }
 
   async article(id: Ulid, market: PublisherMarket = 'CL'): Promise<LiveReadRow | undefined> {
