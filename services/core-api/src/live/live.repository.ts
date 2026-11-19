@@ -212,16 +212,27 @@ export class LiveRepository {
     const market = query.market ?? 'CL';
     const wanted = query.limit + 1;
     // A text search or one source keeps few of the newest versions, so its
-    // walk is not bounded: bounded, it would only take more rounds.
+    // walk is not bounded: bounded, it would only take more rounds. A
+    // common list tries one bounded walk; when that walk was not enough
+    // (a market with few of the newest items, such as Spanish videos) it
+    // goes straight to the full read instead of widening the walk.
     const selective = query.q !== undefined || query.topic !== undefined || query.sourceId !== undefined;
-    for (let window = wanted * 4, scan = selective ? null : window * LIVE_SCAN_PER_CANDIDATE; ;
-      window *= 4, scan = scan === null ? null : scan * 4) {
-      const result = await this.#page(query, market, window, scan);
+    let window = wanted * 4;
+    if (!selective) {
+      const scan = window * LIVE_SCAN_PER_CANDIDATE;
+      const walked = await this.#page(query, market, window, scan);
+      if (walked === null) return [];
+      if (walked.rows.length >= wanted) return walked.rows;
+      // Neither limit cut anything: fewer candidates than the window,
+      // taken from fewer recent versions than the scan.
+      if (walked.candidates < window && walked.scanned < scan) return walked.rows;
+      // A full window that still left the page short needs a wider one.
+      if (walked.candidates >= window) window *= 4;
+    }
+    for (; ; window *= 4) {
+      const result = await this.#page(query, market, window, null);
       if (result === null) return [];
-      if (result.rows.length >= wanted) return result.rows;
-      // Done only when neither limit cut anything: fewer candidates than
-      // the window, taken from fewer recent versions than the scan.
-      if (result.candidates < window && (scan === null || result.scanned < scan)) return result.rows;
+      if (result.rows.length >= wanted || result.candidates < window) return result.rows;
     }
   }
 

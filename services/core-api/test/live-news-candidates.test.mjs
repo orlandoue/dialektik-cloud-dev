@@ -48,6 +48,7 @@ test('a short page with a full window widens the window until candidates run out
     const rows = await new LiveRepository(database).list({ limit: 25, market: 'CL' });
     assert.equal(queries.length, 2);
     assert.ok(queries[1].values.includes(416));
+    assert.match(queries[1].text, /candidates as materialized \(\s+select a\.id from articles a/u);
     assert.deepEqual(rows.map((item) => item.id), ['A', 'B', 'C']);
     assert.ok(rows.every((item) => !('candidate_count' in item)));
   } finally {
@@ -69,7 +70,7 @@ test('the candidates come from a bounded walk of the newest versions', async () 
   }
 });
 
-test('a short page from a full walk widens the walk even with few candidates', async () => {
+test('a short page from a full walk falls back to the full read', async () => {
   const { database, queries } = scriptedDatabase([
     // 10 candidates (< window) but the walk of 1664 versions was full: older
     // versions may still hold candidates, so it must look further.
@@ -79,7 +80,9 @@ test('a short page from a full walk widens the walk even with few candidates', a
   try {
     const rows = await new LiveRepository(database).list({ limit: 25, market: 'CL', format: 'videos' });
     assert.equal(queries.length, 2);
-    assert.ok(queries[1].values.includes(416) && queries[1].values.includes(1664 * 4));
+    // The second round reads every article (no second, wider walk).
+    assert.match(queries[1].text, /candidates as materialized \(\s+select a\.id from articles a/u);
+    assert.ok(queries[1].values.includes(104), 'same window, full read');
     assert.deepEqual(rows.map((item) => item.id), ['A', 'B']);
     assert.ok(rows.every((item) => !('scanned_count' in item)));
   } finally {
