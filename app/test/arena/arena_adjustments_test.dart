@@ -108,29 +108,15 @@ void main() {
         );
         expect(find.textContaining('Contraste de enfoques:'), findsNothing);
 
-        // Medio 1 · VS · Medio 2 share one horizontal row.
-        final Finder faceOff = find.descendant(
-          of: duel,
-          matching: find.byType(DuelFaceOff),
+        // The card shows the two versions without their outlets.
+        expect(
+          find.descendant(of: duel, matching: find.text('Versión A')),
+          findsOneWidget,
         );
-        final Finder a = find.descendant(
-          of: faceOff,
-          matching: find.text('BioBioChile'),
+        expect(
+          find.descendant(of: duel, matching: find.byType(DuelFaceOff)),
+          findsNothing,
         );
-        final Finder vs = find.descendant(
-          of: faceOff,
-          matching: find.text('VS'),
-        );
-        // The emblem also reads «T13»; the name is the last match.
-        final Finder b = find
-            .descendant(of: faceOff, matching: find.text('T13'))
-            .last;
-        expect(tester.getCenter(a).dy, closeTo(tester.getCenter(vs).dy, 1));
-        expect(tester.getCenter(b).dy, closeTo(tester.getCenter(vs).dy, 1));
-        expect(tester.getCenter(a).dx, lessThan(tester.getCenter(vs).dx));
-        expect(tester.getCenter(vs).dx, lessThan(tester.getCenter(b).dx));
-        // The name stays on a single line instead of breaking inside the word.
-        expect(tester.getSize(a).height, lessThan(30 * scale));
 
         // The whole card opens the duel.
         await tester.tap(
@@ -145,7 +131,7 @@ void main() {
           ),
           findsOneWidget,
         );
-        expect(find.textContaining('nuevo cargo”'), findsNothing);
+        expect(find.textContaining('nuevo cargo»'), findsNothing);
         expect(find.text('nuevo cargo'), findsNothing);
         expect(find.text(steinertHeadline), findsOneWidget);
         expect(find.text('Titular de su publicación'), findsOneWidget);
@@ -246,7 +232,7 @@ void main() {
     await tester.tap(
       find.descendant(
         of: find.byKey(const Key('arena-bottom-navigation')),
-        matching: find.text('Tú'),
+        matching: find.text('Perfil'),
       ),
     );
     await tester.pumpAndSettle();
@@ -332,7 +318,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byKey(const Key('arena-bottom-navigation')),
-          matching: find.text('Tú'),
+          matching: find.text('Perfil'),
         ),
       );
       await tester.pumpAndSettle();

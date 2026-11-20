@@ -207,7 +207,7 @@ void main() {
         await tester.tap(find.byTooltip('Volver'));
         await tester.pumpAndSettle();
 
-        await tapTab(tester, 'Tú');
+        await tapTab(tester, 'Perfil');
         await scrollThrough(tester, 'arena-profile-scroll');
         await tapTab(tester, 'Inicio');
         await tapTab(tester, 'Duelos');

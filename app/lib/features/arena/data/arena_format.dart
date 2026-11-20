@@ -22,7 +22,33 @@ final RegExp _titlePrefix = RegExp(
 );
 
 /// Title without the relation prefix Core adds; the pill already says it.
-String arenaTitle(String title) => title.replaceFirst(_titlePrefix, '').trim();
+String arenaTitle(String title) =>
+    arenaHeadline(title.replaceFirst(_titlePrefix, ''));
+
+// Branding that YouTube and some feeds append to a headline: «… | 24»,
+// «… | CNN Chile», «… - Análisis.». It is the channel, not what was said;
+// the original text stays in the acquisition receipt.
+// Up to three words, each starting with a capital or a digit, so a «|»
+// inside the sentence itself is kept.
+final RegExp _channelSuffix = RegExp(
+  r'\s+\|\s+[A-ZÁÉÍÓÚÑ0-9][\wáéíóúñ.]*(?:\s+[A-ZÁÉÍÓÚÑ0-9][\wáéíóúñ.]*){0,2}$',
+);
+final RegExp _sectionSuffix = RegExp(
+  r'\s+[-–—]\s+(?:an[aá]lisis|video|entrevista|en vivo|opini[oó]n|columna)\.?$',
+  caseSensitive: false,
+);
+
+/// A headline without channel or section branding at its end.
+String arenaHeadline(String headline) {
+  String text = headline.trim();
+  for (int i = 0; i < 2; i++) {
+    text = text
+        .replaceFirst(_channelSuffix, '')
+        .replaceFirst(_sectionSuffix, '')
+        .trim();
+  }
+  return text;
+}
 
 extension ArenaEventTitle on EventCardDto {
   String get arenaTitle => arenaTitleOf(titleDescriptive);
@@ -126,17 +152,20 @@ String arenaDateTime(DateTime moment) {
       '${local.hour.toString().padLeft(2, '0')}:$minute';
 }
 
-/// A literal quote; an inner fragment is marked instead of being capitalised.
+/// A literal quote inside «», so the “” of a quote within it stay distinct.
+/// An inner fragment is marked instead of being capitalised, and nothing is
+/// added to its punctuation.
 String arenaQuote(String quote) {
-  final String text = quote.trim();
+  final String text = arenaHeadline(quote);
   if (text.isEmpty) return '';
   final bool fragment = RegExp(r'^[a-záéíóúñü]').hasMatch(text);
-  return '“${fragment ? '[...] ' : ''}$text”';
+  return '«${fragment ? '[...] ' : ''}$text»';
 }
 
 /// Editorial topics used for discovery only; they are not quality labels.
 enum ArenaTopic {
   politica('Política', 'politica'),
+  internacional('Internacional', null),
   justicia('Justicia', 'justicia'),
   economia('Economía', 'economia'),
   seguridad('Seguridad', 'seguridad'),
@@ -157,6 +186,15 @@ enum ArenaTopic {
 // first so a constitutional accusation or a committee vote is not filed
 // under «Otros» or mistaken for a court case.
 final Map<ArenaTopic, RegExp> _topicPatterns = <ArenaTopic, RegExp>{
+  // First: a summit or a foreign government is international even when a
+  // Chilean president or minister takes part («Kast en la cumbre APEC»).
+  ArenaTopic.internacional: RegExp(
+    r'\bapec\b|cumbre|\bonu\b|naciones unidas|\botan\b|\bchina\b|\bchino|'
+    r'xi jinping|estados unidos|ee\.\s?uu|\beeuu\b|casa blanca|\btrump\b|'
+    r'\bputin\b|\brusia|kremlin|ucrania|\bir[aá]n\b|israel|\bgaza\b|'
+    r'venezuela|\bmaduro\b|\bmilei\b|uni[oó]n europea|bruselas|cancill|'
+    r'embajad|diplom[aá]tic',
+  ),
   ArenaTopic.politica: RegExp(
     'polític|politic|gobierno|presidente|ministr|congreso|diputad|senado|'
     'elecci|alcald|subsecretar|partido republican|oposición|oposicion|'
@@ -252,4 +290,43 @@ String arenaWithoutSourcePrefix(String headline, String sourceName) {
     }
   }
   return trimmed;
+}
+
+/// The one clock of a story, in its list card and inside it: when its
+/// newest coverage was published. [fallback] only without coverage.
+DateTime arenaLastCoverage(
+  Iterable<EventCoverageArticleDto> articles, {
+  required DateTime fallback,
+}) {
+  DateTime? newest;
+  for (final EventCoverageArticleDto a in articles) {
+    if (newest == null || a.publishedAt.isAfter(newest)) newest = a.publishedAt;
+  }
+  return newest ?? fallback;
+}
+
+/// The newest-first [items] with at most [maxRun] in a row from one outlet:
+/// an item that would extend a run waits for the next item of another
+/// outlet. Nothing is dropped, and each outlet keeps its own order.
+List<T> arenaInterleaveByOutlet<T>(
+  List<T> items,
+  String Function(T) outletOf, {
+  int maxRun = 2,
+}) {
+  final List<T> pending = List<T>.of(items);
+  final List<T> result = <T>[];
+  while (pending.isNotEmpty) {
+    final int run = result.length < maxRun
+        ? 0
+        : result.sublist(result.length - maxRun).map(outletOf).toSet().length ==
+              1
+        ? maxRun
+        : 0;
+    final String? blocked = run == maxRun ? outletOf(result.last) : null;
+    final int next = blocked == null
+        ? 0
+        : pending.indexWhere((T item) => outletOf(item) != blocked);
+    result.add(pending.removeAt(next < 0 ? 0 : next));
+  }
+  return result;
 }

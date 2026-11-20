@@ -21,8 +21,8 @@ void main() {
     });
 
     test('una cita que parte en minúscula se marca como fragmento', () {
-      expect(arenaQuote('no existe acuerdo'), '“[...] no existe acuerdo”');
-      expect(arenaQuote('La defensa confirmó'), '“La defensa confirmó”');
+      expect(arenaQuote('no existe acuerdo'), '«[...] no existe acuerdo»');
+      expect(arenaQuote('La defensa confirmó'), '«La defensa confirmó»');
     });
 
     test('los temas siguen los patrones de Core', () {
@@ -53,7 +53,7 @@ void main() {
       'Duelos',
       'En desarrollo',
       'Medios',
-      'Tú',
+      'Perfil',
     ]) {
       expect(
         find.descendant(of: bar, matching: find.text(label)),
@@ -63,7 +63,7 @@ void main() {
     await tester.tap(find.descendant(of: bar, matching: find.text('Medios')));
     await tester.pumpAndSettle();
     expect(find.textContaining('medios · sigues 1'), findsOneWidget);
-    await tester.tap(find.descendant(of: bar, matching: find.text('Tú')));
+    await tester.tap(find.descendant(of: bar, matching: find.text('Perfil')));
     await tester.pumpAndSettle();
     expect(find.text('Elegir mis medios'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -91,37 +91,35 @@ void main() {
         find.descendant(of: duel, matching: find.text(duelTitle)),
         findsOneWidget,
       );
+      // The clash itself, without its outlets: they are revealed in the duel.
+      for (final String version in <String>['Versión A', 'Versión B']) {
+        expect(
+          find.descendant(of: duel, matching: find.text(version)),
+          findsOneWidget,
+        );
+      }
       expect(
         find.descendant(of: duel, matching: find.text('La Tercera')),
-        findsOneWidget,
+        findsNothing,
       );
       expect(
-        find.descendant(of: duel, matching: find.text('BioBioChile')),
+        find.descendant(
+          of: duel,
+          matching: find.byKey(const Key('arena-duel-of-day-read')),
+        ),
         findsOneWidget,
       );
-      expect(
-        find.descendant(of: duel, matching: find.text('VS')),
-        findsOneWidget,
-      );
-      // Votes are opinion, never evidence, and their split stays hidden
-      // until the reader votes.
+      // No tally on the card of the day: an empty or small count would be
+      // the first thing a newcomer reads.
       expect(
         find.descendant(
           of: duel,
           matching: find.text('Opinión de la comunidad'),
         ),
-        findsOneWidget,
+        findsNothing,
       );
       expect(find.textContaining('Termómetro'), findsNothing);
-      expect(
-        find.text('3 opiniones · el reparto se muestra después de votar.'),
-        findsOneWidget,
-      );
       expect(find.textContaining('67%'), findsNothing);
-      expect(
-        find.text('Es opinión, no indica qué versión es correcta.'),
-        findsOneWidget,
-      );
       expect(find.byTooltip('Compartir duelo'), findsOneWidget);
       expect(find.byTooltip('Guardar duelo'), findsOneWidget);
       // The whole card opens the duel; no redundant arrow.
@@ -217,12 +215,12 @@ void main() {
     expect(find.textContaining('compatible'), findsNothing);
     expect(
       find.text(
-        '“La defensa confirmó conversaciones con el Ministerio Público”',
+        '«La defensa confirmó conversaciones con el Ministerio Público»',
       ),
       findsOneWidget,
     );
     expect(
-      find.text('“[...] no existe ni existirá un acuerdo con el imputado”'),
+      find.text('«[...] no existe ni existirá un acuerdo con el imputado»'),
       findsOneWidget,
     );
     // Both posture cards sit side by side with the same height.
@@ -362,7 +360,7 @@ void main() {
     expect(
       find.descendant(
         of: change,
-        matching: find.textContaining('Último cambio · '),
+        matching: find.textContaining('Última cobertura · '),
       ),
       findsOneWidget,
     );
@@ -415,7 +413,7 @@ void main() {
 
     await openTab('Citas');
     expect(
-      find.text('“La estatal confirmó la desvinculación de 300 trabajadores”'),
+      find.text('«La estatal confirmó la desvinculación de 300 trabajadores»'),
       findsOneWidget,
     );
     expect(tester.takeException(), isNull);
@@ -537,6 +535,9 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpArena(tester, ArenaFakeCore());
+    // Inside the duel, each outlet's name opens its profile.
+    await tester.tap(find.text(duelTitle).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('BioBioChile').first);
     await tester.pumpAndSettle();
     expect(find.byKey(const Key('arena-media-compare')), findsOneWidget);
@@ -650,6 +651,8 @@ void main() {
       await tester.tap(
         find.descendant(of: bar, matching: find.text('En desarrollo')),
       );
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('arena-stories-order')));
       await tester.pumpAndSettle();
       await tester.tap(
         find.byKey(const ValueKey<String>('arena-stories-order-1')),

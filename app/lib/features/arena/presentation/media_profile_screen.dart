@@ -120,9 +120,47 @@ String arenaMediaKind(LiveSourceDto source) {
   final bool video =
       source.name.toLowerCase().contains('youtube') ||
       source.canonicalDomain.contains('youtube');
-  final String? category = source.category;
-  return '${video ? 'Canal de video' : 'Prensa escrita'}'
-      '${category == null || category.isEmpty ? '' : ' · $category'}';
+  final String? category = arenaMediaCategory(source.category);
+  final String kind = arenaIsRadio(source)
+      ? 'Radio'
+      : video
+      ? 'Canal de video'
+      : 'Prensa escrita';
+  return category == null || category == kind ? kind : '$kind · $category';
+}
+
+/// A radio station, whether its feed is text or video: the name or the
+/// catalog says so («Cooperativa FM», category «radio»).
+bool arenaIsRadio(LiveSourceDto source) {
+  final String name = source.name.toLowerCase();
+  return name.contains('radio') ||
+      RegExp(r'\bfm\b').hasMatch(name) ||
+      (source.category ?? '').toLowerCase().trim() == 'radio';
+}
+
+/// The catalog's section in Spanish, from a closed list: an unknown or
+/// internal value (such as «news») is not shown.
+String? arenaMediaCategory(String? raw) {
+  final String key = (raw ?? '')
+      .toLowerCase()
+      .trim()
+      .replaceAll('á', 'a')
+      .replaceAll('é', 'e')
+      .replaceAll('í', 'i')
+      .replaceAll('ó', 'o')
+      .replaceAll('ú', 'u');
+  return switch (key) {
+    'news' || 'noticias' || 'general' => 'Noticias',
+    'economia' || 'negocios' || 'business' => 'Economía',
+    'pais' || 'nacional' || 'national' => 'Nacional',
+    'politica' || 'politics' => 'Política',
+    'investigacion' || 'investigation' => 'Investigación',
+    'regional' || 'region' => 'Regional',
+    'radio' => 'Radio',
+    'television' || 'tv' => 'Televisión',
+    'deportes' || 'sports' => 'Deportes',
+    _ => null,
+  };
 }
 
 /// Pantalla 4 — public profile of a medium with its «Radiografía».

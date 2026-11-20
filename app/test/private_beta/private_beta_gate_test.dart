@@ -388,7 +388,7 @@ void main() {
       isTrue,
     );
 
-    await tester.tap(find.descendant(of: bar, matching: find.text('Tú')));
+    await tester.tap(find.descendant(of: bar, matching: find.text('Perfil')));
     await tester.pumpAndSettle();
     // In the Arena, sign-out lives in the account card at the top of Perfil.
     expect(find.byTooltip('Cerrar sesión'), findsNothing);

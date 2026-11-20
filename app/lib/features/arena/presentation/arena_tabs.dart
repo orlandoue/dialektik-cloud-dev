@@ -138,6 +138,7 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
   static const List<ArenaTopic?> _filters = <ArenaTopic?>[
     null,
     ArenaTopic.politica,
+    ArenaTopic.internacional,
     ArenaTopic.justicia,
     ArenaTopic.economia,
     ArenaTopic.deportes,
@@ -148,6 +149,11 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
 
   /// 0: most recent first; 1: covered by the most outlets first.
   int _order = 0;
+
+  static const List<(int, String)> _storyOrders = <(int, String)>[
+    (0, 'Recientes'),
+    (1, 'Más cubiertas'),
+  ];
 
   @override
   void initState() {
@@ -211,24 +217,56 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                   onSelected: (int value) => setState(() => _filter = value),
                 ),
                 const SizedBox(height: 8),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: <Widget>[
-                      for (final (int value, String label)
-                          in const <(int, String)>[
-                            (0, 'Recientes'),
-                            (1, 'Más cubiertas'),
-                          ])
-                        ArenaPill(
-                          key: ValueKey<String>('arena-stories-order-$value'),
-                          label: label,
-                          selected: _order == value,
-                          onTap: () => setState(() => _order = value),
+                // Ordering is not a filter: a menu, not a second row of
+                // the same pills as the topics.
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: PopupMenuButton<int>(
+                      key: const Key('arena-stories-order'),
+                      initialValue: _order,
+                      onSelected: (int value) => setState(() => _order = value),
+                      itemBuilder: (BuildContext context) =>
+                          <PopupMenuEntry<int>>[
+                            for (final (int value, String label)
+                                in _storyOrders)
+                              PopupMenuItem<int>(
+                                key: ValueKey<String>(
+                                  'arena-stories-order-$value',
+                                ),
+                                value: value,
+                                child: Text(label),
+                              ),
+                          ],
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 10,
                         ),
-                    ],
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: <Widget>[
+                            const Icon(
+                              Icons.sort_rounded,
+                              size: 18,
+                              color: ArenaColors.muted,
+                            ),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                'Ordenar: ${_storyOrders[_order].$2}',
+                                style: ArenaText.meta,
+                              ),
+                            ),
+                            const Icon(
+                              Icons.arrow_drop_down,
+                              color: ArenaColors.muted,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -328,9 +366,7 @@ int arenaMediaFormat(List<LiveSourceDto> brand) {
   bool video(LiveSourceDto s) =>
       s.canonicalDomain.contains('youtube') ||
       s.name.toLowerCase().contains('youtube');
-  if (brand.any((LiveSourceDto s) => s.name.toLowerCase().contains('radio'))) {
-    return 1;
-  }
+  if (brand.any(arenaIsRadio)) return 1;
   return brand.every(video) ? 2 : 0;
 }
 

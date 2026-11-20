@@ -125,10 +125,7 @@ void main() {
     (WidgetTester tester) async {
       final ArenaFullCore core = ArenaFullCore();
       await pumpArena(tester, core);
-      expect(
-        find.text('3 opiniones · el reparto se muestra después de votar.'),
-        findsOneWidget,
-      );
+      // The card of the day shows no tally at all.
       expect(find.textContaining('67%'), findsNothing);
 
       await tester.tap(find.text(duelTitle).first);

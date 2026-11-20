@@ -609,6 +609,7 @@ class ArenaMessage extends StatelessWidget {
 
 Color _topicTone(ArenaTopic topic) => switch (topic) {
   ArenaTopic.politica => const Color(0xFF312E81),
+  ArenaTopic.internacional => const Color(0xFF1F3A5F),
   ArenaTopic.justicia => const Color(0xFF3B1D5E),
   ArenaTopic.economia => const Color(0xFF134E4A),
   ArenaTopic.seguridad => const Color(0xFF1E3A8A),
@@ -621,6 +622,7 @@ Color _topicTone(ArenaTopic topic) => switch (topic) {
 
 IconData arenaTopicIcon(ArenaTopic topic) => switch (topic) {
   ArenaTopic.politica => Icons.account_balance_outlined,
+  ArenaTopic.internacional => Icons.language,
   ArenaTopic.justicia => Icons.gavel_outlined,
   ArenaTopic.economia => Icons.show_chart,
   ArenaTopic.seguridad => Icons.shield_outlined,

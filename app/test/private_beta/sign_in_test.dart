@@ -297,7 +297,7 @@ void main() {
       await tester.tap(
         find.descendant(
           of: find.byKey(const Key('arena-bottom-navigation')),
-          matching: find.text('Tú'),
+          matching: find.text('Perfil'),
         ),
       );
       await tester.pumpAndSettle();

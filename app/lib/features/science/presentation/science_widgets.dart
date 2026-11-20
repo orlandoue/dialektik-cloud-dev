@@ -214,15 +214,16 @@ class SelectChip extends StatelessWidget {
           // Hugs its label unless it fills a grid cell.
           alignment: expand ? Alignment.center : null,
           decoration: BoxDecoration(
+            // The same violet as every other selected chip of the app.
             color: selected
-                ? SciColors.ink
+                ? SciColors.primary
                 : enabled
                 ? SciColors.surface
                 : SciColors.bgApp,
             borderRadius: BorderRadius.circular(radius),
             border: Border.all(
               color: selected
-                  ? SciColors.ink
+                  ? SciColors.primary
                   : enabled
                   ? SciColors.borderControl
                   : SciColors.borderCard,
@@ -433,7 +434,7 @@ class ArenaBottomBar extends StatelessWidget {
         (Icons.compare_arrows_rounded, Icons.compare_arrows_rounded, 'Duelos'),
         (Icons.timeline_rounded, Icons.timeline_rounded, 'En desarrollo'),
         (Icons.cell_tower_rounded, Icons.cell_tower_rounded, 'Medios'),
-        (Icons.person_outline_rounded, Icons.person_rounded, 'Tú'),
+        (Icons.person_outline_rounded, Icons.person_rounded, 'Perfil'),
       ];
 
   @override

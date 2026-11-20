@@ -450,7 +450,7 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
               for (final EventCoverageArticleDto article in timeline.take(3))
                 _AttributedLine(
                   name: arenaSourceName(article.sourceName),
-                  text: article.title.trim(),
+                  text: arenaHeadline(article.title),
                   verb: 'informó',
                 )
             else
@@ -480,19 +480,21 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
             children: <Widget>[
               Row(
                 children: <Widget>[
+                  // Neutral: orange is kept for corrections, not for news.
                   const Icon(
                     Icons.update_rounded,
                     size: 16,
-                    color: ArenaColors.amberDeep,
+                    color: ArenaColors.muted,
                   ),
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      'Último cambio · ${arenaAgo(latest.publishedAt)}',
+                      'Última cobertura · '
+                      '${arenaAgo(arenaLastCoverage(timeline, fallback: latest.publishedAt))}',
                       style: const TextStyle(
                         fontSize: 13,
                         fontWeight: FontWeight.w800,
-                        color: ArenaColors.amberDeep,
+                        color: ArenaColors.muted,
                       ),
                     ),
                   ),
@@ -506,7 +508,7 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
                 style: ArenaText.meta,
               ),
               const SizedBox(height: 4),
-              Text(latest.title, style: ArenaText.cardTitle),
+              Text(arenaHeadline(latest.title), style: ArenaText.cardTitle),
             ],
           ),
         ),
@@ -851,7 +853,10 @@ class _TimelineEntry extends StatelessWidget {
                               ],
                             )
                           else
-                            Text(article.title, style: ArenaText.cardTitle),
+                            Text(
+                              arenaHeadline(article.title),
+                              style: ArenaText.cardTitle,
+                            ),
                         ],
                       ),
                     ),
