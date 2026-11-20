@@ -36,8 +36,8 @@ void main() {
     final Finder bar = find.byKey(const Key('arena-bottom-navigation'));
     await tester.tap(find.descendant(of: bar, matching: find.text('Duelos')));
     await tester.pumpAndSettle();
-    expect(find.textContaining('Versión A: '), findsWidgets);
-    expect(find.textContaining('La Tercera: '), findsNothing);
+    expect(find.text('VERSIÓN A'), findsWidgets);
+    expect(find.text('La Tercera'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }

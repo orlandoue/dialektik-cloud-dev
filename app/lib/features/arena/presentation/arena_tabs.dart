@@ -8,6 +8,7 @@ import 'package:dialektik/features/arena/presentation/account_card.dart';
 import 'package:dialektik/features/arena/presentation/arena_home_tab.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
+import 'package:dialektik/features/arena/presentation/duel_face.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
 import 'package:dialektik/features/arena/presentation/media_profile_screen.dart';
 import 'package:dialektik/features/arena/presentation/story_group_card.dart';
@@ -71,60 +72,191 @@ class _TabHeader extends StatelessWidget {
 }
 
 /// Pestaña `VS`: every published contrast, never filtered by follows.
-class ArenaVsTab extends StatelessWidget {
+class ArenaVsTab extends StatefulWidget {
   const ArenaVsTab({required this.store, super.key});
 
   final ArenaStore store;
 
   @override
-  Widget build(BuildContext context) => SafeArea(
-    bottom: false,
-    child: ListenableBuilder(
-      listenable: store,
-      builder: (BuildContext context, _) => RefreshIndicator(
-        color: ArenaColors.violet,
-        onRefresh: () => store.load(refresh: true),
-        child: ListView(
-          key: const Key('arena-vs-scroll'),
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.only(bottom: 24),
-          children: <Widget>[
-            const _TabHeader(
-              title: 'VS · Duelos',
-              subtitle:
-                  'Todos los duelos publicados entre medios, sin filtrar '
-                  'por tus fuentes.',
-            ),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Column(
-                children: <Widget>[
-                  if (store.loading && !store.loaded)
-                    const Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(
-                        color: ArenaColors.violet,
-                      ),
-                    )
-                  else if (store.error != null && store.duels.isEmpty)
-                    ArenaMessage(
-                      'No se pudieron cargar los duelos.',
-                      actionLabel: 'Reintentar',
-                      onAction: () => unawaited(store.load(refresh: true)),
-                    )
-                  else if (store.duels.isEmpty)
-                    const ArenaMessage('Todavía no hay duelos publicados.'),
-                  for (final ArenaDuel duel in store.duels)
-                    DuelListCard(duel: duel, store: store),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    ),
-  );
+  State<ArenaVsTab> createState() => _ArenaVsTabState();
 }
+
+class _ArenaVsTabState extends State<ArenaVsTab> {
+  final TextEditingController _search = TextEditingController();
+  int _kind = 0;
+
+  static const List<(String?, String)> _kinds = <(String?, String)>[
+    (null, 'Todos'),
+    ('CONTRADICTION', 'Contradicción'),
+    ('DIFFERENT_FOCUS', 'Distinto enfoque'),
+    ('COMPATIBLE', 'Compatible'),
+  ];
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  bool _matches(ArenaDuel duel, String query) {
+    final String? kind = _kinds[_kind].$1;
+    if (kind != null && duel.kind != kind) return false;
+    if (query.isEmpty) return true;
+    final StringBuffer text = StringBuffer(duel.title)
+      ..write(' ')
+      ..write(arenaPostureText(duel.event, duel.positionA).text)
+      ..write(' ')
+      ..write(arenaPostureText(duel.event, duel.positionB).text);
+    // Outlets are searchable only when they are on screen.
+    if (!widget.store.hidesOutlets(duel.event.id)) {
+      text
+        ..write(' ')
+        ..write(duel.nameA)
+        ..write(' ')
+        ..write(duel.nameB);
+    }
+    return foldArenaText(text.toString()).contains(foldArenaText(query));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ArenaStore store = widget.store;
+    return SafeArea(
+      bottom: false,
+      child: ListenableBuilder(
+        listenable: store,
+        builder: (BuildContext context, _) {
+          final String query = _search.text.trim();
+          final List<ArenaDuel> duels = store.duels
+              .where((ArenaDuel d) => _matches(d, query))
+              .toList();
+          return RefreshIndicator(
+            color: ArenaColors.violet,
+            onRefresh: () => store.load(refresh: true),
+            child: ListView(
+              key: const Key('arena-vs-scroll'),
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 24),
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Semantics(
+                          header: true,
+                          child: const Text(
+                            'VS · Duelos',
+                            style: TextStyle(
+                              fontFamily: ArenaText.serif,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              color: ArenaColors.ink,
+                            ),
+                          ),
+                        ),
+                      ),
+                      Flexible(
+                        child: MergeSemantics(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: <Widget>[
+                              const Flexible(
+                                child: Text(
+                                  'Modo a ciegas',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w600,
+                                    color: ArenaColors.ink,
+                                  ),
+                                ),
+                              ),
+                              Switch(
+                                key: const Key('arena-vs-blind'),
+                                value: store.alwaysBlind,
+                                activeTrackColor: duelColorA,
+                                onChanged: (bool value) => unawaited(
+                                  store.setAlwaysBlind(value: value),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                  child: TextField(
+                    key: const Key('arena-vs-search'),
+                    controller: _search,
+                    onChanged: (_) => setState(() {}),
+                    textInputAction: TextInputAction.search,
+                    decoration: InputDecoration(
+                      hintText: 'Buscar duelos...',
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: Colors.white,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(16),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                ),
+                ArenaPillBar(
+                  labels: <String>[for (final (_, String l) in _kinds) l],
+                  selected: _kind,
+                  onSelected: (int value) => setState(() => _kind = value),
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Column(
+                    children: <Widget>[
+                      if (store.loading && !store.loaded)
+                        const Padding(
+                          padding: EdgeInsets.all(32),
+                          child: CircularProgressIndicator(
+                            color: ArenaColors.violet,
+                          ),
+                        )
+                      else if (store.error != null && store.duels.isEmpty)
+                        ArenaMessage(
+                          'No se pudieron cargar los duelos.',
+                          actionLabel: 'Reintentar',
+                          onAction: () => unawaited(store.load(refresh: true)),
+                        )
+                      else if (store.duels.isEmpty)
+                        const ArenaMessage('Todavía no hay duelos publicados.')
+                      else if (duels.isEmpty)
+                        const ArenaMessage('Ningún duelo coincide.'),
+                      for (final ArenaDuel duel in duels)
+                        DuelListCard(duel: duel, store: store),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// Lower case without accents, for searching.
+String foldArenaText(String text) => text
+    .toLowerCase()
+    .replaceAll('á', 'a')
+    .replaceAll('é', 'e')
+    .replaceAll('í', 'i')
+    .replaceAll('ó', 'o')
+    .replaceAll('ú', 'u');
 
 /// Pestaña `Historias`: living events filtered by topic.
 class ArenaStoriesTab extends StatefulWidget {
