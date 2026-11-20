@@ -8,6 +8,7 @@ import 'package:dialektik/features/science/data/science_repository.dart';
 import 'package:dialektik/features/science/presentation/science_format.dart';
 import 'package:dialektik/features/science/presentation/science_widgets.dart';
 import 'package:dialektik/features/science/presentation/study_label_screen.dart';
+import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:flutter/material.dart';
 
 /// Opens the moderation screen; only moderators reach it (see «Tú»).
@@ -56,6 +57,9 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
 
   /// Story groupings Core proposes; null when Core does not serve them yet.
   List<StoryProposal>? _stories;
+
+  /// Link contributions in review; empty when Core does not serve them yet.
+  List<ReviewEntry> _community = const <ReviewEntry>[];
   bool _failed = false;
 
   ScienceModerationRepository? get _repository => widget.store.moderation;
@@ -90,12 +94,21 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
       } on Object {
         stories = null;
       }
+      List<ReviewEntry> community = const <ReviewEntry>[];
+      try {
+        community =
+            await widget.store.communityModeration?.communityReviewQueue() ??
+            const <ReviewEntry>[];
+      } on Object {
+        community = const <ReviewEntry>[];
+      }
       if (!mounted) return;
       setState(() {
         _queue = loaded.$1;
         _usage = loaded.$2;
         _polls = polls;
         _stories = stories;
+        _community = community;
         _failed = false;
       });
     } on Object {
@@ -233,7 +246,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
     final ModerationQueue? queue = _queue;
     final int pending = queue == null
         ? 0
-        : queue.review.length + queue.reports.length;
+        : queue.review.length + queue.reports.length + _community.length;
     return DefaultTabController(
       length: 4,
       child: Scaffold(
@@ -295,6 +308,12 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
                     onRefresh: _load,
                     child: _QueueList(
                       queue: queue,
+                      community: _community,
+                      onReviewEntry: (ReviewEntry entry, bool approve) => _act(
+                        () => widget.store.communityModeration!
+                            .reviewCommunityEntry(entry.id, approve: approve),
+                        approve ? 'Aporte publicado' : 'Aporte rechazado',
+                      ),
                       onApprove: _approve,
                       onReject: _reject,
                       onDismiss: _dismiss,
@@ -334,6 +353,8 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
 class _QueueList extends StatelessWidget {
   const _QueueList({
     required this.queue,
+    required this.community,
+    required this.onReviewEntry,
     required this.onApprove,
     required this.onReject,
     required this.onDismiss,
@@ -343,6 +364,8 @@ class _QueueList extends StatelessWidget {
   });
 
   final ModerationQueue queue;
+  final List<ReviewEntry> community;
+  final void Function(ReviewEntry, bool) onReviewEntry;
   final ValueChanged<ModerationItem> onApprove;
   final ValueChanged<ModerationItem> onReject;
   final ValueChanged<ModerationItem> onDismiss;
@@ -355,7 +378,61 @@ class _QueueList extends StatelessWidget {
     key: const Key('sci-mod-queue'),
     padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
     children: <Widget>[
-      if (queue.isEmpty)
+      if (community.isNotEmpty) ...<Widget>[
+        _Heading('Aportes con enlace, en revisión · ${community.length}'),
+        for (final ReviewEntry entry in community)
+          Container(
+            key: ValueKey<String>('sci-mod-entry-${entry.id}'),
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: SciColors.surface,
+              borderRadius: BorderRadius.circular(SciRadius.card),
+              border: Border.all(color: SciColors.borderCard),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  '${entry.author} · ${entry.eventTitle}',
+                  style: SciText.meta,
+                ),
+                if (entry.stance != null)
+                  Text(
+                    '${entry.stance!.label}'
+                    '${entry.positionTitle == null ? ' · el caso' : ' · «${entry.positionTitle}»'}',
+                    style: SciText.meta,
+                  ),
+                const SizedBox(height: 6),
+                Text(entry.body, style: SciText.body),
+                if (entry.url != null)
+                  Text(entry.url.toString(), style: SciText.meta),
+                const SizedBox(height: 10),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _ActionButton(
+                      key: ValueKey<String>(
+                        'sci-mod-entry-approve-${entry.id}',
+                      ),
+                      label: 'Publicar',
+                      primary: true,
+                      onPressed: () => onReviewEntry(entry, true),
+                    ),
+                    _ActionButton(
+                      key: ValueKey<String>('sci-mod-entry-reject-${entry.id}'),
+                      label: 'Rechazar',
+                      onPressed: () => onReviewEntry(entry, false),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 8),
+      ],
+      if (queue.isEmpty && community.isEmpty)
         const _Message('No hay nada pendiente.')
       else ...<Widget>[
         _Heading('Con estudio, en revisión · ${queue.review.length}'),

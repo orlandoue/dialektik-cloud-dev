@@ -59,7 +59,8 @@ final class PublicApiClient
         SemanticGraphRepository,
         ScienceRepository,
         ScienceModerationRepository,
-        StoryGroupsRepository {
+        StoryGroupsRepository,
+        CommunityModerationRepository {
   PublicApiClient({
     required ApiConfiguration configuration,
     http.Client? httpClient,
@@ -126,9 +127,17 @@ final class PublicApiClient
     '/v1/social/community', query: {'event_id': eventId},
     decoder: CommunityEntry.listFromJson, refresh: true, requestToken: null);
   @override
-  Future<List<CommunityEntry>> addCommunityEntry(String eventId, {required CommunityChannel channel, required String body, String? articleId, Uri? link, String? alias}) =>
+  Future<List<CommunityEntry>> addCommunityEntry(String eventId, {required CommunityChannel channel, required String body, String? articleId, Uri? link, String? alias, String? positionId, EntryStance? stance}) =>
     _postJson('/v1/social/community', {'event_id': eventId, 'channel': channel.wire, 'body': body,
-      'article_id': ?articleId, 'link_url': ?link?.toString(), 'alias': ?alias}, CommunityEntry.listFromJson);
+      'article_id': ?articleId, 'link_url': ?link?.toString(), 'alias': ?alias,
+      'position_id': ?positionId, 'stance': ?stance?.wire}, CommunityEntry.listFromJson);
+  @override
+  Future<List<ReviewEntry>> communityReviewQueue() => _get<List<ReviewEntry>>('/v1/social/moderation/community',
+    decoder: ReviewEntry.listFromJson, refresh: true, requestToken: null);
+  @override
+  Future<void> reviewCommunityEntry(String entryId, {required bool approve}) =>
+    _postJson('/v1/social/moderation/community/${Uri.encodeComponent(entryId)}',
+      {'decision': approve ? 'approve' : 'reject'}, (_) {});
   @override
   Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote) =>
     _postJson('/v1/social/community/votes', {'entry_id': entryId, 'vote': vote}, CommunityEntry.listFromJson);

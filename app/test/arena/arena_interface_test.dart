@@ -218,9 +218,22 @@ void main() {
       find.byKey(const Key('arena-evidence-note')),
       'Resolución del tribunal sobre el procedimiento.',
     );
+    // Which version it is about and what the link does are required.
+    await tester.tap(find.byKey(const Key('arena-evidence-send')));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Elige a qué versión'), findsOneWidget);
+    await tester.tap(
+      find.byKey(const ValueKey<String>('arena-evidence-version-case')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('arena-evidence-stance-context')),
+    );
+    await tester.pumpAndSettle();
     await tester.tap(find.byKey(const Key('arena-evidence-send')));
     await tester.pumpAndSettle();
     expect(core.entries.first.channel, CommunityChannel.aporte);
+    expect(core.entries.first.stance, EntryStance.context);
+    expect(core.entries.first.positionId, isNull);
     expect(
       core.entries.first.url.toString(),
       'https://www.pjud.cl/resolucion.pdf',

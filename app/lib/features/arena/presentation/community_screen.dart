@@ -335,6 +335,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
           key: ValueKey<String>('arena-entry-${entry.id}'),
           entry: entry,
           event: event,
+          stanceLabel: arenaEntryStanceLabel(store, event.id, entry),
           votable: _channelsReady && !_voting.contains(entry.id),
           showVotes: _channelsReady,
           onVote: (int vote) => _voteEntry(entry, vote),
@@ -556,6 +557,7 @@ class _ContributionCard extends StatelessWidget {
   const _ContributionCard({
     required this.entry,
     required this.event,
+    required this.stanceLabel,
     required this.votable,
     required this.showVotes,
     required this.onVote,
@@ -566,6 +568,10 @@ class _ContributionCard extends StatelessWidget {
 
   final CommunityEntry entry;
   final EventDetailDto event;
+
+  /// «Respalda · Versión A», as this reader sees the versions; null when
+  /// the contribution does not say.
+  final String? stanceLabel;
   final bool votable;
   final bool showVotes;
   final ValueChanged<int> onVote;
@@ -666,6 +672,28 @@ class _ContributionCard extends StatelessWidget {
                         ),
                       ],
                     ),
+                    if (entry.inReview || stanceLabel != null) ...<Widget>[
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 6,
+                        runSpacing: 6,
+                        children: <Widget>[
+                          if (entry.inReview)
+                            const ArenaBadge(
+                              key: Key('arena-entry-in-review'),
+                              label: 'En revisión · solo tú lo ves',
+                              background: SciColors.tagBg,
+                              foreground: SciColors.tagText,
+                            ),
+                          if (stanceLabel != null)
+                            ArenaBadge(
+                              label: stanceLabel!,
+                              background: SciColors.tagBg,
+                              foreground: SciColors.tagText,
+                            ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 10),
                     Text(entry.body, style: ArenaText.body),
                     if (url != null) ...<Widget>[
@@ -814,4 +842,28 @@ class _VoteButton extends StatelessWidget {
       ),
     ),
   );
+}
+
+/// What a contribution says it does, with the version as this reader sees
+/// it: «Respalda · Versión A» (A and B are drawn per reader, so the label is
+/// computed here, never stored).
+String? arenaEntryStanceLabel(
+  ArenaStore store,
+  String eventId,
+  CommunityEntry entry,
+) {
+  final EntryStance? stance = entry.stance;
+  if (stance == null) return null;
+  final String? positionId = entry.positionId;
+  if (positionId == null) return '${stance.label} · el caso';
+  final ArenaDuel? duel = store.duelForEvent(eventId);
+  if (duel == null) return stance.label;
+  final bool hidden = store.hidesOutlets(eventId);
+  if (positionId == duel.idA) {
+    return '${stance.label} · Versión A${hidden ? '' : ' (${duel.nameA})'}';
+  }
+  if (positionId == duel.idB) {
+    return '${stance.label} · Versión B${hidden ? '' : ' (${duel.nameB})'}';
+  }
+  return stance.label;
 }
