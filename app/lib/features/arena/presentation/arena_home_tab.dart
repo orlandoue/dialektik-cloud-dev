@@ -731,7 +731,13 @@ class _BlindspotScreenState extends State<BlindspotScreen> {
     }
     if (!mounted) return;
     setState(() {
-      _events = events;
+      // An event whose story was covered by a medium the reader follows was
+      // not missed: the story, not the pair of notes, is what one sees.
+      _events = events.where((EventCardDto e) {
+        final List<String> covered =
+            store.storyOf(e.id)?.sourceIds ?? const <String>[];
+        return !covered.any(store.followed.contains);
+      }).toList();
       _news = news
           .where((LiveNewsItemDto n) => !store.followed.contains(n.source.id))
           .toList();

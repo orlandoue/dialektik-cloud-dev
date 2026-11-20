@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dialektik/features/arena/data/arena_store.dart';
+import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/science/data/science_models.dart';
 import 'package:dialektik/features/science/data/science_repository.dart';
@@ -52,6 +53,9 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
 
   /// The poll rule's log; null when Core does not answer it yet.
   List<PollDecision>? _polls;
+
+  /// Story groupings Core proposes; null when Core does not serve them yet.
+  List<StoryProposal>? _stories;
   bool _failed = false;
 
   ScienceModerationRepository? get _repository => widget.store.moderation;
@@ -80,11 +84,18 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
       } on Object {
         polls = null;
       }
+      List<StoryProposal>? stories;
+      try {
+        stories = await widget.store.storyRepository?.storyProposals();
+      } on Object {
+        stories = null;
+      }
       if (!mounted) return;
       setState(() {
         _queue = loaded.$1;
         _usage = loaded.$2;
         _polls = polls;
+        _stories = stories;
         _failed = false;
       });
     } on Object {
@@ -107,6 +118,27 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
       );
     }
   }
+
+  Future<void> _joinStory(StoryProposal proposal) async {
+    final String? title = await askStoryTitle(context, proposal);
+    if (title == null || !mounted) return;
+    await _act(
+      () => widget.store.storyRepository!.decideStoryProposal(
+        proposal.id,
+        approve: true,
+        title: title,
+      ),
+      'Historia guardada',
+    );
+  }
+
+  Future<void> _rejectStory(StoryProposal proposal) => _act(
+    () => widget.store.storyRepository!.decideStoryProposal(
+      proposal.id,
+      approve: false,
+    ),
+    'No se volverá a proponer',
+  );
 
   Future<void> _approve(ModerationItem item) => _act(
     () => _repository!.decide(item.comment.id, approve: true),
@@ -203,7 +235,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
         ? 0
         : queue.review.length + queue.reports.length;
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Scaffold(
         backgroundColor: SciColors.bgApp,
         appBar: AppBar(
@@ -241,6 +273,11 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
               _tab(context, const Key('sci-mod-tab-queue'), 'Cola · $pending'),
               _tab(context, const Key('sci-mod-tab-usage'), 'Consumo de APIs'),
               _tab(context, const Key('sci-mod-tab-polls'), 'Encuestas'),
+              _tab(
+                context,
+                const Key('sci-mod-tab-stories'),
+                'Fusiones · ${_stories?.length ?? 0}',
+              ),
             ],
           ),
         ),
@@ -278,6 +315,14 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
                   RefreshIndicator(
                     onRefresh: _load,
                     child: PollDecisionsView(decisions: _polls),
+                  ),
+                  RefreshIndicator(
+                    onRefresh: _load,
+                    child: StoryProposalsView(
+                      proposals: _stories,
+                      onJoin: _joinStory,
+                      onReject: _rejectStory,
+                    ),
                   ),
                 ],
               ),
@@ -1292,4 +1337,199 @@ class HarvestNotice extends StatelessWidget {
       ),
     );
   }
+}
+
+/// «Fusiones»: events Core proposes to group into one story. Nothing is
+/// grouped until a moderator joins them, with the story's title.
+class StoryProposalsView extends StatelessWidget {
+  const StoryProposalsView({
+    required this.proposals,
+    required this.onJoin,
+    required this.onReject,
+    super.key,
+  });
+
+  /// Null when Core does not serve proposals yet.
+  final List<StoryProposal>? proposals;
+  final void Function(StoryProposal) onJoin;
+  final void Function(StoryProposal) onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final List<StoryProposal>? list = proposals;
+    return ListView(
+      key: const Key('sci-mod-stories'),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
+      children: <Widget>[
+        const _Hint(
+          'Coberturas que parecen ser de una misma historia (mismos nombres, '
+          'palabras y fechas, sin IA). Únelas solo si cuentan el mismo tema; '
+          'los duelos no cambian.',
+        ),
+        const SizedBox(height: 12),
+        if (list == null)
+          const _Hint('Core todavía no entrega propuestas.')
+        else if (list.isEmpty)
+          const _Hint('No hay coberturas para unir ahora.')
+        else
+          for (final StoryProposal p in list)
+            _StoryProposalCard(
+              proposal: p,
+              onJoin: () => onJoin(p),
+              onReject: () => onReject(p),
+            ),
+      ],
+    );
+  }
+}
+
+class _StoryProposalCard extends StatelessWidget {
+  const _StoryProposalCard({
+    required this.proposal,
+    required this.onJoin,
+    required this.onReject,
+  });
+
+  final StoryProposal proposal;
+  final VoidCallback onJoin;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) => Container(
+    key: ValueKey<String>('sci-mod-story-${proposal.id}'),
+    margin: const EdgeInsets.only(bottom: 8),
+    padding: const EdgeInsets.all(14),
+    decoration: BoxDecoration(
+      color: SciColors.surface,
+      borderRadius: BorderRadius.circular(SciRadius.card),
+      border: Border.all(color: SciColors.borderCard),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          proposal.addsToStory
+              ? 'Agregar a «${proposal.targetTitle ?? 'historia'}»'
+              : 'Nueva historia · ${proposal.events.length} coberturas',
+          style: SciText.meta,
+        ),
+        const SizedBox(height: 4),
+        Text(proposal.suggestedTitle, style: SciText.cardTitle),
+        for (final StoryProposalEvent e in proposal.events)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(e.title, style: SciText.body),
+                Text(
+                  '${e.outlets.join(' · ')}'
+                  '${e.firstPublishedAt == null ? '' : ' · ${sciShortDate(e.firstPublishedAt!)}'}',
+                  style: SciText.meta,
+                ),
+              ],
+            ),
+          ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: <Widget>[
+            FilledButton(
+              key: ValueKey<String>('sci-mod-story-join-${proposal.id}'),
+              onPressed: onJoin,
+              style: FilledButton.styleFrom(
+                backgroundColor: SciColors.primary,
+                minimumSize: const Size(48, 44),
+              ),
+              child: Text(
+                proposal.addsToStory ? 'Agregar' : 'Unir en una historia',
+              ),
+            ),
+            OutlinedButton(
+              key: ValueKey<String>('sci-mod-story-reject-${proposal.id}'),
+              onPressed: onReject,
+              style: OutlinedButton.styleFrom(minimumSize: const Size(48, 44)),
+              child: const Text('No son la misma'),
+            ),
+          ],
+        ),
+      ],
+    ),
+  );
+}
+
+/// The story's title, starting from Core's suggestion: Dialektik's own,
+/// neutral title (it names the topic, never one outlet's version).
+Future<String?> askStoryTitle(BuildContext context, StoryProposal proposal) =>
+    showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => _StoryTitleDialog(
+        initial: proposal.targetTitle ?? proposal.suggestedTitle,
+      ),
+    );
+
+class _StoryTitleDialog extends StatefulWidget {
+  const _StoryTitleDialog({required this.initial});
+
+  final String initial;
+
+  @override
+  State<_StoryTitleDialog> createState() => _StoryTitleDialogState();
+}
+
+class _StoryTitleDialogState extends State<_StoryTitleDialog> {
+  late final TextEditingController _title = TextEditingController(
+    text: widget.initial,
+  );
+  String? _error;
+
+  @override
+  void dispose() {
+    _title.dispose();
+    super.dispose();
+  }
+
+  void _save() {
+    final String value = _title.text.trim();
+    if (value.length < 3 || value.length > 140) {
+      setState(() => _error = 'Usa entre 3 y 140 caracteres.');
+      return;
+    }
+    Navigator.of(context).pop(value);
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Título de la historia'),
+    content: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Text(
+          'Nombra el tema sin adoptar la versión de un medio. Se muestra '
+          'como título de Dialektik.',
+          style: SciText.meta,
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          key: const Key('sci-mod-story-title'),
+          controller: _title,
+          maxLength: 140,
+          decoration: InputDecoration(errorText: _error),
+        ),
+      ],
+    ),
+    actions: <Widget>[
+      TextButton(
+        onPressed: () => Navigator.of(context).pop(),
+        child: const Text('Cancelar'),
+      ),
+      FilledButton(
+        key: const Key('sci-mod-story-save'),
+        onPressed: _save,
+        child: const Text('Guardar'),
+      ),
+    ],
+  );
 }
