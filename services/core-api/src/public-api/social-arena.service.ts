@@ -2,6 +2,7 @@ import { createDatabase, destroyDatabase, socialArenaSql } from '@dialektik/data
 import { Inject, Injectable, Logger, NotFoundException, ServiceUnavailableException, type OnModuleInit } from '@nestjs/common';
 import { sql, type Kysely, type Transaction } from 'kysely';
 import { CoreDatabaseService } from '../database/core-database.service.js';
+import { profileAlias } from '../science/science.service.js';
 
 export type CommunityChannel = 'DEBATE' | 'APORTE' | 'NOTA';
 
@@ -219,13 +220,26 @@ export class SocialArenaService implements OnModuleInit {
     }));
   }
 
+  /** The reader's chosen alias or «Lector-NNNN»; null where the profile function is missing. */
+  async #authorAlias(tx: Transaction<unknown>, userId: string): Promise<string | null> {
+    const available = await sql<{ ok: boolean }>`select to_regprocedure('public.dialektik_reader_profile(uuid)') is not null as ok`.execute(tx);
+    if (!available.rows[0]?.ok) return null;
+    const rows = await sql<{ alias: string | null; display_name: string | null; reader_number: number | null }>`
+      select alias, display_name, reader_number from public.dialektik_reader_profile(${userId}::uuid)`.execute(tx);
+    return rows.rows[0] === undefined ? null : profileAlias(rows.rows[0]);
+  }
+
   async addEntry(userId: string, eventId: string, entry: NewCommunityEntry): Promise<void> {
     await this.#write(userId, async tx => {
-      // The alias falls back to a stable pseudonym derived from the account.
+      // The signature comes from the account, never from the client: the
+      // alias the reader chose, else «Lector-NNNN». Older apps sent the
+      // Google account's full name here; it is ignored wherever the profile
+      // function exists (the client alias only remains for test schemas).
+      const alias = (await this.#authorAlias(tx, userId)) ?? entry.alias;
       const inserted = await sql`
         insert into public.social_community_entries(event_id,user_id,channel,author_alias,body,article_id,link_url)
         select e.id, ${userId}::uuid, ${entry.channel},
-          coalesce(${entry.alias}::text, 'Lector-' || upper(substr(md5(${userId}::text), 1, 4))),
+          coalesce(${alias}::text, 'Lector-' || upper(substr(md5(${userId}::text), 1, 4))),
           ${entry.body}, ${entry.articleId}::dialektik_ulid, ${entry.linkUrl}::text
         from public.public_events e
         where e.id = ${eventId}::dialektik_ulid and e.analysis_state = 'PUBLISHED'
