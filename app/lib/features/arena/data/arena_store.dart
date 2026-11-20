@@ -29,11 +29,17 @@ import 'package:flutter/foundation.dart';
 enum ArenaMode { general, ciencia }
 
 /// One published contrast joined with the coverage of its event.
-final class ArenaDuel {
-  ArenaDuel({required this.contrast, required this.event});
+/// A stable fair coin from a text (FNV-1a), for the order of the versions.
+bool arenaCoinFlip(String text) {
+  int hash = 0x811c9dc5;
+  for (final int unit in text.codeUnits) {
+    hash = ((hash ^ unit) * 0x01000193) & 0xffffffff;
+  }
+  return hash.isOdd;
+}
 
-  final ContradictionDto contrast;
-  final EventDetailDto event;
+final class ArenaDuel {
+  ArenaDuel({required this.contrast, required this.event, this.seed = ''});
 
   EventCoveragePositionDto? _position(String id) {
     for (final EventCoveragePositionDto position in event.coveragePositions) {
@@ -42,13 +48,21 @@ final class ArenaDuel {
     return null;
   }
 
-  /// The two outlets are always shown in alphabetical order, so the first
-  /// place never depends on how Core happened to order the pair.
-  late final bool _swapped =
-      nameOf(_position(contrast.positionB.id)).toLowerCase().compareTo(
-        nameOf(_position(contrast.positionA.id)).toLowerCase(),
-      ) <
-      0;
+  final ContradictionDto contrast;
+  final EventDetailDto event;
+
+  /// The reader's key: with one, which outlet is A is drawn per reader and
+  /// case (stable across openings), so neither the alphabet nor Core's
+  /// order gives one outlet the first place for everybody. Without one,
+  /// alphabetical.
+  final String seed;
+
+  late final bool _swapped = seed.isEmpty
+      ? nameOf(_position(contrast.positionB.id)).toLowerCase().compareTo(
+              nameOf(_position(contrast.positionA.id)).toLowerCase(),
+            ) <
+            0
+      : arenaCoinFlip('$seed:${event.id}');
 
   /// Position shown first (left) and second (right).
   String get idA => _swapped ? contrast.positionB.id : contrast.positionA.id;
@@ -490,6 +504,7 @@ final class ArenaStore extends ChangeNotifier {
     _notify();
     unawaited(_loadSaved());
     unawaited(_loadMode());
+    unawaited(_loadAlwaysBlind());
     unawaited(_loadScienceAccess());
     unawaited(stories.load().catchError((Object _) {}));
     final Future<void> secondary = Future.wait(<Future<void>>[
@@ -598,6 +613,7 @@ final class ArenaStore extends ChangeNotifier {
           return ArenaDuel(
             contrast: contrast,
             event: await detail(contrast.eventId, refresh: refresh),
+            seed: account?.email ?? '',
           );
         } on Exception {
           return null;
@@ -794,17 +810,54 @@ final class ArenaStore extends ChangeNotifier {
   }
 
   final Set<String> _blind = <String>{};
+  final Set<String> _unblinded = <String>{};
+  bool _alwaysBlind = false;
+  static const String _alwaysBlindKey = 'dialektik_arena_always_blind';
+
+  /// «Leer siempre a ciegas»: every duel opens without the outlets' names,
+  /// in Inicio, VS and the duel itself, until the reader votes. Remembered
+  /// on the device.
+  bool get alwaysBlind => _alwaysBlind;
+
+  Future<void> setAlwaysBlind({required bool value}) async {
+    if (value == _alwaysBlind) return;
+    _alwaysBlind = value;
+    _unblinded.clear();
+    _notify();
+    try {
+      await storage.writeStories(_alwaysBlindKey, value ? '1' : '0');
+    } on Object {
+      /* A device convenience only. */
+    }
+  }
+
+  Future<void> _loadAlwaysBlind() async {
+    try {
+      final bool stored =
+          (await storage.readStories(_alwaysBlindKey))?.trim() == '1';
+      if (stored != _alwaysBlind) {
+        _alwaysBlind = stored;
+        _notify();
+      }
+    } on Object {
+      /* A device convenience only. */
+    }
+  }
 
   /// «Duelo a ciegas»: the reader chose to read both versions without the
   /// outlets' names until they vote on this case.
-  bool isBlind(String eventId) => _blind.contains(eventId);
+  bool isBlind(String eventId) =>
+      _alwaysBlind ? !_unblinded.contains(eventId) : _blind.contains(eventId);
 
   /// Whether the outlets are hidden right now: blind and not yet voted.
   bool hidesOutlets(String eventId) =>
-      _blind.contains(eventId) && cachedPositionVotes(eventId)?.mine == null;
+      isBlind(eventId) && cachedPositionVotes(eventId)?.mine == null;
 
   void setBlind(String eventId, {required bool value}) {
-    if (value ? _blind.add(eventId) : _blind.remove(eventId)) _notify();
+    final bool changed = _alwaysBlind
+        ? (value ? _unblinded.remove(eventId) : _unblinded.add(eventId))
+        : (value ? _blind.add(eventId) : _blind.remove(eventId));
+    if (changed) _notify();
   }
 
   void toggleSaved(String eventId) {

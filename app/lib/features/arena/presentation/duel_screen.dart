@@ -488,24 +488,34 @@ class DuelListCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final PositionVotes? votes = store.cachedPositionVotes(duel.event.id);
     final bool voted = votes?.mine != null;
-    Widget preview(EventCoveragePositionDto? position) {
+    // «Leer siempre a ciegas»: no outlet in the list either, until the vote.
+    final bool hidden = store.hidesOutlets(duel.event.id);
+    Widget preview(EventCoveragePositionDto? position, String version) {
       final ({String text, bool literal}) posture = arenaPostureText(
         duel.event,
         position,
       );
+      final String name = hidden ? version : ArenaDuel.nameOf(position);
       return Padding(
         padding: const EdgeInsets.only(top: 8),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            MediaEmblem(name: ArenaDuel.nameOf(position), size: 24),
+            if (hidden)
+              const Icon(
+                Icons.visibility_off_outlined,
+                size: 24,
+                color: ArenaColors.muted,
+              )
+            else
+              MediaEmblem(name: name, size: 24),
             const SizedBox(width: 8),
             Expanded(
               child: Text.rich(
                 TextSpan(
                   children: <InlineSpan>[
                     TextSpan(
-                      text: '${ArenaDuel.nameOf(position)}: ',
+                      text: '$name: ',
                       style: const TextStyle(fontWeight: FontWeight.w700),
                     ),
                     TextSpan(
@@ -564,8 +574,8 @@ class DuelListCard extends StatelessWidget {
               color: ArenaColors.ink,
             ),
           ),
-          preview(duel.positionA),
-          preview(duel.positionB),
+          preview(duel.positionA, 'Versión A'),
+          preview(duel.positionB, 'Versión B'),
         ],
       ),
     );
@@ -1096,29 +1106,53 @@ class _SourceLinkCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final String? videoId = extractYouTubeVideoId(article.url.toString());
+    // The same card for a video and a written note: a 96-wide leading box
+    // holds the video frame or the outlet's emblem, so a picture never
+    // makes one version weigh more on screen than the other.
     return ArenaCard(
       key: ValueKey<String>('arena-source-link-${article.id}'),
       onTap: onOpen,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          if (videoId != null) ...<Widget>[
-            YouTubeThumbnail(
-              key: ValueKey<String>('arena-source-thumbnail-${article.id}'),
-              videoId: videoId,
-            ),
-            const SizedBox(height: 10),
-          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Semantics(
-                button: onOpenSource != null,
-                label: 'Abrir perfil de ${arenaSourceName(article.sourceName)}',
-                child: InkWell(
-                  customBorder: const CircleBorder(),
-                  onTap: onOpenSource,
-                  child: MediaEmblem(name: article.sourceName, size: 40),
+              SizedBox(
+                width: 96,
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: videoId != null
+                      ? ClipRRect(
+                          borderRadius: BorderRadius.circular(10),
+                          child: YouTubeThumbnail(
+                            key: ValueKey<String>(
+                              'arena-source-thumbnail-${article.id}',
+                            ),
+                            videoId: videoId,
+                          ),
+                        )
+                      : DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEEF0F5),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(
+                            child: Semantics(
+                              button: onOpenSource != null,
+                              label:
+                                  'Abrir perfil de ${arenaSourceName(article.sourceName)}',
+                              child: InkWell(
+                                customBorder: const CircleBorder(),
+                                onTap: onOpenSource,
+                                child: MediaEmblem(
+                                  name: article.sourceName,
+                                  size: 34,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
                 ),
               ),
               const SizedBox(width: 12),

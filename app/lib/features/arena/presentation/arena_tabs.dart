@@ -848,6 +848,28 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                     ],
                     const ArenaSectionTitle('Ajustes'),
                     ArenaCard(
+                      key: const Key('arena-always-blind'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      child: SwitchListTile(
+                        value: store.alwaysBlind,
+                        activeThumbColor: ArenaColors.violet,
+                        onChanged: (bool value) =>
+                            unawaited(store.setAlwaysBlind(value: value)),
+                        title: const Text(
+                          'Leer siempre a ciegas',
+                          style: ArenaText.cardTitle,
+                        ),
+                        subtitle: const Text(
+                          'Los duelos se abren sin los nombres de los medios; '
+                          'los ves al votar.',
+                          style: ArenaText.meta,
+                        ),
+                      ),
+                    ),
+                    ArenaCard(
                       key: const Key('arena-edition'),
                       onTap: () =>
                           unawaited(showArenaCountrySheet(context, store)),
