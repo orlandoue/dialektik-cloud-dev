@@ -1496,3 +1496,47 @@ class ArenaFollowButton extends StatelessWidget {
     );
   }
 }
+
+/// Grey placeholders in the shape of Inicio (the card of the day and two
+/// stories), shown while the first page loads. Announced once to screen
+/// readers instead of reading every block.
+class ArenaSkeleton extends StatelessWidget {
+  const ArenaSkeleton({super.key});
+
+  static Widget _block(double height, {double widthFactor = 1}) =>
+      FractionallySizedBox(
+        alignment: Alignment.centerLeft,
+        widthFactor: widthFactor,
+        child: Container(
+          height: height,
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+            color: ArenaColors.track,
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) => Semantics(
+    label: 'Cargando Inicio',
+    liveRegion: true,
+    child: ExcludeSemantics(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            _block(150),
+            _block(16, widthFactor: 0.8),
+            _block(16, widthFactor: 0.6),
+            const SizedBox(height: 14),
+            _block(16, widthFactor: 0.4),
+            _block(72),
+            _block(72),
+          ],
+        ),
+      ),
+    ),
+  );
+}

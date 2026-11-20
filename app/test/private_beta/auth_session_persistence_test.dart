@@ -286,6 +286,9 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      // Inicio's skeleton does not animate: let Core's retries run out.
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
       expect(find.text('Únete al Coliseo'), findsNothing);
       expect(store.value, isNotNull);
     });
