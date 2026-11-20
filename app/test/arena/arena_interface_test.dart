@@ -38,8 +38,12 @@ void main() {
       final Finder second = find.byKey(const Key('arena-duel-page-1'));
       expect(tester.getSize(first).width, tester.getSize(carousel).width);
       expect(tester.getTopLeft(second).dx, greaterThanOrEqualTo(360 - 16));
-      // Every page is as tall as the tallest card: nothing is clipped.
-      expect(tester.getSize(first).height, tester.getSize(second).height);
+      // The carousel is as tall as the page on screen (no gap under a
+      // shorter card), and that page is not clipped.
+      expect(
+        tester.getSize(carousel).height,
+        closeTo(tester.getSize(first).height, 0.5),
+      );
 
       await tester.drag(carousel, const Offset(-250, 0));
       await tester.pumpAndSettle();
@@ -55,6 +59,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey<String>('arena-duel-dot-4')));
+      await tester.pumpAndSettle();
+      // With large text the carousel scrolled out of view: back to the top.
+      await tester.drag(
+        find.byKey(const Key('arena-coliseo-scroll')),
+        const Offset(0, 3000),
+      );
       await tester.pumpAndSettle();
       expect(
         tester.getTopLeft(find.byKey(const Key('arena-duel-page-4'))).dx,

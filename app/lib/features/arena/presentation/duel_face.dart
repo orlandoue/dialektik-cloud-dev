@@ -252,10 +252,12 @@ class DuelVersionBox extends StatelessWidget {
                         ),
                       ],
                       Padding(
+                        // More room on the side facing the VS bolt, so it
+                        // never covers a word.
                         padding: EdgeInsets.fromLTRB(
-                          10,
+                          first ? 10 : (large ? 24 : 16),
                           large ? (mine ? 34 : 22) : 10,
-                          10,
+                          first ? (large ? 24 : 16) : 10,
                           (mine && !large) || percent != null ? 34 : 12,
                         ),
                         child: Center(

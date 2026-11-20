@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
@@ -14,6 +15,7 @@ import 'package:dialektik/features/live/data/youtube_video.dart';
 import 'package:dialektik/features/social/data/arena_social_repository.dart';
 import 'package:dialektik/features/social/data/social_repository.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 
 String? arenaVideoIdOfEvent(EventDetailDto event) {
   for (final EventCoverageArticleDto article in event.articles) {
@@ -341,6 +343,18 @@ class _DuelCarouselState extends State<DuelCarousel> {
   int _page = 0;
   double _pageWidth = 1;
 
+  /// Natural height of each page, measured after layout.
+  final Map<int, double> _heights = <int, double>{};
+
+  void _measured(int page, double height) {
+    if (_heights[page] == height) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _heights[page] != height) {
+        setState(() => _heights[page] = height);
+      }
+    });
+  }
+
   @override
   void initState() {
     super.initState();
@@ -378,31 +392,50 @@ class _DuelCarouselState extends State<DuelCarousel> {
         LayoutBuilder(
           builder: (BuildContext context, BoxConstraints constraints) {
             _pageWidth = constraints.maxWidth;
-            return SingleChildScrollView(
-              key: const Key('arena-duel-carousel'),
-              controller: _controller,
-              scrollDirection: Axis.horizontal,
-              physics: pages.length > 1
-                  ? const PageScrollPhysics()
-                  : const NeverScrollableScrollPhysics(),
-              child: IntrinsicHeight(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: <Widget>[
-                    for (int i = 0; i < pages.length; i++)
-                      SizedBox(
-                        width: constraints.maxWidth,
-                        child: DuelOfTheDayCard(
-                          key: Key(
-                            i == 0
-                                ? 'arena-duel-of-the-day'
-                                : 'arena-duel-page-$i',
+            // As tall as the page on screen, not the tallest page: a voted
+            // card with its split would otherwise leave a gap under a blind
+            // one and push «Lo que no viste hoy» down.
+            final double? height = _heights[current];
+            return AnimatedSize(
+              duration: MediaQuery.disableAnimationsOf(context)
+                  ? Duration.zero
+                  : const Duration(milliseconds: 200),
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                height: height ?? _heights.values.fold<double>(0, math.max),
+                child: SingleChildScrollView(
+                  key: const Key('arena-duel-carousel'),
+                  controller: _controller,
+                  scrollDirection: Axis.horizontal,
+                  physics: pages.length > 1
+                      ? const PageScrollPhysics()
+                      : const NeverScrollableScrollPhysics(),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      for (int i = 0; i < pages.length; i++)
+                        SizedBox(
+                          width: constraints.maxWidth,
+                          child: OverflowBox(
+                            alignment: Alignment.topCenter,
+                            minHeight: 0,
+                            maxHeight: double.infinity,
+                            child: _SizeReporter(
+                              onSize: (Size size) => _measured(i, size.height),
+                              child: DuelOfTheDayCard(
+                                key: Key(
+                                  i == 0
+                                      ? 'arena-duel-of-the-day'
+                                      : 'arena-duel-page-$i',
+                                ),
+                                duel: pages[i],
+                                store: widget.store,
+                              ),
+                            ),
                           ),
-                          duel: pages[i],
-                          store: widget.store,
                         ),
-                      ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             );
@@ -1883,5 +1916,35 @@ class _VoteSheetState extends State<_VoteSheet> {
         ..._footer(context),
       ],
     );
+  }
+}
+
+/// Reports its child's laid-out size, so the carousel can be as tall as the
+/// page on screen.
+class _SizeReporter extends SingleChildRenderObjectWidget {
+  const _SizeReporter({required this.onSize, required super.child});
+
+  final ValueChanged<Size> onSize;
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderSizeReporter(onSize);
+
+  @override
+  void updateRenderObject(
+    BuildContext context,
+    _RenderSizeReporter renderObject,
+  ) => renderObject.onSize = onSize;
+}
+
+class _RenderSizeReporter extends RenderProxyBox {
+  _RenderSizeReporter(this.onSize);
+
+  ValueChanged<Size> onSize;
+
+  @override
+  void performLayout() {
+    super.performLayout();
+    onSize(size);
   }
 }
