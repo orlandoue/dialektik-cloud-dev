@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:dialektik/core/infrastructure/startup_snapshot_client.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
+import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
 import 'package:dialektik/features/consumer/data/public_api_client.dart';
@@ -194,6 +195,39 @@ final class ArenaStore extends ChangeNotifier {
           : live is ScienceRepository
           ? live as ScienceRepository
           : null);
+
+  /// Stories (several events of one topic) and their moderation.
+  StoryGroupsRepository? get storyRepository =>
+      consumer is StoryGroupsRepository
+      ? consumer as StoryGroupsRepository
+      : live is StoryGroupsRepository
+      ? live as StoryGroupsRepository
+      : null;
+
+  List<StoryGroup> _storyGroups = const <StoryGroup>[];
+  Map<String, StoryGroup> _storyByEvent = const <String, StoryGroup>{};
+
+  /// Approved stories of the last 30 days; empty until Core serves them.
+  List<StoryGroup> get storyGroups => _storyGroups;
+
+  /// The story an event belongs to, if a moderator grouped it.
+  StoryGroup? storyOf(String eventId) => _storyByEvent[eventId];
+
+  Future<void> _loadStoryGroups() async {
+    final StoryGroupsRepository? repository = storyRepository;
+    if (repository == null) return;
+    try {
+      final List<StoryGroup> groups = await repository.storyGroups();
+      _storyGroups = groups;
+      _storyByEvent = <String, StoryGroup>{
+        for (final StoryGroup group in groups)
+          for (final String id in group.eventIds) id: group,
+      };
+      _notify();
+    } on Object {
+      // Without stories every event is shown on its own, as before.
+    }
+  }
 
   /// Moderation calls, for moderator accounts (DIALEKTIK_SCIENCE_MODERATORS).
   ScienceModerationRepository? get moderation {
@@ -462,6 +496,7 @@ final class ArenaStore extends ChangeNotifier {
       _loadSources(refresh: refresh),
       _loadFollowed(),
       _loadVideos(refresh: refresh),
+      _loadStoryGroups(),
     ]);
     try {
       // Inicio paints with the first page of each list; the next pages are

@@ -3,12 +3,14 @@ import 'dart:async';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
+import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/arena/presentation/account_card.dart';
 import 'package:dialektik/features/arena/presentation/arena_home_tab.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
 import 'package:dialektik/features/arena/presentation/media_profile_screen.dart';
+import 'package:dialektik/features/arena/presentation/story_group_card.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/data/story_follow_store.dart';
@@ -150,6 +152,9 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
   /// 0: most recent first; 1: covered by the most outlets first.
   int _order = 0;
 
+  static int _coverage(ArenaStore store, EventCardDto event) =>
+      store.storyOf(event.id)?.sourceCount ?? event.sourceCount;
+
   static const List<(int, String)> _storyOrders = <(int, String)>[
     (0, 'Recientes'),
     (1, 'Más cubiertas'),
@@ -190,7 +195,8 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                   .toList()
                 ..sort(
                   (EventCardDto a, EventCardDto b) => _order == 1
-                      ? b.sourceCount.compareTo(a.sourceCount)
+                      // A story counts every outlet of all its events.
+                      ? _coverage(store, b).compareTo(_coverage(store, a))
                       : b.detectedAt.compareTo(a.detectedAt),
                 );
           final SeismicObservationRepository? seismic = store.seismic;
@@ -291,21 +297,32 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                         const ArenaMessage(
                           'No hay acontecimientos en este tema.',
                         ),
-                      for (final EventCardDto event in events)
-                        DevelopingEventCard(
-                          event: event,
-                          store: store,
-                          note: switch (stories.snapshot(event.id)) {
-                            final StorySnapshot snapshot
-                                when event.sourceCount > snapshot.sourceCount =>
-                              'Novedades: ${event.sourceCount - snapshot.sourceCount} '
-                                  '${event.sourceCount - snapshot.sourceCount == 1 ? 'medio nuevo' : 'medios nuevos'} '
-                                  'desde tu última visita',
-                            StorySnapshot() => 'Sigues esta historia',
-                            null => null,
-                          },
-                          duel: store.duelForEvent(event.id),
-                        ),
+                      for (final Object item in arenaStoryItems(store, events))
+                        if (item case (
+                          story: final StoryGroup story,
+                          members: final List<EventCardDto> members,
+                        ))
+                          StoryGroupCard(
+                            story: story,
+                            members: members,
+                            store: store,
+                          )
+                        else if (item case final EventCardDto event)
+                          DevelopingEventCard(
+                            event: event,
+                            store: store,
+                            note: switch (stories.snapshot(event.id)) {
+                              final StorySnapshot snapshot
+                                  when event.sourceCount >
+                                      snapshot.sourceCount =>
+                                'Novedades: ${event.sourceCount - snapshot.sourceCount} '
+                                    '${event.sourceCount - snapshot.sourceCount == 1 ? 'medio nuevo' : 'medios nuevos'} '
+                                    'desde tu última visita',
+                              StorySnapshot() => 'Sigues esta historia',
+                              null => null,
+                            },
+                            duel: store.duelForEvent(event.id),
+                          ),
                       if (seismic != null) ...<Widget>[
                         const SizedBox(height: 16),
                         DecoratedBox(

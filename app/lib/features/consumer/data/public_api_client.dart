@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
+import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
@@ -57,7 +58,8 @@ final class PublicApiClient
         EphemeralSemanticRepository,
         SemanticGraphRepository,
         ScienceRepository,
-        ScienceModerationRepository {
+        ScienceModerationRepository,
+        StoryGroupsRepository {
   PublicApiClient({
     required ApiConfiguration configuration,
     http.Client? httpClient,
@@ -259,6 +261,18 @@ final class PublicApiClient
   @override
   Future<List<PollDecision>> pollDecisions() => _get<List<PollDecision>>('/v1/science/moderation/poll-decisions',
     decoder: PollDecision.listFromJson, refresh: true, requestToken: null);
+
+  // ---- Stories (several events of one developing topic) ----
+  @override
+  Future<List<StoryGroup>> storyGroups() => _get<List<StoryGroup>>('/v1/story-groups',
+    decoder: StoryGroup.listFromJson, refresh: false, requestToken: null);
+  @override
+  Future<List<StoryProposal>> storyProposals() => _get<List<StoryProposal>>('/v1/moderation/story-groups',
+    decoder: StoryProposal.listFromJson, refresh: true, requestToken: null);
+  @override
+  Future<void> decideStoryProposal(String proposalId, {required bool approve, String? title}) =>
+    _postJson('/v1/moderation/story-groups/${Uri.encodeComponent(proposalId)}',
+      {'decision': approve ? 'approve' : 'reject', 'title': ?title}, (_) {});
 
   Future<T> _postJson<T>(String path, Map<String,Object?> body, JsonDecoder<T> decoder, {String method = 'POST'}) async {
     final token = await authorizationTokenProvider?.call();
