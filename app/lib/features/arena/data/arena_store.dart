@@ -243,6 +243,14 @@ final class ArenaStore extends ChangeNotifier {
     }
   }
 
+  /// The queue of link contributions, for moderator accounts.
+  CommunityModerationRepository? get communityModeration =>
+      consumer is CommunityModerationRepository
+      ? consumer as CommunityModerationRepository
+      : live is CommunityModerationRepository
+      ? live as CommunityModerationRepository
+      : null;
+
   /// Moderation calls, for moderator accounts (DIALEKTIK_SCIENCE_MODERATORS).
   ScienceModerationRepository? get moderation {
     final Object? source = science;

@@ -6,6 +6,7 @@ import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
+import 'package:dialektik/features/consumer/data/public_api_failure.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
 import 'package:dialektik/features/consumer/presentation/widgets/share_synthesis.dart';
 import 'package:dialektik/features/live/data/youtube_video.dart';
@@ -765,6 +766,15 @@ class _DuelScreenState extends State<DuelScreen> {
           ),
         ),
       const SizedBox(height: 4),
+      // The case's community is one tap away, not hidden in the vote sheet.
+      OutlinedButton.icon(
+        key: const Key('arena-open-community'),
+        onPressed: () => openArenaCommunity(context, store, event),
+        style: arenaSecondaryButtonStyle(),
+        icon: const Icon(Icons.forum_outlined),
+        label: const Text('Comunidad del caso'),
+      ),
+      const SizedBox(height: 8),
       OutlinedButton.icon(
         key: const Key('arena-add-evidence'),
         onPressed: () => showArenaContributionSheet(context, store, event),
@@ -1304,6 +1314,33 @@ class _ContributionSheetState extends State<_ContributionSheet> {
   String? _error;
   bool _sending = false;
 
+  /// The version the link is about: a position id, or the whole case.
+  ({bool chosen, String? positionId}) _version = (
+    chosen: false,
+    positionId: null,
+  );
+  EntryStance? _stance;
+
+  /// Versions as this reader sees them («Versión A» is drawn per reader).
+  List<({String? id, String label})> get _versions {
+    final ArenaDuel? duel = widget.store.duelForEvent(widget.event.id);
+    final bool hidden =
+        duel != null && widget.store.hidesOutlets(widget.event.id);
+    return <({String? id, String label})>[
+      if (duel != null) ...<({String? id, String label})>[
+        (
+          id: duel.idA,
+          label: hidden ? 'Versión A' : 'Versión A · ${duel.nameA}',
+        ),
+        (
+          id: duel.idB,
+          label: hidden ? 'Versión B' : 'Versión B · ${duel.nameB}',
+        ),
+      ],
+      (id: null, label: 'El caso en general'),
+    ];
+  }
+
   @override
   void dispose() {
     _link.dispose();
@@ -1323,6 +1360,12 @@ class _ContributionSheetState extends State<_ContributionSheet> {
       );
       return;
     }
+    if (!_version.chosen || _stance == null) {
+      setState(
+        () => _error = 'Elige a qué versión se refiere y qué hace el enlace.',
+      );
+      return;
+    }
     if (note.isEmpty) {
       setState(() => _error = 'Explica en una línea qué respalda este enlace.');
       return;
@@ -1337,22 +1380,30 @@ class _ContributionSheetState extends State<_ContributionSheet> {
       _error = null;
     });
     try {
-      widget.store.rememberCommunity(
+      final List<CommunityEntry> entries = await arena.addCommunityEntry(
         widget.event.id,
-        await arena.addCommunityEntry(
-          widget.event.id,
-          channel: CommunityChannel.aporte,
-          body: note,
-          link: uri,
-          alias: widget.store.alias,
-        ),
+        channel: CommunityChannel.aporte,
+        body: note,
+        link: uri,
+        alias: widget.store.alias,
+        positionId: _version.positionId,
+        stance: _stance,
       );
+      widget.store.rememberCommunity(widget.event.id, entries);
+      final bool inReview = entries
+          .where((CommunityEntry e) => e.mine)
+          .any((CommunityEntry e) => e.inReview && e.body == note);
       if (!mounted) return;
       Navigator.of(context).pop();
       if (widget.hostContext.mounted) {
         ScaffoldMessenger.of(widget.hostContext).showSnackBar(
           SnackBar(
-            content: const Text('Tu aporte quedó publicado en la comunidad.'),
+            content: Text(
+              inReview
+                  ? 'Tu aporte quedó en revisión: se publica cuando un '
+                        'moderador lo apruebe.'
+                  : 'Tu aporte quedó publicado en la comunidad.',
+            ),
             action: SnackBarAction(
               label: 'Ver',
               onPressed: () => openArenaCommunity(
@@ -1362,6 +1413,15 @@ class _ContributionSheetState extends State<_ContributionSheet> {
               ),
             ),
           ),
+        );
+      }
+    } on PublicApiFailure catch (failure) {
+      if (mounted) {
+        setState(
+          () => _error = failure.kind == PublicFailureKind.rateLimited
+              ? 'Llegaste a los 3 aportes con enlace de hoy. Vuelve mañana.'
+              : 'El servidor todavía no acepta enlaces externos. Puedes '
+                    'adjuntar una publicación del caso desde la comunidad.',
         );
       }
     } on Exception {
@@ -1393,9 +1453,45 @@ class _ContributionSheetState extends State<_ContributionSheet> {
           const Text('Aportar una fuente', style: ArenaText.section),
           const SizedBox(height: 4),
           const Text(
-            'Suma un enlace o documento que respalde o contradiga una de las '
-            'versiones.',
+            'Suma un enlace que respalde o contradiga una de las versiones, '
+            'o que dé contexto al caso.',
             style: ArenaText.meta,
+          ),
+          const SizedBox(height: 12),
+          const Text('¿A qué se refiere?', style: ArenaText.cardTitle),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              for (final ({String? id, String label}) v in _versions)
+                ArenaPill(
+                  key: ValueKey<String>(
+                    'arena-evidence-version-${v.id ?? 'case'}',
+                  ),
+                  label: v.label,
+                  selected: _version.chosen && _version.positionId == v.id,
+                  onTap: () => setState(
+                    () => _version = (chosen: true, positionId: v.id),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          const Text('¿Qué hace el enlace?', style: ArenaText.cardTitle),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              for (final EntryStance stance in EntryStance.values)
+                ArenaPill(
+                  key: ValueKey<String>('arena-evidence-stance-${stance.wire}'),
+                  label: stance.label,
+                  selected: _stance == stance,
+                  onTap: () => setState(() => _stance = stance),
+                ),
+            ],
           ),
           const SizedBox(height: 12),
           TextField(

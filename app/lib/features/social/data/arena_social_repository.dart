@@ -56,6 +56,9 @@ class CommunityEntry {
     this.downvotes = 0,
     this.myVote,
     this.mine = false,
+    this.positionId,
+    this.stance,
+    this.inReview = false,
   });
 
   factory CommunityEntry.fromJson(Map<String, dynamic> json) => CommunityEntry(
@@ -70,6 +73,9 @@ class CommunityEntry {
     downvotes: json['downvotes'] as int,
     myVote: json['my_vote'] as int?,
     mine: json['mine'] as bool? ?? false,
+    positionId: json['position_id'] as String?,
+    stance: EntryStance.parse(json['stance'] as String?),
+    inReview: json['status'] == 'in_review',
   );
 
   static List<CommunityEntry> listFromJson(Object? value) => <CommunityEntry>[
@@ -93,7 +99,72 @@ class CommunityEntry {
   final int? myVote;
   final bool mine;
 
+  /// The version (position) it is about; null: the case as a whole.
+  final String? positionId;
+  final EntryStance? stance;
+
+  /// Waiting for a moderator; only its author sees it.
+  final bool inReview;
+
   bool get hasLink => url != null && url!.hasScheme && url!.host.isNotEmpty;
+}
+
+/// What a contributed link does for the version it is about.
+enum EntryStance {
+  supports('supports', 'Respalda'),
+  contradicts('contradicts', 'Contradice'),
+  context('context', 'Da contexto');
+
+  const EntryStance(this.wire, this.label);
+  final String wire;
+  final String label;
+
+  static EntryStance? parse(String? value) =>
+      EntryStance.values.where((EntryStance s) => s.wire == value).firstOrNull;
+}
+
+/// A link contribution waiting for a moderator.
+final class ReviewEntry {
+  const ReviewEntry({
+    required this.id,
+    required this.eventTitle,
+    required this.author,
+    required this.body,
+    this.url,
+    this.positionTitle,
+    this.stance,
+  });
+
+  factory ReviewEntry.fromJson(Map<String, dynamic> json) => ReviewEntry(
+    id: json['id']! as String,
+    eventTitle: json['event_title'] as String? ?? '',
+    author: json['author'] as String? ?? '',
+    body: json['body'] as String? ?? '',
+    url: Uri.tryParse(json['url'] as String? ?? ''),
+    positionTitle: json['position_title'] as String?,
+    stance: EntryStance.parse(json['stance'] as String?),
+  );
+
+  static List<ReviewEntry> listFromJson(Object? value) => <ReviewEntry>[
+    for (final Object? item
+        in ((value! as Map<String, dynamic>)['entries'] as List<dynamic>?) ??
+            const <Object?>[])
+      ReviewEntry.fromJson(item! as Map<String, dynamic>),
+  ];
+
+  final String id;
+  final String eventTitle;
+  final String author;
+  final String body;
+  final Uri? url;
+  final String? positionTitle;
+  final EntryStance? stance;
+}
+
+/// The moderator's queue of link contributions.
+abstract interface class CommunityModerationRepository {
+  Future<List<ReviewEntry>> communityReviewQueue();
+  Future<void> reviewCommunityEntry(String entryId, {required bool approve});
 }
 
 /// Posture votes and the three community channels served by Core.
@@ -110,6 +181,10 @@ abstract interface class ArenaSocialRepository {
 
     /// Public alias; Core derives a pseudonym when it is null.
     String? alias,
+
+    /// The version it is about (a position id), and what the link does.
+    String? positionId,
+    EntryStance? stance,
   });
   Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote);
 }

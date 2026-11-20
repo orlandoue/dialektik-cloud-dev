@@ -471,6 +471,8 @@ class ArenaFullCore extends ArenaFakeCore implements ArenaSocialRepository {
     String? articleId,
     Uri? link,
     String? alias,
+    String? positionId,
+    EntryStance? stance,
   }) async {
     aliases.add(alias);
     entries = <CommunityEntry>[
@@ -480,6 +482,8 @@ class ArenaFullCore extends ArenaFakeCore implements ArenaSocialRepository {
         author: 'Lector-AB12',
         body: body,
         articleId: articleId,
+        positionId: positionId,
+        stance: stance,
         url:
             link ??
             (articleId == null
