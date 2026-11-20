@@ -156,15 +156,15 @@ void main() {
 
         await reveal(
           tester,
-          find.byKey(const ValueKey<String>('arena-subtab-Análisis IA')),
+          find.byKey(const ValueKey<String>('arena-subtab-Qué significa')),
           'arena-duel-scroll',
         );
         await tester.ensureVisible(
-          find.byKey(const ValueKey<String>('arena-subtab-Análisis IA')),
+          find.byKey(const ValueKey<String>('arena-subtab-Qué significa')),
         );
         await tester.pumpAndSettle();
         await tester.tap(
-          find.byKey(const ValueKey<String>('arena-subtab-Análisis IA')),
+          find.byKey(const ValueKey<String>('arena-subtab-Qué significa')),
         );
         await tester.pumpAndSettle();
         await reveal(

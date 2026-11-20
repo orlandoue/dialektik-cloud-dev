@@ -84,10 +84,11 @@ String? sanitizeAlias(String? raw) {
 /// the part of the email before `@`.
 /// The public name of a reader. Never derived from the e-mail address: a
 /// reader without an alias gets a stable «Lector-NNNN» instead.
+/// The public signature: the alias the reader chose, else «Lector-NNNN».
+/// Never the account's real name, which would sign every vote and comment
+/// with name and surname.
 String aliasFor(SupabaseAuthUser? user) =>
-    sanitizeAlias(user?.alias) ??
-    sanitizeAlias(user?.displayName) ??
-    readerAliasFor(user?.email);
+    sanitizeAlias(user?.alias) ?? readerAliasFor(user?.email);
 
 /// «Lector-NNNN», stable for one e-mail without revealing it.
 String readerAliasFor(String? seed) {
