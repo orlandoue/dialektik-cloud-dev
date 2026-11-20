@@ -38,10 +38,19 @@ void main() {
       final Finder second = find.byKey(const Key('arena-duel-page-1'));
       expect(tester.getSize(first).width, tester.getSize(carousel).width);
       expect(tester.getTopLeft(second).dx, greaterThanOrEqualTo(360 - 16));
-      // Every page is as tall as the tallest card: nothing is clipped.
-      expect(tester.getSize(first).height, tester.getSize(second).height);
+      // The carousel is as tall as the page on screen (no gap under a
+      // shorter card), and that page is not clipped.
+      expect(
+        tester.getSize(carousel).height,
+        closeTo(tester.getSize(first).height, 0.5),
+      );
 
-      await tester.drag(carousel, const Offset(-250, 0));
+      // Drag near the top of the card: with large text its middle can be
+      // below the fold.
+      await tester.dragFrom(
+        tester.getTopLeft(carousel) + const Offset(200, 40),
+        const Offset(-250, 0),
+      );
       await tester.pumpAndSettle();
       // The page snapped: the second duel now sits where the first was.
       expect(tester.getTopLeft(second).dx, closeTo(16, 0.5));
@@ -55,6 +64,12 @@ void main() {
       );
       await tester.pumpAndSettle();
       await tester.tap(find.byKey(const ValueKey<String>('arena-duel-dot-4')));
+      await tester.pumpAndSettle();
+      // With large text the carousel scrolled out of view: back to the top.
+      await tester.drag(
+        find.byKey(const Key('arena-coliseo-scroll')),
+        const Offset(0, 3000),
+      );
       await tester.pumpAndSettle();
       expect(
         tester.getTopLeft(find.byKey(const Key('arena-duel-page-4'))).dx,
@@ -134,6 +149,8 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text(ArenaManyDuelsCore.titleOf(1)));
+    await tester.pumpAndSettle();
     await tester.tap(find.text(ArenaManyDuelsCore.titleOf(1)));
     await tester.pumpAndSettle();
     expect(

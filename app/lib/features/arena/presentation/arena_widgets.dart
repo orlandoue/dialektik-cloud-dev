@@ -735,7 +735,11 @@ class ArenaCover extends StatelessWidget {
 /// split stays hidden until the reader votes and while there are fewer than
 /// [minimumOpinionsForSplit] opinions, and both sides use neutral greys of
 /// the same weight so no colour, length or order reads as a winner.
-const int minimumOpinionsForSplit = 30;
+const int minimumOpinionsForSplit = 1;
+
+/// Below this many opinions the split is shown with a note that it can
+/// still change a lot (in the beta the split starts at the first vote).
+const int stableSplitOpinions = 30;
 
 const String _opinionTitle = 'Opinión de la comunidad';
 const String _opinionDisclaimer =

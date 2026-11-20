@@ -146,23 +146,16 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(core.positionVoteCalls, <String?>[positionBId]);
-      expect(find.text('✓ BioBioChile'), findsOneWidget);
-      // Four opinions are still too few for a split.
-      expect(
-        find.text(
-          'Aún hay pocas opiniones (4 opiniones). El reparto se muestra desde '
-          '30.',
-        ),
-        findsWidgets,
-      );
-      expect(find.textContaining('50%'), findsNothing);
+      expect(find.textContaining('✓ BioBioChile'), findsOneWidget);
+      // In the beta the split shows from the first vote, once voted.
+      expect(find.textContaining('50%'), findsWidgets);
       // Tapping the chosen side again withdraws the vote.
       await tester.tap(
         find.byKey(const ValueKey<String>('arena-vote-position-$positionBId')),
       );
       await tester.pumpAndSettle();
       expect(core.positionVoteCalls, <String?>[positionBId, null]);
-      expect(find.text('✓ BioBioChile'), findsNothing);
+      expect(find.textContaining('✓ BioBioChile'), findsNothing);
       expect(tester.takeException(), isNull);
     },
   );
