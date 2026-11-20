@@ -437,27 +437,60 @@ class DuelSplitBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final PositionVotes? votes = store.cachedPositionVotes(duel.event.id);
-    if (votes?.mine == null) return const SizedBox.shrink();
-    final int total = votes!.total;
-    if (total < minimumOpinionsForSplit) {
+    final int total = votes?.total ?? 0;
+    // Before the vote: an even grey bar without numbers. It is room for the
+    // reader's opinion, not a result, so nobody follows the crowd.
+    if (votes?.mine == null) {
       return Padding(
-        padding: const EdgeInsets.only(top: 10),
-        child: Text(
-          'Aún hay pocas opiniones (${arenaOpinionCount(total)}). El reparto '
-          'se muestra desde $minimumOpinionsForSplit.',
-          textAlign: TextAlign.center,
-          style: ArenaText.meta,
+        key: const Key('arena-split-empty'),
+        padding: const EdgeInsets.only(top: 12),
+        child: Column(
+          children: <Widget>[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(999),
+              child: SizedBox(
+                height: 22,
+                child: Row(
+                  children: <Widget>[
+                    const Expanded(
+                      child: ColoredBox(
+                        color: Color(0xFFD9DCE6),
+                        child: SizedBox.expand(),
+                      ),
+                    ),
+                    Container(width: 2, color: Colors.white),
+                    const Expanded(
+                      child: ColoredBox(
+                        color: Color(0xFFD9DCE6),
+                        child: SizedBox.expand(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              total == 0
+                  ? 'Aún no hay votos · sé la primera persona en opinar'
+                  : '$total ${total == 1 ? 'voto' : 'votos'} · vota para '
+                        'ver cómo opina la comunidad',
+              textAlign: TextAlign.center,
+              style: ArenaText.meta,
+            ),
+          ],
         ),
       );
     }
-    final int shareA = (votes.votesFor(duel.idA) * 100 / total).round();
+    final int shareA = (votes!.votesFor(duel.idA) * 100 / total).round();
     Widget part(int share, Color color) => Expanded(
       flex: math.max(1, share),
       child: ColoredBox(
         color: color,
         child: Center(
           child: Text(
-            '$share%',
+            // A sliver of a side has no room for its number.
+            share < 12 ? '' : '$share%',
             style: const TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w800,
@@ -487,7 +520,8 @@ class DuelSplitBar extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             'Opinión de la comunidad · $total ${total == 1 ? 'voto' : 'votos'} '
-            '(no indica qué versión es correcta)',
+            '(no indica qué versión es correcta)'
+            '${total < stableSplitOpinions ? ' · pocas opiniones, puede cambiar mucho' : ''}',
             textAlign: TextAlign.center,
             style: ArenaText.meta,
           ),

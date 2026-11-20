@@ -45,7 +45,12 @@ void main() {
         closeTo(tester.getSize(first).height, 0.5),
       );
 
-      await tester.drag(carousel, const Offset(-250, 0));
+      // Drag near the top of the card: with large text its middle can be
+      // below the fold.
+      await tester.dragFrom(
+        tester.getTopLeft(carousel) + const Offset(200, 40),
+        const Offset(-250, 0),
+      );
       await tester.pumpAndSettle();
       // The page snapped: the second duel now sits where the first was.
       expect(tester.getTopLeft(second).dx, closeTo(16, 0.5));
@@ -144,6 +149,8 @@ void main() {
     await tester.pageBack();
     await tester.pumpAndSettle();
 
+    await tester.ensureVisible(find.text(ArenaManyDuelsCore.titleOf(1)));
+    await tester.pumpAndSettle();
     await tester.tap(find.text(ArenaManyDuelsCore.titleOf(1)));
     await tester.pumpAndSettle();
     expect(

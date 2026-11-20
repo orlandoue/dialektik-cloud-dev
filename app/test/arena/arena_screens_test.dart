@@ -290,15 +290,16 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('arena-vote-SOLID')));
     await tester.pumpAndSettle();
     expect(core.reactions, <String>['SOLID']);
-    // Four opinions are too few to show a split.
+    // In the beta the split shows from the first opinion.
     expect(
       find.text(
         'Aún hay pocas opiniones (4 opiniones). El reparto se muestra desde '
         '30.',
       ),
-      findsWidgets,
+      findsNothing,
     );
-    expect(find.textContaining('75%'), findsNothing);
+    // After the vote the split shows, even with few opinions (beta).
+    expect(find.textContaining('75%'), findsWidgets);
     expect(find.text('✓ Tiene respaldo sólido'), findsOneWidget);
     expect(find.text('Abrir comunidad del caso'), findsOneWidget);
     expect(find.text('Crear tarjeta para X y WhatsApp'), findsOneWidget);
