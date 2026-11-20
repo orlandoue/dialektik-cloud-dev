@@ -23,6 +23,7 @@ export { duelPollRetroactiveSql } from './migration/098_duel_poll_retroactive';
 export { liveItemSightingsSql } from './migration/099_live_item_sightings';
 export { liveVersionsByPublishedSql } from './migration/100_live_versions_by_published';
 export { readerAliasPseudonymSql } from './migration/101_reader_alias_pseudonym';
+export { storyGroupsSql } from './migration/102_story_groups';
 export * from './migration/migrator';
 export * from './safety/state-dimension-checker';
 export * from './transaction';

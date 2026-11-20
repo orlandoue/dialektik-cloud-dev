@@ -123,6 +123,11 @@ export class SharedReadCache<T> {
     this.#timer = undefined;
   }
 
+  /** Forgets a copy so the next reader reads it again (after a write). */
+  invalidate(key: string): void {
+    this.#entries.delete(key);
+  }
+
   get size(): number {
     return this.#entries.size;
   }

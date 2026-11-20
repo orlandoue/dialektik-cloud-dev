@@ -14,10 +14,12 @@ import { SocialService } from './social.service.js';
 import { ScienceController } from '../science/science.controller.js';
 import { ScienceService } from '../science/science.service.js';
 import { SourceProfilesMonitor } from './source-profiles.js';
+import { StoryGroupsController } from '../stories/story-groups.controller.js';
+import { StoryGroupsService } from '../stories/story-groups.service.js';
 
 @Module({
   imports: [PrivateBetaAuthModule],
-  controllers: [FollowedSourcesController, PublicApiController, SocialController, SocialArenaController, ScienceController],
-  providers: [SourceProfilesMonitor, PublicApiRepository, PublicApiService, PublicRateLimitService, FollowedSourcesService, SocialService, SocialArenaService, ScienceService],
+  controllers: [FollowedSourcesController, PublicApiController, SocialController, SocialArenaController, ScienceController, StoryGroupsController],
+  providers: [SourceProfilesMonitor, PublicApiRepository, PublicApiService, PublicRateLimitService, FollowedSourcesService, SocialService, SocialArenaService, ScienceService, StoryGroupsService],
 })
 export class PublicApiModule {}
