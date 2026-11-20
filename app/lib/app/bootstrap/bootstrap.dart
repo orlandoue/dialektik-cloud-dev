@@ -2,12 +2,14 @@ import 'package:app_links/app_links.dart';
 import 'package:dialektik/app/dialektik_app.dart';
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
+import 'package:dialektik/core/infrastructure/startup_snapshot_client.dart';
 import 'package:dialektik/features/consumer/presentation/navigation/consumer_routes.dart';
 import 'package:dialektik/features/private_beta/data/auth_session_store.dart';
 import 'package:dialektik/features/private_beta/presentation/private_beta_gate.dart';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, kIsWeb, kReleaseMode, TargetPlatform;
 import 'package:flutter/widgets.dart';
+import 'package:http/http.dart' as http;
 
 /// Android release artifacts always require the private-beta sign-in gate,
 /// even when a build accidentally omits the environment define.
@@ -122,6 +124,8 @@ void bootstrap() {
     runApp(
       PrivateBetaGate(
         apiConfiguration: ApiConfiguration.forEnvironment(environment),
+        // Inicio opens on the copy saved on the phone while Core wakes up.
+        apiHttpClient: StartupSnapshotClient(inner: http.Client()),
         supabaseUrl: supabaseUrl,
         publishableKey: publishableKey,
         initialRoute: initialRoute,

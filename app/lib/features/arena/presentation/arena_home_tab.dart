@@ -263,12 +263,8 @@ class _Coliseo extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
           children: <Widget>[
             if (store.loading && !store.loaded)
-              const Padding(
-                padding: EdgeInsets.all(32),
-                child: Center(
-                  child: CircularProgressIndicator(color: ArenaColors.violet),
-                ),
-              )
+              // The shape of Inicio while it loads, not a lone spinner.
+              const ArenaSkeleton(key: Key('arena-coliseo-skeleton'))
             else if (store.error != null && store.events.isEmpty)
               ArenaMessage(
                 'No se pudo cargar el Coliseo.',

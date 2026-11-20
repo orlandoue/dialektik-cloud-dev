@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dialektik/core/infrastructure/startup_snapshot_client.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
@@ -116,6 +117,13 @@ final class ArenaStore extends ChangeNotifier {
     following?.followingChanges.addListener(_followsChanged);
     _country = market?.value ?? 'CL';
     market?.addListener(_marketChanged);
+    startupSnapshotFreshness.addListener(_snapshotRefreshed);
+  }
+
+  /// Inicio was painted from the copy saved on the phone; the fresh answer
+  /// is here, so load again (now from the network, without a spinner).
+  void _snapshotRefreshed() {
+    if (!_disposed) unawaited(load());
   }
 
   /// Selected country (CL, ES, AR, US); shared with the API client, which
@@ -777,6 +785,7 @@ final class ArenaStore extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    startupSnapshotFreshness.removeListener(_snapshotRefreshed);
     following?.followingChanges.removeListener(_followsChanged);
     market?.removeListener(_marketChanged);
     super.dispose();
