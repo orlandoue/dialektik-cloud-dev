@@ -17,13 +17,15 @@ export const storyGroupsSql = String.raw`
 create table if not exists public.story_groups (
   id uuid primary key default gen_random_uuid(),
   title text not null check (char_length(btrim(title)) between 3 and 140),
-  cover_event_id dialektik_ulid references public.public_events(id),
+  -- Plain ids: public_events has no unique key to reference in every
+  -- deployment; Core only takes them from public_events.
+  cover_event_id dialektik_ulid,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   decided_by uuid not null
 );
 create table if not exists public.story_group_events (
-  event_id dialektik_ulid primary key references public.public_events(id),
+  event_id dialektik_ulid primary key,
   group_id uuid not null references public.story_groups(id) on delete cascade,
   added_at timestamptz not null default now()
 );
