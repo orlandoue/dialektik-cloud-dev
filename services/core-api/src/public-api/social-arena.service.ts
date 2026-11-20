@@ -372,6 +372,31 @@ export class SocialArenaService implements OnModuleInit {
     });
   }
 
+  /**
+   * Published comments of each case (community entries, earlier evidence
+   * comments and story comments), for the comment count of the duel cards.
+   * Entries in review or rejected are not counted.
+   */
+  async commentCounts(eventIds: readonly string[]): Promise<Record<string, number>> {
+    if (eventIds.length === 0) return {};
+    return this.#guarded(() => this.db.database.transaction().execute(async tx => {
+      // Once migration 103 adds a review state, only published entries count.
+      const review = (await sql<{ ok: boolean }>`select exists (select 1 from information_schema.columns
+        where table_schema = 'public' and table_name = 'social_community_entries' and column_name = 'status') as ok`
+        .execute(tx)).rows[0]?.ok === true;
+      const stories = await sql<{ ok: boolean }>`select to_regclass('public.story_comments') is not null as ok`.execute(tx);
+      const rows = await sql<{ event_id: string; n: number }>`
+        select id as event_id, (
+          (select count(*) from public.social_community_entries c where c.event_id = e.id
+            and ${review ? sql`c.status = 'published'` : sql`true`})
+          + (select count(*) from public.social_evidence_comments l where l.event_id = e.id)
+          ${stories.rows[0]?.ok ? sql`+ (select count(*) from public.story_comments s where s.event_id = e.id and s.status = 'published')` : sql``}
+        )::int as n
+        from (select unnest(${[...eventIds]}::text[]) as id) e`.execute(tx);
+      return Object.fromEntries(rows.rows.map((row) => [row.event_id, row.n]));
+    }));
+  }
+
   /** Shared usefulness vote; returns the event whose listing changed. */
   async voteEntry(userId: string, entryId: string, vote: 1 | -1 | null): Promise<string> {
     return this.#write(userId, async tx => {

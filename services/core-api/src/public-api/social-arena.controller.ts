@@ -73,6 +73,19 @@ export class SocialArenaController {
     return this.arena.community(betaUserId(request), parseUlidParameter(eventId));
   }
 
+  /** Published comments per case, for up to 50 duel cards at once. */
+  @Get('comment-counts')
+  async commentCounts(@Req() request: FastifyRequest, @Query('event_ids') eventIds: unknown,
+    @Res({ passthrough: true }) reply: FastifyReply) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    betaUserId(request);
+    if (typeof eventIds !== 'string' || eventIds.trim() === '') throw new BadRequestException('Specify the events.');
+    const ids = [...new Set(eventIds.split(',').map((id) => id.trim()).filter((id) => id !== ''))];
+    if (ids.length > 50) throw new BadRequestException('At most 50 events.');
+    void reply.header('cache-control', 'private, max-age=60');
+    return { counts: await this.arena.commentCounts(ids.map((id) => parseUlidParameter(id))) };
+  }
+
   @Post('community')
   async addEntry(@Req() request: FastifyRequest, @Body() body: unknown) {
     this.rateLimit.assertAllowed(rateLimitClient(request));
