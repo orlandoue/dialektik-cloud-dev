@@ -33,9 +33,13 @@ export function sanitizeAlias(raw: string | null | undefined): string | null {
   return clipped.length >= 2 ? clipped : null;
 }
 
-/** The reader's public name from the profile; the client cannot choose it. */
+/**
+ * The reader's public name from the profile; the client cannot choose it.
+ * Only an alias the reader chose; never the account's real name
+ * (display_name), which would sign every comment with name and surname.
+ */
 export function profileAlias(row: { alias: string | null; display_name: string | null; reader_number: number | null } | undefined): string {
-  return sanitizeAlias(row?.alias) ?? sanitizeAlias(row?.display_name)
+  return sanitizeAlias(row?.alias)
     ?? (row?.reader_number == null ? 'Lector' : `Lector-${row.reader_number}`);
 }
 

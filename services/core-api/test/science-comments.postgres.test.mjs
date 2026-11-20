@@ -16,6 +16,7 @@ import { scienceModerationSql } from '../../../packages/database/dist/migration/
 import { scienceReportPrivacySql } from '../../../packages/database/dist/migration/094_science_report_privacy.js';
 import { scienceStudyReviewSql } from '../../../packages/database/dist/migration/095_science_study_review.js';
 import { scienceTopicsSql } from '../../../packages/database/dist/migration/096_science_topics.js';
+import { readerAliasPseudonymSql } from '../../../packages/database/dist/migration/101_reader_alias_pseudonym.js';
 
 const ownerUrl = process.env.SCIENCE_TEST_DATABASE_URL;
 if (!ownerUrl && process.env.CI) throw new Error('CI must provide SCIENCE_TEST_DATABASE_URL: row security is not checked otherwise.');
@@ -303,4 +304,34 @@ test('a moderator only resolves a report: reporter, comment and reason cannot ch
     await owner.query('delete from public.story_comment_reports');
     await owner.query('delete from public.story_comments where id = $1', [commentId]);
   }
+});
+
+test('101: comments signed with the account\'s real name become «Lector-NNNN»; chosen aliases stay', { skip }, async () => {
+  const named = '55555555-5555-4555-8555-555555555555';
+  await owner.query(`insert into auth.users values ($1, now() - interval '10 days', 'ana@example.cl',
+    '{"full_name":"Ana María (Pérez) Soto"}')`, [named]);
+  const add = (user, alias) => owner.query(`insert into public.story_comments(event_id,user_id,kind,status,author_alias,body)
+    values ('event1', $1, 'normal', 'published', $2, 'Texto') returning id`, [user, alias]).then((r) => r.rows[0].id);
+  const raw = await add(named, 'Ana María (Pérez) Soto');
+  const cleaned = await add(named, 'Ana María Pérez Soto');
+  const chosen = await add(named, 'Anita');
+  const other = await add(reader, 'Lectora');
+  await owner.query(readerAliasPseudonymSql);
+  await owner.query(readerAliasPseudonymSql); // idempotent
+  const number = (await owner.query('select reader_number from public.dialektik_reader_profile($1)', [named])).rows[0].reader_number;
+  const alias = async (id) => (await owner.query('select author_alias from public.story_comments where id = $1', [id])).rows[0].author_alias;
+  assert.equal(await alias(raw), `Lector-${number}`);
+  assert.equal(await alias(cleaned), `Lector-${number}`);
+  assert.equal(await alias(chosen), 'Anita');
+  assert.equal(await alias(other), 'Lectora');
+  const left = await owner.query(`select count(*)::int as n from pg_policies where policyname like 'reader_alias_retro%'`);
+  assert.equal(left.rows[0].n, 0, 'the temporary policies are gone');
+  await owner.query('delete from public.story_comments where id = any($1::uuid[])', [[raw, cleaned, chosen, other]]);
+});
+
+test('the public name never falls back to the account\'s real name', async () => {
+  const { profileAlias } = await import('../dist/science/science.service.js');
+  assert.equal(profileAlias({ alias: null, display_name: 'Ana María Pérez', reader_number: 4321 }), 'Lector-4321');
+  assert.equal(profileAlias({ alias: 'Anita', display_name: 'Ana María Pérez', reader_number: 4321 }), 'Anita');
+  assert.equal(profileAlias({ alias: null, display_name: 'Ana', reader_number: null }), 'Lector');
 });
