@@ -110,7 +110,7 @@ void main() {
 
         // The card shows the two versions without their outlets.
         expect(
-          find.descendant(of: duel, matching: find.text('Versión A')),
+          find.descendant(of: duel, matching: find.text('VERSIÓN A')),
           findsOneWidget,
         );
         expect(

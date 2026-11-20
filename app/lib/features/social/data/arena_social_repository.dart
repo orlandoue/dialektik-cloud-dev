@@ -187,4 +187,7 @@ abstract interface class ArenaSocialRepository {
     EntryStance? stance,
   });
   Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote);
+
+  /// Published comments per case, for the duel cards (one request).
+  Future<Map<String, int>> commentCounts(List<String> eventIds);
 }

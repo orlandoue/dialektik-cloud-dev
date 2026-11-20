@@ -1,6 +1,7 @@
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/presentation/arena_shell.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
+import 'package:dialektik/features/arena/presentation/duel_face.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -94,7 +95,7 @@ void main() {
       // The clash itself, without its outlets: they are revealed in the duel.
       for (final String version in <String>['Versión A', 'Versión B']) {
         expect(
-          find.descendant(of: duel, matching: find.text(version)),
+          find.descendant(of: duel, matching: find.text(version.toUpperCase())),
           findsOneWidget,
         );
       }
@@ -194,7 +195,8 @@ void main() {
     // The list says whether the reader voted and previews both quotes.
     // Nothing before a vote: no «Pendiente», no «Ya opinaste».
     expect(find.text('Pendiente'), findsNothing);
-    expect(find.textContaining('Distinto enfoque'), findsOneWidget);
+    // The kind pill of the card (the filter chips also name the kinds).
+    expect(find.byType(DuelKindPill), findsOneWidget);
     await tester.tap(find.text(duelTitle));
     await tester.pumpAndSettle();
 

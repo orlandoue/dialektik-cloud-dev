@@ -4,6 +4,7 @@ import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
+import 'package:dialektik/features/arena/presentation/duel_face.dart';
 import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_failure.dart';
@@ -175,10 +176,10 @@ Widget arenaDuelThermometer(ArenaStore store, ArenaDuel duel) {
   );
 }
 
-/// Protagonist card of the Coliseo. It shows the clash itself: the two
-/// versions side by side without their outlets (revealed in the duel), the
-/// kind of duel in one line, and the main action. No vote count: an empty
-/// tally on the first card a newcomer sees reads as nobody being here.
+/// Protagonist card of the Coliseo, as in the mockup: the kind, the case,
+/// the two versions face to face with the VS bolt and, after the vote, the
+/// community's split. Before the vote it is read blind («Versión A/B»), so
+/// no outlet anchors the choice.
 class DuelOfTheDayCard extends StatelessWidget {
   const DuelOfTheDayCard({required this.duel, required this.store, super.key});
 
@@ -190,115 +191,127 @@ class DuelOfTheDayCard extends StatelessWidget {
     openArenaDuel(context, store, duel);
   }
 
-  Widget _version(String label, EventCoveragePositionDto? position) {
-    final ({String text, bool literal}) posture = arenaPostureText(
-      duel.event,
-      position,
-    );
+  @override
+  Widget build(BuildContext context) {
+    final bool voted = store.cachedPositionVotes(duel.event.id)?.mine != null;
+    final bool saved = store.saved.contains(duel.event.id);
+    final ArenaTopic topic = arenaTopicOfEvent(duel.event);
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(vertical: 4),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label, style: ArenaText.meta),
-          const SizedBox(height: 2),
-          Text(
-            posture.literal ? arenaQuote(posture.text) : posture.text,
-            maxLines: 3,
-            overflow: TextOverflow.ellipsis,
-            style: SciText.quote,
-          ),
-        ],
-      ),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final ({IconData icon, String label, String explanation}) kind =
-        DuelKindBadge.describe(duel.kind);
-    return ArenaCard(
-      margin: EdgeInsets.zero,
-      padding: EdgeInsets.zero,
-      onTap: () => openArenaDuel(context, store, duel),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: <Widget>[
-          ArenaCover(
-            // Neutral: a picture from one of the two outlets (with its logo)
-            // would side with it before the reader compares them.
-            topic: arenaTopicOfEvent(duel.event),
-            radius: 0,
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const ArenaBadge.fire('DUELO DEL DÍA'),
-                  const SizedBox(height: 12),
-                  Text(
-                    duel.title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      height: 1.25,
-                      fontWeight: FontWeight.w700,
-                      color: Colors.white,
-                    ),
+          Row(
+            children: <Widget>[
+              const ArenaBadge.fire('DUELO DEL DÍA'),
+              const SizedBox(width: 10),
+              Flexible(
+                child: Text(
+                  topic.label.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.4,
+                    color: ArenaColors.violet,
                   ),
-                ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          KeyedSubtree(
+            key: const Key('arena-duel-of-day-kind'),
+            child: DuelKindBadge(kind: duel.kind),
+          ),
+          const SizedBox(height: 8),
+          GestureDetector(
+            onTap: () => openArenaDuel(context, store, duel),
+            child: Text(
+              duel.title,
+              style: const TextStyle(
+                fontFamily: ArenaText.serif,
+                fontSize: 24,
+                height: 1.25,
+                fontWeight: FontWeight.w800,
+                color: ArenaColors.ink,
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                _version('Versión A', duel.positionA),
-                _version('Versión B', duel.positionB),
-                Row(
-                  key: const Key('arena-duel-of-day-kind'),
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Icon(kind.icon, size: 18, color: ArenaColors.violet),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        '${kind.label} (Dialektik). ${kind.explanation}',
-                        style: ArenaText.meta,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                FilledButton.icon(
-                  key: const Key('arena-duel-of-day-read'),
-                  onPressed: () => _readBlind(context),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: ArenaColors.violet,
-                    minimumSize: const Size(48, 48),
-                  ),
-                  icon: const Icon(Icons.visibility_off_outlined, size: 18),
-                  label: const Text('Leer a ciegas y votar'),
-                ),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                        child: TextButton(
-                          key: const Key('arena-duel-of-day-open'),
-                          onPressed: () => openArenaDuel(context, store, duel),
-                          child: const Text('Ver con los medios'),
-                        ),
-                      ),
-                    ),
-                    DuelActions(duel: duel, store: store),
-                  ],
-                ),
-              ],
+          const SizedBox(height: 14),
+          GestureDetector(
+            onTap: voted
+                ? () => openArenaDuel(context, store, duel)
+                : () => _readBlind(context),
+            child: DuelVersionsPanel(
+              duel: duel,
+              store: store,
+              large: true,
+              forceHidden: true,
             ),
           ),
+          DuelSplitBar(duel: duel, store: store),
+          const SizedBox(height: 14),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: FilledButton(
+                  key: Key(
+                    voted ? 'arena-duel-of-day-open' : 'arena-duel-of-day-read',
+                  ),
+                  onPressed: voted
+                      ? () => openArenaDuel(context, store, duel)
+                      : () => _readBlind(context),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: duelColorA,
+                    minimumSize: const Size(48, 52),
+                    shape: const StadiumBorder(),
+                  ),
+                  child: Text(
+                    voted
+                        ? 'Ver notas originales y comunidad →'
+                        : 'Votar a ciegas →',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w800),
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Compartir duelo',
+                color: ArenaColors.ink,
+                onPressed: () => showSynthesisSharePreview(
+                  context,
+                  duel.event,
+                  relation: duel.kind,
+                ),
+                icon: const Icon(Icons.ios_share),
+              ),
+              IconButton(
+                tooltip: saved ? 'Quitar de guardados' : 'Guardar duelo',
+                color: saved ? ArenaColors.violet : ArenaColors.ink,
+                onPressed: () => store.toggleSaved(duel.event.id),
+                icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border),
+              ),
+            ],
+          ),
+          if (voted)
+            Center(
+              child: TextButton(
+                key: const Key('arena-duel-of-day-change-vote'),
+                onPressed: () => showArenaVoteSheet(context, store, duel.event),
+                child: const Text(
+                  'Cambiar mi voto',
+                  style: TextStyle(decoration: TextDecoration.underline),
+                ),
+              ),
+            )
+          else
+            Center(
+              child: TextButton(
+                key: const Key('arena-duel-of-day-with-outlets'),
+                onPressed: () => openArenaDuel(context, store, duel),
+                child: const Text('Ver con los medios'),
+              ),
+            ),
         ],
       ),
     );
@@ -489,96 +502,126 @@ class DuelListCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final PositionVotes? votes = store.cachedPositionVotes(duel.event.id);
     final bool voted = votes?.mine != null;
-    // «Leer siempre a ciegas»: no outlet in the list either, until the vote.
-    final bool hidden = store.hidesOutlets(duel.event.id);
-    Widget preview(EventCoveragePositionDto? position, String version) {
-      final ({String text, bool literal}) posture = arenaPostureText(
-        duel.event,
-        position,
-      );
-      final String name = hidden ? version : ArenaDuel.nameOf(position);
-      return Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            if (hidden)
-              const Icon(
-                Icons.visibility_off_outlined,
-                size: 24,
-                color: ArenaColors.muted,
-              )
-            else
-              MediaEmblem(name: name, size: 24),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: <InlineSpan>[
-                    TextSpan(
-                      text: '$name: ',
-                      style: const TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                    TextSpan(
-                      text: posture.literal
-                          ? arenaQuote(posture.text)
-                          : posture.text,
-                    ),
-                  ],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: ArenaText.body,
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
     return ArenaCard(
       key: ValueKey<String>('arena-duel-${duel.contrast.id}'),
       onTap: () => openArenaDuel(context, store, duel),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
-          // The same line in every card; «Ya opinaste» only after a vote.
           Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Expanded(
                 child: Text(
-                  '${arenaTopicOfEvent(duel.event).label} · '
-                  '${arenaDate(duel.contrast.confirmedAt)} · '
-                  '${arenaKindLabel(duel.kind)}',
-                  style: ArenaText.meta,
+                  duelMetaLine(duel),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.3,
+                    color: ArenaColors.muted,
+                  ),
                 ),
               ),
               if (voted) ...<Widget>[
-                const SizedBox(width: 8),
-                const ArenaBadge(
-                  key: Key('arena-duel-voted'),
-                  label: 'Ya opinaste',
-                  background: SciColors.tagBg,
-                  foreground: SciColors.tagText,
-                ),
+                const DuelVotedBadge(),
+                const SizedBox(width: 6),
               ],
+              Flexible(child: DuelKindPill(kind: duel.kind)),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             duel.title,
             style: const TextStyle(
-              fontSize: 17,
-              height: 1.3,
-              fontWeight: FontWeight.w700,
+              fontFamily: ArenaText.serif,
+              fontSize: 19,
+              height: 1.25,
+              fontWeight: FontWeight.w800,
               color: ArenaColors.ink,
             ),
           ),
-          preview(duel.positionA, 'Versión A'),
-          preview(duel.positionB, 'Versión B'),
+          const SizedBox(height: 12),
+          DuelVersionsPanel(duel: duel, store: store),
+          DuelSplitBar(duel: duel, store: store),
+          const SizedBox(height: 8),
+          const Divider(height: 1),
+          DuelSocialRow(duel: duel, store: store),
         ],
       ),
+    );
+  }
+}
+
+/// The social row of a duel card: comments, share, save, and the next step
+/// (vote blind, or the community once voted).
+class DuelSocialRow extends StatelessWidget {
+  const DuelSocialRow({required this.duel, required this.store, super.key});
+
+  final ArenaDuel duel;
+  final ArenaStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool voted = store.cachedPositionVotes(duel.event.id)?.mine != null;
+    final bool saved = store.saved.contains(duel.event.id);
+    final int? comments = store.commentCount(duel.event.id);
+    return Row(
+      children: <Widget>[
+        TextButton.icon(
+          key: const Key('arena-duel-comments'),
+          onPressed: () => openArenaCommunity(context, store, duel.event),
+          style: TextButton.styleFrom(
+            foregroundColor: ArenaColors.ink,
+            minimumSize: const Size(44, 44),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+          ),
+          icon: const Icon(Icons.chat_bubble_outline, size: 20),
+          label: Text(comments == null ? '' : '$comments'),
+        ),
+        IconButton(
+          tooltip: 'Compartir duelo',
+          color: ArenaColors.ink,
+          constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+          padding: EdgeInsets.zero,
+          onPressed: () => showSynthesisSharePreview(
+            context,
+            duel.event,
+            relation: duel.kind,
+          ),
+          icon: const Icon(Icons.send_outlined, size: 20),
+        ),
+        IconButton(
+          tooltip: saved ? 'Quitar de guardados' : 'Guardar duelo',
+          color: saved ? ArenaColors.violet : ArenaColors.ink,
+          constraints: const BoxConstraints.tightFor(width: 44, height: 44),
+          padding: EdgeInsets.zero,
+          onPressed: () => store.toggleSaved(duel.event.id),
+          icon: Icon(saved ? Icons.bookmark : Icons.bookmark_border, size: 20),
+        ),
+        Expanded(
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              key: const Key('arena-duel-next'),
+              onPressed: voted
+                  ? () => openArenaCommunity(context, store, duel.event)
+                  : () {
+                      store.setBlind(duel.event.id, value: true);
+                      openArenaDuel(context, store, duel);
+                    },
+              style: TextButton.styleFrom(
+                foregroundColor: duelColorA,
+                minimumSize: const Size(48, 44),
+              ),
+              child: Text(
+                voted ? 'Ver comunidad →' : 'Votar a ciegas →',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w800),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

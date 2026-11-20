@@ -498,6 +498,10 @@ class ArenaFullCore extends ArenaFakeCore implements ArenaSocialRepository {
   }
 
   @override
+  Future<Map<String, int>> commentCounts(List<String> eventIds) async =>
+      <String, int>{for (final String id in eventIds) id: entries.length};
+
+  @override
   Future<List<CommunityEntry>> voteCommunityEntry(
     String entryId,
     int? vote,

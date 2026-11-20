@@ -29,6 +29,7 @@ void main() {
           'assets/fonts/Inter-Medium.ttf',
           'assets/fonts/OFL.txt',
           'assets/fonts/Merriweather-Regular.ttf',
+          'assets/fonts/Merriweather-Bold.ttf',
           'assets/fonts/Merriweather-OFL.txt',
         ]),
       );

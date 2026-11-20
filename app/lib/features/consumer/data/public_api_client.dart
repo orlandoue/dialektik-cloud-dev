@@ -139,6 +139,14 @@ final class PublicApiClient
     _postJson('/v1/social/moderation/community/${Uri.encodeComponent(entryId)}',
       {'decision': approve ? 'approve' : 'reject'}, (_) {});
   @override
+  Future<Map<String, int>> commentCounts(List<String> eventIds) => _get<Map<String, int>>(
+    '/v1/social/comment-counts', query: {'event_ids': eventIds.join(',')},
+    decoder: (Object? value) => <String, int>{
+      for (final MapEntry<String, dynamic> e
+          in (((value! as Map<String, dynamic>)['counts'] as Map<String, dynamic>?) ?? const <String, dynamic>{}).entries)
+        e.key: (e.value as num).toInt(),
+    }, refresh: false, requestToken: null);
+  @override
   Future<List<CommunityEntry>> voteCommunityEntry(String entryId, int? vote) =>
     _postJson('/v1/social/community/votes', {'entry_id': entryId, 'vote': vote}, CommunityEntry.listFromJson);
 

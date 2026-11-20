@@ -316,6 +316,26 @@ final class ArenaStore extends ChangeNotifier {
 
   List<EventCardDto> events = const <EventCardDto>[];
   List<ArenaDuel> duels = const <ArenaDuel>[];
+
+  Map<String, int> _commentCounts = const <String, int>{};
+
+  /// Published comments of a case, for its duel card; null until known.
+  int? commentCount(String eventId) => _commentCounts[eventId];
+
+  Future<void> _loadCommentCounts() async {
+    final ArenaSocialRepository? repository = arenaSocial;
+    if (repository == null || duels.isEmpty) return;
+    try {
+      final List<String> ids = <String>[
+        for (final ArenaDuel duel in duels.take(50)) duel.event.id,
+      ];
+      _commentCounts = await repository.commentCounts(ids);
+      _notify();
+    } on Object {
+      // Cards show no count when Core does not serve it.
+    }
+  }
+
   List<LiveSourceDto> sources = const <LiveSourceDto>[];
   List<LiveNewsItemDto> videos = const <LiveNewsItemDto>[];
   Set<String> followed = <String>{};
@@ -572,6 +592,7 @@ final class ArenaStore extends ChangeNotifier {
         refresh: refresh,
       );
       duels = joined;
+      unawaited(_loadCommentCounts());
       duelsLoading = false;
       _notify();
       final List<ContradictionDto> rest = _sortedContrasts(<ContradictionDto>[
@@ -588,6 +609,7 @@ final class ArenaStore extends ChangeNotifier {
         );
         if (more.isEmpty) continue;
         duels = List<ArenaDuel>.unmodifiable(<ArenaDuel>[...duels, ...more]);
+        unawaited(_loadCommentCounts());
         _notify();
       }
     } on Object catch (failure) {
