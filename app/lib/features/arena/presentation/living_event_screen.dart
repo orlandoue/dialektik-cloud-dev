@@ -254,9 +254,10 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
     final List<Widget> header = <Widget>[
       // The same compact hero on every tab but Comentarios: one status
       // pill, the case and when its coverage began.
+      // Neutral, like the card of the day: a frame from one outlet's video
+      // (with its logo or another person's face) would frame the story.
       ArenaCover(
         topic: topic,
-        videoId: videoId,
         minHeight: 160,
         child: Padding(
           padding: const EdgeInsets.all(16),

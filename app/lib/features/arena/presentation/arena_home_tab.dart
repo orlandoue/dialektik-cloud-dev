@@ -460,25 +460,10 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
     }
   }
 
-  /// The case's video when it has one; otherwise the emblems of the outlets
-  /// that cover it on a light tile, never a dark empty block.
+  /// The emblems of the outlets that cover the case on a light tile. Never
+  /// a frame of one outlet's video: it favoured that outlet and could show
+  /// someone else (a Trump frame on a story about Kast).
   Widget _thumbnail(ArenaTopic topic, EventDetailDto? detail) {
-    final String? videoId = detail == null ? null : arenaVideoIdOfEvent(detail);
-    if (videoId != null) {
-      return ArenaCover(
-        topic: topic,
-        videoId: videoId,
-        minHeight: 0,
-        radius: 12,
-        child: const Center(
-          child: Icon(
-            Icons.play_circle_fill_rounded,
-            color: Color(0xE6FFFFFF),
-            size: 30,
-          ),
-        ),
-      );
-    }
     final List<String> outlets =
         (detail?.articles ?? const <EventCoverageArticleDto>[])
             .map((EventCoverageArticleDto a) => arenaSourceName(a.sourceName))
