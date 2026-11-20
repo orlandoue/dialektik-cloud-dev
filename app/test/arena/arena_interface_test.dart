@@ -244,10 +244,7 @@ void main() {
     await tester.pumpAndSettle();
     final Finder button = find.byKey(const Key('arena-vote-button'));
     expect(
-      find.descendant(
-        of: button,
-        matching: find.text('¿A qué versión le crees más?'),
-      ),
+      find.descendant(of: button, matching: find.textContaining('?')),
       findsOneWidget,
     );
     expect(find.textContaining('tiene más respaldo'), findsNothing);

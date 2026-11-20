@@ -152,7 +152,10 @@ void main() {
             .replaceAll('=', ''),
         challenge,
       );
-      expect(aliasFor(auth.currentUser), 'Gabriela Mistral');
+      // The Google name is never the public signature: «Lector-NNNN».
+      expect(auth.currentUser?.displayName, 'Gabriela Mistral');
+      expect(aliasFor(auth.currentUser), startsWith('Lector-'));
+      expect(aliasFor(auth.currentUser), isNot(contains('Gabriela')));
       // A replayed callback has no verifier left.
       await expectLater(
         auth.completeOAuth(callback),
@@ -363,10 +366,7 @@ void main() {
         findsOneWidget,
       );
       expect(
-        find.descendant(
-          of: card,
-          matching: find.text('ana.perez@example.test'),
-        ),
+        find.descendant(of: card, matching: find.text('a•••@example.test')),
         findsOneWidget,
       );
 
@@ -490,7 +490,9 @@ void main() {
           findsOneWidget,
         );
         await openPerfil(tester);
-        expect(find.text('Gabriela Mistral'), findsOneWidget);
+        // Perfil signs with «Lector-NNNN», never the Google name.
+        expect(find.text('Gabriela Mistral'), findsNothing);
+        expect(find.textContaining('Lector-'), findsWidgets);
       },
     );
 

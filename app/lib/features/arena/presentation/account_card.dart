@@ -77,7 +77,11 @@ class ArenaAccountCard extends StatelessWidget {
                       children: <Widget>[
                         Text(alias, style: ArenaText.section),
                         if (account.email != null)
-                          Text(account.email!, style: ArenaText.meta),
+                          Text(
+                            arenaMaskedEmail(account.email!),
+                            key: const Key('arena-account-email'),
+                            style: ArenaText.meta,
+                          ),
                       ],
                     ),
                   ),
@@ -201,4 +205,12 @@ class _AliasDialogState extends State<_AliasDialog> {
       ),
     ],
   );
+}
+
+/// The e-mail with most of its name hidden (a•••@gmail.com), so a shared
+/// screenshot of Perfil does not expose the account.
+String arenaMaskedEmail(String email) {
+  final int at = email.indexOf('@');
+  if (at <= 0) return '•••';
+  return '${email.substring(0, 1)}•••${email.substring(at)}';
 }

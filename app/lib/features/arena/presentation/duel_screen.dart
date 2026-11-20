@@ -557,7 +557,7 @@ class _DuelScreenState extends State<DuelScreen> {
       child: ArenaGradientButton(
         key: const Key('arena-vote-button'),
         icon: Icons.bolt,
-        label: '¿A qué versión le crees más?',
+        label: arenaVoteQuestion(duel.kind),
         onPressed: () => showArenaVoteSheet(context, store, duel.event),
       ),
     ),
@@ -641,7 +641,7 @@ class _DuelScreenState extends State<DuelScreen> {
         ),
         const SizedBox(height: 16),
         ArenaSubTabs(
-          labels: const <String>['Notas originales', 'Análisis IA'],
+          labels: const <String>['Notas originales', 'Qué significa'],
           selected: _tab,
           onSelected: (int value) => setState(() => _tab = value),
         ),
@@ -1108,6 +1108,15 @@ class _SourceLinkCard extends StatelessWidget {
   }
 }
 
+/// The vote question for each kind of duel. Only a contradiction asks which
+/// version the reader believes: in a different focus or a compatible duel
+/// both versions can be true at once.
+String arenaVoteQuestion(String? kind) => switch (kind) {
+  'DIFFERENT_FOCUS' => '¿Qué enfoque te ayuda más a entender el hecho?',
+  'COMPATIBLE' => '¿Qué cobertura te parece más clara?',
+  _ => '¿A qué versión le crees más?',
+};
+
 /// «Leer a ciegas»: hides the outlets until the reader votes, so the brand
 /// does not anchor the choice. Both versions are revealed together.
 class _BlindToggle extends StatelessWidget {
@@ -1444,7 +1453,7 @@ class _VoteSheetState extends State<_VoteSheet> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: <Widget>[
               const Text(
-                '¿A qué versión le crees más?',
+                '¿La cobertura te parece bien respaldada?',
                 style: TextStyle(
                   fontSize: 19,
                   fontWeight: FontWeight.w800,
@@ -1453,9 +1462,8 @@ class _VoteSheetState extends State<_VoteSheet> {
               ),
               const SizedBox(height: 6),
               const Text(
-                '¿La cobertura de este caso te parece bien respaldada? Tu '
-                'voto es tu opinión, se suma a la de la comunidad y puedes '
-                'cambiarlo cuando quieras.',
+                'Tu voto se suma al de la comunidad y puedes cambiarlo '
+                'cuando quieras.',
                 style: ArenaText.body,
               ),
               const SizedBox(height: 14),
@@ -1567,18 +1575,18 @@ class _VoteSheetState extends State<_VoteSheet> {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        const Text(
-          '¿A qué versión le crees más?',
-          style: TextStyle(
+        Text(
+          arenaVoteQuestion(duel.kind),
+          style: const TextStyle(
             fontSize: 19,
             fontWeight: FontWeight.w800,
             color: ArenaColors.ink,
           ),
         ),
         const SizedBox(height: 6),
+        // The thermometer below already says the vote is an opinion.
         const Text(
-          'Lee ambas citas y sus notas originales. Tu voto es tu opinión, '
-          'no decide qué versión es correcta. Tienes un voto por caso y '
+          'Lee ambas citas y sus notas originales. Tienes un voto por caso y '
           'puedes cambiarlo.',
           style: ArenaText.body,
         ),

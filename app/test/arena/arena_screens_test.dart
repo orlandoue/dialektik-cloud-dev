@@ -271,7 +271,7 @@ void main() {
       lessThan(tester.getTopLeft(later).dy),
     );
     await tester.tap(
-      find.byKey(const ValueKey<String>('arena-subtab-Análisis IA')),
+      find.byKey(const ValueKey<String>('arena-subtab-Qué significa')),
     );
     await tester.pumpAndSettle();
     // Dialektik's reading sits in its own labelled box; no filler block.

@@ -101,7 +101,7 @@ void main() {
       await tester.tap(find.text(duelTitle));
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      for (final String tab in <String>['Notas originales', 'Análisis IA']) {
+      for (final String tab in <String>['Notas originales', 'Qué significa']) {
         final Finder target = find.byKey(ValueKey<String>('arena-subtab-$tab'));
         await reveal(tester, target, 'arena-duel-scroll');
         await tester.ensureVisible(target);
