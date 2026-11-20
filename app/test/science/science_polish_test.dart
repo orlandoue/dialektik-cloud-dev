@@ -96,7 +96,7 @@ void main() {
         'Duelos',
         'En desarrollo',
         'Medios',
-        'Tú',
+        'Perfil',
       ]) {
         final Finder text = find.descendant(
           of: bar,

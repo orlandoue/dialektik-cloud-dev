@@ -231,12 +231,12 @@ class StudyCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final List<String> origin = <String>[
       ?study.institution,
-      ?study.journal,
+      if (study.journal != null) sciVenue(study.journal!),
       if (study.publishedAt != null) sciStudyDate(study),
     ];
     final String meta =
         '${origin.isEmpty ? notInformed : origin.join(' · ')}'
-        '${study.connectedStories == 0 ? ' · aún sin conectar' : ''}';
+        '${study.connectedStories == 0 ? ' · sin noticias conectadas' : ''}';
     return DecoratedBox(
       key: ValueKey<String>('sci-study-${study.doi}'),
       decoration: BoxDecoration(

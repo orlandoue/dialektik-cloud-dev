@@ -167,7 +167,7 @@ void main() {
       'Duelos',
       'En desarrollo',
       'Medios',
-      'Tú',
+      'Perfil',
     ]) {
       expect(find.byKey(ValueKey<String>('arena-tab-$tab')), findsOneWidget);
     }
@@ -205,7 +205,7 @@ void main() {
     expect(find.text('Preprint', skipOffstage: false), findsOneWidget);
     // Unconnected studies say so in their meta line.
     expect(
-      find.textContaining('aún sin conectar', skipOffstage: false),
+      find.textContaining('sin noticias conectadas', skipOffstage: false),
       findsWidgets,
     );
     // A retracted study cannot be connected.

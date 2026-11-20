@@ -174,62 +174,134 @@ Widget arenaDuelThermometer(ArenaStore store, ArenaDuel duel) {
   );
 }
 
-/// Protagonist card of the Coliseo: the most recent published contrast.
+/// Protagonist card of the Coliseo. It shows the clash itself: the two
+/// versions side by side without their outlets (revealed in the duel), the
+/// kind of duel in one line, and the main action. No vote count: an empty
+/// tally on the first card a newcomer sees reads as nobody being here.
 class DuelOfTheDayCard extends StatelessWidget {
   const DuelOfTheDayCard({required this.duel, required this.store, super.key});
 
   final ArenaDuel duel;
   final ArenaStore store;
 
+  void _readBlind(BuildContext context) {
+    store.setBlind(duel.event.id, value: true);
+    openArenaDuel(context, store, duel);
+  }
+
+  Widget _version(String label, EventCoveragePositionDto? position) {
+    final ({String text, bool literal}) posture = arenaPostureText(
+      duel.event,
+      position,
+    );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(label, style: ArenaText.meta),
+          const SizedBox(height: 2),
+          Text(
+            posture.literal ? arenaQuote(posture.text) : posture.text,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: SciText.quote,
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
-  Widget build(BuildContext context) => ArenaCard(
-    margin: EdgeInsets.zero,
-    padding: EdgeInsets.zero,
-    onTap: () => openArenaDuel(context, store, duel),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: <Widget>[
-        ArenaCover(
-          // Neutral: a picture from one of the two outlets (with its logo)
-          // would side with it before the reader compares them.
-          topic: arenaTopicOfEvent(duel.event),
-          radius: 0,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: <Widget>[
-                const ArenaBadge.fire('DUELO DEL DÍA'),
-                const SizedBox(height: 48),
-                Text(
-                  duel.title,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    height: 1.25,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white,
+  Widget build(BuildContext context) {
+    final ({IconData icon, String label, String explanation}) kind =
+        DuelKindBadge.describe(duel.kind);
+    return ArenaCard(
+      margin: EdgeInsets.zero,
+      padding: EdgeInsets.zero,
+      onTap: () => openArenaDuel(context, store, duel),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          ArenaCover(
+            // Neutral: a picture from one of the two outlets (with its logo)
+            // would side with it before the reader compares them.
+            topic: arenaTopicOfEvent(duel.event),
+            radius: 0,
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const ArenaBadge.fire('DUELO DEL DÍA'),
+                  const SizedBox(height: 12),
+                  Text(
+                    duel.title,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      height: 1.25,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
                   ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                _version('Versión A', duel.positionA),
+                _version('Versión B', duel.positionB),
+                Row(
+                  key: const Key('arena-duel-of-day-kind'),
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Icon(kind.icon, size: 18, color: ArenaColors.violet),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text(
+                        '${kind.label} (Dialektik). ${kind.explanation}',
+                        style: ArenaText.meta,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                FilledButton.icon(
+                  key: const Key('arena-duel-of-day-read'),
+                  onPressed: () => _readBlind(context),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: ArenaColors.violet,
+                    minimumSize: const Size(48, 48),
+                  ),
+                  icon: const Icon(Icons.visibility_off_outlined, size: 18),
+                  label: const Text('Leer a ciegas y votar'),
+                ),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: TextButton(
+                          key: const Key('arena-duel-of-day-open'),
+                          onPressed: () => openArenaDuel(context, store, duel),
+                          child: const Text('Ver con los medios'),
+                        ),
+                      ),
+                    ),
+                    DuelActions(duel: duel, store: store),
+                  ],
                 ),
               ],
             ),
           ),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: <Widget>[
-              DuelFaceOff(duel: duel, store: store),
-              const SizedBox(height: 12),
-              DuelThermometer(store: store, duel: duel),
-              DuelActions(duel: duel, store: store),
-            ],
-          ),
-        ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 
 /// Swipeable carousel of the most recent duels with its page dots.
@@ -379,6 +451,7 @@ class DuelActions extends StatelessWidget {
     builder: (BuildContext context, _) {
       final bool saved = store.saved.contains(duel.event.id);
       return Row(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.end,
         children: <Widget>[
           // The whole card opens the duel; these two are its only actions.

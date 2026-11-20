@@ -195,20 +195,19 @@ class _ArenaHomeTabState extends State<ArenaHomeTab> {
                   ),
                   icon: const Icon(SciIcons.search, size: 22),
                 ),
-                // Not in the Science mockup: General keeps its alerts.
-                if (store.mode == ArenaMode.general)
-                  IconButton(
-                    key: const Key('arena-alerts'),
-                    tooltip: 'Novedades de lo que sigues',
-                    color: SciColors.ink,
-                    constraints: const BoxConstraints.tightFor(
-                      width: 44,
-                      height: 44,
-                    ),
-                    padding: EdgeInsets.zero,
-                    onPressed: _openAlerts,
-                    icon: const Icon(Icons.notifications_none, size: 22),
+                // Alerts of what the reader follows, in both modes.
+                IconButton(
+                  key: const Key('arena-alerts'),
+                  tooltip: 'Novedades de lo que sigues',
+                  color: SciColors.ink,
+                  constraints: const BoxConstraints.tightFor(
+                    width: 44,
+                    height: 44,
                   ),
+                  padding: EdgeInsets.zero,
+                  onPressed: _openAlerts,
+                  icon: const Icon(Icons.notifications_none, size: 22),
+                ),
               ],
             ),
           ),
@@ -518,11 +517,11 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
   Widget build(BuildContext context) {
     final EventCardDto event = widget.event;
     final EventDetailDto? detail = _detail;
-    DateTime updated = event.detectedAt;
-    for (final EventCoverageArticleDto a
-        in detail?.articles ?? const <EventCoverageArticleDto>[]) {
-      if (a.publishedAt.isAfter(updated)) updated = a.publishedAt;
-    }
+    // The same clock as the story itself: its newest coverage.
+    final DateTime updated = arenaLastCoverage(
+      detail?.articles ?? const <EventCoverageArticleDto>[],
+      fallback: event.detectedAt,
+    );
     final ArenaTopic topic = arenaTopicOfEvent(event);
     return ArenaCard(
       key: ValueKey<String>('arena-event-${event.id}'),
@@ -559,7 +558,7 @@ class _DevelopingEventCardState extends State<DevelopingEventCard> {
                 Text(
                   '${event.sourceCount} '
                   '${event.sourceCount == 1 ? 'medio' : 'medios'} · '
-                  '${DateTime.now().difference(updated) > const Duration(hours: 72) ? 'Sin novedades recientes' : 'Actualizada ${arenaAgo(updated)}'}',
+                  '${DateTime.now().difference(updated) > const Duration(hours: 72) ? 'Sin novedades recientes' : 'Última cobertura ${arenaAgo(updated)}'}',
                   style: ArenaText.meta,
                 ),
                 if (widget.note != null) ...<Widget>[
@@ -1049,7 +1048,10 @@ class _FollowingFeedState extends State<_FollowingFeed> {
             ArenaSectionTitle(_fromYourMedia()),
             if (_items.isEmpty)
               const ArenaMessage('Tus medios no tienen publicaciones nuevas.'),
-            for (final LiveNewsItemDto item in _items)
+            for (final LiveNewsItemDto item in arenaInterleaveByOutlet(
+              _items,
+              (LiveNewsItemDto item) => item.source.id,
+            ))
               ArenaNewsCard(item: item, store: store),
           ],
         ],
@@ -1080,9 +1082,11 @@ class _FollowingFeedState extends State<_FollowingFeed> {
         ),
       );
     }
-    final List<LiveNewsItemDto> items = _items
-        .take(_FollowingFeed.previewCount)
-        .toList();
+    // Interleaved by outlet: one prolific outlet does not fill the preview.
+    final List<LiveNewsItemDto> items = arenaInterleaveByOutlet(
+      _items,
+      (LiveNewsItemDto item) => item.source.id,
+    ).take(_FollowingFeed.previewCount).toList();
     return Column(
       key: const Key('arena-following-preview'),
       crossAxisAlignment: CrossAxisAlignment.stretch,

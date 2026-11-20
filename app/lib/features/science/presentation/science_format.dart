@@ -24,9 +24,14 @@ String sciShortDate(DateTime moment) {
 
 /// A study's date with only what the source gives: «2026», «ene 2026» or
 /// «10 nov» (short) / «10 nov 2026» (long).
-String sciStudyDate(Study study, {bool long = false}) {
+String sciStudyDate(Study study, {bool long = false, DateTime? now}) {
   final DateTime? date = study.publishedAt;
   if (date == null) return notInformed;
+  // Some repositories carry the year of a coming issue: say it is ahead
+  // instead of showing a date that has not happened.
+  if (date.isAfter(now ?? DateTime.now())) {
+    return 'publicación prevista para ${date.year}';
+  }
   return switch (study.publishedPrecision) {
     DatePrecision.year => '${date.year}',
     DatePrecision.month => '${_months[date.month - 1]} ${date.year}',
@@ -85,8 +90,9 @@ String sampleLabel(int? n) {
 /// Tags of a study card: status, design, population · n, place.
 List<String> studyTagLabels(Study study) => <String>[
   if (study.retracted) 'Retractado',
-  // No tag when the source does not say: never assume a review.
-  if (study.review != StudyReview.notReported) study.reviewLabel,
+  // Always said, the most useful fact for a reader: «Revisión no informada»
+  // when the source does not say (never assumed either way).
+  study.reviewLabel,
   ?study.design,
   if (study.population != null)
     study.sampleSize == null
@@ -94,3 +100,8 @@ List<String> studyTagLabels(Study study) => <String>[
         : '${study.population} · ${sampleLabel(study.sampleSize)}',
   if (study.madeInChile) 'Hecha en Chile',
 ];
+
+/// A journal or repository without its long parenthetical owner:
+/// «Zenodo (CERN European Organization for Nuclear Research)» → «Zenodo».
+String sciVenue(String venue) =>
+    venue.replaceFirst(RegExp(r'\s*\([^)]{12,}\)\s*$'), '').trim();
