@@ -1,11 +1,12 @@
-import { BadRequestException, Body, Controller, Get, Inject, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Inject, Param, Post, Query, Req, Res, UseGuards } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import { parseUlidParameter } from './public-api.validation.js';
 import { PublicRateLimitService, rateLimitClient } from './public-rate-limit.service.js';
-import { SocialArenaService, type CommunityChannel } from './social-arena.service.js';
+import { SocialArenaService, type CommunityChannel, type CommunityStance } from './social-arena.service.js';
 
 const CHANNELS: Record<string, CommunityChannel> = { debate: 'DEBATE', aporte: 'APORTE', nota: 'NOTA' };
+const STANCES = new Set<CommunityStance>(['supports', 'contradicts', 'context']);
 const ALIAS = /^[\p{L}\p{N}][\p{L}\p{N} ._-]{1,29}$/u;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -94,8 +95,34 @@ export class SocialArenaController {
     const articleId = typeof input.article_id === 'string' ? parseUlidParameter(input.article_id) : null;
     const linkUrl = parseLink(input.link_url);
     if (channel !== 'DEBATE' && articleId === null && linkUrl === null) throw new BadRequestException(message);
-    await this.arena.addEntry(betaUserId(request), eventId, { channel, body: text, alias, articleId, linkUrl });
+    // Which version a contribution is about, and whether it supports,
+    // contradicts or gives context; both optional for older apps.
+    const positionId = typeof input.position_id === 'string' ? parseUlidParameter(input.position_id) : null;
+    if (input.stance !== undefined && input.stance !== null && !STANCES.has(input.stance as CommunityStance)) {
+      throw new BadRequestException('Invalid stance.');
+    }
+    const stance = (input.stance ?? null) as CommunityStance | null;
+    await this.arena.addEntry(betaUserId(request), eventId, { channel, body: text, alias, articleId, linkUrl, positionId, stance });
     return this.arena.community(betaUserId(request), eventId);
+  }
+
+  /** Link contributions waiting for a moderator. */
+  @Get('moderation/community')
+  async reviewQueue(@Req() request: FastifyRequest, @Res({ passthrough: true }) reply: FastifyReply) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    void reply.header('cache-control', 'private, no-store');
+    return this.arena.reviewQueue(betaUserId(request));
+  }
+
+  /** `approve` publishes a contribution in review; `reject` hides it. */
+  @Post('moderation/community/:id')
+  async reviewEntry(@Req() request: FastifyRequest, @Param('id') id: string, @Body() body: unknown) {
+    this.rateLimit.assertAllowed(rateLimitClient(request));
+    if (!UUID.test(id)) throw new BadRequestException('Invalid contribution.');
+    const input = record(body, 'Invalid decision.');
+    if (input.decision !== 'approve' && input.decision !== 'reject') throw new BadRequestException('Invalid decision.');
+    await this.arena.reviewEntry(betaUserId(request), id, input.decision === 'approve');
+    return { ok: true };
   }
 
   @Post('community/votes')
