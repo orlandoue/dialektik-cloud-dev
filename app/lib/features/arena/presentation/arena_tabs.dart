@@ -1023,6 +1023,23 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                         ],
                       ),
                     ),
+                    ArenaCard(
+                      key: const Key('arena-glossary'),
+                      onTap: () => unawaited(showArenaGlossary(context)),
+                      child: const Row(
+                        children: <Widget>[
+                          Icon(Icons.menu_book, color: ArenaColors.muted),
+                          SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Glosario de Dialektik',
+                              style: ArenaText.cardTitle,
+                            ),
+                          ),
+                          Icon(Icons.chevron_right, color: ArenaColors.muted),
+                        ],
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1033,6 +1050,73 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
     );
   }
 }
+
+/// The words the app uses, each in one line.
+const List<(String, String)> arenaGlossary = <(String, String)>[
+  (
+    'Hecho',
+    'Una sola cosa que pasó, contada por varios medios. Cada hecho tiene su '
+        'pantalla con lo que dijo cada uno.',
+  ),
+  (
+    'Historia',
+    'Varios hechos de un mismo tema encadenados en el tiempo, como una gira o '
+        'un juicio. La arma un moderador; nunca se arma sola.',
+  ),
+  (
+    'Duelo',
+    'Dos medios cuentan el mismo hecho de forma distinta. Lees las dos '
+        'versiones y opinas, si quieres a ciegas.',
+  ),
+  (
+    'Opinión',
+    'Tu voto en un duelo. Cuenta en el reparto que ves después de votar.',
+  ),
+  (
+    'Aporte',
+    'Un enlace con fuente que respalda, contradice o da contexto a una '
+        'versión. Los primeros de cada cuenta pasan por revisión.',
+  ),
+  (
+    'Comentario',
+    'Lo que escribes sobre un hecho, con o sin un estudio. Un duelo y su '
+        'hecho comparten comentarios, aportes y opiniones: es un solo hilo.',
+  ),
+];
+
+Future<void> showArenaGlossary(BuildContext context) =>
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: ArenaColors.background,
+      builder: (BuildContext context) => SafeArea(
+        child: ListView(
+          key: const Key('arena-glossary-sheet'),
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+          children: <Widget>[
+            const Text('Glosario', style: ArenaText.cardTitle),
+            const SizedBox(height: 12),
+            for (final (String term, String meaning) in arenaGlossary)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text.rich(
+                  TextSpan(
+                    children: <InlineSpan>[
+                      TextSpan(
+                        text: '$term. ',
+                        style: const TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                      TextSpan(text: meaning),
+                    ],
+                  ),
+                  style: ArenaText.body,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
 
 /// An empty section with a way forward.
 class _EmptySection extends StatelessWidget {

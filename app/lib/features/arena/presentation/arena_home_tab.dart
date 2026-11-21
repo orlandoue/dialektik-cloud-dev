@@ -2,9 +2,11 @@ import 'dart:async';
 
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
+import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
+import 'package:dialektik/features/arena/presentation/story_group_card.dart';
 import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
@@ -658,11 +660,97 @@ class ArenaNewsCard extends StatelessWidget {
                     Text(arenaAgo(item.publishedAt), style: ArenaText.meta),
                   ],
                 ),
+                if (item.publishedEventId case final String eventId)
+                  AlsoCoveredLine(eventId: eventId, store: store),
                 ?trailing,
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// «También lo cubren N medios · Comparar →» under a note of a followed
+/// medium whose case is published: the same fact, told by others. Counts
+/// the whole story when the case belongs to one.
+class AlsoCoveredLine extends StatelessWidget {
+  const AlsoCoveredLine({
+    required this.eventId,
+    required this.store,
+    super.key,
+  });
+
+  final String eventId;
+  final ArenaStore store;
+
+  @override
+  Widget build(BuildContext context) {
+    final StoryGroup? story = store.storyOf(eventId);
+    EventCardDto? event;
+    for (final EventCardDto candidate in store.events) {
+      if (candidate.id == eventId) event = candidate;
+    }
+    final int outlets = story?.sourceCount ?? event?.sourceCount ?? 0;
+    final int others = outlets - 1;
+    final bool inDuel = store.duelForEvent(eventId) != null;
+    final String label = others >= 1
+        ? 'También lo ${others == 1 ? 'cubre 1 medio' : 'cubren $others medios'}'
+              ' · Comparar →'
+        : 'Ver cómo lo cubren otros medios →';
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: InkWell(
+        key: ValueKey<String>('arena-also-covered-$eventId'),
+        borderRadius: BorderRadius.circular(8),
+        onTap: () {
+          if (story != null) {
+            final List<EventCardDto> members = store.events
+                .where((EventCardDto e) => story.eventIds.contains(e.id))
+                .toList();
+            if (members.isNotEmpty) {
+              unawaited(
+                Navigator.of(context).push(
+                  MaterialPageRoute<void>(
+                    builder: (_) => StoryGroupScreen(
+                      story: story,
+                      members: members,
+                      store: store,
+                    ),
+                  ),
+                ),
+              );
+              return;
+            }
+          }
+          unawaited(openArenaEvent(context, store, eventId));
+        },
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 44),
+          child: Row(
+            children: <Widget>[
+              if (inDuel) ...<Widget>[
+                const ArenaBadge(
+                  label: 'En duelo',
+                  background: ArenaColors.violetSoft,
+                  foreground: ArenaColors.violetDeep,
+                ),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: Text(
+                  label,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: ArenaColors.violet,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
