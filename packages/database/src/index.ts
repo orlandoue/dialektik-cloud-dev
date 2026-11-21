@@ -25,6 +25,7 @@ export { liveVersionsByPublishedSql } from './migration/100_live_versions_by_pub
 export { readerAliasPseudonymSql } from './migration/101_reader_alias_pseudonym';
 export { storyGroupsSql } from './migration/102_story_groups';
 export { communityReviewSql } from './migration/103_community_review';
+export { pushDevicesSql } from './migration/104_push_devices';
 export * from './migration/migrator';
 export * from './safety/state-dimension-checker';
 export * from './transaction';
