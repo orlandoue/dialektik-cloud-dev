@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/push_notices.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
@@ -87,6 +88,7 @@ Future<void> startUsageAnalytics() async {
       ),
     );
     usageAnalytics = FirebaseUsageAnalytics(FirebaseAnalytics.instance);
+    await startPushNotices();
   } on Object catch (error) {
     debugPrint('Analytics unavailable: $error');
   }

@@ -6,6 +6,7 @@ import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
+import 'package:dialektik/features/arena/presentation/daily_notice.dart';
 import 'package:dialektik/features/arena/presentation/duel_face.dart';
 import 'package:dialektik/features/arena/presentation/youtube_player_sheet.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
@@ -1691,6 +1692,10 @@ class _VoteSheetState extends State<_VoteSheet> {
           'blind': widget.store.isBlind(widget.event.id) ? 1 : 0,
           'changed': mine == null ? 0 : 1,
         });
+        // After a first vote, once: the «Duelo del día» notice.
+        if (mine == null && mounted && widget.store.shouldOfferDailyNotice) {
+          unawaited(offerDailyNotice(context, widget.store));
+        }
       }
     } on Exception {
       if (mounted) setState(() => _error = 'No se pudo guardar tu voto.');

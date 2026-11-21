@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/push_notices.dart';
 import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
@@ -9,6 +10,7 @@ import 'package:dialektik/features/arena/presentation/account_card.dart';
 import 'package:dialektik/features/arena/presentation/arena_home_tab.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
+import 'package:dialektik/features/arena/presentation/daily_notice.dart';
 import 'package:dialektik/features/arena/presentation/duel_face.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
 import 'package:dialektik/features/arena/presentation/media_profile_screen.dart';
@@ -1024,6 +1026,8 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                         ],
                       ),
                     ),
+                    if (pushGateway.available && store.pushDevices != null)
+                      DailyNoticeSettings(store: store),
                     ArenaCard(
                       key: const Key('arena-share-usage'),
                       padding: const EdgeInsets.symmetric(
