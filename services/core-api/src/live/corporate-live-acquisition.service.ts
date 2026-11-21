@@ -420,11 +420,13 @@ export class CorporateLiveAcquisitionService implements OnModuleInit, OnModuleDe
     }
     // Every poll records a receipt per sighting; keep only the latest
     // sighting of each item and those that versions cite (migration 090).
+    // One day (the function's minimum) keeps the table near its live size:
+    // after a VACUUM FULL on 21 Nov 2026 the database went from 452 to 250 MB.
     let receipts = 0;
     try {
       for (let batch = 0; batch < RECEIPT_RETENTION_MAX_BATCHES; batch += 1) {
         const result = await sql<{ outcome: { status?: string; deleted?: number } }>`
-          select public.dialektik_purge_redundant_receipts(interval '2 days', ${RECEIPT_RETENTION_BATCH}) as outcome`
+          select public.dialektik_purge_redundant_receipts(interval '1 day', ${RECEIPT_RETENTION_BATCH}) as outcome`
           .execute(this.database);
         const deleted = Number(result.rows[0]?.outcome?.deleted ?? 0);
         receipts += deleted;
