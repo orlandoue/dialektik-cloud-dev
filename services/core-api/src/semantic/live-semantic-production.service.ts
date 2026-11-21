@@ -617,8 +617,15 @@ export class LiveSemanticProductionService implements OnApplicationBootstrap, On
       join public.live_semantic_event_group_members rm on rm.group_id=g.id and rm.article_id=p.right_article_id
       join public.assertion_extraction_generations lg on lg.id=lm.extraction_generation_id and lg.id=p.left_extraction_generation_id and lg.state='active'
       join public.assertion_extraction_generations rg on rg.id=rm.extraction_generation_id and rg.id=p.right_extraction_generation_id and rg.state='active'
-      join public.live_semantic_excerpt_inputs li on li.article_id=lm.article_id::text and li.input_sha256=lg.input_hash
-      join public.live_semantic_excerpt_inputs ri on ri.article_id=rm.article_id::text and ri.input_sha256=rg.input_hash
+      -- Each side is read by primary key with the same checks as the
+      -- live_semantic_excerpt_inputs view (route allowed, which includes
+      -- read allowed and the input hash). Joining the view on its text id
+      -- hashed every article twice per group: from 19 Nov 2026 the query
+      -- passed two minutes, timed out, and nothing was promoted.
+      join lateral (select a.text_original,a.published_at from public.articles a where a.id=lm.article_id
+        and public.dialektik_live_semantic_route_allowed(a.id,lg.input_hash,${PROVIDER},${MODEL})) li on true
+      join lateral (select a.text_original,a.published_at from public.articles a where a.id=rm.article_id
+        and public.dialektik_live_semantic_route_allowed(a.id,rg.input_hash,${PROVIDER},${MODEL})) ri on true
       where (g.origin_run_id=${runId}::dialektik_ulid or (${windowStartDay ?? null}::date is not null and g.target_day>=${windowStartDay ?? null}::date))
         and g.config_sha256=${configSha}
         and p.config_sha256=${stanceConfigSha256(configSha)} and lm.source_id<>rm.source_id
