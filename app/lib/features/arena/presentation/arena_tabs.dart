@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
@@ -1024,8 +1025,33 @@ class _ArenaProfileTabState extends State<ArenaProfileTab> {
                       ),
                     ),
                     ArenaCard(
+                      key: const Key('arena-share-usage'),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 2,
+                      ),
+                      child: SwitchListTile(
+                        value: store.shareUsage,
+                        activeThumbColor: ArenaColors.violet,
+                        onChanged: (bool value) =>
+                            unawaited(store.setShareUsage(value: value)),
+                        title: const Text(
+                          'Enviar estadísticas de uso anónimas',
+                          style: ArenaText.cardTitle,
+                        ),
+                        subtitle: const Text(
+                          'Qué pantallas se usan, sin tu cuenta, tus medios '
+                          'ni tus votos. Nos ayuda a mejorar la beta.',
+                          style: ArenaText.meta,
+                        ),
+                      ),
+                    ),
+                    ArenaCard(
                       key: const Key('arena-glossary'),
-                      onTap: () => unawaited(showArenaGlossary(context)),
+                      onTap: () {
+                        logUsage('glossary_open');
+                        unawaited(showArenaGlossary(context));
+                      },
                       child: const Row(
                         children: <Widget>[
                           Icon(Icons.menu_book, color: ArenaColors.muted),

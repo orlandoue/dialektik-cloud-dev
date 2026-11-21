@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:app_links/app_links.dart';
 import 'package:dialektik/app/dialektik_app.dart';
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
 import 'package:dialektik/core/infrastructure/app_environment.dart';
 import 'package:dialektik/core/infrastructure/startup_snapshot_client.dart';
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/consumer/presentation/navigation/consumer_routes.dart';
 import 'package:dialektik/features/private_beta/data/auth_session_store.dart';
 import 'package:dialektik/features/private_beta/presentation/private_beta_gate.dart';
@@ -114,6 +117,8 @@ void bootstrap() {
     inspectShadow: inspectShadow,
   );
   if (privateBetaRequired) {
+    // Anonymous usage statistics start behind the first frame.
+    unawaited(startUsageAnalytics());
     const String supabaseUrl = String.fromEnvironment(
       'DIALEKTIK_SUPABASE_URL',
       defaultValue: 'https://vclsswwfhljczxgnsciq.supabase.co',

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/startup_snapshot_client.dart';
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
@@ -533,6 +534,7 @@ final class ArenaStore extends ChangeNotifier {
     unawaited(_loadSaved());
     unawaited(_loadMode());
     unawaited(_loadAlwaysBlind());
+    unawaited(_loadShareUsage());
     unawaited(_loadScienceAccess());
     unawaited(stories.load().catchError((Object _) {}));
     final Future<void> secondary = Future.wait(<Future<void>>[
@@ -812,6 +814,7 @@ final class ArenaStore extends ChangeNotifier {
   }
 
   Future<void> setFollowing(String sourceId, {required bool value}) async {
+    logUsage(value ? 'media_follow' : 'media_unfollow');
     final FollowingRepository? repository = following;
     if (repository == null) {
       throw StateError('El seguimiento requiere una sesión.');
@@ -851,6 +854,7 @@ final class ArenaStore extends ChangeNotifier {
 
   Future<void> setAlwaysBlind({required bool value}) async {
     if (value == _alwaysBlind) return;
+    logUsage('always_blind_set', <String, Object>{'on': value ? 1 : 0});
     _alwaysBlind = value;
     _unblinded.clear();
     _notify();
@@ -867,6 +871,38 @@ final class ArenaStore extends ChangeNotifier {
           (await storage.readStories(_alwaysBlindKey))?.trim() == '1';
       if (stored != _alwaysBlind) {
         _alwaysBlind = stored;
+        _notify();
+      }
+    } on Object {
+      /* A device convenience only. */
+    }
+  }
+
+  bool _shareUsage = true;
+  static const String _shareUsageKey = 'dialektik_share_usage';
+
+  /// «Enviar estadísticas de uso anónimas» (on unless the reader turned it
+  /// off). Firebase also remembers the choice on the device.
+  bool get shareUsage => _shareUsage;
+
+  Future<void> setShareUsage({required bool value}) async {
+    if (value == _shareUsage) return;
+    _shareUsage = value;
+    _notify();
+    try {
+      await usageAnalytics.setEnabled(value: value);
+      await storage.writeStories(_shareUsageKey, value ? '1' : '0');
+    } on Object {
+      /* Retried the next time the reader changes it. */
+    }
+  }
+
+  Future<void> _loadShareUsage() async {
+    try {
+      final bool stored =
+          (await storage.readStories(_shareUsageKey))?.trim() != '0';
+      if (stored != _shareUsage) {
+        _shareUsage = stored;
         _notify();
       }
     } on Object {

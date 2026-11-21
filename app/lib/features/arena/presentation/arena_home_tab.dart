@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
@@ -705,6 +706,9 @@ class AlsoCoveredLine extends StatelessWidget {
         key: ValueKey<String>('arena-also-covered-$eventId'),
         borderRadius: BorderRadius.circular(8),
         onTap: () {
+          logUsage('also_covered_tap', <String, Object>{
+            'story': story == null ? 0 : 1,
+          });
           if (story != null) {
             final List<EventCardDto> members = store.events
                 .where((EventCardDto e) => story.eventIds.contains(e.id))

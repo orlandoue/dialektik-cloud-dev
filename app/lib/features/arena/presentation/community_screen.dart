@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
@@ -134,6 +135,7 @@ class _CommunityScreenState extends State<CommunityScreen> {
             alias: store.alias,
           ),
         );
+        logUsage('community_post', <String, Object>{'channel': _channel.name});
       } else {
         // Core without the three channels: an evidence contribution.
         final SocialRepository? social = store.social;
