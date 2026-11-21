@@ -45,8 +45,10 @@ LiveNewsItemDto newsItem(
   String headline,
   LiveSourceDto source, {
   String? video,
+  String? publishedEventId,
 }) => LiveNewsItemDto(
   id: id,
+  publishedEventId: publishedEventId,
   headline: headline,
   canonicalUrl: Uri.parse(
     video == null
