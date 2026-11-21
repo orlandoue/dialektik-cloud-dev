@@ -1,4 +1,6 @@
 import { BadRequestException, Body, Controller, HttpCode, Inject, Post, Req, UseGuards } from '@nestjs/common';
+
+const OK = { status: 'ok' } as const;
 import type { FastifyRequest } from 'fastify';
 import { betaUserId, PrivateBetaAuthGuard } from '../private-beta/private-beta-auth.guard.js';
 import { PublicRateLimitService, rateLimitClient } from '../public-api/public-rate-limit.service.js';
@@ -25,8 +27,8 @@ export class PushController {
 
   /** Registers this phone, or updates its «Duelo del día» preference. */
   @Post('devices')
-  @HttpCode(204)
-  async register(@Req() request: FastifyRequest, @Body() body: unknown): Promise<void> {
+  @HttpCode(200)
+  async register(@Req() request: FastifyRequest, @Body() body: unknown): Promise<typeof OK> {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     const value = input(body);
     const hour = value.daily_hour ?? 9;
@@ -38,13 +40,15 @@ export class PushController {
     const country = value.country ?? 'CL';
     if (typeof country !== 'string') throw new BadRequestException('Invalid country.');
     await this.push.register(betaUserId(request), { token: token(value.token), dailyEnabled: enabled, dailyHour: hour, country });
+    return OK;
   }
 
   /** Forgets this phone (notices turned off, or sign-out). */
   @Post('devices/remove')
-  @HttpCode(204)
-  async unregister(@Req() request: FastifyRequest, @Body() body: unknown): Promise<void> {
+  @HttpCode(200)
+  async unregister(@Req() request: FastifyRequest, @Body() body: unknown): Promise<typeof OK> {
     this.rateLimit.assertAllowed(rateLimitClient(request));
     await this.push.unregister(betaUserId(request), token(input(body).token));
+    return OK;
   }
 }
