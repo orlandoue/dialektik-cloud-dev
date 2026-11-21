@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
@@ -35,12 +38,20 @@ class StoryGroupCard extends StatelessWidget {
     return ArenaCard(
       key: ValueKey<String>('arena-story-${story.id}'),
       padding: const EdgeInsets.all(12),
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute<void>(
-          builder: (_) =>
-              StoryGroupScreen(story: story, members: members, store: store),
-        ),
-      ),
+      onTap: () {
+        logUsage('story_open');
+        unawaited(
+          Navigator.of(context).push(
+            MaterialPageRoute<void>(
+              builder: (_) => StoryGroupScreen(
+                story: story,
+                members: members,
+                store: store,
+              ),
+            ),
+          ),
+        );
+      },
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[

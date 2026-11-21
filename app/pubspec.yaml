@@ -1,7 +1,7 @@
 name: dialektik
 description: Dialektik application and design-system foundation.
 publish_to: none
-version: 0.1.51+52
+version: 0.1.52+53
 
 environment:
   sdk: ^3.10.1
@@ -9,6 +9,8 @@ environment:
 dependencies:
   app_links: ^7.0.0
   crypto: ^3.0.7
+  firebase_analytics: ^13.0.1
+  firebase_core: ^5.1.0
   flutter:
     sdk: flutter
   flutter_localizations:

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
@@ -56,6 +57,7 @@ class _LivingEventScreenState extends State<LivingEventScreen> {
   @override
   void initState() {
     super.initState();
+    logUsage('event_open');
     _event = store.cachedDetail(widget.eventId);
     stories.addListener(_changed);
     _comments.addListener(_changed);

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
@@ -679,6 +680,7 @@ class _DuelScreenState extends State<DuelScreen> {
   @override
   void initState() {
     super.initState();
+    logUsage('duel_open', <String, Object>{'kind': duel.kind});
     unawaited(
       store.summary(duel.event.id).then<void>((_) {}).catchError((Object _) {}),
     );
@@ -1466,6 +1468,9 @@ class _ContributionSheetState extends State<_ContributionSheet> {
         stance: _stance,
       );
       widget.store.rememberCommunity(widget.event.id, entries);
+      logUsage('contribution_add', <String, Object>{
+        'stance': _stance?.name ?? '',
+      });
       final bool inReview = entries
           .where((CommunityEntry e) => e.mine)
           .any((CommunityEntry e) => e.inReview && e.body == note);
@@ -1676,6 +1681,17 @@ class _VoteSheetState extends State<_VoteSheet> {
         mine == positionId ? null : positionId,
       );
       widget.store.rememberPositionVotes(widget.event.id, updated);
+      final ArenaDuel? duel = _duel;
+      if (mine != positionId && duel != null) {
+        // Only the kind, the place on screen and blindness: never the
+        // version or the outlets, so no one is tied to a side.
+        logUsage('duel_vote', <String, Object>{
+          'kind': duel.kind,
+          'shown': positionId == duel.idA ? 'first' : 'second',
+          'blind': widget.store.isBlind(widget.event.id) ? 1 : 0,
+          'changed': mine == null ? 0 : 1,
+        });
+      }
     } on Exception {
       if (mounted) setState(() => _error = 'No se pudo guardar tu voto.');
     } finally {

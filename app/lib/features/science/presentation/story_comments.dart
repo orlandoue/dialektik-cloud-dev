@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/public_api_models.dart';
@@ -844,6 +845,7 @@ class _CommentComposerState extends State<CommentComposer> {
     if (!mounted) return;
     setState(() => _busy = false);
     if (ok) {
+      logUsage('comment_add');
       _text.clear();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_home_tab.dart';
@@ -134,10 +135,13 @@ class _ArenaShellState extends State<ArenaShell> {
     ),
   );
 
-  void _select(ArenaTab tab) => setState(() {
-    _built.add(tab);
-    _tab = tab;
-  });
+  void _select(ArenaTab tab) {
+    if (tab != _tab) logScreen('tab_${tab.name}');
+    setState(() {
+      _built.add(tab);
+      _tab = tab;
+    });
+  }
 
   Widget _page(ArenaTab tab) {
     if (!_built.contains(tab)) return const SizedBox.shrink();
