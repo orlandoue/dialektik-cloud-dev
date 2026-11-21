@@ -50,3 +50,15 @@ test('live feed includes linked articles and reports the actual link state witho
   assert.equal(firstPage.semantic_mode, 'unassigned');
   assert.equal(firstPage.items[0].semantic_assignment, 'UNASSIGNED');
 });
+
+test('live feed names the case of an article only once that case is published', async () => {
+  const draft = row('01M4YDQK00EVART00000000003', '01M4YDQK00AM9JB7KHN6HEA504');
+  const published = { ...row('01M4YDQK00EVART00000000004', '01M4YDQK00AM9JB7KHN6HEA505'), published_event_id: '01M4YDQK00AM9JB7KHN6HEA505' };
+  const service = new LiveApplicationService({
+    list: async () => [draft, published],
+    article: async () => draft,
+  });
+  const page = await service.list({ limit: 2 });
+  assert.deepEqual(page.items.map((item) => item.published_event_id), [null, '01M4YDQK00AM9JB7KHN6HEA505']);
+  assert.ok(page.items.every((item) => !('event_id' in item)));
+});

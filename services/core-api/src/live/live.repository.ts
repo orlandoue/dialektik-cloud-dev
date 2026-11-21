@@ -13,6 +13,8 @@ function publisherIdentityFilter(market: PublisherMarket, sourceColumn: string) 
 export interface LiveReadRow {
   id: Ulid;
   event_id: Ulid | null;
+  /** The article's event, only once that event is published. */
+  published_event_id?: Ulid | null;
   country_code?: string | null;
   media_group_slug?: string | null;
   editorial_lean?: string | null;
@@ -329,7 +331,10 @@ export class LiveRepository {
         and ${query.publishedFrom === undefined ? sql`true` : sql`published_at >= ${query.publishedFrom}`}
         and ${query.publishedTo === undefined ? sql`true` : sql`published_at < ${query.publishedTo}`}
       order by published_at desc, id desc limit ${query.limit + 1})
-      select page.*, ${this.receiptColumns('page')}, ${this.profileColumns('page.source_id')}, meta.candidate_count, meta.scanned_count
+      select page.*, ${this.receiptColumns('page')}, ${this.profileColumns('page.source_id')},
+        (select pe.id from public.public_events pe where pe.id = page.event_id
+          and pe.analysis_state = 'PUBLISHED' limit 1) as published_event_id,
+        meta.candidate_count, meta.scanned_count
       from (select (select count(*)::int from candidates) as candidate_count,
         (select count(*)::int from recent) as scanned_count) meta left join page on true
       order by page.published_at desc, page.id desc`.execute(this.database);
