@@ -53,6 +53,9 @@ function newsDto(row: LiveReadRow) {
     }),
     origin: 'LIVE_REAL' as const,
     semantic_assignment: row.event_id === null ? ('UNASSIGNED' as const) : ('EVENT_LINKED' as const),
+    // The engine's event stays private; only a published case is named, so
+    // the app can say «También lo cubren N medios · Comparar».
+    published_event_id: row.published_event_id ?? null,
     version_count: row.version_count,
   };
 }
