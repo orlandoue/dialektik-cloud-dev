@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:dialektik/core/infrastructure/push_notices.dart';
 import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/presentation/arena_home_tab.dart';
+import 'package:dialektik/features/arena/presentation/arena_navigation.dart';
 import 'package:dialektik/features/arena/presentation/arena_tabs.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
@@ -72,17 +74,36 @@ class _ArenaShellState extends State<ArenaShell> {
   @override
   void initState() {
     super.initState();
+    tappedNoticeEventId.addListener(_noticeTapped);
     unawaited(_start());
   }
 
   @override
   void dispose() {
+    tappedNoticeEventId.removeListener(_noticeTapped);
     if (widget.store == null) _store.dispose();
     super.dispose();
   }
 
+  /// A tapped «Duelo del día» notice opens its duel (or its case while the
+  /// duels are still loading).
+  void _noticeTapped() {
+    final String? eventId = tappedNoticeEventId.value;
+    if (eventId == null || !mounted) return;
+    tappedNoticeEventId.value = null;
+    logUsage('daily_notice_open');
+    final ArenaDuel? duel = _store.duelForEvent(eventId);
+    unawaited(
+      duel == null
+          ? openArenaEvent(context, _store, eventId)
+          : openArenaDuel(context, _store, duel),
+    );
+  }
+
   Future<void> _start() async {
     await _store.load();
+    // A notice tapped before the duels loaded is opened now.
+    if (mounted && tappedNoticeEventId.value != null) _noticeTapped();
     if (!mounted || !widget.offerWelcomeRadar || _welcomeOffered) return;
     // A reader with no followed sources is invited once to build the radar.
     if (_store.following != null &&

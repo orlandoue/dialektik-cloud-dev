@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
+import 'package:dialektik/features/arena/data/push_devices.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/curated_event_preview.dart';
@@ -60,6 +61,7 @@ final class PublicApiClient
         ScienceRepository,
         ScienceModerationRepository,
         StoryGroupsRepository,
+        PushDeviceRepository,
         CommunityModerationRepository {
   PublicApiClient({
     required ApiConfiguration configuration,
@@ -138,6 +140,11 @@ final class PublicApiClient
   Future<void> reviewCommunityEntry(String entryId, {required bool approve}) =>
     _postJson('/v1/social/moderation/community/${Uri.encodeComponent(entryId)}',
       {'decision': approve ? 'approve' : 'reject'}, (_) {});
+  @override
+  Future<void> registerPushDevice(String token, {required bool dailyEnabled, required int dailyHour, required String country}) =>
+    _postJson('/v1/push/devices', {'token': token, 'daily_enabled': dailyEnabled, 'daily_hour': dailyHour, 'country': country}, (_) {});
+  @override
+  Future<void> removePushDevice(String token) => _postJson('/v1/push/devices/remove', {'token': token}, (_) {});
   @override
   Future<Map<String, int>> commentCounts(List<String> eventIds) => _get<Map<String, int>>(
     '/v1/social/comment-counts', query: {'event_ids': eventIds.join(',')},

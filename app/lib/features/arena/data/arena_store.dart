@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:dialektik/core/infrastructure/push_notices.dart';
 import 'package:dialektik/core/infrastructure/startup_snapshot_client.dart';
 import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
+import 'package:dialektik/features/arena/data/push_devices.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
 import 'package:dialektik/features/consumer/data/following_repository.dart';
@@ -535,6 +537,7 @@ final class ArenaStore extends ChangeNotifier {
     unawaited(_loadMode());
     unawaited(_loadAlwaysBlind());
     unawaited(_loadShareUsage());
+    unawaited(_loadDailyNotice());
     unawaited(_loadScienceAccess());
     unawaited(stories.load().catchError((Object _) {}));
     final Future<void> secondary = Future.wait(<Future<void>>[
@@ -878,6 +881,112 @@ final class ArenaStore extends ChangeNotifier {
     }
   }
 
+  PushDeviceRepository? get pushDevices => _capability<PushDeviceRepository>();
+
+  /// «Duelo del día» notice: null until the reader is asked (after their
+  /// first vote), then their answer. Remembered on the device.
+  bool? _dailyNotice;
+  int _dailyHour = 9;
+  static const String _dailyNoticeKey = 'dialektik_daily_notice';
+  StreamSubscription<String>? _tokenRefresh;
+
+  bool? get dailyNotice => _dailyNotice;
+  int get dailyHour => _dailyHour;
+
+  /// Whether to offer the notice now: Firebase is on, Core can register the
+  /// phone, and the reader was never asked.
+  bool get shouldOfferDailyNotice =>
+      _dailyNotice == null && pushGateway.available && pushDevices != null;
+
+  /// Turns the notice on (asking Android's permission) or off. Returns
+  /// false if it could not be turned on.
+  Future<bool> setDailyNotice({required bool value, int? hour}) async {
+    final PushDeviceRepository? repository = pushDevices;
+    if (hour != null) _dailyHour = hour.clamp(0, 23);
+    if (repository == null || !pushGateway.available) return false;
+    bool on = value;
+    try {
+      if (on && !await pushGateway.requestPermission()) on = false;
+      final String? token = await pushGateway.token();
+      if (token != null) {
+        if (on) {
+          await repository.registerPushDevice(
+            token,
+            dailyEnabled: true,
+            dailyHour: _dailyHour,
+            country: _country,
+          );
+        } else {
+          await repository.removePushDevice(token);
+        }
+      } else if (on) {
+        on = false;
+      }
+    } on Object {
+      if (value) on = false;
+    }
+    _dailyNotice = on;
+    logUsage('daily_notice_set', <String, Object>{'on': on ? 1 : 0});
+    _notify();
+    _watchTokenRefresh();
+    _saveDailyNotice();
+    return on == value;
+  }
+
+  /// The reader said «Ahora no»: not asked again; Ajustes still offers it.
+  Future<void> declineDailyNotice() async {
+    _dailyNotice = false;
+    _notify();
+    _saveDailyNotice();
+  }
+
+  /// Remembered on the device; nothing waits for it.
+  void _saveDailyNotice() => unawaited(
+    storage
+        .writeStories(
+          _dailyNoticeKey,
+          jsonEncode(<String, Object>{
+            'on': _dailyNotice ?? false,
+            'hour': _dailyHour,
+          }),
+        )
+        .catchError((Object _) {}),
+  );
+
+  Future<void> _loadDailyNotice() async {
+    try {
+      final String? raw = await storage.readStories(_dailyNoticeKey);
+      if (raw == null || raw.trim().isEmpty) return;
+      final Object? value = jsonDecode(raw);
+      if (value is Map<String, dynamic>) {
+        _dailyNotice = value['on'] == true;
+        final Object? hour = value['hour'];
+        if (hour is int) _dailyHour = hour.clamp(0, 23);
+        _notify();
+        _watchTokenRefresh();
+      }
+    } on Object {
+      /* A device convenience only. */
+    }
+  }
+
+  /// FCM may rotate the token: the new one is registered again.
+  void _watchTokenRefresh() {
+    if (_dailyNotice != true || _tokenRefresh != null) return;
+    _tokenRefresh = pushGateway.tokenRefresh.listen((String token) {
+      unawaited(
+        pushDevices
+            ?.registerPushDevice(
+              token,
+              dailyEnabled: true,
+              dailyHour: _dailyHour,
+              country: _country,
+            )
+            .catchError((Object _) {}),
+      );
+    });
+  }
+
   bool _shareUsage = true;
   static const String _shareUsageKey = 'dialektik_share_usage';
 
@@ -938,6 +1047,7 @@ final class ArenaStore extends ChangeNotifier {
 
   @override
   void dispose() {
+    unawaited(_tokenRefresh?.cancel());
     _disposed = true;
     startupSnapshotFreshness.removeListener(_snapshotRefreshed);
     following?.followingChanges.removeListener(_followsChanged);
