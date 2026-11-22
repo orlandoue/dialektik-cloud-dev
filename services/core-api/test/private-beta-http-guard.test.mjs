@@ -43,6 +43,8 @@ test('Core resolves the beta guard and protects content routes while health stay
       ).statusCode,
       401,
     );
+    // Large answers go out compressed (Render counts outbound bandwidth).
+    assert.ok(fastify.hasReplyDecorator('compress'), 'compression is registered');
   } finally {
     await application?.close();
     for (const [name, value] of previous) {
