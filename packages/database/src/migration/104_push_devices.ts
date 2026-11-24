@@ -26,6 +26,11 @@ create index if not exists push_devices_daily_idx on public.push_devices (daily_
 alter table public.push_devices enable row level security;
 alter table public.push_devices force row level security;
 revoke all on public.push_devices from public, anon, authenticated, service_role;
+do $revoke$ begin
+  if exists (select 1 from pg_roles where rolname = 'dialektik_core_app') then
+    revoke all on public.push_devices from dialektik_core_app;
+  end if;
+end $revoke$;
 
 create or replace function public.dialektik_register_push_device(
   p_user uuid, p_token text, p_daily_enabled boolean, p_daily_hour integer, p_country text
