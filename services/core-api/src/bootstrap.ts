@@ -1,3 +1,4 @@
+import compress from '@fastify/compress';
 import { NestFactory } from '@nestjs/core';
 import { FastifyAdapter, type NestFastifyApplication } from '@nestjs/platform-fastify';
 
@@ -21,6 +22,9 @@ export async function createCoreApplication(
   );
 
   registerRequestCorrelation(adapter.getInstance());
+  // JSON shrinks ~85 % with gzip. Render's free plan counts outbound
+  // bandwidth (5 GB a month), and the app's HTTP client accepts gzip.
+  await application.register(compress, { global: true, threshold: 1024, encodings: ['br', 'gzip', 'deflate'] });
   if (
     config.nodeEnvironment !== 'production' &&
     ['fixture', 'unassigned'].includes(config.semanticMode ?? 'disabled')

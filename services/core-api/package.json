@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@dialektik/database": "0.1.0",
+    "@fastify/compress": "8.3.1",
     "@nestjs/common": "12.0.1",
     "@nestjs/core": "12.0.1",
     "@nestjs/platform-fastify": "12.0.1",
