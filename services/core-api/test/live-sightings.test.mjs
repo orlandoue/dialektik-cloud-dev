@@ -16,11 +16,14 @@ test('a new item, or any change of evidence, needs a receipt; an identical repea
   assert.equal(receiptNeeded({ ...evidence, error_code: undefined }, evidence), false, 'null and missing are equal');
   for (const [field, value] of Object.entries({
     policy_id: 'p2', discovery_url: 'https://medio.cl/feed', discovered_url: null, canonical_url: 'https://medio.cl/b',
-    source_item_id: 'guid-2', raw_payload_hash: 'b'.repeat(64), adapter_version: 'v4', disposition: 'QUARANTINED',
+    source_item_id: 'guid-2', adapter_version: 'v4', disposition: 'QUARANTINED',
     error_code: 'INVALID_ITEM',
   })) {
     assert.equal(receiptNeeded(evidence, { ...evidence, [field]: value }), true, field);
   }
+  // The item's hash is recorded, not compared: its content changes write a
+  // receipt through the new article version (live-item-hash.ts).
+  assert.equal(receiptNeeded(evidence, { ...evidence, raw_payload_hash: 'b'.repeat(64) }), false);
 });
 
 test('the in-memory throttle asks the database at most once per hour per item', async () => {

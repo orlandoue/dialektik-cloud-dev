@@ -14,10 +14,10 @@ import { createHash } from 'node:crypto';
  * headline, excerpt and declared modification time, normalized. A feed that
  * rewrites pubDate or reorders items no longer changes it; a real edit does
  * (and also makes a new article version, which always cites a new receipt).
- * The prefix says which rule made the hash: rows are append-only and keep
- * the feed hash of their time.
+ * The column only accepts 64 hex characters (a check constraint), so the
+ * hash carries no prefix: rows written before 24 Nov 2026 keep the feed
+ * hash of their time.
  */
-export const ITEM_HASH_PREFIX = 'item:v1:';
 
 export function normalizeHashText(text: string | null | undefined): string {
   if (text === null || text === undefined) return '';
@@ -39,5 +39,5 @@ export function itemEvidenceHash(item: {
     normalizeHashText(item.excerpt),
     (item.originalModifiedAt ?? '').trim(),
   ]);
-  return `${ITEM_HASH_PREFIX}${createHash('sha256').update(canonical, 'utf8').digest('hex')}`;
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }

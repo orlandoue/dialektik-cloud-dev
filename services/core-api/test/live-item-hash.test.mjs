@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { parseLiveFeed } from '../dist/live/live.adapter.js';
-import { ITEM_HASH_PREFIX, itemEvidenceHash } from '../dist/live/live-item-hash.js';
+import { itemEvidenceHash } from '../dist/live/live-item-hash.js';
 import { receiptNeeded } from '../dist/live/live-sightings.js';
 
 const policy = {
@@ -25,7 +25,7 @@ test('a feed that changes around an item leaves the item\'s hash alone', () => {
   const after = feed([item('Tres'), item('Dos'), item('Uno')], 'Thu, 29 Oct 2026 10:05:00 GMT');
   assert.equal(hashOf(before, 'Uno'), hashOf(after, 'Uno'));
   assert.notEqual(hashOf(before, 'Uno'), hashOf(before, 'Dos'), 'each item has its own hash');
-  assert.ok(hashOf(before, 'Uno').startsWith(ITEM_HASH_PREFIX));
+  assert.match(hashOf(before, 'Uno'), /^[0-9a-f]{64}$/u, 'the column only takes 64 hex characters');
 });
 
 test('a real edit of the item changes it; pubDate rewrites and markup do not', () => {
@@ -41,12 +41,11 @@ const evidence = (hash, extra = {}) => ({ policy_id: 'p1', discovery_url: 'https
   canonical_url: 'https://medio.cl/a', source_item_id: 'g1', raw_payload_hash: hash, adapter_version: 'v4',
   disposition: 'PERSISTED', error_code: null, ...extra });
 
-test('switching from feed hashes to item hashes writes no burst of receipts', () => {
+test('a different hash alone writes no receipt: content changes write theirs through a new version', () => {
   const legacy = evidence('a'.repeat(64));
-  const next = evidence(`${ITEM_HASH_PREFIX}${'b'.repeat(64)}`);
-  assert.equal(receiptNeeded(legacy, next), false, 'only the hash rule changed');
+  const next = evidence('b'.repeat(64));
+  assert.equal(receiptNeeded(legacy, next), false, 'the switch from feed to item hashes writes nothing');
   assert.equal(receiptNeeded(legacy, { ...next, canonical_url: 'https://medio.cl/otra' }), true, 'other evidence still counts');
-  assert.equal(receiptNeeded(next, evidence(`${ITEM_HASH_PREFIX}${'c'.repeat(64)}`)), true, 'after the switch, item hashes compare');
-  assert.equal(receiptNeeded(next, next), false);
+  assert.equal(receiptNeeded(legacy, { ...next, disposition: 'QUARANTINED' }), true);
   assert.equal(receiptNeeded(undefined, next), true);
 });
