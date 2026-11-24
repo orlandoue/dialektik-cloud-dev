@@ -45,7 +45,7 @@ function latest(values: readonly Date[]): Date {
   return new Date(Math.max(...values.map((value) => value.getTime())));
 }
 
-function eventCard(row: FeedRow | EventRow): EventCardDto {
+export function eventCard(row: FeedRow | EventRow): EventCardDto {
   const positionCount = row.analysis_state === 'ANALYSIS_PENDING' ? null : row.position_count;
   if (row.analysis_state === 'PUBLISHED' && row.position_count < 1) {
     throw new TypeError('Published Event has no published Position.');
