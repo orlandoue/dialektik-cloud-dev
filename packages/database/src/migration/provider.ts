@@ -21,6 +21,7 @@ import { readerAliasPseudonymMigration } from './101_reader_alias_pseudonym.js';
 import { storyGroupsMigration } from './102_story_groups.js';
 import { communityReviewMigration } from './103_community_review.js';
 import { pushDevicesMigration } from './104_push_devices.js';
+import { homeEditionsMigration } from './105_home_editions.js';
 import { llmSemanticContractV2Migration } from './024_llm_semantic_contract_v2';
 import { cloudflareProjectionRouteGrantMigration } from './025_cloudflare_projection_route_grants';
 import { titleOnlyProjectionShadowMigration } from './026_title_only_projection_shadow';
@@ -123,6 +124,7 @@ const migrations: Readonly<Record<string, Migration>> = {
   '102_story_groups': storyGroupsMigration,
   '103_community_review': communityReviewMigration,
   '104_push_devices': pushDevicesMigration,
+  '105_home_editions': homeEditionsMigration,
   '085_social_arena': socialArenaMigration,
   '084_social_follower_count': socialFollowerCountMigration,
   '083_social_community': socialCommunityMigration,

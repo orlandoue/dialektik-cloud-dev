@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Optional,
   Logger,
   ServiceUnavailableException,
   type OnModuleDestroy,
@@ -10,6 +11,7 @@ import {
 import type { Database } from '@dialektik/database';
 import { sql, type Transaction } from 'kysely';
 import { CoreDatabaseService } from '../database/core-database.service.js';
+import { EditionService } from '../edition/edition.service.js';
 import { PublicApiRepository } from '../public-api/public-api.repository.js';
 import { PUBLIC_COUNTRIES, type PublicCountry } from '../public-api/source-profiles.js';
 import { FcmSender, parseServiceAccount, type PushMessage } from './fcm-sender.js';
@@ -54,6 +56,7 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
   constructor(
     @Inject(CoreDatabaseService) private readonly db: CoreDatabaseService,
     @Inject(PublicApiRepository) private readonly repository: PublicApiRepository,
+    @Optional() @Inject(EditionService) private readonly editions?: EditionService,
   ) {
     const account = parseServiceAccount(process.env.FIREBASE_SERVICE_ACCOUNT_JSON);
     this.#sender = account === null ? null : new FcmSender(account);
@@ -98,6 +101,15 @@ export class PushService implements OnModuleInit, OnModuleDestroy {
 
   /** The newest published duel of a country, if it is recent enough. */
   async dailyDuel(country: PublicCountry, now = new Date()): Promise<DailyDuel | null> {
+    // The hour's edition chooses it, so the notice and Inicio agree.
+    const edition = await this.editions?.latest(country).catch(() => null);
+    if (edition && edition.duel_event_id !== null
+      && now.getTime() - new Date(edition.generated_at).getTime() <= 3 * 60 * 60_000) {
+      const card = edition.cards[edition.duel_event_id];
+      if (card !== undefined && typeof card.title_descriptive === 'string') {
+        return { eventId: edition.duel_event_id, title: card.title_descriptive };
+      }
+    }
     const rows = await this.repository.listContradictions({ cursor: null, limit: 1, country });
     const row = rows[0];
     if (row === undefined || now.getTime() - new Date(row.confirmed_at).getTime() > DAILY_MAX_AGE_MS) return null;
