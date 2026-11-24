@@ -2,7 +2,6 @@ import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } f
 import { sql, type Kysely } from 'kysely';
 
 import { CoreDatabaseService } from '../database/core-database.service.js';
-import { ITEM_HASH_PREFIX } from './live-item-hash.js';
 
 /**
  * A feed is polled every few seconds and lists the same items for days. A
@@ -24,19 +23,19 @@ export interface ReceiptEvidence {
   readonly error_code: string | null;
 }
 
-const EVIDENCE_FIELDS = ['policy_id', 'discovery_url', 'discovered_url', 'canonical_url', 'source_item_id',
-  'raw_payload_hash', 'adapter_version', 'disposition', 'error_code'] as const satisfies readonly (keyof ReceiptEvidence)[];
+const COMPARED_FIELDS = ['policy_id', 'discovery_url', 'discovered_url', 'canonical_url', 'source_item_id',
+  'adapter_version', 'disposition', 'error_code'] as const satisfies readonly (keyof ReceiptEvidence)[];
 
 /** A receipt is only needed when some evidence differs from the latest one. */
 export function receiptNeeded(latest: ReceiptEvidence | undefined, candidate: ReceiptEvidence): boolean {
   if (latest === undefined) return true;
-  // Transition to per-item hashes: a receipt that still carries the old
-  // whole-feed hash is not «different» only because of the new rule. If the
-  // item really changed, the new article version writes its own receipt.
-  const transition = !latest.raw_payload_hash.startsWith(ITEM_HASH_PREFIX)
-    && candidate.raw_payload_hash.startsWith(ITEM_HASH_PREFIX);
-  return EVIDENCE_FIELDS.some((field) =>
-    !(transition && field === 'raw_payload_hash') && (latest[field] ?? null) !== (candidate[field] ?? null));
+  // The item's hash (live-item-hash.ts) only moves when its id, URL,
+  // headline, excerpt or declared modification time move: the first two are
+  // compared here on their own, and a change of content makes a new article
+  // version, which always writes its own receipt. So the hash is recorded
+  // but not compared, which also lets receipts that still carry the old
+  // whole-feed hash pass the switch without a burst of new receipts.
+  return COMPARED_FIELDS.some((field) => (latest[field] ?? null) !== (candidate[field] ?? null));
 }
 
 /** The latest receipt of an item, for comparison. */
