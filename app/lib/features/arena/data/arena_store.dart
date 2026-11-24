@@ -6,6 +6,7 @@ import 'package:dialektik/core/infrastructure/startup_snapshot_client.dart';
 import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
+import 'package:dialektik/features/arena/data/home_edition.dart';
 import 'package:dialektik/features/arena/data/push_devices.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
@@ -173,6 +174,7 @@ final class ArenaStore extends ChangeNotifier {
 
   /// Another country is another set of outlets, events and duels.
   void _resetForCountry() {
+    _edition = null;
     events = const <EventCardDto>[];
     duels = const <ArenaDuel>[];
     duelsLoading = false;
@@ -220,6 +222,47 @@ final class ArenaStore extends ChangeNotifier {
       : live is StoryGroupsRepository
       ? live as StoryGroupsRepository
       : null;
+
+  HomeEditionRepository? get editionRepository =>
+      _capability<HomeEditionRepository>();
+  HomeEditionModerationRepository? get editionModeration =>
+      _capability<HomeEditionModerationRepository>();
+
+  HomeEdition? _edition;
+
+  /// The hour's edition of Inicio for this country; null until Core has one.
+  HomeEdition? get edition => _edition;
+
+  Future<void> _loadEdition() async {
+    final HomeEditionRepository? repository = editionRepository;
+    if (repository == null) return;
+    try {
+      _edition = await repository.homeEdition(_country);
+      _notify();
+    } on Object {
+      // Without an edition Inicio orders as before.
+    }
+  }
+
+  /// A moderator's change returns the recomposed edition at once.
+  void rememberEdition(HomeEdition? value) {
+    if (value == null) return;
+    _edition = value;
+    _notify();
+  }
+
+  /// Duels for Inicio: the edition's «Duelo del día» first.
+  List<ArenaDuel> get homeDuels {
+    final String? id = _edition?.duelEventId;
+    if (id == null) return duels;
+    final int index = duels.indexWhere((ArenaDuel d) => d.event.id == id);
+    if (index <= 0) return duels;
+    return List<ArenaDuel>.unmodifiable(<ArenaDuel>[
+      duels[index],
+      ...duels.take(index),
+      ...duels.skip(index + 1),
+    ]);
+  }
 
   List<StoryGroup> _storyGroups = const <StoryGroup>[];
   Map<String, StoryGroup> _storyByEvent = const <String, StoryGroup>{};
@@ -545,6 +588,7 @@ final class ArenaStore extends ChangeNotifier {
       _loadFollowed(),
       _loadVideos(refresh: refresh),
       _loadStoryGroups(),
+      _loadEdition(),
     ]);
     try {
       // Inicio paints with the first page of each list; the next pages are

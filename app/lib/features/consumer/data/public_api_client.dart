@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dialektik/core/infrastructure/api_configuration.dart';
+import 'package:dialektik/features/arena/data/home_edition.dart';
 import 'package:dialektik/features/arena/data/push_devices.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/consumer/data/consumer_repository.dart';
@@ -62,6 +63,8 @@ final class PublicApiClient
         ScienceModerationRepository,
         StoryGroupsRepository,
         PushDeviceRepository,
+        HomeEditionRepository,
+        HomeEditionModerationRepository,
         CommunityModerationRepository {
   PublicApiClient({
     required ApiConfiguration configuration,
@@ -140,6 +143,22 @@ final class PublicApiClient
   Future<void> reviewCommunityEntry(String entryId, {required bool approve}) =>
     _postJson('/v1/social/moderation/community/${Uri.encodeComponent(entryId)}',
       {'decision': approve ? 'approve' : 'reject'}, (_) {});
+  @override
+  Future<HomeEdition?> homeEdition(String country) => _get<HomeEdition?>('/v1/home-edition', query: {'country': country},
+    decoder: (Object? value) => _edition((value! as Map<String, dynamic>)['edition']), refresh: true, requestToken: null);
+  @override
+  Future<(HomeEdition?, List<HomeEditionPin>)> moderationEdition(String country) => _get<(HomeEdition?, List<HomeEditionPin>)>(
+    '/v1/moderation/home-edition', query: {'country': country}, refresh: true, requestToken: null,
+    decoder: (Object? value) { final Map<String, dynamic> body = value! as Map<String, dynamic>; return (_edition(body['edition']), <HomeEditionPin>[
+      for (final Object? pin in (body['pins'] as List<dynamic>?) ?? const <dynamic>[]) HomeEditionPin.fromJson(pin! as Map<String, dynamic>)]); });
+  @override
+  Future<HomeEdition?> pinEdition({required String country, required String targetKind, required String targetId, required String action, required String reason, required int hours}) =>
+    _postJson('/v1/moderation/home-edition/pins', {'country': country, 'target_kind': targetKind, 'target_id': targetId,
+      'action': action, 'reason': reason, 'hours': hours}, (Object? value) => _edition((value! as Map<String, dynamic>)['edition']));
+  @override
+  Future<HomeEdition?> unpinEdition(String pinId) => _postJson('/v1/moderation/home-edition/pins/${Uri.encodeComponent(pinId)}/remove', {},
+    (Object? value) => _edition((value! as Map<String, dynamic>)['edition']));
+  static HomeEdition? _edition(Object? value) => value is Map<String, dynamic> ? HomeEdition.fromJson(value) : null;
   @override
   Future<void> registerPushDevice(String token, {required bool dailyEnabled, required int dailyHour, required String country}) =>
     _postJson('/v1/push/devices', {'token': token, 'daily_enabled': dailyEnabled, 'daily_hour': dailyHour, 'country': country}, (_) {});
