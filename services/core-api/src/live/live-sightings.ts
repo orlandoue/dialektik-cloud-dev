@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger, type OnModuleDestroy, type OnModuleInit } f
 import { sql, type Kysely } from 'kysely';
 
 import { CoreDatabaseService } from '../database/core-database.service.js';
+import { ITEM_HASH_PREFIX } from './live-item-hash.js';
 
 /**
  * A feed is polled every few seconds and lists the same items for days. A
@@ -29,7 +30,13 @@ const EVIDENCE_FIELDS = ['policy_id', 'discovery_url', 'discovered_url', 'canoni
 /** A receipt is only needed when some evidence differs from the latest one. */
 export function receiptNeeded(latest: ReceiptEvidence | undefined, candidate: ReceiptEvidence): boolean {
   if (latest === undefined) return true;
-  return EVIDENCE_FIELDS.some((field) => (latest[field] ?? null) !== (candidate[field] ?? null));
+  // Transition to per-item hashes: a receipt that still carries the old
+  // whole-feed hash is not «different» only because of the new rule. If the
+  // item really changed, the new article version writes its own receipt.
+  const transition = !latest.raw_payload_hash.startsWith(ITEM_HASH_PREFIX)
+    && candidate.raw_payload_hash.startsWith(ITEM_HASH_PREFIX);
+  return EVIDENCE_FIELDS.some((field) =>
+    !(transition && field === 'raw_payload_hash') && (latest[field] ?? null) !== (candidate[field] ?? null));
 }
 
 /** The latest receipt of an item, for comparison. */

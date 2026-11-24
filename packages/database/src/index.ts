@@ -27,6 +27,7 @@ export { storyGroupsSql } from './migration/102_story_groups';
 export { communityReviewSql } from './migration/103_community_review';
 export { pushDevicesSql } from './migration/104_push_devices';
 export { homeEditionsSql } from './migration/105_home_editions';
+export { receiptLookupIndexSql } from './migration/106_receipt_lookup_index';
 export * from './migration/migrator';
 export * from './safety/state-dimension-checker';
 export * from './transaction';

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { itemEvidenceHash } from './live-item-hash.js';
 import { XMLParser } from 'fast-xml-parser';
 import { SyntaxValidator } from 'fast-xml-validator';
 import type { LiveSourcePolicy } from './live.registry.js';
@@ -168,7 +169,6 @@ function itemFromEntry(
   entry: unknown,
   atom: boolean,
   policy: LiveSourcePolicy,
-  payloadHash: string,
   feedRights: string | null,
 ): LiveDiscoveredItem {
   const item = record(entry);
@@ -280,7 +280,14 @@ function itemFromEntry(
     originalPublishedAt,
     originalModifiedAt,
     declaredUpstream,
-    rawPayloadHash: payloadHash,
+    // The item's own evidence, not the whole feed's (see live-item-hash.ts).
+    rawPayloadHash: itemEvidenceHash({
+      sourceItemId,
+      canonicalUrl,
+      headline,
+      excerpt: policy.storagePolicy === 'METADATA_AND_FEED_EXCERPT' && !thirdParty ? rawExcerpt : null,
+      originalModifiedAt: originalModifiedAt ?? null,
+    }),
     errorCode,
   };
 }
@@ -412,7 +419,6 @@ export function parseLiveFeedBatches(
   if (!sitemap && root.feed === undefined && root.rss === undefined)
     throw new Error('UNSUPPORTED_FEED_FORMAT');
   if (entries.length > MAX_LIVE_FEED_ITEMS) throw new Error('FEED_ITEM_LIMIT_EXCEEDED');
-  const hash = liveHash(payload);
   return {
     itemCount: entries.length,
     batches: {
@@ -420,7 +426,7 @@ export function parseLiveFeedBatches(
         for (let offset = 0; offset < entries.length; offset += MAX_LIVE_FEED_BATCH_ITEMS) {
           yield entries
             .slice(offset, offset + MAX_LIVE_FEED_BATCH_ITEMS)
-            .map((entry) => itemFromEntry(entry, atom, policy, hash, feedRights));
+            .map((entry) => itemFromEntry(entry, atom, policy, feedRights));
         }
       },
     },
