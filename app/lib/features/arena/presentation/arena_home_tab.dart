@@ -255,7 +255,7 @@ class _Coliseo extends StatelessWidget {
       final List<EventCardDto> developing = store.developing.isEmpty
           ? store.events
           : store.developing;
-      final List<ArenaDuel> duels = store.duels;
+      final List<ArenaDuel> duels = store.homeDuels;
       final List<LiveNewsItemDto> videos = store.videos;
       return RefreshIndicator(
         color: ArenaColors.violet,

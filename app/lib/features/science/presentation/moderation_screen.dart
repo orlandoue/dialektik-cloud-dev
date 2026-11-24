@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:dialektik/features/arena/data/arena_store.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
+import 'package:dialektik/features/arena/presentation/home_edition_view.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
 import 'package:dialektik/features/science/data/science_models.dart';
 import 'package:dialektik/features/science/data/science_repository.dart';
@@ -248,7 +249,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
         ? 0
         : queue.review.length + queue.reports.length + _community.length;
     return DefaultTabController(
-      length: 4,
+      length: 5,
       child: Scaffold(
         backgroundColor: SciColors.bgApp,
         appBar: AppBar(
@@ -291,6 +292,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
                 const Key('sci-mod-tab-stories'),
                 'Fusiones · ${_stories?.length ?? 0}',
               ),
+              _tab(context, const Key('sci-mod-tab-edition'), 'Edición'),
             ],
           ),
         ),
@@ -343,6 +345,7 @@ class _ScienceModerationScreenState extends State<ScienceModerationScreen> {
                       onReject: _rejectStory,
                     ),
                   ),
+                  EditionModerationView(store: widget.store),
                 ],
               ),
       ),

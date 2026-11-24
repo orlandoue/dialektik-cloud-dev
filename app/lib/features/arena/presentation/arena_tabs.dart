@@ -5,6 +5,7 @@ import 'package:dialektik/core/infrastructure/usage_analytics.dart';
 import 'package:dialektik/features/arena/data/arena_account.dart';
 import 'package:dialektik/features/arena/data/arena_format.dart';
 import 'package:dialektik/features/arena/data/arena_store.dart';
+import 'package:dialektik/features/arena/data/home_edition.dart';
 import 'package:dialektik/features/arena/data/story_groups.dart';
 import 'package:dialektik/features/arena/presentation/account_card.dart';
 import 'package:dialektik/features/arena/presentation/arena_home_tab.dart';
@@ -13,6 +14,7 @@ import 'package:dialektik/features/arena/presentation/arena_widgets.dart';
 import 'package:dialektik/features/arena/presentation/daily_notice.dart';
 import 'package:dialektik/features/arena/presentation/duel_face.dart';
 import 'package:dialektik/features/arena/presentation/duel_screen.dart';
+import 'package:dialektik/features/arena/presentation/home_edition_view.dart';
 import 'package:dialektik/features/arena/presentation/media_profile_screen.dart';
 import 'package:dialektik/features/arena/presentation/story_group_card.dart';
 import 'package:dialektik/features/arena/theme/arena_theme.dart';
@@ -284,16 +286,24 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
   ];
   int _filter = 0;
 
-  /// 0: most recent first; 1: covered by the most outlets first.
-  int _order = 0;
+  /// 0: most recent first; 1: covered by the most outlets first; 2: the
+  /// hour's edition. Unset, the edition when Core has one.
+  int? _chosenOrder;
+
+  int _order(ArenaStore store) =>
+      _chosenOrder ?? (store.edition != null ? 2 : 0);
 
   static int _coverage(ArenaStore store, EventCardDto event) =>
       store.storyOf(event.id)?.sourceCount ?? event.sourceCount;
 
   static const List<(int, String)> _storyOrders = <(int, String)>[
+    (2, 'Edición de la hora'),
     (0, 'Recientes'),
     (1, 'Más cubiertas'),
   ];
+
+  static String _orderLabel(int order) =>
+      _storyOrders.firstWhere(((int, String) o) => o.$1 == order).$2;
 
   @override
   void initState() {
@@ -321,19 +331,27 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
         listenable: store,
         builder: (BuildContext context, _) {
           final ArenaTopic? topic = _filters[_filter];
+          final HomeEdition? edition = store.edition;
+          final int order = edition == null && _order(store) == 2
+              ? 0
+              : _order(store);
           final List<EventCardDto> events =
-              store.events
+              (order == 2
+                      ? arenaEditionEvents(store, edition!)
+                      : (List<EventCardDto>.of(store.events)..sort(
+                          (EventCardDto a, EventCardDto b) => order == 1
+                              // A story counts every outlet of all its events.
+                              ? _coverage(
+                                  store,
+                                  b,
+                                ).compareTo(_coverage(store, a))
+                              : b.detectedAt.compareTo(a.detectedAt),
+                        )))
                   .where(
                     (EventCardDto e) =>
                         topic == null || arenaTopicOfEvent(e) == topic,
                   )
-                  .toList()
-                ..sort(
-                  (EventCardDto a, EventCardDto b) => _order == 1
-                      // A story counts every outlet of all its events.
-                      ? _coverage(store, b).compareTo(_coverage(store, a))
-                      : b.detectedAt.compareTo(a.detectedAt),
-                );
+                  .toList();
           final SeismicObservationRepository? seismic = store.seismic;
           return RefreshIndicator(
             color: ArenaColors.violet,
@@ -366,19 +384,21 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     child: PopupMenuButton<int>(
                       key: const Key('arena-stories-order'),
-                      initialValue: _order,
-                      onSelected: (int value) => setState(() => _order = value),
+                      initialValue: order,
+                      onSelected: (int value) =>
+                          setState(() => _chosenOrder = value),
                       itemBuilder: (BuildContext context) =>
                           <PopupMenuEntry<int>>[
                             for (final (int value, String label)
                                 in _storyOrders)
-                              PopupMenuItem<int>(
-                                key: ValueKey<String>(
-                                  'arena-stories-order-$value',
+                              if (value != 2 || edition != null)
+                                PopupMenuItem<int>(
+                                  key: ValueKey<String>(
+                                    'arena-stories-order-$value',
+                                  ),
+                                  value: value,
+                                  child: Text(label),
                                 ),
-                                value: value,
-                                child: Text(label),
-                              ),
                           ],
                       child: Padding(
                         padding: const EdgeInsets.symmetric(
@@ -396,7 +416,7 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                             const SizedBox(width: 6),
                             Flexible(
                               child: Text(
-                                'Ordenar: ${_storyOrders[_order].$2}',
+                                'Ordenar: ${_orderLabel(order)}',
                                 style: ArenaText.meta,
                               ),
                             ),
@@ -410,6 +430,15 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                     ),
                   ),
                 ),
+                if (order == 2 && edition != null)
+                  Padding(
+                    key: const Key('arena-edition-caption'),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 0),
+                    child: Text(
+                      arenaEditionCaption(edition),
+                      style: ArenaText.meta,
+                    ),
+                  ),
                 const SizedBox(height: 12),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -446,16 +475,21 @@ class _ArenaStoriesTabState extends State<ArenaStoriesTab> {
                           DevelopingEventCard(
                             event: event,
                             store: store,
-                            note: switch (stories.snapshot(event.id)) {
-                              final StorySnapshot snapshot
-                                  when event.sourceCount >
-                                      snapshot.sourceCount =>
-                                'Novedades: ${event.sourceCount - snapshot.sourceCount} '
-                                    '${event.sourceCount - snapshot.sourceCount == 1 ? 'medio nuevo' : 'medios nuevos'} '
-                                    'desde tu última visita',
-                              StorySnapshot() => 'Sigues esta historia',
-                              null => null,
-                            },
+                            note:
+                                order == 2 &&
+                                    edition?.itemOf(event.id)?.pinReason != null
+                                ? 'Destacado por moderación: '
+                                      '${edition!.itemOf(event.id)!.pinReason}'
+                                : switch (stories.snapshot(event.id)) {
+                                    final StorySnapshot snapshot
+                                        when event.sourceCount >
+                                            snapshot.sourceCount =>
+                                      'Novedades: ${event.sourceCount - snapshot.sourceCount} '
+                                          '${event.sourceCount - snapshot.sourceCount == 1 ? 'medio nuevo' : 'medios nuevos'} '
+                                          'desde tu última visita',
+                                    StorySnapshot() => 'Sigues esta historia',
+                                    null => null,
+                                  },
                             duel: store.duelForEvent(event.id),
                           ),
                       if (seismic != null) ...<Widget>[
